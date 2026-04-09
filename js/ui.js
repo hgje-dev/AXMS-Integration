@@ -6,6 +6,11 @@ window.getNormalRandom = (mean, stdDev) => { let u1=Math.random(); if(u1===0) u1
 window.getLocalDateStr = (d) => (!d||isNaN(d.getTime()))?"":d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,'0')+"-"+String(d.getDate()).padStart(2,'0');
 window.getDateTimeStr = (d) => (!d||isNaN(d.getTime()))?"":d.getFullYear().toString().slice(2)+"-"+String(d.getMonth()+1).padStart(2,'0')+"-"+String(d.getDate()).padStart(2,'0')+" "+String(d.getHours()).padStart(2,'0')+":"+String(d.getMinutes()).padStart(2,'0');
 
+// 🌟 누락되었던 필수 날짜/주차 계산 함수 완벽 복원 (이게 빠져서 화면이 멈췄습니다)
+window.getWeekString = function(d) { const date = new Date(d.getTime()); date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay()||7)); const yearStart = new Date(Date.UTC(date.getUTCFullYear(),0,1)); const weekNo = Math.ceil(( ( (date - yearStart) / 86400000) + 1)/7); return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`; };
+window.getDatesFromWeek = function(weekStr) { const [year, week] = weekStr.split('-W'); const d = new Date(year, 0, 1); const dayOffset = (d.getDay() <= 4 && d.getDay() !== 0) ? 1 : 8; const firstMonday = new Date(year, 0, d.getDate() - d.getDay() + dayOffset); const start = new Date(firstMonday.getTime() + (week - 1) * 7 * 24 * 60 * 60 * 1000); const end = new Date(start); end.setDate(end.getDate() + 6); end.setHours(23, 59, 59, 999); return { start, end }; };
+window.getWeekNumberInMonth = function(dateObj) { const firstDay = new Date(dateObj.getFullYear(), dateObj.getMonth(), 1).getDay(); return Math.ceil((dateObj.getDate() + (firstDay === 0 ? 6 : firstDay - 1)) / 7); };
+
 const koreaHolidays = new Set(['2024-01-01','2024-03-01','2024-05-06','2024-12-25','2025-01-01','2025-05-05','2025-10-06','2025-12-25']); 
 window.isWorkDay = (d) => { const el=document.getElementById('apply-holidays'); if(!el||!el.checked) return true; if(d.getDay()===0||d.getDay()===6) return false; return !koreaHolidays.has(window.getLocalDateStr(d)); };
 window.calculateWorkDate = (s, d) => { let dt = new Date(s); if(isNaN(dt.getTime())) return new Date(); let a = 0; while(a<d) { dt.setDate(dt.getDate()+1); if(window.isWorkDay(dt)) a++; } return dt; };
