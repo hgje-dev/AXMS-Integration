@@ -184,7 +184,7 @@
                 <div class="flex items-center gap-3">
                     <h2 class="text-lg font-extrabold text-slate-800"><i class="fa-solid fa-tags text-indigo-500 mr-2"></i>PJT 코드 마스터 관리</h2>
                     <button onclick="window.toggleBulkPjtInput()" class="bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"><i class="fa-solid fa-paste mr-1"></i>일괄 등록</button>
-                    <button onclick="window.deleteAllProjectCodes()" class="bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border border-rose-200 shadow-sm"><i class="fa-solid fa-trash-can mr-1"></i>전체 삭제</button>
+                    <button onclick="window.deleteAllProjectCodes()" class="bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border border-rose-200 shadow-sm"><i class="fa-solid fa-trash-can mr-1"></i>전체 데이터 삭제</button>
                 </div>
                 <button onclick="window.closeProjCodeMasterModal()" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-xl"></i></button>
             </div>
@@ -195,14 +195,20 @@
                      <input type="text" id="new-pjt-company" placeholder="업체명" class="border border-slate-300 p-2 rounded-lg text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none w-32">
                      <button onclick="window.addProjectCode()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-bold transition-colors shadow-sm whitespace-nowrap">단일 등록</button>
                  </div>
+                 
                  <div id="bulk-pjt-section" class="hidden bg-indigo-50 p-4 rounded-xl border border-indigo-100 shadow-inner">
                      <label class="block text-xs font-bold text-indigo-700 mb-2">엑셀에서 복사한 데이터 붙여넣기 (코드 | 프로젝트명 | 업체명)</label>
-                     <textarea id="bulk-pjt-input" class="w-full border border-indigo-200 p-3 rounded-lg text-sm h-32 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="복사한 내용을 이곳에 붙여넣기 하세요..."></textarea>
-                     <div class="flex justify-end mt-2"><button onclick="window.bulkAddProjectCodes()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-lg text-xs font-bold transition-colors shadow-md">저장하기</button></div>
+                     <textarea id="bulk-pjt-input" class="w-full border border-indigo-200 p-3 rounded-lg text-sm h-32 focus:ring-2 focus:ring-indigo-500 outline-none placeholder-slate-400" placeholder="RM0E2601-OA	현대모비스 JK1 시생산 정산	현대모비스&#10;EMOT2501-OA	엑추에이터 탈피기	현대모비스"></textarea>
+                     <div class="flex justify-end mt-2">
+                         <button onclick="window.bulkAddProjectCodes()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-lg text-xs font-bold transition-colors shadow-md"><i class="fa-solid fa-cloud-arrow-up mr-1"></i>일괄 데이터 저장</button>
+                     </div>
                  </div>
+                 
                  <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                      <table class="w-full border-collapse text-sm text-left">
-                        <thead class="bg-slate-800 text-white text-xs"><tr><th class="p-3 w-32">PJT 코드</th><th class="p-3">프로젝트명</th><th class="p-3 w-32">업체명</th><th class="p-3 w-20 text-center">관리</th></tr></thead>
+                        <thead class="bg-slate-800 text-white text-xs">
+                            <tr><th class="p-3 w-32">PJT 코드</th><th class="p-3">프로젝트명</th><th class="p-3 w-32">업체명</th><th class="p-3 w-20 text-center">관리</th></tr>
+                        </thead>
                         <tbody id="pjt-code-tbody" class="divide-y divide-slate-100"></tbody>
                      </table>
                  </div>
@@ -243,6 +249,113 @@
                 
                 <div class="flex-1 overflow-y-auto custom-scrollbar border border-slate-200 rounded-xl p-3 bg-slate-50/50">
                     <ul id="daily-log-list" class="space-y-3 text-xs"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="link-modal" class="fixed inset-0 z-[120] hidden flex items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg transform transition-all border border-slate-200 flex flex-col max-h-[80vh] overflow-hidden">
+            <div class="px-6 py-4 border-b flex justify-between items-center bg-teal-50">
+                <h2 class="text-base font-extrabold text-teal-800"><i class="fa-solid fa-link text-teal-500 mr-1"></i> 다중 문서/링크 관리</h2>
+                <button onclick="window.closeLinkModal()" class="text-teal-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="p-5 bg-white flex-1 flex flex-col overflow-hidden gap-4">
+                <input type="hidden" id="link-req-id">
+                <div class="bg-slate-50 p-3 rounded-lg border border-slate-200"><p class="text-xs font-bold text-teal-600" id="link-project-title">프로젝트명</p></div>
+                
+                <div class="flex flex-col gap-2 bg-teal-50/30 p-4 rounded-xl border border-teal-100">
+                    <input type="text" id="new-link-name" class="px-3 py-2 border rounded-lg text-xs font-bold" placeholder="링크 이름 (예: 구글 스프레드시트, 도면 폴더)">
+                    <div class="flex gap-2">
+                        <input type="url" id="new-link-url" class="flex-1 px-3 py-2 border rounded-lg text-xs" placeholder="https://..." onkeypress="if(event.key==='Enter') window.saveLinkItem()">
+                        <button type="button" onclick="window.saveLinkItem()" class="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap">추가</button>
+                    </div>
+                </div>
+                
+                <div class="flex-1 overflow-y-auto custom-scrollbar border border-slate-200 rounded-xl p-2 bg-white">
+                    <ul id="link-list" class="space-y-2 text-xs divide-y divide-slate-100"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="md-log-modal" class="fixed inset-0 z-[120] hidden flex items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl transform transition-all border border-slate-200 flex flex-col max-h-[85vh] overflow-hidden">
+            <div class="px-6 py-4 border-b flex justify-between items-center bg-purple-50">
+                <div class="flex items-center gap-3">
+                    <h2 class="text-base font-extrabold text-purple-800"><i class="fa-solid fa-business-time text-purple-500 mr-1"></i> 일별 투입 공수(MD) 관리</h2>
+                    <span id="md-total-badge" class="text-[10px] bg-purple-600 text-white px-2 py-0.5 rounded-full font-bold shadow-sm">총 0 MD</span>
+                </div>
+                <button onclick="window.closeMdLogModal()" class="text-purple-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="p-5 bg-white flex-1 flex flex-col overflow-hidden gap-4">
+                <input type="hidden" id="md-req-id">
+                <input type="hidden" id="editing-md-id">
+                <div class="bg-slate-50 p-3 rounded-lg border border-slate-200"><p class="text-xs font-bold text-purple-600" id="md-project-title">프로젝트명</p></div>
+                <div class="flex gap-2 items-center flex-wrap bg-purple-50/30 p-4 rounded-xl border border-purple-100">
+                    <input type="date" id="new-md-date" class="px-3 py-2 border rounded-lg text-xs font-bold w-32">
+                    <input type="number" id="new-md-val" step="0.1" class="px-3 py-2 border rounded-lg text-xs font-bold w-24 text-purple-700" placeholder="MD 입력">
+                    <input type="text" id="new-md-desc" class="flex-1 px-3 py-2 border rounded-lg text-xs" placeholder="작업 내용 (선택)" onkeypress="if(event.key==='Enter') window.saveMdLogItem()">
+                    <button type="button" id="btn-md-save" onclick="window.saveMdLogItem()" class="bg-purple-600 text-white px-4 py-2 rounded-lg text-xs font-bold">등록</button>
+                    <button type="button" id="btn-md-cancel" onclick="window.resetMdLogForm()" class="hidden bg-slate-200 text-slate-600 px-3 py-2 rounded-lg text-xs font-bold">취소</button>
+                </div>
+                <div class="flex-1 overflow-y-auto custom-scrollbar border border-slate-200 rounded-xl">
+                    <table class="w-full text-left border-collapse"><thead class="bg-slate-50 text-[10px] text-slate-500 sticky top-0"><tr><th class="p-3 text-center w-24">일자</th><th class="p-3 text-center w-20">투입 MD</th><th class="p-3">작업 내용</th><th class="p-3 text-center w-20">작업자</th><th class="p-3 text-center w-16">관리</th></tr></thead><tbody id="md-log-list" class="divide-y text-xs"></tbody></table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="comment-modal" class="fixed inset-0 z-[120] hidden flex items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl transform transition-all border border-slate-200 flex flex-col max-h-[85vh] overflow-hidden">
+            <div class="px-6 py-4 border-b flex justify-between items-center bg-amber-50">
+                <div class="flex items-center gap-3">
+                    <h2 class="text-base font-extrabold text-amber-800"><i class="fa-solid fa-comment-dots text-amber-500 mr-1"></i> 현황 코멘트 관리</h2>
+                    <span id="cmt-total-count" class="text-[10px] bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full font-bold">총 0개</span>
+                </div>
+                <button onclick="window.closeCommentModal()" class="text-amber-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="p-5 bg-white flex-1 flex flex-col overflow-hidden gap-4">
+                <input type="hidden" id="cmt-req-id">
+                <input type="hidden" id="reply-to-id">
+                <input type="hidden" id="editing-cmt-id">
+                <div class="bg-slate-50 p-3 rounded-lg border border-slate-200"><p class="text-xs font-bold text-amber-600" id="cmt-project-title">프로젝트명</p></div>
+                <div class="flex-1 overflow-y-auto custom-scrollbar border border-slate-200 rounded-xl bg-slate-50 p-4">
+                    <div id="comment-list" class="space-y-4 text-xs"></div>
+                </div>
+                <div class="flex flex-col gap-2 bg-white pt-2">
+                    <div id="reply-indicator" class="hidden flex items-center justify-between bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100">
+                        <span class="text-[10px] text-indigo-700 font-bold" id="reply-indicator-name"></span>
+                        <button onclick="window.cancelCommentAction()" class="text-[10px] text-rose-500 font-bold">취소</button>
+                    </div>
+                    <div class="flex gap-2">
+                        <input type="text" id="new-cmt-text" class="flex-1 px-3 py-2 border rounded-lg text-xs" placeholder="특이사항이나 코멘트를 남겨주세요..." onkeypress="if(event.key==='Enter') window.saveCommentItem()">
+                        <button type="button" id="btn-cmt-save" onclick="window.saveCommentItem()" class="bg-amber-500 text-white px-4 py-2 rounded-lg text-xs font-bold">작성</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="issue-modal" class="fixed inset-0 z-[120] hidden flex items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl transform transition-all border border-slate-200 flex flex-col max-h-[85vh] overflow-hidden">
+            <div class="px-6 py-4 border-b flex justify-between items-center bg-rose-50">
+                <div class="flex items-center gap-3">
+                    <h2 class="text-base font-extrabold text-rose-800"><i class="fa-solid fa-triangle-exclamation text-rose-500 mr-1"></i> 현황 이슈 관리</h2>
+                    <span id="issue-total-count" class="text-[10px] bg-rose-200 text-rose-800 px-2 py-0.5 rounded-full font-bold">미해결 0건</span>
+                </div>
+                <button onclick="window.closeIssueModal()" class="text-rose-400 hover:text-rose-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="p-5 bg-white flex-1 flex flex-col overflow-hidden gap-4">
+                <input type="hidden" id="issue-req-id">
+                <input type="hidden" id="editing-issue-id">
+                <div class="bg-slate-50 p-3 rounded-lg border border-slate-200"><p class="text-xs font-bold text-rose-600" id="issue-project-title">프로젝트명</p></div>
+                <div class="flex gap-2 items-center bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <input type="text" id="new-issue-text" class="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-xs" placeholder="이슈 내용을 입력하세요..." onkeypress="if(event.key==='Enter') window.saveIssueItem()">
+                    <button type="button" id="btn-issue-save" onclick="window.saveIssueItem()" class="bg-rose-500 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-rose-600">등록</button>
+                </div>
+                <div class="flex-1 overflow-y-auto custom-scrollbar border border-slate-200 rounded-xl p-2">
+                    <ul id="issue-list" class="space-y-2 text-xs"></ul>
                 </div>
             </div>
         </div>
@@ -324,112 +437,6 @@
         </div>
     </div>
 
-    <div id="md-log-modal" class="fixed inset-0 z-[120] hidden flex items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
-        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl transform transition-all border border-slate-200 flex flex-col max-h-[85vh] overflow-hidden">
-            <div class="px-6 py-4 border-b flex justify-between items-center bg-purple-50">
-                <div class="flex items-center gap-3">
-                    <h2 class="text-base font-extrabold text-purple-800"><i class="fa-solid fa-business-time text-purple-500 mr-1"></i> 일별 투입 공수(MD) 관리</h2>
-                    <span id="md-total-badge" class="text-[10px] bg-purple-600 text-white px-2 py-0.5 rounded-full font-bold shadow-sm">총 0 MD</span>
-                </div>
-                <button onclick="window.closeMdLogModal()" class="text-purple-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-lg"></i></button>
-            </div>
-            <div class="p-5 bg-white flex-1 flex flex-col overflow-hidden gap-4">
-                <input type="hidden" id="md-req-id">
-                <input type="hidden" id="editing-md-id">
-                <div class="bg-slate-50 p-3 rounded-lg border border-slate-200"><p class="text-xs font-bold text-purple-600" id="md-project-title">프로젝트명</p></div>
-                <div class="flex gap-2 items-center flex-wrap bg-purple-50/30 p-4 rounded-xl border border-purple-100">
-                    <input type="date" id="new-md-date" class="px-3 py-2 border rounded-lg text-xs font-bold w-32">
-                    <input type="number" id="new-md-val" step="0.1" class="px-3 py-2 border rounded-lg text-xs font-bold w-24 text-purple-700" placeholder="MD 입력">
-                    <input type="text" id="new-md-desc" class="flex-1 px-3 py-2 border rounded-lg text-xs" placeholder="작업 내용 (선택)" onkeypress="if(event.key==='Enter') window.saveMdLogItem()">
-                    <button type="button" id="btn-md-save" onclick="window.saveMdLogItem()" class="bg-purple-600 text-white px-4 py-2 rounded-lg text-xs font-bold">등록</button>
-                    <button type="button" id="btn-md-cancel" onclick="window.resetMdLogForm()" class="hidden bg-slate-200 text-slate-600 px-3 py-2 rounded-lg text-xs font-bold">취소</button>
-                </div>
-                <div class="flex-1 overflow-y-auto custom-scrollbar border border-slate-200 rounded-xl">
-                    <table class="w-full text-left border-collapse"><thead class="bg-slate-50 text-[10px] text-slate-500 sticky top-0"><tr><th class="p-3 text-center w-24">일자</th><th class="p-3 text-center w-20">투입 MD</th><th class="p-3">작업 내용</th><th class="p-3 text-center w-20">작업자</th><th class="p-3 text-center w-16">관리</th></tr></thead><tbody id="md-log-list" class="divide-y text-xs"></tbody></table>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="link-modal" class="fixed inset-0 z-[120] hidden flex items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
-        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg transform transition-all border border-slate-200 flex flex-col max-h-[80vh] overflow-hidden">
-            <div class="px-6 py-4 border-b flex justify-between items-center bg-teal-50">
-                <h2 class="text-base font-extrabold text-teal-800"><i class="fa-solid fa-link text-teal-500 mr-1"></i> 다중 문서/링크 관리</h2>
-                <button onclick="window.closeLinkModal()" class="text-teal-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-lg"></i></button>
-            </div>
-            <div class="p-5 bg-white flex-1 flex flex-col overflow-hidden gap-4">
-                <input type="hidden" id="link-req-id">
-                <div class="bg-slate-50 p-3 rounded-lg border border-slate-200"><p class="text-xs font-bold text-teal-600" id="link-project-title">프로젝트명</p></div>
-                
-                <div class="flex flex-col gap-2 bg-teal-50/30 p-4 rounded-xl border border-teal-100">
-                    <input type="text" id="new-link-name" class="px-3 py-2 border rounded-lg text-xs font-bold" placeholder="링크 이름 (예: 구글 스프레드시트, 도면 폴더)">
-                    <div class="flex gap-2">
-                        <input type="url" id="new-link-url" class="flex-1 px-3 py-2 border rounded-lg text-xs" placeholder="https://..." onkeypress="if(event.key==='Enter') window.saveLinkItem()">
-                        <button type="button" onclick="window.saveLinkItem()" class="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap">추가</button>
-                    </div>
-                </div>
-                <div class="flex-1 overflow-y-auto custom-scrollbar border border-slate-200 rounded-xl p-2 bg-white">
-                    <ul id="link-list" class="space-y-2 text-xs divide-y divide-slate-100"></ul>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="comment-modal" class="fixed inset-0 z-[120] hidden flex items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
-        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl transform transition-all border border-slate-200 flex flex-col max-h-[85vh] overflow-hidden">
-            <div class="px-6 py-4 border-b flex justify-between items-center bg-amber-50">
-                <div class="flex items-center gap-3">
-                    <h2 class="text-base font-extrabold text-amber-800"><i class="fa-solid fa-comment-dots text-amber-500 mr-1"></i> 현황 코멘트 관리</h2>
-                    <span id="cmt-total-count" class="text-[10px] bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full font-bold">총 0개</span>
-                </div>
-                <button onclick="window.closeCommentModal()" class="text-amber-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-lg"></i></button>
-            </div>
-            <div class="p-5 bg-white flex-1 flex flex-col overflow-hidden gap-4">
-                <input type="hidden" id="cmt-req-id">
-                <input type="hidden" id="reply-to-id">
-                <input type="hidden" id="editing-cmt-id">
-                <div class="bg-slate-50 p-3 rounded-lg border border-slate-200"><p class="text-xs font-bold text-amber-600" id="cmt-project-title">프로젝트명</p></div>
-                <div class="flex-1 overflow-y-auto custom-scrollbar border border-slate-200 rounded-xl bg-slate-50 p-4">
-                    <div id="comment-list" class="space-y-4 text-xs"></div>
-                </div>
-                <div class="flex flex-col gap-2 bg-white pt-2">
-                    <div id="reply-indicator" class="hidden flex items-center justify-between bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100">
-                        <span class="text-[10px] text-indigo-700 font-bold" id="reply-indicator-name"></span>
-                        <button onclick="window.cancelCommentAction()" class="text-[10px] text-rose-500 font-bold">취소</button>
-                    </div>
-                    <div class="flex gap-2">
-                        <input type="text" id="new-cmt-text" class="flex-1 px-3 py-2 border rounded-lg text-xs" placeholder="특이사항이나 코멘트를 남겨주세요..." onkeypress="if(event.key==='Enter') window.saveCommentItem()">
-                        <button type="button" id="btn-cmt-save" onclick="window.saveCommentItem()" class="bg-amber-500 text-white px-4 py-2 rounded-lg text-xs font-bold">작성</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="issue-modal" class="fixed inset-0 z-[120] hidden flex items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
-        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl transform transition-all border border-slate-200 flex flex-col max-h-[85vh] overflow-hidden">
-            <div class="px-6 py-4 border-b flex justify-between items-center bg-rose-50">
-                <div class="flex items-center gap-3">
-                    <h2 class="text-base font-extrabold text-rose-800"><i class="fa-solid fa-triangle-exclamation text-rose-500 mr-1"></i> 현황 이슈 관리</h2>
-                    <span id="issue-total-count" class="text-[10px] bg-rose-200 text-rose-800 px-2 py-0.5 rounded-full font-bold">미해결 0건</span>
-                </div>
-                <button onclick="window.closeIssueModal()" class="text-rose-400 hover:text-rose-600"><i class="fa-solid fa-xmark text-lg"></i></button>
-            </div>
-            <div class="p-5 bg-white flex-1 flex flex-col overflow-hidden gap-4">
-                <input type="hidden" id="issue-req-id">
-                <input type="hidden" id="editing-issue-id">
-                <div class="bg-slate-50 p-3 rounded-lg border border-slate-200"><p class="text-xs font-bold text-rose-600" id="issue-project-title">프로젝트명</p></div>
-                <div class="flex gap-2 items-center bg-slate-50 p-4 rounded-xl border border-slate-200">
-                    <input type="text" id="new-issue-text" class="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-xs" placeholder="이슈 내용을 입력하세요..." onkeypress="if(event.key==='Enter') window.saveIssueItem()">
-                    <button type="button" id="btn-issue-save" onclick="window.saveIssueItem()" class="bg-rose-500 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-rose-600">등록</button>
-                </div>
-                <div class="flex-1 overflow-y-auto custom-scrollbar border border-slate-200 rounded-xl p-2">
-                    <ul id="issue-list" class="space-y-2 text-xs"></ul>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <div id="write-modal" class="fixed inset-0 z-[150] hidden flex items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
         <div class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl transform transition-all border border-slate-200 flex flex-col max-h-full overflow-hidden">
             <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-blue-50">
@@ -481,187 +488,673 @@
         </div>
     </div>
 
-    <div id="ai-modal" class="fixed inset-0 z-[60] hidden flex items-center justify-center bg-slate-900/70 backdrop-blur-sm">
-        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md border border-purple-200 flex flex-col relative overflow-hidden">
-            <div class="px-6 py-4 border-b flex justify-between items-center bg-white z-10">
-                <h2 class="text-lg font-extrabold text-slate-800"><i class="fa-solid fa-wand-magic-sparkles text-purple-500 mr-1"></i> AI 브리핑</h2>
-                <button onclick="window.closeAiModal()" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-xl"></i></button>
-            </div>
-            <div class="p-6 bg-slate-50/50 z-10 flex-1"><div id="ai-modal-content" class="text-sm font-medium text-slate-700 leading-relaxed whitespace-pre-wrap"></div></div>
-            <div class="px-6 py-4 bg-white border-t z-10"><button onclick="window.closeAiModal()" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-xl shadow-md">확인</button></div>
-        </div>
-    </div>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { initializeFirestore, memoryLocalCache, collection, doc, setDoc, getDoc, getDocs, query, orderBy, deleteDoc, serverTimestamp, addDoc, onSnapshot, where, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        
+        const firebaseConfig = {
+            apiKey: "AIzaSyBWmFHVD2wczvkHh7ovXQv0QD95dA2oAuw",
+            authDomain: "axms-e9655.firebaseapp.com",
+            projectId: "axms-e9655",
+            storageBucket: "axms-e9655.firebasestorage.app",
+            messagingSenderId: "1049294200223",
+            appId: "1:1049294200223:web:7db23819234772a1ab71aa"
+        };
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = initializeFirestore(app, { localCache: memoryLocalCache(), experimentalForceLongPolling: true });
 
-    <div id="view-simulation" class="view-section hidden flex-col gap-8">
-        <div class="flex items-center gap-2 overflow-x-auto bg-slate-50 p-3 rounded-2xl border border-slate-200 shadow-sm">
-            <span id="save-status" class="text-[11px] font-bold text-slate-400 mr-auto ml-2 hidden sm:block"></span>
-            <button onclick="window.toggleAiApiPanel()" class="btn-hover-effect text-rose-600 hover:text-white px-4 py-2 rounded-xl font-bold transition-colors bg-rose-50 hover:bg-rose-500 text-xs border border-rose-200 shadow-sm flex items-center gap-2 flex-shrink-0"><i class="fa-solid fa-key"></i><span class="hidden sm:inline">API 인증관리</span></button>
-            <button onclick="window.openProjectModal()" class="btn-hover-effect text-slate-600 hover:text-amber-600 px-4 py-2 rounded-xl font-bold transition-colors bg-white hover:bg-amber-50 text-xs border border-slate-200 shadow-sm flex items-center gap-2 flex-shrink-0"><i class="fa-solid fa-folder-open text-amber-500"></i><span class="hidden lg:inline">불러오기</span></button>
-            <button id="btn-save" onclick="window.saveToFirestore(false)" class="btn-hover-effect text-indigo-600 hover:text-white px-4 py-2 rounded-xl font-bold transition-colors bg-indigo-50 hover:bg-indigo-600 text-xs border border-indigo-200 shadow-sm flex items-center gap-2 flex-shrink-0"><i class="fa-solid fa-cloud-arrow-up"></i><span class="hidden sm:inline">저장</span></button>
-        </div>
+        // ===== 통합된 자바스크립트 로직 (ui.js, project.js, 등 모두 포함) =====
+        window.currentUser = null; window.userProfile = null; window.allSystemUsers = []; window.teamMembers = []; window.allDashProjects = []; window.allDashMdLogs = []; window.currentProjectStatusList = []; window.pjtCodeMasterList = []; window.currentRequestList = []; window.currentWeeklyLogList = []; window.currentProcessData = []; window.projectLogs = []; window.masterPresets = {}; window.projectCommentCounts = {}; window.projectIssueCounts = {}; window.projectLogCounts = {}; window.currentSelectedMembers = [];
+        window.currentProjDashView = 'list'; window.currentProjPartTab = '제조'; window.currentCategoryFilter = 'all'; window.currentReqView = 'list'; window.currentAppId = null; window.editingReqId = null; window.latestP50Md = 0; window.originalProjectName = ''; window.pendingSaveData = null; window.isProjectDirty = false; window.pendingAction = null; window.currentTab = 'hist'; window.latestHistData = null; window.latestTorData = null; window.theChart = null; window.dashChartObj = null; window.currentProjectId = null;
 
-        <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200/60 dark:border-slate-700 p-6 flex flex-wrap gap-8 items-center justify-between">
-            <div class="flex items-center gap-8 w-full">
-                <div class="flex items-center gap-4">
-                    <div class="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-500 shadow-sm"><i class="fa-solid fa-calculator text-lg"></i></div>
-                    <div class="flex flex-col">
-                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 text-indigo-500">산출 기법</span>
-                        <select id="sim-method" class="border-0 p-0 text-sm font-extrabold text-slate-800 dark:text-slate-200 bg-transparent focus:ring-0 cursor-pointer auto-save-trigger" onchange="window.handleMethodChange(); window.addSystemLog('산출 기법을 변경했습니다.', 'system');">
-                            <option value="mc">🎲 몬테카를로 (Monte Carlo)</option>
-                            <option value="pert">🎯 3점 추정 (Triangular)</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="w-px h-10 bg-slate-200 dark:bg-slate-700 hidden md:block"></div>
-                <div class="flex items-center gap-4 flex-1">
-                    <div class="w-12 h-12 rounded-2xl bg-purple-50 flex items-center justify-center text-purple-500 shadow-sm"><i class="fa-solid fa-industry text-lg"></i></div>
-                    <div class="flex flex-col flex-1">
-                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 text-purple-500">마스터 설비 프리셋 (DB)</span>
-                        <div class="flex items-center gap-3 flex-wrap">
-                            <select id="eq-type" class="border border-slate-200 rounded-xl px-4 py-2 text-sm font-extrabold text-slate-800 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-purple-500 cursor-pointer auto-save-trigger w-full max-w-sm transition-all" onchange="window.handleTypeChange(); window.addSystemLog('프리셋을 로드했습니다.', 'system');"></select>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        let projectStatusSnapshotUnsubscribe = null, masterCodeSnapshotUnsubscribe = null, currentMdLogUnsubscribe = null, currentLogUnsubscribe = null, currentCommentUnsubscribe = null, currentIssueUnsubscribe = null, unsubscribeRequests = null, currentWeeklyLogUnsubscribe = null, homeReqSnapshotUnsubscribe = null, homeProjSnapshotUnsubscribe = null, homeMdLogSnapshotUnsubscribe = null, allUsersUnsubscribe=null, teamMembersUnsubscribe=null;
 
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            <div class="lg:col-span-7 space-y-8">
-                <section class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200/60 dark:border-slate-700 overflow-hidden">
-                    <div class="px-8 py-5 border-b border-slate-100 dark:border-slate-700 flex items-center gap-3">
-                        <i class="fa-solid fa-id-card text-slate-400"></i>
-                        <h2 class="text-sm font-extrabold text-slate-800 dark:text-slate-200">프로젝트 정보</h2>
-                    </div>
-                    <div class="p-8 grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50/30 dark:bg-slate-900/30">
-                        <div class="flex flex-col gap-2">
-                            <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">프로젝트 코드</label>
-                            <input type="text" id="sim-project-code" placeholder="예: PRJ-2603-01" class="w-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-800 dark:text-slate-200 shadow-sm outline-none auto-save-trigger">
-                        </div>
-                        <div class="flex flex-col gap-2">
-                            <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">프로젝트 명</label>
-                            <input type="text" id="sim-project-name" placeholder="예: 3way 조립기 신규" class="w-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-800 dark:text-slate-200 shadow-sm outline-none auto-save-trigger">
-                        </div>
-                        <div class="flex flex-col gap-2">
-                            <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">담당자</label>
-                            <input type="text" id="sim-manager-name" placeholder="홍길동 선임" class="w-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-800 dark:text-slate-200 shadow-sm outline-none auto-save-trigger">
-                        </div>
-                    </div>
-                </section>
+        window.getTriangularRandom = (min, mode, max) => { let u=Math.random(); let F=(mode-min)/(max-min); return u<=F ? min+Math.sqrt(u*(max-min)*(mode-min)) : max-Math.sqrt((1-u)*(max-min)*(max-mode)); };
+        window.getNormalRandom = (mean, stdDev) => { let u1=Math.random(); if(u1===0) u1=0.0001; return (Math.sqrt(-2.0*Math.log(u1))*Math.cos(2.0*Math.PI*Math.random()))*stdDev + mean; };
+        window.getLocalDateStr = (d) => (!d||isNaN(d.getTime()))?"":d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,'0')+"-"+String(d.getDate()).padStart(2,'0');
+        window.getDateTimeStr = (d) => (!d||isNaN(d.getTime()))?"":d.getFullYear().toString().slice(2)+"-"+String(d.getMonth()+1).padStart(2,'0')+"-"+String(d.getDate()).padStart(2,'0')+" "+String(d.getHours()).padStart(2,'0')+":"+String(d.getMinutes()).padStart(2,'0');
+        window.getWeekString = function(d) { const date = new Date(d.getTime()); date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay()||7)); const yearStart = new Date(Date.UTC(date.getUTCFullYear(),0,1)); const weekNo = Math.ceil(( ( (date - yearStart) / 86400000) + 1)/7); return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`; };
+        window.getDatesFromWeek = function(weekStr) { const [year, week] = weekStr.split('-W'); const d = new Date(year, 0, 1); const dayOffset = (d.getDay() <= 4 && d.getDay() !== 0) ? 1 : 8; const firstMonday = new Date(year, 0, d.getDate() - d.getDay() + dayOffset); const start = new Date(firstMonday.getTime() + (week - 1) * 7 * 24 * 60 * 60 * 1000); const end = new Date(start); end.setDate(end.getDate() + 6); end.setHours(23, 59, 59, 999); return { start, end }; };
+        window.getWeekNumberInMonth = function(dateObj) { const firstDay = new Date(dateObj.getFullYear(), dateObj.getMonth(), 1).getDay(); return Math.ceil((dateObj.getDate() + (firstDay === 0 ? 6 : firstDay - 1)) / 7); };
 
-                <section class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200/60 dark:border-slate-700 relative z-30">
-                    <div class="px-8 py-5 border-b border-slate-100 dark:border-slate-700 flex items-center gap-3">
-                        <i class="fa-solid fa-sliders text-slate-400"></i>
-                        <h2 class="text-sm font-extrabold text-slate-800 dark:text-slate-200">기본 설정</h2>
-                    </div>
-                    <div class="p-8 grid grid-cols-2 gap-6 bg-slate-50/30 dark:bg-slate-900/30 rounded-b-3xl">
-                        <div class="flex flex-col gap-2 relative group w-full">
-                            <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1 cursor-help border-b border-dashed border-slate-400 w-max">장비 제작 대수 (대)</label>
-                            <input type="number" id="equip-qty" value="1" min="1" class="w-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 rounded-2xl px-4 py-3 text-right font-black text-indigo-700 dark:text-indigo-400 calc-trigger auto-save-trigger shadow-sm focus:ring-2 focus:ring-indigo-500">
-                        </div>
-                        <div class="flex flex-col gap-2 relative group w-full">
-                            <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1 cursor-help border-b border-dashed border-slate-400 w-max">적용 학습 곡선 (%)</label>
-                            <input type="number" id="learning-curve" value="95" min="50" max="100" class="w-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 rounded-2xl px-4 py-3 text-right font-bold text-slate-800 dark:text-slate-200 calc-trigger auto-save-trigger shadow-sm">
-                        </div>
-                        <div class="mc-only flex flex-col gap-2 relative group w-full">
-                            <label class="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider ml-1 cursor-help border-b border-dashed border-indigo-400 w-max">MC 시뮬레이션 횟수</label>
-                            <input type="number" id="mc-iterations" value="5000" class="w-full border border-indigo-200 dark:border-indigo-800 bg-indigo-50/30 dark:bg-indigo-900/30 rounded-2xl px-4 py-3 text-right font-bold text-indigo-900 dark:text-indigo-200 calc-trigger auto-save-trigger shadow-sm">
-                        </div>
-                        <div class="mc-only flex flex-col gap-2 relative group w-full">
-                            <label class="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider ml-1 cursor-help border-b border-dashed border-indigo-400 w-max">데이터 불확실성 (%)</label>
-                            <input type="number" id="mc-uncertainty" value="5" class="w-full border border-indigo-200 dark:border-indigo-800 bg-indigo-50/30 dark:bg-indigo-900/30 rounded-2xl px-4 py-3 text-right font-bold text-indigo-900 dark:text-indigo-200 calc-trigger auto-save-trigger shadow-sm">
-                        </div>
-                    </div>
-                </section>
+        const koreaHolidays = new Set(['2024-01-01','2024-03-01','2024-05-06','2024-12-25','2025-01-01','2025-05-05','2025-10-06','2025-12-25']); 
+        window.isWorkDay = (d) => { const el=document.getElementById('apply-holidays'); if(!el||!el.checked) return true; if(d.getDay()===0||d.getDay()===6) return false; return !koreaHolidays.has(window.getLocalDateStr(d)); };
+        window.calculateWorkDate = (s, d) => { let dt = new Date(s); if(isNaN(dt.getTime())) return new Date(); let a = 0; while(a<d) { dt.setDate(dt.getDate()+1); if(window.isWorkDay(dt)) a++; } return dt; };
+        window.getWorkingDays = (sStr, eStr) => { let s=new Date(sStr), e=new Date(eStr); if(isNaN(s)||isNaN(e)||s>e) return 0; let c=0, cur=new Date(s); while(cur<=e) { if(window.isWorkDay(cur)) c++; cur.setDate(cur.getDate()+1); } return c; };
 
-                <section class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200/60 dark:border-slate-700 overflow-hidden relative border-l-8 border-l-indigo-500">
-                    <div class="px-8 py-5 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-white">
-                        <h2 class="text-sm font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-2"><i class="fa-solid fa-list-ol text-indigo-500"></i> 산출 기준 데이터 <span class="text-indigo-600 dark:text-indigo-400">(전체 공정)</span></h2>
-                        <button id="btn-add-process" onclick="window.addProcessRow()" class="btn-hover-effect bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-200 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 dark:bg-indigo-900/30 dark:border-indigo-800 dark:text-indigo-300"><i class="fa-solid fa-plus text-[10px]"></i> 공정 추가</button>
-                    </div>
-                    <div class="p-0 overflow-x-auto max-h-[500px] overflow-y-auto">
-                        <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
-                            <thead class="bg-slate-50/80 dark:bg-slate-900/80 sticky top-0 z-10" id="process-thead"></thead>
-                            <tbody class="bg-white dark:bg-slate-800 divide-y divide-slate-50 dark:divide-slate-700" id="process-tbody"></tbody>
-                        </table>
-                    </div>
-                </section>
+        window.showToast = (msg, type="success") => { 
+            const c=document.getElementById('toast-container'); if(!c)return; 
+            const t=document.createElement('div'); 
+            t.className="toast text-white px-6 py-3 rounded-xl shadow-lg text-sm font-bold z-[9999] flex items-center gap-2 " + (type==="success"?"bg-emerald-600":"bg-rose-600"); 
+            t.innerHTML=(type==="success"?'<i class="fa-solid fa-circle-check"></i> ':'<i class="fa-solid fa-triangle-exclamation"></i> ')+msg; 
+            c.appendChild(t); 
+            setTimeout(()=>{ t.style.opacity='0'; setTimeout(()=>t.remove(),300); },3000); 
+        };
 
-                <div id="dynamic-unit-sections" class="space-y-6"></div>
+        window.getChosung = (str) => { const cho=["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"]; let res=""; for(let i=0; i<str.length; i++) { let c=str.charCodeAt(i)-44032; if(c>-1&&c<11172) res+=cho[Math.floor(c/588)]; else res+=str.charAt(i); } return res; };
+        window.matchString = (q, t) => { if(!q) return true; if(!t) return false; q=q.toLowerCase(); t=t.toLowerCase(); if(t.includes(q)) return true; if(window.getChosung(t).includes(q)) return true; return false; };
 
-                <section class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200/60 dark:border-slate-700 relative z-20">
-                    <div class="px-8 py-5 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
-                        <h2 class="text-sm font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                            <i class="fa-solid fa-users-gear text-slate-400"></i> 리스크 및 자원 운영
-                        </h2>
-                    </div>
-                    <div class="p-8 flex flex-col gap-6 bg-slate-50/30 dark:bg-slate-900/30 rounded-b-3xl">
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div class="flex flex-col gap-2"><label class="text-[11px] font-bold text-slate-500 ml-1 tracking-wider">난이도 보정</label><input type="number" id="diff-multiplier" value="1.0" step="0.1" class="w-full border border-slate-300 bg-white rounded-2xl px-4 py-3 text-right font-semibold text-slate-800 calc-trigger auto-save-trigger shadow-sm"></div>
-                            <div class="flex flex-col gap-2"><label class="text-[11px] font-bold text-slate-500 ml-1 tracking-wider">재작업률 (%)</label><input type="number" id="rework-rate" value="2" min="0" class="w-full border border-slate-300 bg-white rounded-2xl px-4 py-3 text-right font-semibold text-slate-800 calc-trigger auto-save-trigger shadow-sm"></div>
-                            <div class="flex flex-col gap-2"><label class="text-[11px] font-bold text-slate-500 ml-1 tracking-wider">버퍼 (%)</label><input type="number" id="buffer-rate" value="3" min="0" class="w-full border border-slate-300 bg-white rounded-2xl px-4 py-3 text-right font-semibold text-slate-800 calc-trigger auto-save-trigger shadow-sm"></div>
-                        </div>
+        window.toggleDarkMode = () => { const h=document.documentElement, i=document.getElementById('dark-mode-icon'); if(h.classList.contains('dark')) { h.classList.remove('dark'); localStorage.setItem('color-theme', 'light'); if(i) i.className='fa-solid fa-moon'; } else { h.classList.add('dark'); localStorage.setItem('color-theme', 'dark'); if(i) i.className='fa-solid fa-sun text-amber-400'; } };
+        window.toggleSidebar = (fShow) => { const s=document.getElementById('sidebar'), b=document.getElementById('sidebar-backdrop'); if(!s||!b) return; if(fShow===true||s.classList.contains('-translate-x-full')) { s.classList.remove('-translate-x-full'); b.classList.remove('hidden'); } else { s.classList.add('-translate-x-full'); b.classList.add('hidden'); } };
+        window.toggleAuthMode = (mode) => { 
+            if (mode==='signup') { 
+                document.getElementById('signup-fields')?.classList.remove('hidden'); document.getElementById('action-buttons-login')?.classList.add('hidden'); document.getElementById('action-buttons-signup')?.classList.remove('hidden'); document.getElementById('login-view')?.classList.add('hidden'); document.getElementById('signup-view')?.classList.remove('hidden'); if(document.getElementById('auth-title')) document.getElementById('auth-title').innerText='AXBIS 계정 생성'; document.getElementById('login-error')?.classList.add('hidden'); 
+            } else { 
+                document.getElementById('signup-fields')?.classList.add('hidden'); document.getElementById('action-buttons-login')?.classList.remove('hidden'); document.getElementById('action-buttons-signup')?.classList.add('hidden'); document.getElementById('login-view')?.classList.remove('hidden'); document.getElementById('signup-view')?.classList.add('hidden'); if(document.getElementById('auth-title')) document.getElementById('auth-title').innerText='AXBIS Cloud 접속'; document.getElementById('signup-error')?.classList.add('hidden'); 
+            } 
+        };
 
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 border-t border-slate-200 dark:border-slate-700 pt-6">
-                            <div class="flex flex-col gap-2"><label class="text-[11px] font-bold text-slate-500 ml-1 tracking-wider">프로젝트 시작일</label><input type="date" id="start-date" class="w-full border border-slate-300 bg-white rounded-2xl px-4 py-3 calc-trigger auto-save-trigger text-sm font-semibold text-slate-700 shadow-sm"></div>
-                            <div class="flex flex-col gap-2"><label class="text-[11px] font-bold text-purple-600 ml-1 tracking-wider">목표 조립 완료일</label><input type="date" id="target-date" class="w-full border border-purple-300 bg-white rounded-2xl px-4 py-3 calc-trigger auto-save-trigger text-sm font-semibold text-purple-700 shadow-sm"></div>
-                            <div class="flex flex-col gap-2"><label class="text-[11px] font-bold text-rose-600 ml-1 tracking-wider">출하 예정일</label><input type="date" id="shipping-date" class="w-full border border-rose-300 bg-rose-50 rounded-2xl px-4 py-3 calc-trigger auto-save-trigger text-sm font-semibold text-rose-800 shadow-sm"></div>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div class="flex flex-col gap-2"><label class="text-[11px] font-bold text-emerald-600 ml-1 tracking-wider">1MD 인건비(원)</label><input type="number" id="labor-cost" value="300000" class="w-full border border-emerald-200 bg-emerald-50 rounded-2xl px-4 py-3 text-right font-semibold text-emerald-900 calc-trigger auto-save-trigger shadow-sm"></div>
-                            <div class="flex flex-col gap-2"><label class="text-[11px] font-bold text-amber-600 ml-1 tracking-wider">예상 기타 경비(원)</label><input type="number" id="planned-expense" value="0" min="0" class="w-full border border-amber-200 bg-amber-50 rounded-2xl px-4 py-3 text-right font-semibold text-amber-900 calc-trigger auto-save-trigger shadow-sm"></div>
-                        </div>
-                    </div>
-                </section>
-            </div>
+        window.checkLogin = async () => { 
+            const e=document.getElementById('login-id')?.value.trim(); 
+            const p=document.getElementById('login-pw')?.value.trim(); 
+            const err=document.getElementById('login-error'); 
+            if(!e||!p) { if(err) { err.innerText="이메일과 비밀번호를 입력하세요."; err.classList.remove('hidden'); } return; } 
+            try { await signInWithEmailAndPassword(auth, e, p); } catch(er) { if(err) { err.innerText="정보가 일치하지 않습니다."; err.classList.remove('hidden'); } } 
+        };
+
+        window.signUp = async () => { 
+            const n=document.getElementById('login-name')?.value.trim()||document.getElementById('signup-name')?.value.trim(); 
+            const t=document.getElementById('login-team')?.value||document.getElementById('signup-dept')?.value; 
+            const e=document.getElementById('login-id')?.value.trim()||document.getElementById('signup-id')?.value.trim(); 
+            const p=document.getElementById('login-pw')?.value.trim()||document.getElementById('signup-pw')?.value.trim(); 
+            const err=document.getElementById('login-error')||document.getElementById('signup-error'); 
+            if(!n||!e||!p) { if(err){ err.innerHTML="모든 정보를 입력하세요."; err.classList.remove('hidden'); } return; } 
+            if(p.length<6) { if(err){ err.innerHTML="비밀번호는 6자리 이상이어야 합니다."; err.classList.remove('hidden'); } return; } 
+            try { 
+                const uC = await createUserWithEmailAndPassword(auth, e, p); 
+                await setDoc(doc(db, "users", uC.user.uid), { 
+                    email:e, name:n, team:t, department:t, role:'pending', 
+                    permissions:{ collab:true, purchase:true, assembly:true, repair:true, 'project-status':true, 'weekly-log':true } 
+                }); 
+                if(err){ err.innerHTML="가입 성공! 관리자 승인 대기 중입니다."; err.className="text-emerald-500 text-[11px] font-bold text-center mt-2 bg-emerald-50 p-3 rounded-xl border border-emerald-100 break-words"; err.classList.remove('hidden'); } 
+                setTimeout(()=>window.logout(), 3000); 
+            } catch(er) { 
+                if(err){ err.innerHTML=er.code==='auth/email-already-in-use'?"이미 가입된 이메일입니다.":er.message; err.className="text-rose-500 text-[11px] font-bold text-center mt-2 bg-rose-50 p-3 rounded-xl border border-rose-100 break-words"; err.classList.remove('hidden'); } 
+            } 
+        };
+
+        window.logout = async () => { await signOut(auth); location.reload(); };
+
+        window.openApp = function(viewId, title) {
+            window.toggleSidebar(false);
+            let permissionKey = viewId.replace('view-', '');
+            if (permissionKey.startsWith('project-status')) permissionKey = 'project-status';
             
-            <div class="lg:col-span-5 space-y-8 lg:sticky lg:top-24">
-                <section class="glass-dark rounded-3xl shadow-2xl text-white p-8 relative overflow-hidden">
-                    <div class="flex justify-between items-center mb-8 relative z-10">
-                        <h2 class="text-lg font-extrabold flex items-center gap-3 text-slate-100 tracking-wide"><i class="fa-solid fa-bolt text-indigo-400"></i> 납기 시뮬레이션 결과</h2>
-                    </div>
-                    <div class="bg-slate-800/60 backdrop-blur-xl rounded-[1.5rem] p-7 border border-slate-700 mb-6 shadow-2xl relative overflow-hidden z-10">
-                        <div class="absolute left-0 top-0 w-1.5 h-full bg-gradient-to-b from-indigo-400 to-purple-500"></div>
-                        <div class="flex justify-between items-start gap-6">
-                            <div class="flex-1">
-                                <p class="text-indigo-300 text-[11px] font-extrabold mb-2">P50 (조립 평균 공수)</p>
-                                <div class="flex items-baseline gap-2"><span id="out-p50-md" class="text-6xl font-black tracking-tighter text-white drop-shadow-lg">0.0</span><span class="text-lg font-bold text-slate-400 uppercase">MD</span></div>
-                                <div class="mt-4 inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-xl flex-wrap">
-                                    <i class="fa-solid fa-sack-dollar text-emerald-400 text-xs"></i><span class="text-[13px] text-emerald-300 font-bold"><span id="out-p50-cost">0</span> 원</span>
-                                </div>
-                            </div>
-                            <div class="text-right flex-shrink-0 pt-2 min-w-[130px]">
-                                <p class="text-slate-400 text-[10px] font-bold mb-2 uppercase tracking-widest">조립 완료 예정일</p>
-                                <div class="text-2xl font-black text-white tracking-tighter mb-2"><span id="out-p50-date">-</span></div>
-                                <div class="text-[11px] text-indigo-300 font-bold bg-indigo-500/10 inline-block px-3 py-1 rounded-full"><span id="out-p50-dur">0</span>일 소요</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-4 relative z-10">
-                        <div class="bg-slate-800/40 backdrop-blur-sm rounded-2xl p-5 border border-slate-700/60 relative overflow-hidden">
-                            <div class="absolute left-0 top-0 w-1 h-full bg-emerald-500"></div>
-                            <p class="text-emerald-400 text-[10px] font-extrabold mb-2 uppercase tracking-widest">P10 (낙관)</p>
-                            <div class="font-bold text-2xl text-slate-100"><span id="out-p10-md">0.0</span><span class="text-xs text-slate-500 ml-1">MD</span></div>
-                            <div class="text-[13px] font-medium text-slate-300 mt-1" id="out-p10-date">-</div>
-                        </div>
-                        <div class="bg-slate-800/40 backdrop-blur-sm rounded-2xl p-5 border border-slate-700/60 relative overflow-hidden">
-                            <div class="absolute left-0 top-0 w-1 h-full bg-rose-500"></div>
-                            <p class="text-rose-400 text-[10px] font-extrabold mb-2 uppercase tracking-widest">P90 (안전)</p>
-                            <div class="font-bold text-2xl text-slate-100"><span id="out-p90-md">0.0</span><span class="text-xs text-slate-500 ml-1">MD</span></div>
-                            <div class="text-[13px] font-medium text-slate-300 mt-1" id="out-p90-date">-</div>
-                        </div>
-                    </div>
-                </section>
-                
-                <section class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200/60 dark:border-slate-700 overflow-hidden flex flex-col">
-                    <div class="flex border-b border-slate-100 p-2 gap-2">
-                        <button onclick="window.switchTab('hist')" id="tab-hist" class="flex-1 py-2.5 text-xs font-extrabold rounded-xl bg-white text-indigo-600 shadow-sm border border-slate-200">📊 분포</button>
-                        <button onclick="window.switchTab('tor')" id="tab-tor" class="flex-1 py-2.5 text-xs font-bold rounded-xl text-slate-500 hover:bg-slate-100 border border-transparent">🌪️ 민감도</button>
-                    </div>
-                    <div class="w-full relative h-[300px] p-6"><canvas id="chart-canvas"></canvas></div>
-                </section>
-            </div>
-        </div>
+            if (permissionKey !== 'dashboard-proj' && permissionKey !== 'simulation' && window.userProfile && window.userProfile.permissions && !window.userProfile.permissions[permissionKey]) {
+                window.showToast("접근 권한이 없습니다.", "error"); return;
+            }
 
-    <script type="module" src="./js/app.js"></script>
+            document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+            document.getElementById('nav-title').innerText = title;
+            
+            if(viewId.startsWith('view-project-status')) {
+                window.currentProjPartTab = viewId.includes('opt') ? '광학' : '제조';
+                document.getElementById('view-project-status').classList.remove('hidden');
+                document.getElementById('pjt-dash-title-label').innerText = title;
+                window.currentCategoryFilter = 'all'; const catSelect = document.getElementById('filter-category-select'); if(catSelect) catSelect.value = 'all';
+                document.getElementById('btn-part-mfg').className = window.currentProjPartTab === '제조' ? "px-4 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all" : "px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all";
+                document.getElementById('btn-part-opt').className = window.currentProjPartTab === '광학' ? "px-4 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all" : "px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all";
+                if(window.toggleProjDashView) window.toggleProjDashView(window.currentProjDashView || 'list');
+                if(window.loadProjectStatusData) window.loadProjectStatusData();
+            } else if (viewId === 'view-weekly-log') {
+                document.getElementById('view-weekly-log').classList.remove('hidden');
+                const now = new Date();
+                const weekNum = window.getWeekString ? window.getWeekString(now) : '';
+                document.getElementById('weekly-log-filter-week').value = weekNum;
+                if(window.loadWeeklyLogsData) window.loadWeeklyLogsData();
+            } else if (viewId === 'view-simulation') {
+                document.getElementById('view-simulation').classList.remove('hidden');
+                document.getElementById('view-simulation').classList.add('flex');
+            } else {
+                document.getElementById('view-requests').classList.remove('hidden');
+                window.currentAppId = permissionKey; 
+                document.getElementById('req-list-title').innerText = title + " 목록";
+                if(window.toggleRequestView) window.toggleRequestView('list');
+                if(window.loadRequestsData) window.loadRequestsData(window.currentAppId);
+            }
+        };
+
+        window.navigateHome = function() {
+            window.toggleSidebar(false);
+            document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+            document.getElementById('view-dashboard-home').classList.remove('hidden');
+            document.getElementById('nav-title').innerText = "통합 대시보드 홈";
+            if(window.loadHomeDashboards) window.loadHomeDashboards();
+        };
+
+        window.toggleDashPeriod = function() {
+            const unit = document.getElementById('dash-time-unit').value;
+            if(unit === 'week') {
+                document.getElementById('dash-month-select').classList.add('hidden'); document.getElementById('dash-week-select').classList.remove('hidden'); document.getElementById('dash-month-charts').classList.add('hidden'); document.getElementById('dash-week-charts').classList.remove('hidden'); document.getElementById('dash-week-charts').classList.add('grid');
+            } else {
+                document.getElementById('dash-week-select').classList.add('hidden'); document.getElementById('dash-month-select').classList.remove('hidden'); document.getElementById('dash-week-charts').classList.add('hidden'); document.getElementById('dash-week-charts').classList.remove('grid'); document.getElementById('dash-month-charts').classList.remove('hidden');
+            }
+            if(window.renderMonthlyDetail) window.renderMonthlyDetail();
+        };
+
+        window.loadHomeDashboards = function() {
+            if(homeReqSnapshotUnsubscribe) homeReqSnapshotUnsubscribe();
+            if(homeProjSnapshotUnsubscribe) homeProjSnapshotUnsubscribe();
+            if(homeMdLogSnapshotUnsubscribe) homeMdLogSnapshotUnsubscribe();
+            const now = new Date(); const yyyy = now.getFullYear().toString(); const yyyymm = `${yyyy}-${String(now.getMonth()+1).padStart(2,'0')}`;
+            if(!document.getElementById('dash-year-select').value) document.getElementById('dash-year-select').value = yyyy;
+            if(!document.getElementById('dash-month-select').value) document.getElementById('dash-month-select').value = yyyymm;
+            homeProjSnapshotUnsubscribe = onSnapshot(collection(db, "projects_status"), (snapshot) => { window.allDashProjects = []; snapshot.forEach(docSnap => window.allDashProjects.push({ id: docSnap.id, ...docSnap.data() })); if(window.processDashboardData) window.processDashboardData(); });
+            homeMdLogSnapshotUnsubscribe = onSnapshot(collection(db, "project_md_logs"), (snapshot) => { window.allDashMdLogs = []; snapshot.forEach(docSnap => window.allDashMdLogs.push({ id: docSnap.id, ...docSnap.data() })); if(window.processDashboardData) window.processDashboardData(); });
+        };
+
+        window.processDashboardData = function() {
+            const year = document.getElementById('dash-year-select').value; const teamSize = window.teamMembers ? window.teamMembers.length : 0;
+            let stats = { estMd: 0, curMd: 0, completed: 0 }; let delayedCount = 0; let annualPlanData = Array(12).fill(0); let annualActData = Array(12).fill(0);
+            window.allDashProjects.forEach(data => {
+                let isInYear = false;
+                if(data.status === 'pending' || data.status === 'progress' || data.status === 'inspecting') isInYear = true;
+                if(data.d_shipEn && data.d_shipEn.startsWith(year)) isInYear = true;
+                if(data.d_shipEst && data.d_shipEst.startsWith(year)) { isInYear = true; let mIdx = parseInt(data.d_shipEst.split('-')[1]) - 1; annualPlanData[mIdx] += parseFloat(data.estMd) || 0; }
+                if(!isInYear) return;
+                stats.estMd += parseFloat(data.estMd) || 0;
+                let yearMd = 0;
+                window.allDashMdLogs.forEach(log => { if(log.projectId === data.id && log.date && log.date.startsWith(year)) { let mdV = parseFloat(log.md) || 0; yearMd += mdV; let mIdx = parseInt(log.date.split('-')[1]) - 1; annualActData[mIdx] += mdV; } });
+                stats.curMd += yearMd;
+                if(data.status === 'completed') stats.completed++;
+            });
+            if(document.getElementById('dash-pd-estMd')) document.getElementById('dash-pd-estMd').innerText = stats.estMd.toFixed(1);
+            if(document.getElementById('dash-pd-curMd')) document.getElementById('dash-pd-curMd').innerText = stats.curMd.toFixed(1);
+            if(document.getElementById('dash-pd-completed')) document.getElementById('dash-pd-completed').innerText = stats.completed;
+            if(window.renderMonthlyDetail) window.renderMonthlyDetail();
+        };
+
+        window.loadCounts = function() {
+            onSnapshot(collection(db, "project_comments"), snap => {
+                window.projectCommentCounts = {};
+                snap.forEach(doc => { let d = doc.data(); if(d.projectId) window.projectCommentCounts[d.projectId] = (window.projectCommentCounts[d.projectId]||0)+1; });
+                if(window.currentProjDashView === 'list' && document.getElementById('view-project-status').classList.contains('hidden') === false) window.renderProjectStatusList();
+            });
+            onSnapshot(collection(db, "project_issues"), snap => {
+                window.projectIssueCounts = {};
+                snap.forEach(doc => { let d = doc.data(); if(d.projectId && !d.isResolved) window.projectIssueCounts[d.projectId] = (window.projectIssueCounts[d.projectId]||0)+1; });
+                if(window.currentProjDashView === 'list' && document.getElementById('view-project-status').classList.contains('hidden') === false) window.renderProjectStatusList();
+            });
+            onSnapshot(collection(db, "daily_logs"), snap => {
+                window.projectLogCounts = {};
+                snap.forEach(doc => { let d = doc.data(); if(d.projectId) window.projectLogCounts[d.projectId] = (window.projectLogCounts[d.projectId]||0)+1; });
+                if(window.currentProjDashView === 'list' && document.getElementById('view-project-status').classList.contains('hidden') === false) window.renderProjectStatusList();
+            });
+        };
+
+        window.switchProjPartTab = function(part) {
+            window.currentProjPartTab = part; window.currentCategoryFilter = 'all'; const catSelect = document.getElementById('filter-category-select'); if(catSelect) catSelect.value = 'all';
+            document.getElementById('btn-part-mfg').className = part === '제조' ? "px-4 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all" : "px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all";
+            document.getElementById('btn-part-opt').className = part === '광학' ? "px-4 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all" : "px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all";
+            window.loadProjectStatusData();
+        };
+
+        window.filterByCategory = function(category) { 
+            window.currentCategoryFilter = category; 
+            if(window.currentProjDashView === 'gantt') window.renderProjGantt(); 
+            else if(window.currentProjDashView === 'calendar') window.renderProjCalendar();
+            else window.renderProjectStatusList(); 
+        };
+
+        window.searchProjectBoard = function(keyword) {
+            const k = keyword.toLowerCase();
+            document.querySelectorAll('#proj-dash-tbody tr').forEach(tr => {
+                const text = tr.innerText.toLowerCase();
+                tr.style.display = (text.includes(k) || window.matchString(k, text)) ? '' : 'none';
+            });
+        };
+
+        window.loadProjectStatusData = function() {
+            if(projectStatusSnapshotUnsubscribe) projectStatusSnapshotUnsubscribe();
+            projectStatusSnapshotUnsubscribe = onSnapshot(query(collection(db, "projects_status")), (snapshot) => {
+                window.currentProjectStatusList = []; let lastUpdated = 0;
+                snapshot.forEach(doc => { const data = doc.data(); if(data.part === window.currentProjPartTab) window.currentProjectStatusList.push({ id: doc.id, ...data }); if(data.updatedAt && data.updatedAt.toMillis() > lastUpdated) lastUpdated = data.updatedAt.toMillis();});
+                if (lastUpdated > 0) { const lDate = new Date(lastUpdated); document.getElementById('pjt-last-update').innerText = `${lDate.getFullYear().toString().slice(2)}-${String(lDate.getMonth()+1).padStart(2,'0')}-${String(lDate.getDate()).padStart(2,'0')} ${String(lDate.getHours()).padStart(2,'0')}:${String(lDate.getMinutes()).padStart(2,'0')}`; }
+                window.currentProjectStatusList.sort((a,b) => { const tA = a.createdAt ? a.createdAt.toMillis() : 0; const tB = b.createdAt ? b.createdAt.toMillis() : 0; return tB - tA; });
+                if(window.updateMiniDashboard) window.updateMiniDashboard();
+                
+                if(window.currentProjDashView === 'gantt') window.renderProjGantt(); 
+                else if(window.currentProjDashView === 'calendar') window.renderProjCalendar();
+                else window.renderProjectStatusList();
+            });
+        };
+
+        window.updateMiniDashboard = function() {
+            let pending = 0, progress = 0, completedThisMonth = 0;
+            let upcomingCodes7 = [], upcomingCodes14 = [];
+            const now = new Date(); const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+            const completedLabel = document.getElementById('mini-dash-completed-label');
+            if (completedLabel) completedLabel.innerHTML = `<i class="fa-solid fa-truck-fast text-emerald-400"></i> 출하 완료 (${now.getMonth() + 1}월)`;
+
+            window.currentProjectStatusList.forEach(item => {
+                if (item.status === 'pending' || item.status === 'rejected') pending++;
+                else if (item.status === 'progress' || item.status === 'inspecting') progress++;
+                else if (item.status === 'completed') {
+                    if ((item.d_shipEn && item.d_shipEn.startsWith(currentMonthStr)) || (!item.d_shipEn && item.d_shipEst && item.d_shipEst.startsWith(currentMonthStr))) completedThisMonth++;
+                }
+
+                if (item.status !== 'completed' && item.status !== 'rejected' && item.d_shipEst) {
+                    const shipDate = new Date(item.d_shipEst);
+                    const diffDays = Math.ceil((shipDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                    if (diffDays >= 0 && diffDays <= 7) upcomingCodes7.push({ code: item.code || '미지정', dDay: diffDays });
+                    else if (diffDays < 0) upcomingCodes7.push({ code: item.code || '미지정', dDay: diffDays });
+                    else if (diffDays > 7 && diffDays <= 14) upcomingCodes14.push({ code: item.code || '미지정', dDay: diffDays });
+                }
+            });
+
+            upcomingCodes7.sort((a,b) => a.dDay - b.dDay); upcomingCodes14.sort((a,b) => a.dDay - b.dDay);
+
+            if(document.getElementById('mini-dash-pending')) document.getElementById('mini-dash-pending').innerText = pending;
+            if(document.getElementById('mini-dash-progress')) document.getElementById('mini-dash-progress').innerText = progress;
+            if(document.getElementById('mini-dash-completed')) document.getElementById('mini-dash-completed').innerText = completedThisMonth;
+            
+            const elUpcoming7 = document.getElementById('mini-dash-upcoming');
+            if(elUpcoming7) {
+                elUpcoming7.innerHTML = upcomingCodes7.length === 0 ? `<span class="text-[10px] text-rose-400 font-bold">임박한 프로젝트 없음</span>` : upcomingCodes7.map(u => {
+                    let dText = u.dDay === 0 ? 'D-Day' : (u.dDay < 0 ? `지연` : `D-${u.dDay}`);
+                    let bgClass = u.dDay <= 3 ? 'bg-rose-500 text-white border-rose-600' : 'bg-white text-rose-600 border-rose-200';
+                    return `<span class="text-[10px] border px-1.5 py-0.5 rounded font-bold shadow-sm flex items-center gap-1 ${bgClass}">${u.code} <span class="opacity-80 text-[8px]">[${dText}]</span></span>`;
+                }).join('');
+            }
+
+            const elUpcoming14 = document.getElementById('mini-dash-upcoming-14');
+            if(elUpcoming14) {
+                elUpcoming14.innerHTML = upcomingCodes14.length === 0 ? `<span class="text-[10px] text-orange-400 font-bold">임박한 프로젝트 없음</span>` : upcomingCodes14.map(u => `<span class="text-[10px] border px-1.5 py-0.5 rounded font-bold shadow-sm flex items-center gap-1 bg-white text-orange-600 border-orange-200">${u.code} <span class="opacity-80 text-[8px]">[D-${u.dDay}]</span></span>`).join('');
+            }
+        };
+
+        window.renderProjectStatusList = function() {
+            const tbody = document.getElementById('proj-dash-tbody'); if(!tbody) return;
+            let displayList = window.currentProjectStatusList;
+            if(window.currentCategoryFilter && window.currentCategoryFilter !== 'all') displayList = displayList.filter(item => item.category === window.currentCategoryFilter);
+            if(displayList.length === 0) { tbody.innerHTML = `<tr><td colspan="28" class="text-center p-6 text-slate-400 font-bold">등록된 PJT 현황이 없습니다.</td></tr>`; return; }
+            
+            const statusMap = { 'pending':'<span class="text-slate-500 bg-slate-100 px-2 py-0.5 rounded">대기/보류</span>', 'progress':'<span class="text-blue-600 bg-blue-50 px-2 py-0.5 rounded">진행중(제작)</span>', 'inspecting':'<span class="text-amber-600 bg-amber-50 px-2 py-0.5 rounded">진행중(검수)</span>', 'completed':'<span class="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">완료(출하)</span>', 'rejected':'<span class="text-rose-600 bg-rose-50 px-2 py-0.5 rounded">보류/불가</span>' };
+            
+            tbody.innerHTML = displayList.map(item => {
+                const fMd = item.finalMd || ((parseFloat(item.currentMd) || 0) + (parseFloat(item.outMd) || 0));
+                const safeNameJs = (item.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, ' ').replace(/\r/g, '');
+                const safeNameHtml = (item.name || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                
+                let linksHtml = '';
+                if(item.links && Array.isArray(item.links) && item.links.length > 0) {
+                    linksHtml = item.links.map(lnk => `<a href="${lnk.url}" target="_blank" title="${lnk.name}" class="text-teal-500 hover:text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded transition-colors"><i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i></a>`).join('');
+                }
+
+                let cCount = window.projectCommentCounts[item.id] || 0;
+                let iCount = window.projectIssueCounts[item.id] || 0;
+                let lCount = window.projectLogCounts?.[item.id] || 0;
+                
+                return `<tr class="hover:bg-indigo-50/50 transition-colors cursor-pointer" onclick="window.editProjStatus('${item.id}')">
+                    <td class="border border-slate-200 px-2 py-1 text-center bg-white sticky left-0 z-10" onclick="event.stopPropagation()"><button onclick="window.deleteProjStatus('${item.id}')" class="text-slate-400 hover:text-rose-500 mx-1"><i class="fa-solid fa-trash-can"></i></button></td>
+                    <td class="border border-slate-200 px-2 py-1 text-center">${item.category || ''}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openCommentModal('${item.id}', '${safeNameJs}')" class="text-amber-400 hover:text-amber-500 relative"><i class="fa-regular fa-comment-dots text-lg"></i> ${cCount > 0 ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm">${cCount}</span>` : ''}</button></td>
+                    <td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openIssueModal('${item.id}', '${safeNameJs}')" class="text-rose-400 hover:text-rose-500 relative"><i class="fa-solid fa-triangle-exclamation text-lg"></i> ${iCount > 0 ? `<span class="absolute -top-1 -right-2 bg-rose-100 text-rose-600 text-[9px] font-bold px-1 rounded-full shadow-sm">${iCount}</span>` : ''}</button></td>
+                    <td class="border border-slate-200 px-2 py-1 text-center font-bold text-indigo-700">${item.code || ''}</td>
+                    <td class="border border-slate-200 px-2 py-1 truncate max-w-[150px]">${safeNameHtml}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center">${item.company || ''}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center font-black text-emerald-600">${item.progress || 0}%</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center">${statusMap[item.status] || ''}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center">${item.manager || ''}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openDailyLogModal('${item.id}', '${safeNameJs}', ${item.progress || 0})" class="text-sky-400 hover:text-sky-500 relative"><i class="fa-solid fa-book text-lg"></i> ${lCount > 0 ? `<span class="absolute -top-1 -right-2 bg-sky-100 text-sky-600 text-[9px] font-bold px-1 rounded-full shadow-sm">${lCount}</span>` : ''}</button></td>
+                    <td class="border border-slate-200 px-2 py-1 text-center text-sky-600">${item.estMd || 0}</td>
+                    <td class="border border-slate-200 px-1 py-1 text-center font-bold" onclick="event.stopPropagation()"><button onclick="window.openMdLogModal('${item.id}', '${safeNameJs}', ${item.currentMd || 0})" class="text-purple-600 hover:bg-purple-50 w-full h-full py-0.5 rounded underline decoration-purple-300">${item.currentMd || 0}</button></td>
+                    <td class="border border-slate-200 px-2 py-1 text-center text-sky-600 font-bold">${fMd.toFixed(1)}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center text-amber-600">${item.totPers || ''}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center text-amber-600">${item.outPers || ''}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center text-amber-600">${item.outMd || ''}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center bg-rose-50/50 text-rose-700">${item.d_shipEst || ''}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center bg-indigo-50/50">${item.d_asmEst || ''}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center bg-indigo-50/50">${item.d_asmEndEst || ''}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center">${item.d_asmSt || ''}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center">${item.d_asmEn || ''}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center">${item.d_insSt || ''}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center">${item.d_insEn || ''}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center bg-rose-50/50 text-rose-700 font-bold">${item.d_shipEn || ''}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center">${item.d_setSt || ''}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center">${item.d_setEn || ''}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()">
+                        <div class="flex items-center justify-center gap-1 flex-wrap">
+                            <button onclick="window.openLinkModal('${item.id}', '${safeNameJs}')" class="text-slate-400 hover:text-teal-500 transition-colors bg-slate-50 px-1.5 py-0.5 rounded shadow-sm border border-slate-200"><i class="fa-solid fa-link"></i></button>
+                            ${linksHtml}
+                        </div>
+                    </td>
+                </tr>`;
+            }).join('');
+        };
+
+        window.openProjStatusWriteModal = function() {
+            document.getElementById('ps-id').value = ''; document.getElementById('ps-code').value = ''; document.getElementById('ps-name').value = ''; document.getElementById('ps-company').value = ''; document.getElementById('ps-part').value = window.currentProjPartTab || '제조'; document.getElementById('ps-category').value = '설비'; document.getElementById('ps-status').value = 'pending'; document.getElementById('ps-progress-pct').value = '0';
+            ['ps-est-md', 'ps-current-md', 'ps-final-md', 'ps-tot-pers', 'ps-out-pers', 'ps-out-md', 'ps-d-rcv-est', 'ps-d-asm-est', 'ps-d-ship-est', 'ps-d-ship-en', 'ps-d-asm-end-est', 'ps-d-asm-st', 'ps-d-asm-en', 'ps-d-ins-st', 'ps-d-ins-en', 'ps-d-set-st', 'ps-d-set-en'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+            document.getElementById('proj-status-write-modal').classList.remove('hidden'); document.getElementById('proj-status-write-modal').classList.add('flex');
+        };
+        window.closeProjStatusWriteModal = function() { document.getElementById('proj-status-write-modal').classList.add('hidden'); document.getElementById('proj-status-write-modal').classList.remove('flex'); };
+        window.editProjStatus = function(id) {
+            const item = window.currentProjectStatusList.find(p => p.id === id); if(!item) return;
+            document.getElementById('ps-id').value = item.id; document.getElementById('ps-code').value = item.code || ''; document.getElementById('ps-name').value = item.name || ''; document.getElementById('ps-company').value = item.company || ''; document.getElementById('ps-part').value = item.part || '제조'; document.getElementById('ps-category').value = item.category || '설비'; document.getElementById('ps-status').value = item.status || 'pending'; document.getElementById('ps-progress-pct').value = item.progress !== undefined ? item.progress : 0; document.getElementById('ps-manager').value = item.manager || '';
+            window.currentSelectedMembers = item.members ? item.members.split(',').map(s=>s.trim()).filter(Boolean) : []; window.renderSelectedMembers();
+            document.getElementById('ps-est-md').value = item.estMd !== undefined ? item.estMd : ''; document.getElementById('ps-current-md').value = item.currentMd !== undefined ? item.currentMd : '';
+            const cMd = parseFloat(item.currentMd) || 0; const oMd = parseFloat(item.outMd) || 0; document.getElementById('ps-final-md').value = (cMd + oMd).toFixed(1);
+            document.getElementById('ps-tot-pers').value = item.totPers !== undefined ? item.totPers : ''; document.getElementById('ps-out-pers').value = item.outPers !== undefined ? item.outPers : ''; document.getElementById('ps-out-md').value = item.outMd !== undefined ? item.outMd : '';
+            ['ps-d-rcv-est', 'ps-d-asm-est', 'ps-d-asm-end-est', 'ps-d-ship-est', 'ps-d-asm-st', 'ps-d-asm-en', 'ps-d-ins-st', 'ps-d-ins-en', 'ps-d-ship-en', 'ps-d-set-st', 'ps-d-set-en'].forEach(id => { const key = id.replace('ps-', '').replace(/-([a-z])/g, g => g[1].toUpperCase()); document.getElementById(id).value = item[key] || ''; });
+            document.getElementById('proj-status-write-modal').classList.remove('hidden'); document.getElementById('proj-status-write-modal').classList.add('flex');
+        };
+        window.saveProjStatus = async function(btn) {
+            const id = document.getElementById('ps-id').value; const code = document.getElementById('ps-code').value; const name = document.getElementById('ps-name').value;
+            if(!code || !name) return window.showToast("코드와 이름을 입력하세요.", "error");
+            btn.disabled = true; btn.innerHTML = '저장중...';
+            const currentMd = parseFloat(document.getElementById('ps-current-md').value) || 0; const outMd = parseFloat(document.getElementById('ps-out-md').value) || 0;
+            const data = { code: code, name: name, company: document.getElementById('ps-company').value, part: document.getElementById('ps-part').value, category: document.getElementById('ps-category').value, status: document.getElementById('ps-status').value, progress: parseInt(document.getElementById('ps-progress-pct').value) || 0, manager: document.getElementById('ps-manager').value, members: document.getElementById('ps-members').value, estMd: parseFloat(document.getElementById('ps-est-md').value) || 0, outMd: outMd, finalMd: currentMd + outMd, totPers: parseInt(document.getElementById('ps-tot-pers').value)||0, outPers: parseInt(document.getElementById('ps-out-pers').value)||0, d_rcvEst: document.getElementById('ps-d-rcv-est').value, d_asmEst: document.getElementById('ps-d-asm-est').value, d_asmEndEst: document.getElementById('ps-d-asm-end-est').value, d_shipEst: document.getElementById('ps-d-ship-est').value, d_asmSt: document.getElementById('ps-d-asm-st').value, d_asmEn: document.getElementById('ps-d-asm-en').value, d_insSt: document.getElementById('ps-d-ins-st').value, d_insEn: document.getElementById('ps-d-ins-en').value, d_shipEn: document.getElementById('ps-d-ship-en').value, d_setSt: document.getElementById('ps-d-set-st').value, d_setEn: document.getElementById('ps-d-set-en').value, updatedAt: serverTimestamp() };
+            try { if(id) { await setDoc(doc(db, "projects_status", id), data, { merge: true }); window.showToast("수정되었습니다."); } else { data.createdAt = serverTimestamp(); data.currentMd = 0; await addDoc(collection(db, "projects_status"), data); window.showToast("등록되었습니다."); } window.closeProjStatusWriteModal(); } catch(e) { window.showToast("오류 발생", "error"); } finally { btn.disabled = false; btn.innerHTML = '현황 저장하기'; }
+        };
+        window.deleteProjStatus = async function(id) { if(!confirm("삭제하시겠습니까?")) return; try { await deleteDoc(doc(db, "projects_status", id)); window.showToast("삭제되었습니다."); } catch(e) { window.showToast("삭제 실패", "error"); } };
+        window.calcFinalMd = function() { const curMd = parseFloat(document.getElementById('ps-current-md').value) || 0; const outMd = parseFloat(document.getElementById('ps-out-md').value) || 0; document.getElementById('ps-final-md').value = (curMd + outMd).toFixed(1); };
+        window.addProjectMember = function(name) { if(!name) return; if(!window.currentSelectedMembers.includes(name)) { window.currentSelectedMembers.push(name); window.renderSelectedMembers(); } document.getElementById('ps-member-add').value = ''; };
+        window.removeProjectMember = function(name) { window.currentSelectedMembers = window.currentSelectedMembers.filter(n => n !== name); window.renderSelectedMembers(); };
+        window.renderSelectedMembers = function() { const container = document.getElementById('ps-selected-members'); document.getElementById('ps-members').value = window.currentSelectedMembers.join(', '); container.innerHTML = window.currentSelectedMembers.map(name => `<span class="bg-indigo-100 text-indigo-700 px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1.5 shadow-sm">${name} <i class="fa-solid fa-xmark cursor-pointer hover:text-rose-500 bg-white/50 rounded-full px-1 py-0.5" onclick="window.removeProjectMember('${name}')"></i></span>`).join(''); };
+
+        window.toggleProjDashView = function(view) {
+            window.currentProjDashView = view;
+            document.getElementById('proj-dash-list-container').classList.add('hidden'); 
+            document.getElementById('proj-dash-gantt-container').classList.add('hidden');
+            document.getElementById('proj-dash-calendar-container').classList.add('hidden');
+            
+            const btns = ['list', 'gantt', 'calendar'];
+            btns.forEach(b => document.getElementById(`btn-pd-${b}`).className = "px-3 py-1.5 text-xs font-bold bg-white border border-slate-200 hover:bg-slate-100 rounded-md text-slate-500 transition-all");
+            document.getElementById(`btn-pd-${view}`).className = "px-3 py-1.5 text-xs font-bold bg-slate-200 shadow-inner rounded-md text-slate-700 transition-all";
+
+            if(view === 'list') document.getElementById('proj-dash-list-container').classList.remove('hidden');
+            else if(view === 'gantt') { document.getElementById('proj-dash-gantt-container').classList.remove('hidden'); window.renderProjGantt(); }
+            else if(view === 'calendar') { document.getElementById('proj-dash-calendar-container').classList.remove('hidden'); window.renderProjCalendar(); }
+        };
+
+        window.renderProjGantt = function() {
+            const container = document.getElementById('proj-dash-gantt-content');
+            let displayList = window.currentProjectStatusList;
+            if(window.currentCategoryFilter && window.currentCategoryFilter !== 'all') displayList = displayList.filter(item => item.category === window.currentCategoryFilter);
+            const projects = displayList.filter(p => p.d_asmSt || p.d_asmEst);
+            if(projects.length === 0) { container.innerHTML = '<div class="text-center p-10 text-slate-500">표시할 일정 데이터가 없습니다.</div>'; return; }
+
+            let minDate = new Date(); let maxDate = new Date(); let hasDates = false;
+            projects.forEach(p => {
+                const dates = [p.d_asmSt, p.d_asmEn, p.d_insSt, p.d_insEn, p.d_shipEn, p.d_setSt, p.d_setEn, p.d_asmEst, p.d_shipEst].filter(d => d).map(d => new Date(d));
+                dates.forEach(d => { if(!hasDates) { minDate = new Date(d); maxDate = new Date(d); hasDates = true; } if(d < minDate) minDate = new Date(d); if(d > maxDate) maxDate = new Date(d); });
+            });
+            if(!hasDates) { container.innerHTML = '<div class="text-center p-10 text-slate-500">표시할 일정 데이터가 없습니다.</div>'; return; }
+            minDate.setDate(minDate.getDate() - 5); maxDate.setDate(maxDate.getDate() + 10);
+            const totalDays = Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24)); const dayWidth = 24; const today = new Date(); today.setHours(0,0,0,0); let todayOffset = -1;
+
+            let html = `<div class="relative min-w-max" style="width: ${totalDays * dayWidth + 300}px"><div class="flex border-b border-slate-200 sticky top-0 bg-white z-30 shadow-sm"><div class="w-[300px] flex-shrink-0 p-3 font-bold text-xs text-slate-700 bg-slate-50 border-r border-slate-200 flex items-center sticky left-0 z-30"><div class="w-[100px] text-indigo-600">PJT 코드</div><div class="w-[200px]">프로젝트명</div></div>`;
+            for(let i=0; i<totalDays; i++) {
+                let d = new Date(minDate); d.setDate(d.getDate() + i);
+                if(d.getTime() === today.getTime()) todayOffset = i * dayWidth;
+                let bgClass = (d.getDay() === 0 || d.getDay() === 6) ? 'bg-slate-50' : 'bg-white';
+                let textClass = d.getDay() === 0 ? 'text-rose-500' : (d.getDay() === 6 ? 'text-blue-500' : 'text-slate-500');
+                if (d.getTime() === today.getTime()) { bgClass = 'bg-rose-50'; textClass = 'text-rose-600 font-black'; }
+                html += `<div class="w-[${dayWidth}px] flex-shrink-0 text-center border-r border-slate-100 ${bgClass} flex flex-col justify-center relative">${(d.getDate() === 1 || i === 0) ? `<div class="text-[8px] font-black bg-slate-200 text-slate-600">${d.getMonth()+1}월</div>` : `<div class="text-[8px] font-bold bg-slate-100 text-transparent select-none">-</div>`}<div class="text-[10px] font-bold ${textClass} py-1">${d.getDate()}</div></div>`;
+            }
+            html += `</div><div class="relative">`;
+            if(todayOffset >= 0) html += `<div class="absolute top-0 bottom-0 w-[2px] bg-rose-500 z-20 pointer-events-none" style="left: ${300 + todayOffset + (dayWidth/2)}px;"><div class="absolute top-0 -translate-x-1/2 -mt-4 bg-rose-500 text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm font-bold whitespace-nowrap">오늘</div></div>`;
+
+            projects.forEach(p => {
+                const safeNameHtml = (p.name || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                html += `<div class="flex border-b border-slate-100 hover:bg-slate-50 relative group cursor-pointer" onclick="window.editProjStatus('${p.id}')"><div class="w-[300px] flex-shrink-0 p-2 text-[11px] font-bold text-slate-700 border-r border-slate-200 bg-white z-10 sticky left-0 flex items-center group-hover:bg-slate-50 transition-colors" title="${safeNameHtml}"><div class="w-[100px] text-indigo-600 truncate font-black pr-1">${p.code || '-'}</div><div class="w-[200px] truncate">${safeNameHtml}</div></div><div class="flex relative" style="width: ${totalDays * dayWidth}px">`;
+                for(let i=0; i<totalDays; i++) { let d = new Date(minDate); d.setDate(d.getDate() + i); html += `<div class="w-[${dayWidth}px] flex-shrink-0 border-r border-slate-50 ${(d.getDay() === 0 || d.getDay() === 6) ? 'bg-slate-50/50' : ''} h-10"></div>`; }
+                const drawBar = (start, end, colorClass, label) => {
+                    if(!start) return ''; let sD = new Date(start); let eD = end ? new Date(end) : new Date(start);
+                    if(sD < minDate) sD = new Date(minDate); if(eD > maxDate) eD = new Date(maxDate); if(sD > eD) eD = new Date(sD);
+                    let leftOffset = Math.floor((sD - minDate) / (1000 * 60 * 60 * 24)) * dayWidth; let width = Math.ceil((eD - sD) / (1000 * 60 * 60 * 24) + 1) * dayWidth;
+                    return `<div class="absolute top-1/2 -translate-y-1/2 h-[18px] rounded-full ${colorClass} text-[9px] text-white flex items-center justify-center font-bold shadow-sm overflow-hidden whitespace-nowrap opacity-90 hover:opacity-100 hover:scale-y-110 transition-all cursor-pointer z-10" style="left: ${leftOffset}px; width: ${width}px;" title="${label}: ${start} ~ ${end||start}"></div>`;
+                };
+                html += drawBar(p.d_asmEst || p.d_asmSt, p.d_asmEndEst || p.d_asmEn, 'bg-indigo-500', '조립'); html += drawBar(p.d_insSt, p.d_insEn, 'bg-teal-500', '검수'); html += drawBar(p.d_setSt, p.d_setEn, 'bg-slate-600', 'Setup');
+                if(p.d_shipEn || p.d_shipEst) { let shipD = new Date(p.d_shipEn || p.d_shipEst); let leftOffset = Math.floor((shipD - minDate) / (1000 * 60 * 60 * 24)) * dayWidth; html += `<div class="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded bg-rose-500 transform rotate-45 shadow-sm border-2 border-white z-10" style="left: ${leftOffset + dayWidth/2 - 7}px;" title="출하: ${p.d_shipEn || p.d_shipEst}"></div>`; }
+                html += `</div></div>`;
+            });
+            html += `</div></div>`; 
+            container.innerHTML = html;
+            setTimeout(() => { const scrollContainer = document.getElementById('proj-dash-gantt-container'); if(scrollContainer && todayOffset > 0) scrollContainer.scrollLeft = todayOffset - 200; }, 100);
+        };
+
+        window.renderProjCalendar = function() {
+            const container = document.getElementById('proj-dash-calendar-content');
+            let displayList = window.currentProjectStatusList;
+            if(window.currentCategoryFilter && window.currentCategoryFilter !== 'all') displayList = displayList.filter(item => item.category === window.currentCategoryFilter);
+            
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth();
+            const firstDay = new Date(year, month, 1).getDay();
+            const lastDate = new Date(year, month + 1, 0).getDate();
+            
+            let html = `<div class="p-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-black text-indigo-800">${year}년 ${month + 1}월 프로젝트 주요 일정</h3>
+                    <div class="flex gap-2 text-[10px] font-bold">
+                        <span class="bg-indigo-100 text-indigo-700 px-2 py-1 rounded border border-indigo-200">조립진행</span>
+                        <span class="bg-rose-100 text-rose-700 px-2 py-1 rounded border border-rose-200">출하예정</span>
+                    </div>
+                </div>
+                <div class="grid grid-cols-7 gap-1 text-center font-bold text-xs text-slate-500 mb-2">
+                    <div class="text-rose-500">일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div class="text-blue-500">토</div>
+                </div>
+                <div class="grid grid-cols-7 gap-1 auto-rows-fr">`;
+            
+            for(let i=0; i<firstDay; i++) { html += `<div class="min-h-[100px] bg-slate-50 rounded-lg border border-slate-100"></div>`; }
+            
+            for(let date=1; date<=lastDate; date++) {
+                const currentDateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(date).padStart(2,'0')}`;
+                let dayEvents = '';
+                
+                displayList.forEach(p => {
+                    const safeNameHtml = (p.name || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    let isAsm = false;
+                    if(p.d_asmSt && p.d_asmEn) { if(currentDateStr >= p.d_asmSt && currentDateStr <= p.d_asmEn) isAsm = true; } 
+                    else if(p.d_asmEst && p.d_asmEndEst) { if(currentDateStr >= p.d_asmEst && currentDateStr <= p.d_asmEndEst) isAsm = true; }
+                    if(isAsm) dayEvents += `<div class="text-[9px] bg-indigo-500 text-white px-1.5 py-0.5 rounded mb-0.5 truncate cursor-pointer shadow-sm hover:scale-[1.02] transition-transform" onclick="window.editProjStatus('${p.id}')" title="${safeNameHtml}">${p.code} 조립</div>`;
+                    
+                    if(p.d_shipEn === currentDateStr || (!p.d_shipEn && p.d_shipEst === currentDateStr)) {
+                        dayEvents += `<div class="text-[9px] bg-rose-500 text-white px-1.5 py-0.5 rounded mb-0.5 truncate cursor-pointer shadow-sm hover:scale-[1.02] transition-transform" onclick="window.editProjStatus('${p.id}')" title="${safeNameHtml}">${p.code} 출하</div>`;
+                    }
+                });
+
+                const isToday = (date === now.getDate());
+                const badge = isToday ? `<span class="bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center mx-auto shadow-md">${date}</span>` : date;
+                
+                html += `<div class="min-h-[100px] bg-white rounded-lg border ${isToday ? 'border-indigo-400 bg-indigo-50/10' : 'border-slate-200'} p-1 hover:bg-slate-50 transition-colors">
+                    <div class="text-xs font-bold text-slate-700 mb-1 text-center">${badge}</div>
+                    <div class="flex flex-col gap-0.5 overflow-hidden">${dayEvents}</div>
+                </div>`;
+            }
+            html += `</div></div>`;
+            container.innerHTML = html;
+        };
+
+        window.openAdminModal = () => { document.getElementById('admin-modal').classList.remove('hidden'); document.getElementById('admin-modal').classList.add('flex'); window.renderAdminUsers(); };
+        window.closeAdminModal = () => { document.getElementById('admin-modal').classList.add('hidden'); document.getElementById('admin-modal').classList.remove('flex'); };
+        window.renderAdminUsers = () => {
+            const tb = document.getElementById('admin-users-tbody'); if (!tb) return;
+            if (window.allSystemUsers.length === 0) { tb.innerHTML = '<tr><td colspan="6" class="text-center p-6 text-slate-500 font-bold">등록된 사용자가 없습니다.</td></tr>'; return; }
+            let sortedUsers = [...window.allSystemUsers].sort((a, b) => { if (a.role === 'pending' && b.role !== 'pending') return -1; if (a.role !== 'pending' && b.role === 'pending') return 1; return 0; });
+            let html = '';
+            sortedUsers.forEach(u => {
+                const p = u.permissions || {}; const isP = u.role === 'pending';
+                html += `<tr class="hover:bg-slate-50 transition-colors ${isP ? 'bg-amber-50/50' : ''}"><td class="p-3 text-center font-bold text-slate-700">${u.name}</td><td class="p-3 text-center text-slate-600">${u.team || u.department || ''}</td><td class="p-3 text-center text-slate-500">${u.email}</td><td class="p-3 text-center"><select class="border border-slate-300 rounded px-2 py-1.5 text-xs font-bold ${isP ? 'text-amber-600' : 'text-slate-600'}" onchange="window.updateUserRole('${u.uid}', this.value)"><option value="pending" ${u.role === 'pending' ? 'selected' : ''}>승인 대기</option><option value="user" ${u.role === 'user' ? 'selected' : ''}>일반 사용자</option><option value="master" ${u.role === 'master' ? 'selected' : ''}>마스터</option><option value="admin" ${u.role === 'admin' ? 'selected' : ''}>시스템 관리자</option></select></td><td class="p-3"><div class="flex flex-wrap gap-3 justify-center"><label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p.collab ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','collab',this.checked)">협업</label><label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p.purchase ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','purchase',this.checked)">구매</label><label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p.assembly ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','assembly',this.checked)">조립</label><label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p.repair ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','repair',this.checked)">수리/점검</label><label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p['project-status'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','project-status',this.checked)">PJT현황판</label><label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p['weekly-log'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','weekly-log',this.checked)">주간업무</label></div></td><td class="p-3 text-center"><div class="flex items-center justify-center gap-1">${isP ? `<button onclick="window.updateUserRole('${u.uid}', 'user')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-2 py-1 rounded text-[10px] font-bold shadow-sm transition-colors whitespace-nowrap">승인하기</button>` : ''}<button onclick="window.deleteUser('${u.uid}')" class="bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white px-2 py-1 rounded transition-colors"><i class="fa-solid fa-trash-can text-sm"></i></button></div></td></tr>`;
+            });
+            tb.innerHTML = html;
+        };
+        window.updateUserRole = async (uid, role) => { try { await setDoc(doc(db, "users", uid), { role: role }, { merge: true }); window.showToast("등급이 변경되었습니다."); } catch (e) { window.showToast("오류 발생", "error"); } };
+        window.updateUserPerm = async (uid, key, val) => { try { const uR = doc(db, "users", uid); const uD = await getDoc(uR); if (uD.exists()) { let p = uD.data().permissions || {}; p[key] = val; await setDoc(uR, { permissions: p }, { merge: true }); window.showToast("권한이 업데이트되었습니다."); } } catch (e) { window.showToast("오류 발생", "error"); } };
+        window.deleteUser = async (uid) => { if (!confirm("이 사용자를 정말 삭제하시겠습니까?")) return; try { await deleteDoc(doc(db, "users", uid)); window.showToast("삭제되었습니다."); } catch (e) { window.showToast("오류 발생", "error"); } };
+
+        window.openTeamModal = function() { document.getElementById('team-modal').classList.remove('hidden'); document.getElementById('team-modal').classList.add('flex'); window.renderTeamMembers(); };
+        window.closeTeamModal = function() { document.getElementById('team-modal').classList.add('hidden'); document.getElementById('team-modal').classList.remove('flex'); };
+        window.renderTeamMembers = function() {
+            const tbody = document.getElementById('team-list-tbody'); if(!tbody) return;
+            document.getElementById('team-modal-count').innerText = `총 ${window.teamMembers.length}명`;
+            if(window.teamMembers.length === 0) { tbody.innerHTML = '<tr><td colspan="3" class="text-center p-6 text-slate-500 font-bold">등록된 팀원이 없습니다.</td></tr>'; return; }
+            tbody.innerHTML = window.teamMembers.map(t => `<tr class="hover:bg-slate-50 transition-colors"><td class="p-3 text-center"><span class="bg-indigo-50 text-indigo-600 px-2 py-1 rounded text-[10px] font-bold border border-indigo-100">${t.part}</span></td><td class="p-3 font-bold text-slate-700">${t.name}</td><td class="p-3 text-center"><button onclick="window.deleteTeamMember('${t.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button></td></tr>`).join('');
+        };
+        window.addTeamMember = async function() {
+            const name = document.getElementById('new-team-name').value.trim(); const part = document.getElementById('new-team-part').value;
+            if(!name) return window.showToast("이름을 입력하세요.", "error");
+            try { await addDoc(collection(db, "team_members"), { name, part, createdAt: Date.now() }); document.getElementById('new-team-name').value = ''; window.showToast("팀원이 추가되었습니다."); } catch(e) { window.showToast("오류 발생", "error"); }
+        };
+        window.deleteTeamMember = async function(id) {
+            if(!confirm("이 팀원을 삭제하시겠습니까?")) return;
+            try { await deleteDoc(doc(db, "team_members", id)); window.showToast("삭제되었습니다."); } catch(e) { window.showToast("오류 발생", "error"); }
+        };
+
+        window.toggleBulkPjtInput = function() {
+            const bulkSection = document.getElementById('bulk-pjt-section');
+            bulkSection.classList.toggle('hidden');
+        };
+
+        window.bulkAddProjectCodes = async function() {
+            const text = document.getElementById('bulk-pjt-input').value;
+            if(!text.trim()) return window.showToast("데이터를 붙여넣어 주세요.", "error");
+
+            const lines = text.split('\n');
+            const validItems = [];
+            for(let line of lines) {
+                if(!line.trim()) continue;
+                let parts = line.split('\t');
+                if(parts.length < 2) parts = line.split(',');
+                if(parts.length < 2) parts = line.trim().split(/\s{2,}/);
+                
+                if(parts.length >= 2) {
+                    let code = parts[0].trim();
+                    let name = parts[1].trim();
+                    let company = parts.length > 2 ? parts[2].trim() : '-';
+                    if(code && name) validItems.push({ code, name, company });
+                }
+            }
+
+            if(validItems.length === 0) return window.showToast("등록할 유효한 데이터가 없습니다.", "error");
+            window.showToast(`${validItems.length}건의 코드를 서버에 등록 중입니다...`, "success");
+            
+            try {
+                for(let i=0; i<validItems.length; i+=400) {
+                    const chunk = validItems.slice(i, i+400);
+                    const batch = writeBatch(db);
+                    chunk.forEach((item, idx) => {
+                        const docRef = doc(collection(db, "project_codes"));
+                        batch.set(docRef, { code: item.code, name: item.name, company: item.company, createdAt: Date.now() + i + idx });
+                    });
+                    await batch.commit();
+                }
+                window.showToast(`총 ${validItems.length}건 일괄 등록 완료!`);
+                document.getElementById('bulk-pjt-input').value = '';
+                window.toggleBulkPjtInput();
+            } catch(e) { window.showToast("일괄 등록 중 오류 발생", "error"); console.error(e); }
+        };
+
+        window.deleteAllProjectCodes = async function() {
+            if(!confirm("⚠️ 경고: 등록된 모든 마스터 코드를 정말 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.")) return;
+            const pwd = prompt("전체 삭제를 진행하려면 아래 텍스트를 정확히 입력하세요.\n[ 삭제확인 ]");
+            if(pwd !== '삭제확인') return window.showToast("입력이 일치하지 않아 취소되었습니다.", "error");
+
+            window.showToast("전체 데이터를 삭제 중입니다. 잠시만 기다려주세요...", "success");
+            try {
+                const snap = await getDocs(query(collection(db, "project_codes")));
+                let batches = []; let currentBatch = writeBatch(db); let count = 0;
+                snap.forEach(doc => {
+                    currentBatch.delete(doc.ref); count++;
+                    if (count % 400 === 0) { batches.push(currentBatch.commit()); currentBatch = writeBatch(db); }
+                });
+                if (count % 400 !== 0) batches.push(currentBatch.commit());
+                await Promise.all(batches);
+                window.showToast(`총 ${count}건의 마스터 코드가 완전히 삭제되었습니다.`);
+            } catch(e) { window.showToast("전체 삭제 중 오류가 발생했습니다.", "error"); console.error(e); }
+        };
+
+        window.openProjCodeMasterModal = function() { document.getElementById('proj-code-master-modal').classList.remove('hidden'); document.getElementById('proj-code-master-modal').classList.add('flex'); window.loadProjectCodeMaster(); };
+        window.closeProjCodeMasterModal = function() { document.getElementById('proj-code-master-modal').classList.add('hidden'); document.getElementById('proj-code-master-modal').classList.remove('flex'); };
+        window.loadProjectCodeMaster = function() {
+            if(masterCodeSnapshotUnsubscribe) masterCodeSnapshotUnsubscribe();
+            masterCodeSnapshotUnsubscribe = onSnapshot(collection(db, "project_codes"), (snapshot) => {
+                window.pjtCodeMasterList = []; snapshot.forEach(doc => { window.pjtCodeMasterList.push({ id: doc.id, ...doc.data() }); });
+                window.pjtCodeMasterList.sort((a,b) => b.createdAt - a.createdAt);
+                const modal = document.getElementById('proj-code-master-modal'); if (modal && !modal.classList.contains('hidden')) { window.renderProjCodeMasterList(); }
+            });
+        };
+        window.renderProjCodeMasterList = function() {
+            const tbody = document.getElementById('pjt-code-tbody'); if(!tbody) return;
+            if(window.pjtCodeMasterList.length === 0) { tbody.innerHTML = `<tr><td colspan="4" class="text-center p-6 text-slate-400 font-bold">등록된 PJT 코드가 없습니다.</td></tr>`; return; }
+            tbody.innerHTML = window.pjtCodeMasterList.map(c => `<tr class="hover:bg-slate-50 transition-colors"><td class="p-3 font-bold text-indigo-600">${c.code}</td><td class="p-3 font-bold text-slate-700">${c.name}</td><td class="p-3 text-slate-600">${c.company}</td><td class="p-3 text-center"><button onclick="window.deleteProjectCode('${c.id}')" class="text-slate-400 hover:text-rose-500 p-1"><i class="fa-solid fa-trash-can"></i></button></td></tr>`).join('');
+        };
+        window.addProjectCode = async function() {
+            const code = document.getElementById('new-pjt-code').value.trim(); const name = document.getElementById('new-pjt-name').value.trim(); const comp = document.getElementById('new-pjt-company').value.trim();
+            if(!code || !name || !comp) { window.showToast("코드, 명칭, 업체명을 모두 입력해주세요.", "error"); return; }
+            try {
+                window.pjtCodeMasterList.unshift({ id: 'temp-'+Date.now(), code: code, name: name, company: comp, createdAt: Date.now() }); window.renderProjCodeMasterList();
+                await addDoc(collection(db, "project_codes"), { code: code, name: name, company: comp, createdAt: Date.now() });
+                window.showToast("마스터 코드가 등록되었습니다."); document.getElementById('new-pjt-code').value = ''; document.getElementById('new-pjt-name').value = ''; document.getElementById('new-pjt-company').value = '';
+            } catch(e) { window.showToast("등록 실패", "error"); }
+        };
+        window.deleteProjectCode = async function(id) {
+            if(!confirm("해당 마스터 코드를 삭제하시겠습니까?")) return;
+            window.pjtCodeMasterList = window.pjtCodeMasterList.filter(c => c.id !== id); window.renderProjCodeMasterList();
+            try { if(id && !String(id).startsWith('temp-')) { await deleteDoc(doc(db, "project_codes", id)); } window.showToast("삭제되었습니다."); } catch(e) { window.showToast("삭제 실패", "error"); }
+        };
+        window.showAutocomplete = function(inputEl, nameId, compId, isNameSearch=false) {
+            let listId = inputEl.id + '-autocomplete-list'; let listEl = document.getElementById(listId);
+            if(!listEl) {
+                listEl = document.createElement('div'); listEl.id = listId; listEl.className = "absolute z-50 w-[150%] max-w-[400px] bg-white border border-slate-200 shadow-2xl rounded-xl mt-1 hidden max-h-60 overflow-y-auto custom-scrollbar";
+                inputEl.parentNode.style.position = 'relative'; inputEl.parentNode.appendChild(listEl);
+                document.addEventListener('click', (e) => { if(e.target !== inputEl && !listEl.contains(e.target)) listEl.classList.add('hidden'); });
+            }
+            const queryStr = inputEl.value; let matches = window.pjtCodeMasterList;
+            if(queryStr.trim() !== '') matches = window.pjtCodeMasterList.filter(c => window.matchString(queryStr, c.code) || window.matchString(queryStr, c.name) || window.matchString(queryStr, c.company));
+            matches = matches.slice(0, 100);
+            if(matches.length === 0) { listEl.innerHTML = `<div class="p-3 text-xs text-slate-400 text-center font-bold">검색 결과 없음<br><span class="text-[9px] font-normal">(직접 입력하여 사용 가능)</span></div>`; } else {
+                listEl.innerHTML = matches.map(c => `<div class="p-3 text-xs hover:bg-indigo-50 cursor-pointer border-b border-slate-100 last:border-0 transition-colors" onclick="window.selectAutocomplete('${inputEl.id}', '${nameId}', '${compId}', '${c.code}', '${c.name}', '${c.company}', ${isNameSearch})"><div class="font-black text-indigo-600 mb-0.5">${c.code}</div><div class="text-slate-700 font-bold truncate">${c.name} <span class="text-slate-400 font-medium ml-1">(${c.company})</span></div></div>`).join('');
+            }
+            listEl.classList.remove('hidden');
+        };
+        window.selectAutocomplete = function(inputId, nameId, compId, code, name, company, isNameSearch) {
+            if(isNameSearch) { document.getElementById(inputId).value = name; if(nameId && document.getElementById(nameId)) document.getElementById(nameId).value = code; } else { document.getElementById(inputId).value = code; if(nameId && document.getElementById(nameId)) document.getElementById(nameId).value = name; }
+            if(compId && document.getElementById(compId)) document.getElementById(compId).value = company;
+            document.getElementById(inputId + '-autocomplete-list').classList.add('hidden');
+        };
+
+        window.openWriteModal = function() { window.editingReqId = null; document.getElementById('req-project-name').value = ''; document.getElementById('req-title').value = ''; document.getElementById('write-modal').classList.remove('hidden'); document.getElementById('write-modal').classList.add('flex'); };
+        window.closeWriteModal = function() { document.getElementById('write-modal').classList.add('hidden'); document.getElementById('write-modal').classList.remove('flex'); };
+        window.saveRequest = async function(btn) {
+            const title = document.getElementById('req-title').value; if(!title) return window.showToast("제목을 입력하세요", "error");
+            btn.disabled=true; btn.innerHTML='저장중...';
+            try { const data = { type: window.currentAppId, status: 'pending', title: title, authorUid: window.currentUser.uid, authorName: window.userProfile.name, authorTeam: window.userProfile.team, updatedAt: serverTimestamp() }; if(window.editingReqId) { await setDoc(doc(db,"requests",window.editingReqId), data, {merge:true}); } else { data.createdAt = serverTimestamp(); await addDoc(collection(db,"requests"), data); } window.showToast("등록 완료"); window.closeWriteModal(); } catch(e) { window.showToast("에러", "error"); } finally { btn.disabled=false; btn.innerHTML='저장하기'; }
+        };
+        window.loadRequestsData = function(appId) { if(unsubscribeRequests) unsubscribeRequests(); unsubscribeRequests = onSnapshot(query(collection(db, "requests"), where("type", "==", appId)), (s) => { window.currentRequestList=[]; s.forEach(d=>window.currentRequestList.push({id:d.id,...d.data()})); window.currentRequestList.sort((a,b)=>(b.createdAt?.toMillis()||0)-(a.createdAt?.toMillis()||0)); if(window.renderRequestList) window.renderRequestList(); }); };
+        window.renderRequestList = function() { const tb = document.getElementById('request-tbody'); if(!tb) return; if(window.currentRequestList.length===0) { tb.innerHTML='<tr><td colspan="6" class="text-center p-8">데이터 없음</td></tr>'; return; } tb.innerHTML = window.currentRequestList.map(r=>`<tr class="hover:bg-slate-50"><td class="p-4 font-bold text-indigo-700">${r.title}</td><td class="p-4 text-xs">${r.authorName}</td><td class="p-4"><button onclick="window.deleteRequest('${r.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button></td></tr>`).join(''); };
+        window.deleteRequest = async function(id) { if(confirm("삭제할까요?")){ await deleteDoc(doc(db,"requests",id)); window.showToast("삭제됨"); } };
+
+        window.openWeeklyLogWriteModal = function(id=null) { document.getElementById('weekly-id').value = id||''; document.getElementById('weekly-content').value = ''; document.getElementById('weekly-week').value = window.getWeekString?window.getWeekString(new Date()):''; document.getElementById('weekly-log-write-modal').classList.remove('hidden'); document.getElementById('weekly-log-write-modal').classList.add('flex'); };
+        window.closeWeeklyLogWriteModal = function() { document.getElementById('weekly-log-write-modal').classList.add('hidden'); document.getElementById('weekly-log-write-modal').classList.remove('flex'); };
+        window.saveWeeklyLog = async function() { const id=document.getElementById('weekly-id').value, week=document.getElementById('weekly-week').value, content=document.getElementById('weekly-content').value.trim(); if(!week||!content)return window.showToast("주차/내용 입력","error"); try { if(id) await setDoc(doc(db,"weekly_logs",id),{week,content,updatedAt:serverTimestamp()},{merge:true}); else await addDoc(collection(db,"weekly_logs"),{week,content,authorUid:window.currentUser.uid,authorName:window.userProfile.name,createdAt:serverTimestamp()}); window.showToast("저장됨"); window.closeWeeklyLogWriteModal(); } catch(e){} };
+        window.loadWeeklyLogsData = function() { const w=document.getElementById('weekly-log-filter-week').value; if(!w)return; if(currentWeeklyLogUnsubscribe) currentWeeklyLogUnsubscribe(); currentWeeklyLogUnsubscribe = onSnapshot(query(collection(db,"weekly_logs"),where("week","==",w)), s=>{ window.currentWeeklyLogList=[]; s.forEach(d=>window.currentWeeklyLogList.push({id:d.id,...d.data()})); window.currentWeeklyLogList.sort((a,b)=>(b.createdAt?.toMillis()||0)-(a.createdAt?.toMillis()||0)); if(window.renderWeeklyLogs) window.renderWeeklyLogs(); }); };
+        window.renderWeeklyLogs = function() { const g=document.getElementById('weekly-log-grid'); if(!g)return; g.innerHTML=window.currentWeeklyLogList.map(l=>`<div class="bg-white rounded-2xl border p-5 shadow-sm"><div class="flex justify-between mb-3"><span class="font-black text-xs">${l.authorName}</span><button onclick="window.deleteWeeklyLog('${l.id}')" class="text-rose-500"><i class="fa-solid fa-trash-can"></i></button></div><div class="text-sm whitespace-pre-wrap">${l.content}</div></div>`).join(''); };
+        window.deleteWeeklyLog = async function(id) { if(confirm("삭제할까요?")){ await deleteDoc(doc(db,"weekly_logs",id)); window.showToast("삭제됨"); } };
+
+        window.addEventListener('error', (e) => {
+            console.error("🚨 에러 발생:", e.filename, "줄:", e.lineno, "메시지:", e.message);
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+                const icon = document.getElementById('dark-mode-icon');
+                if(icon) icon.className = 'fa-solid fa-sun text-amber-400';
+            }
+            if (window.initAuthListeners) {
+                window.initAuthListeners();
+            } else {
+                console.error("🚨 auth.js가 로드되지 않았습니다.");
+            }
+        });
+    </script>
 </body>
 </html>
