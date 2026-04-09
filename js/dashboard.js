@@ -1,5 +1,5 @@
 import { db } from './firebase.js';
-import { collection, query, onSnapshot } from "[https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js](https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js)";
+import { collection, query, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 let homeReqSnapshotUnsubscribe = null, homeProjSnapshotUnsubscribe = null, homeMdLogSnapshotUnsubscribe = null;
 
@@ -8,7 +8,7 @@ window.openApp = function(viewId, title) {
     let permissionKey = viewId.replace('view-', '');
     if (permissionKey.startsWith('project-status')) permissionKey = 'project-status';
     
-    if (permissionKey !== 'dashboard-proj' && permissionKey !== 'simulation' && window.userProfile.permissions && !window.userProfile.permissions[permissionKey]) {
+    if (permissionKey !== 'dashboard-proj' && permissionKey !== 'simulation' && window.userProfile && window.userProfile.permissions && !window.userProfile.permissions[permissionKey]) {
         window.showToast("접근 권한이 없습니다.", "error"); return;
     }
 
@@ -20,15 +20,15 @@ window.openApp = function(viewId, title) {
         document.getElementById('view-project-status').classList.remove('hidden');
         document.getElementById('pjt-dash-title-label').innerText = title;
         window.currentCategoryFilter = 'all'; const catSelect = document.getElementById('filter-category-select'); if(catSelect) catSelect.value = 'all';
-        document.getElementById('btn-part-mfg').className = window.currentProjPartTab === '제조' ? "px-4 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700" : "px-4 py-1.5 text-xs font-bold text-slate-500";
-        document.getElementById('btn-part-opt').className = window.currentProjPartTab === '광학' ? "px-4 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700" : "px-4 py-1.5 text-xs font-bold text-slate-500";
+        document.getElementById('btn-part-mfg').className = window.currentProjPartTab === '제조' ? "px-4 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all" : "px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all";
+        document.getElementById('btn-part-opt').className = window.currentProjPartTab === '광학' ? "px-4 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all" : "px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all";
         if(window.toggleProjDashView) window.toggleProjDashView(window.currentProjDashView || 'list');
         if(window.loadProjectStatusData) window.loadProjectStatusData();
     } else if (viewId === 'view-weekly-log') {
         document.getElementById('view-weekly-log').classList.remove('hidden');
         const now = new Date();
-        const date = new Date(now.getTime()); date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay()||7)); const yearStart = new Date(Date.UTC(date.getUTCFullYear(),0,1)); const weekNo = Math.ceil((((date - yearStart) / 86400000) + 1)/7);
-        document.getElementById('weekly-log-filter-week').value = `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+        const weekNum = window.getWeekString ? window.getWeekString(now) : '';
+        document.getElementById('weekly-log-filter-week').value = weekNum;
         if(window.loadWeeklyLogsData) window.loadWeeklyLogsData();
     } else if (viewId === 'view-simulation') {
         document.getElementById('view-simulation').classList.remove('hidden');
@@ -78,8 +78,7 @@ window.processDashboardData = function() {
         let isInYear = false;
         if(data.status === 'pending' || data.status === 'progress' || data.status === 'inspecting') isInYear = true;
         if(data.d_shipEn && data.d_shipEn.startsWith(year)) isInYear = true;
-        if(data.d_shipEst && data.d_shipEst.startsWith(year)) isInYear = true;
-        if(data.d_shipEst && data.d_shipEst.startsWith(year)) { let mIdx = parseInt(data.d_shipEst.split('-')[1]) - 1; annualPlanData[mIdx] += parseFloat(data.estMd) || 0; }
+        if(data.d_shipEst && data.d_shipEst.startsWith(year)) { isInYear = true; let mIdx = parseInt(data.d_shipEst.split('-')[1]) - 1; annualPlanData[mIdx] += parseFloat(data.estMd) || 0; }
         if(!isInYear) return;
         stats.estMd += parseFloat(data.estMd) || 0;
         let yearMd = 0;
