@@ -2,6 +2,11 @@ import { db } from './firebase.js';
 import { collection, doc, setDoc, getDoc, getDocs, addDoc, deleteDoc, query, onSnapshot, where, serverTimestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 let projectStatusSnapshotUnsubscribe=null;
+let masterCodeSnapshotUnsubscribe = null;
+let currentMdLogUnsubscribe = null;
+let currentLogUnsubscribe = null;
+let currentCommentUnsubscribe = null;
+let currentIssueUnsubscribe = null;
 
 // 🌟 카운트 데이터 로드
 window.loadCounts = function() {
@@ -59,7 +64,6 @@ window.loadProjectStatusData = function() {
     });
 };
 
-// 🌟 리스트 렌더링 (아이콘 및 개수 표시 완벽 적용)
 window.renderProjectStatusList = function() {
     const tbody = document.getElementById('proj-dash-tbody'); if(!tbody) return;
     let displayList = window.currentProjectStatusList;
@@ -150,7 +154,89 @@ window.addProjectMember = function(name) { if(!name) return; if(!window.currentS
 window.removeProjectMember = function(name) { window.currentSelectedMembers = window.currentSelectedMembers.filter(n => n !== name); window.renderSelectedMembers(); };
 window.renderSelectedMembers = function() { const container = document.getElementById('ps-selected-members'); document.getElementById('ps-members').value = window.currentSelectedMembers.join(', '); container.innerHTML = window.currentSelectedMembers.map(name => `<span class="bg-indigo-100 text-indigo-700 px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1.5 shadow-sm">${name} <i class="fa-solid fa-xmark cursor-pointer hover:text-rose-500 bg-white/50 rounded-full px-1 py-0.5" onclick="window.removeProjectMember('${name}')"></i></span>`).join(''); };
 
-// 🌟 간트 차트 및 달력 뷰 토글
+// 🌟 PJT 마스터 로직 복구
+window.openProjCodeMasterModal = function() { document.getElementById('proj-code-master-modal').classList.remove('hidden'); document.getElementById('proj-code-master-modal').classList.add('flex'); window.loadProjectCodeMaster(); };
+window.closeProjCodeMasterModal = function() { document.getElementById('proj-code-master-modal').classList.add('hidden'); document.getElementById('proj-code-master-modal').classList.remove('flex'); };
+window.loadProjectCodeMaster = function() {
+    if(masterCodeSnapshotUnsubscribe) masterCodeSnapshotUnsubscribe();
+    masterCodeSnapshotUnsubscribe = onSnapshot(collection(db, "project_codes"), (snapshot) => {
+        window.pjtCodeMasterList = []; snapshot.forEach(doc => { window.pjtCodeMasterList.push({ id: doc.id, ...doc.data() }); });
+        window.pjtCodeMasterList.sort((a,b) => b.createdAt - a.createdAt);
+        const modal = document.getElementById('proj-code-master-modal'); if (modal && !modal.classList.contains('hidden')) { window.renderProjCodeMasterList(); }
+    });
+};
+window.renderProjCodeMasterList = function() {
+    const tbody = document.getElementById('pjt-code-tbody'); if(!tbody) return;
+    if(window.pjtCodeMasterList.length === 0) { tbody.innerHTML = `<tr><td colspan="4" class="text-center p-6 text-slate-400 font-bold">등록된 PJT 코드가 없습니다.</td></tr>`; return; }
+    tbody.innerHTML = window.pjtCodeMasterList.map(c => `<tr class="hover:bg-slate-50 transition-colors"><td class="p-3 font-bold text-indigo-600">${c.code}</td><td class="p-3 font-bold text-slate-700">${c.name}</td><td class="p-3 text-slate-600">${c.company}</td><td class="p-3 text-center"><button onclick="window.deleteProjectCode('${c.id}')" class="text-slate-400 hover:text-rose-500 p-1"><i class="fa-solid fa-trash-can"></i></button></td></tr>`).join('');
+};
+window.addProjectCode = async function() {
+    const code = document.getElementById('new-pjt-code').value.trim(); const name = document.getElementById('new-pjt-name').value.trim(); const comp = document.getElementById('new-pjt-company').value.trim();
+    if(!code || !name || !comp) { window.showToast("코드, 명칭, 업체명을 모두 입력해주세요.", "error"); return; }
+    try {
+        window.pjtCodeMasterList.unshift({ id: 'temp-'+Date.now(), code: code, name: name, company: comp, createdAt: Date.now() }); window.renderProjCodeMasterList();
+        await addDoc(collection(db, "project_codes"), { code: code, name: name, company: comp, createdAt: Date.now() });
+        window.showToast("마스터 코드가 등록되었습니다."); document.getElementById('new-pjt-code').value = ''; document.getElementById('new-pjt-name').value = ''; document.getElementById('new-pjt-company').value = '';
+    } catch(e) { window.showToast("등록 실패", "error"); }
+};
+window.toggleBulkPjtInput = function() { document.getElementById('bulk-pjt-section').classList.toggle('hidden'); };
+window.bulkAddProjectCodes = async function() {
+    const text = document.getElementById('bulk-pjt-input').value; if(!text.trim()) return window.showToast("데이터를 붙여넣어 주세요.", "error");
+    const lines = text.split('\n'); const validItems = [];
+    for(let line of lines) {
+        if(!line.trim()) continue; let parts = line.split('\t'); if(parts.length < 2) parts = line.split(','); if(parts.length < 2) parts = line.trim().split(/\s{2,}/);
+        if(parts.length >= 2) { let code = parts[0].trim(); let name = parts[1].trim(); let company = parts.length > 2 ? parts[2].trim() : '-'; if(code && name) validItems.push({ code, name, company }); }
+    }
+    if(validItems.length === 0) return window.showToast("등록할 유효한 데이터가 없습니다.", "error");
+    window.showToast(`${validItems.length}건의 코드를 서버에 등록 중입니다...`, "success");
+    try {
+        for(let i=0; i<validItems.length; i+=400) {
+            const chunk = validItems.slice(i, i+400); const batch = writeBatch(db);
+            chunk.forEach((item, idx) => { const docRef = doc(collection(db, "project_codes")); batch.set(docRef, { code: item.code, name: item.name, company: item.company, createdAt: Date.now() + i + idx }); });
+            await batch.commit();
+        }
+        window.showToast(`총 ${validItems.length}건 일괄 등록 완료!`); document.getElementById('bulk-pjt-input').value = ''; window.toggleBulkPjtInput();
+    } catch(e) { window.showToast("일괄 등록 중 오류 발생", "error"); console.error(e); }
+};
+window.deleteProjectCode = async function(id) {
+    if(!confirm("해당 마스터 코드를 삭제하시겠습니까?")) return;
+    window.pjtCodeMasterList = window.pjtCodeMasterList.filter(c => c.id !== id); window.renderProjCodeMasterList();
+    try { if(id && !String(id).startsWith('temp-')) { await deleteDoc(doc(db, "project_codes", id)); } window.showToast("삭제되었습니다."); } catch(e) { window.showToast("삭제 실패", "error"); }
+};
+window.deleteAllProjectCodes = async function() {
+    if(!confirm("⚠️ 경고: 등록된 모든 마스터 코드를 정말 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.")) return;
+    const pwd = prompt("전체 삭제를 진행하려면 아래 텍스트를 정확히 입력하세요.\n[ 삭제확인 ]");
+    if(pwd !== '삭제확인') return window.showToast("입력이 일치하지 않아 취소되었습니다.", "error");
+    window.showToast("전체 데이터를 삭제 중입니다. 잠시만 기다려주세요...", "success");
+    try {
+        const snap = await getDocs(query(collection(db, "project_codes"))); let batches = []; let currentBatch = writeBatch(db); let count = 0;
+        snap.forEach(doc => { currentBatch.delete(doc.ref); count++; if (count % 400 === 0) { batches.push(currentBatch.commit()); currentBatch = writeBatch(db); } });
+        if (count % 400 !== 0) batches.push(currentBatch.commit()); await Promise.all(batches);
+        window.showToast(`총 ${count}건의 마스터 코드가 완전히 삭제되었습니다.`);
+    } catch(e) { window.showToast("전체 삭제 중 오류가 발생했습니다.", "error"); console.error(e); }
+};
+window.showAutocomplete = function(inputEl, nameId, compId, isNameSearch=false) {
+    let listId = inputEl.id + '-autocomplete-list'; let listEl = document.getElementById(listId);
+    if(!listEl) {
+        listEl = document.createElement('div'); listEl.id = listId; listEl.className = "absolute z-50 w-[150%] max-w-[400px] bg-white border border-slate-200 shadow-2xl rounded-xl mt-1 hidden max-h-60 overflow-y-auto custom-scrollbar";
+        inputEl.parentNode.style.position = 'relative'; inputEl.parentNode.appendChild(listEl);
+        document.addEventListener('click', (e) => { if(e.target !== inputEl && !listEl.contains(e.target)) listEl.classList.add('hidden'); });
+    }
+    const queryStr = inputEl.value; let matches = window.pjtCodeMasterList;
+    if(queryStr.trim() !== '') matches = window.pjtCodeMasterList.filter(c => window.matchString(queryStr, c.code) || window.matchString(queryStr, c.name) || window.matchString(queryStr, c.company));
+    matches = matches.slice(0, 100);
+    if(matches.length === 0) { listEl.innerHTML = `<div class="p-3 text-xs text-slate-400 text-center font-bold">검색 결과 없음<br><span class="text-[9px] font-normal">(직접 입력하여 사용 가능)</span></div>`; } else {
+        listEl.innerHTML = matches.map(c => `<div class="p-3 text-xs hover:bg-indigo-50 cursor-pointer border-b border-slate-100 last:border-0 transition-colors" onclick="window.selectAutocomplete('${inputEl.id}', '${nameId}', '${compId}', '${c.code}', '${c.name}', '${c.company}', ${isNameSearch})"><div class="font-black text-indigo-600 mb-0.5">${c.code}</div><div class="text-slate-700 font-bold truncate">${c.name} <span class="text-slate-400 font-medium ml-1">(${c.company})</span></div></div>`).join('');
+    }
+    listEl.classList.remove('hidden');
+};
+window.selectAutocomplete = function(inputId, nameId, compId, code, name, company, isNameSearch) {
+    if(isNameSearch) { document.getElementById(inputId).value = name; if(nameId && document.getElementById(nameId)) document.getElementById(nameId).value = code; } else { document.getElementById(inputId).value = code; if(nameId && document.getElementById(nameId)) document.getElementById(nameId).value = name; }
+    if(compId && document.getElementById(compId)) document.getElementById(compId).value = company;
+    document.getElementById(inputId + '-autocomplete-list').classList.add('hidden');
+};
+
+// 🌟 간트 차트 및 달력 뷰 토글 복구
 window.toggleProjDashView = function(view) {
     window.currentProjDashView = view;
     document.getElementById('proj-dash-list-container').classList.add('hidden'); 
@@ -215,96 +301,59 @@ window.renderProjGantt = function() {
 
 window.renderProjCalendar = function() {
     const container = document.getElementById('proj-dash-calendar-content');
-    container.innerHTML = '<div class="p-10 text-center text-slate-500 font-bold">달력 뷰는 준비 중입니다.</div>';
-};
-
-
-// 🌟 팀원 관리 로직 복구
-window.openTeamModal = function() { document.getElementById('team-modal').classList.remove('hidden'); document.getElementById('team-modal').classList.add('flex'); window.renderTeamMembers(); };
-window.closeTeamModal = function() { document.getElementById('team-modal').classList.add('hidden'); document.getElementById('team-modal').classList.remove('flex'); };
-window.renderTeamMembers = function() {
-    const tbody = document.getElementById('team-list-tbody'); if(!tbody) return;
-    document.getElementById('team-modal-count').innerText = `총 ${window.teamMembers.length}명`;
-    if(window.teamMembers.length === 0) { tbody.innerHTML = '<tr><td colspan="3" class="text-center p-6 text-slate-500 font-bold">등록된 팀원이 없습니다.</td></tr>'; return; }
-    tbody.innerHTML = window.teamMembers.map(t => `<tr class="hover:bg-slate-50 transition-colors"><td class="p-3 text-center"><span class="bg-indigo-50 text-indigo-600 px-2 py-1 rounded text-[10px] font-bold border border-indigo-100">${t.part}</span></td><td class="p-3 font-bold text-slate-700">${t.name}</td><td class="p-3 text-center"><button onclick="window.deleteTeamMember('${t.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button></td></tr>`).join('');
-};
-window.addTeamMember = async function() {
-    const name = document.getElementById('new-team-name').value.trim(); const part = document.getElementById('new-team-part').value;
-    if(!name) return window.showToast("이름을 입력하세요.", "error");
-    try { await addDoc(collection(db, "team_members"), { name, part, createdAt: Date.now() }); document.getElementById('new-team-name').value = ''; window.showToast("팀원이 추가되었습니다."); } catch(e) { window.showToast("오류 발생", "error"); }
-};
-window.deleteTeamMember = async function(id) {
-    if(!confirm("이 팀원을 삭제하시겠습니까?")) return;
-    try { await deleteDoc(doc(db, "team_members", id)); window.showToast("삭제되었습니다."); } catch(e) { window.showToast("오류 발생", "error"); }
-};
-
-
-// 🌟 PJT 마스터 관리 (일괄 등록, 삭제 기능)
-window.toggleBulkPjtInput = function() {
-    const bulkSection = document.getElementById('bulk-pjt-section');
-    bulkSection.classList.toggle('hidden');
-};
-
-window.bulkAddProjectCodes = async function() {
-    const text = document.getElementById('bulk-pjt-input').value;
-    if(!text.trim()) return window.showToast("데이터를 붙여넣어 주세요.", "error");
-
-    const lines = text.split('\n');
-    const validItems = [];
-    for(let line of lines) {
-        if(!line.trim()) continue;
-        let parts = line.split('\t');
-        if(parts.length < 2) parts = line.split(',');
-        if(parts.length < 2) parts = line.trim().split(/\s{2,}/);
-        
-        if(parts.length >= 2) {
-            let code = parts[0].trim();
-            let name = parts[1].trim();
-            let company = parts.length > 2 ? parts[2].trim() : '-';
-            if(code && name) validItems.push({ code, name, company });
-        }
-    }
-
-    if(validItems.length === 0) return window.showToast("등록할 유효한 데이터가 없습니다.", "error");
-    window.showToast(`${validItems.length}건의 코드를 서버에 등록 중입니다...`, "success");
+    let displayList = window.currentProjectStatusList;
+    if(window.currentCategoryFilter && window.currentCategoryFilter !== 'all') displayList = displayList.filter(item => item.category === window.currentCategoryFilter);
     
-    try {
-        for(let i=0; i<validItems.length; i+=400) {
-            const chunk = validItems.slice(i, i+400);
-            const batch = writeBatch(db);
-            chunk.forEach((item, idx) => {
-                const docRef = doc(collection(db, "project_codes"));
-                batch.set(docRef, { code: item.code, name: item.name, company: item.company, createdAt: Date.now() + i + idx });
-            });
-            await batch.commit();
-        }
-        window.showToast(`총 ${validItems.length}건 일괄 등록 완료!`);
-        document.getElementById('bulk-pjt-input').value = '';
-        window.toggleBulkPjtInput();
-    } catch(e) { window.showToast("일괄 등록 중 오류 발생", "error"); console.error(e); }
-};
-
-window.deleteAllProjectCodes = async function() {
-    if(!confirm("⚠️ 경고: 등록된 모든 마스터 코드를 정말 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.")) return;
-    const pwd = prompt("전체 삭제를 진행하려면 아래 텍스트를 정확히 입력하세요.\n[ 삭제확인 ]");
-    if(pwd !== '삭제확인') return window.showToast("입력이 일치하지 않아 취소되었습니다.", "error");
-
-    window.showToast("전체 데이터를 삭제 중입니다. 잠시만 기다려주세요...", "success");
-    try {
-        const snap = await getDocs(query(collection(db, "project_codes")));
-        let batches = []; let currentBatch = writeBatch(db); let count = 0;
-        snap.forEach(doc => {
-            currentBatch.delete(doc.ref); count++;
-            if (count % 400 === 0) { batches.push(currentBatch.commit()); currentBatch = writeBatch(db); }
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const lastDate = new Date(year, month + 1, 0).getDate();
+    
+    let html = `<div class="p-4">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-black text-indigo-800">${year}년 ${month + 1}월 프로젝트 주요 일정</h3>
+            <div class="flex gap-2 text-[10px] font-bold">
+                <span class="bg-indigo-100 text-indigo-700 px-2 py-1 rounded border border-indigo-200">조립진행</span>
+                <span class="bg-rose-100 text-rose-700 px-2 py-1 rounded border border-rose-200">출하예정</span>
+            </div>
+        </div>
+        <div class="grid grid-cols-7 gap-1 text-center font-bold text-xs text-slate-500 mb-2">
+            <div class="text-rose-500">일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div class="text-blue-500">토</div>
+        </div>
+        <div class="grid grid-cols-7 gap-1 auto-rows-fr">`;
+    
+    for(let i=0; i<firstDay; i++) { html += `<div class="min-h-[100px] bg-slate-50 rounded-lg border border-slate-100"></div>`; }
+    
+    for(let date=1; date<=lastDate; date++) {
+        const currentDateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(date).padStart(2,'0')}`;
+        let dayEvents = '';
+        
+        displayList.forEach(p => {
+            const safeNameHtml = (p.name || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            let isAsm = false;
+            if(p.d_asmSt && p.d_asmEn) { if(currentDateStr >= p.d_asmSt && currentDateStr <= p.d_asmEn) isAsm = true; } 
+            else if(p.d_asmEst && p.d_asmEndEst) { if(currentDateStr >= p.d_asmEst && currentDateStr <= p.d_asmEndEst) isAsm = true; }
+            if(isAsm) dayEvents += `<div class="text-[9px] bg-indigo-500 text-white px-1.5 py-0.5 rounded mb-0.5 truncate cursor-pointer shadow-sm hover:scale-[1.02] transition-transform" onclick="window.editProjStatus('${p.id}')" title="${safeNameHtml}">${p.code} 조립</div>`;
+            
+            if(p.d_shipEn === currentDateStr || (!p.d_shipEn && p.d_shipEst === currentDateStr)) {
+                dayEvents += `<div class="text-[9px] bg-rose-500 text-white px-1.5 py-0.5 rounded mb-0.5 truncate cursor-pointer shadow-sm hover:scale-[1.02] transition-transform" onclick="window.editProjStatus('${p.id}')" title="${safeNameHtml}">${p.code} 출하</div>`;
+            }
         });
-        if (count % 400 !== 0) batches.push(currentBatch.commit());
-        await Promise.all(batches);
-        window.showToast(`총 ${count}건의 마스터 코드가 완전히 삭제되었습니다.`);
-    } catch(e) { window.showToast("전체 삭제 중 오류가 발생했습니다.", "error"); console.error(e); }
+
+        const isToday = (date === now.getDate());
+        const badge = isToday ? `<span class="bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center mx-auto shadow-md">${date}</span>` : date;
+        
+        html += `<div class="min-h-[100px] bg-white rounded-lg border ${isToday ? 'border-indigo-400 bg-indigo-50/10' : 'border-slate-200'} p-1 hover:bg-slate-50 transition-colors">
+            <div class="text-xs font-bold text-slate-700 mb-1 text-center">${badge}</div>
+            <div class="flex flex-col gap-0.5 overflow-hidden">${dayEvents}</div>
+        </div>`;
+    }
+    html += `</div></div>`;
+    container.innerHTML = html;
 };
 
-
-// 🌟 생산일지 관리 (진행률 반영 기능 추가)
+// 🌟 생산일지 및 이미지 첨부, 진행률
 window.resizeAndConvertToBase64 = function(file, callback) {
     const reader = new FileReader();
     reader.onload = function(e) {
@@ -343,7 +392,7 @@ window.renderDailyLogs = function(logs) {
 };
 window.saveDailyLogItem = async function() {
     const projectId = document.getElementById('log-req-id').value; const logId = document.getElementById('editing-log-id').value; const date = document.getElementById('new-log-date').value; const content = document.getElementById('new-log-text').value.trim(); const fileInput = document.getElementById('new-log-image');
-    const progressVal = parseInt(document.getElementById('log-project-progress').value) || 0; // 진행률 연동
+    const progressVal = parseInt(document.getElementById('log-project-progress').value) || 0;
     
     if(!date || !content) return window.showToast("날짜와 작업 내용을 모두 입력하세요.", "error");
     document.getElementById('btn-log-save').innerHTML = '저장중..'; document.getElementById('btn-log-save').disabled = true;
@@ -352,10 +401,7 @@ window.saveDailyLogItem = async function() {
         try {
             const payload = { date, content, updatedAt: Date.now() }; if(base64Img) payload.imageUrl = base64Img;
             if (logId) { await setDoc(doc(db, "daily_logs", logId), payload, { merge: true }); window.showToast("일지가 수정되었습니다."); } else { payload.projectId = projectId; payload.authorUid = window.currentUser.uid; payload.authorName = window.userProfile.name; payload.createdAt = Date.now(); await addDoc(collection(db, "daily_logs"), payload); window.showToast("일지가 등록되었습니다."); }
-            
-            // 프로젝트 진행률(%) 부모 문서 업데이트
             await setDoc(doc(db, "projects_status", projectId), { progress: progressVal }, { merge: true });
-            
             window.resetDailyLogForm();
         } catch(e) { window.showToast("저장 중 오류 발생", "error"); console.error(e); } finally { document.getElementById('btn-log-save').innerHTML = '등록'; document.getElementById('btn-log-save').disabled = false; }
     };
