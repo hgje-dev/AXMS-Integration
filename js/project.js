@@ -1,12 +1,12 @@
 import { db } from './firebase.js';
-import { collection, doc, setDoc, getDoc, addDoc, deleteDoc, query, onSnapshot, serverTimestamp } from "[https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js](https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js)";
+import { collection, doc, setDoc, getDoc, addDoc, deleteDoc, query, onSnapshot, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 let projectStatusSnapshotUnsubscribe=null;
 
 window.switchProjPartTab = function(part) {
     window.currentProjPartTab = part; window.currentCategoryFilter = 'all'; const catSelect = document.getElementById('filter-category-select'); if(catSelect) catSelect.value = 'all';
-    document.getElementById('btn-part-mfg').className = part === '제조' ? "px-4 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700" : "px-4 py-1.5 text-xs font-bold text-slate-500";
-    document.getElementById('btn-part-opt').className = part === '광학' ? "px-4 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700" : "px-4 py-1.5 text-xs font-bold text-slate-500";
+    document.getElementById('btn-part-mfg').className = part === '제조' ? "px-4 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all" : "px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all";
+    document.getElementById('btn-part-opt').className = part === '광학' ? "px-4 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all" : "px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all";
     window.loadProjectStatusData();
 };
 
@@ -39,7 +39,7 @@ window.renderProjectStatusList = function() {
             <td class="border border-slate-200 px-2 py-1 text-center font-bold text-indigo-700">${item.code || ''}</td>
             <td class="border border-slate-200 px-2 py-1 truncate max-w-[150px]">${item.name || ''}</td>
             <td class="border border-slate-200 px-2 py-1 text-center">${item.company || ''}</td>
-            <td class="border border-slate-200 px-2 py-1 text-center">${item.progress || 0}%</td>
+            <td class="border border-slate-200 px-2 py-1 text-center font-black text-emerald-600">${item.progress || 0}%</td>
             <td class="border border-slate-200 px-2 py-1 text-center">${item.manager || ''}</td>
             <td class="border border-slate-200 px-2 py-1 text-center text-sky-600">${item.estMd || 0}</td>
             <td class="border border-slate-200 px-1 py-1 text-center font-bold">${item.currentMd || 0}</td>
