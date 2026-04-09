@@ -36,7 +36,6 @@ window.renderProjectStatusList = function() {
         const safeNameJs = (item.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, ' ').replace(/\r/g, '');
         const safeNameHtml = (item.name || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         
-        // 🌟 여러 개의 링크 아이콘 표시 로직
         let linksHtml = '';
         if(item.links && Array.isArray(item.links) && item.links.length > 0) {
             linksHtml = item.links.map(lnk => `<a href="${lnk.url}" target="_blank" title="${lnk.name}" class="text-teal-500 hover:text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded transition-colors"><i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i></a>`).join('');
@@ -111,7 +110,7 @@ window.saveProjStatus = async function(btn) {
 window.deleteProjStatus = async function(id) { if(!confirm("삭제하시겠습니까?")) return; try { await deleteDoc(doc(db, "projects_status", id)); window.showToast("삭제되었습니다."); } catch(e) { window.showToast("삭제 실패", "error"); } };
 
 
-// 🌟 PJT 마스터 일괄 추가 & 삭제 기능
+// 🌟 PJT 마스터 관리 (일괄 등록, 삭제 기능)
 window.toggleBulkPjtInput = function() {
     const bulkSection = document.getElementById('bulk-pjt-section');
     bulkSection.classList.toggle('hidden');
@@ -133,16 +132,13 @@ window.bulkAddProjectCodes = async function() {
             let code = parts[0].trim();
             let name = parts[1].trim();
             let company = parts.length > 2 ? parts[2].trim() : '-';
-            
-            if(code && name) {
-                validItems.push({ code, name, company });
-            }
+            if(code && name) validItems.push({ code, name, company });
         }
     }
 
     if(validItems.length === 0) return window.showToast("등록할 유효한 데이터가 없습니다.", "error");
-
     window.showToast(`${validItems.length}건의 코드를 서버에 등록 중입니다...`, "success");
+    
     try {
         for(let i=0; i<validItems.length; i+=400) {
             const chunk = validItems.slice(i, i+400);
@@ -179,7 +175,7 @@ window.deleteAllProjectCodes = async function() {
 };
 
 
-// 🌟 생산일지 및 이미지 첨부 기능
+// 🌟 생산일지 관리 (이미지 첨부 포함)
 window.resizeAndConvertToBase64 = function(file, callback) {
     const reader = new FileReader();
     reader.onload = function(e) {
@@ -229,22 +225,13 @@ window.saveDailyLogItem = async function() {
                 window.showToast("일지가 등록되었습니다.");
             }
             window.resetDailyLogForm();
-        } catch(e) { 
-            window.showToast("저장 중 오류 발생", "error"); 
-            console.error(e);
-        } finally {
-            document.getElementById('btn-log-save').innerHTML = '등록';
-            document.getElementById('btn-log-save').disabled = false;
-        }
+        } catch(e) { window.showToast("저장 중 오류 발생", "error"); console.error(e); } 
+        finally { document.getElementById('btn-log-save').innerHTML = '등록'; document.getElementById('btn-log-save').disabled = false; }
     };
 
     if(fileInput.files.length > 0) {
-        window.resizeAndConvertToBase64(fileInput.files[0], (base64) => {
-            saveData(base64);
-        });
-    } else {
-        saveData(null);
-    }
+        window.resizeAndConvertToBase64(fileInput.files[0], (base64) => { saveData(base64); });
+    } else { saveData(null); }
 };
 
 window.resetDailyLogForm = function() {
@@ -271,7 +258,7 @@ window.renderDailyLogs = function(logs) {
     
     list.innerHTML = logs.map(log => {
         const safeContent = (log.content || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, ' ').replace(/\r/g, '');
-        const imgHtml = log.imageUrl ? `<div class="mt-2 rounded-lg overflow-hidden border border-slate-200 w-fit max-w-[200px]"><img src="${log.imageUrl}" class="w-full h-auto" onclick="window.open('${log.imageUrl}')"></div>` : '';
+        const imgHtml = log.imageUrl ? `<div class="mt-2 rounded-lg overflow-hidden border border-slate-200 w-fit max-w-[200px]"><img src="${log.imageUrl}" class="w-full h-auto cursor-pointer" onclick="window.open('${log.imageUrl}')"></div>` : '';
         return `
         <li class="bg-white p-3 rounded-lg border border-slate-100 shadow-sm flex flex-col gap-1 hover:shadow-md transition-shadow">
             <div class="flex justify-between items-center">
@@ -366,4 +353,15 @@ window.deleteLinkItem = async function(projectId, index) {
 };
 
 
-// 코멘트/일별MD 관련 자잘한 함수들은 기존 코드를 유지 (용량상 생략하지만 이전 파일을 그대로 덮어쓰거나 유지하시면 됩니다)
+// 🌟 코멘트/일별MD 관련 자잘한 함수 모음
+window.cancelCommentAction = function() {
+    document.getElementById('reply-to-id').value = ''; document.getElementById('editing-cmt-id').value = ''; document.getElementById('new-cmt-text').value = ''; document.getElementById('btn-cmt-save').innerText = '작성'; document.getElementById('reply-indicator').classList.add('hidden');
+};
+
+window.editComment = function(id, content) {
+    window.cancelCommentAction(); document.getElementById('editing-cmt-id').value = id; document.getElementById('new-cmt-text').value = content; document.getElementById('btn-cmt-save').innerText = '수정'; document.getElementById('reply-indicator-name').innerHTML = `<i class="fa-solid fa-pen mr-1"></i> 코멘트 수정 중`; document.getElementById('reply-indicator').classList.remove('hidden'); document.getElementById('new-cmt-text').focus();
+};
+
+window.setReplyTo = function(commentId, authorName) {
+    window.cancelCommentAction(); document.getElementById('reply-to-id').value = commentId; document.getElementById('reply-indicator-name').innerHTML = `<i class="fa-solid fa-reply rotate-180 scale-y-[-1] mr-1"></i> <b class="text-indigo-800">${authorName}</b> 님에게 답글 작성 중`; document.getElementById('reply-indicator').classList.remove('hidden'); document.getElementById('new-cmt-text').focus();
+};
