@@ -133,6 +133,44 @@
         </div>
     </div>
 
+    <div id="daily-log-modal" class="fixed inset-0 z-[120] hidden flex items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl transform transition-all border border-slate-200 flex flex-col max-h-[85vh] overflow-hidden">
+            <div class="px-6 py-4 border-b flex justify-between items-center bg-sky-50">
+                <h2 class="text-base font-extrabold text-sky-800"><i class="fa-solid fa-book text-sky-500 mr-1"></i> 생산일지 관리 (일별)</h2>
+                <button onclick="window.closeDailyLogModal()" class="text-sky-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="p-5 bg-white flex-1 flex flex-col overflow-hidden gap-4">
+                <input type="hidden" id="log-req-id">
+                <input type="hidden" id="editing-log-id">
+                
+                <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 flex justify-between items-center">
+                    <p class="text-xs font-bold text-sky-600" id="log-project-title">프로젝트명</p>
+                    <div class="flex items-center gap-2">
+                        <label class="text-[10px] font-bold text-slate-500">전체 진행률(%) 업데이트:</label>
+                        <input type="number" id="log-project-progress" min="0" max="100" class="w-16 border rounded px-2 py-1 text-xs font-bold text-emerald-600 text-center shadow-inner">
+                    </div>
+                </div>
+                
+                <div class="flex flex-col gap-2 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <div class="flex gap-2 items-center">
+                        <input type="date" id="new-log-date" class="px-3 py-2 border rounded-lg text-xs font-bold w-32 shadow-sm">
+                        <input type="text" id="new-log-text" class="flex-1 px-3 py-2 border rounded-lg text-xs shadow-sm" placeholder="해당 일자의 작업 내용을 입력하세요..." onkeypress="if(event.key==='Enter') window.saveDailyLogItem()">
+                        <button type="button" id="btn-log-save" onclick="window.saveDailyLogItem()" class="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors shadow-md">등록</button>
+                        <button type="button" id="btn-log-cancel" onclick="window.resetDailyLogForm()" class="hidden bg-slate-200 text-slate-600 px-3 py-2 rounded-lg text-xs font-bold">취소</button>
+                    </div>
+                    <div class="flex items-center gap-2 mt-1 pl-1">
+                        <i class="fa-regular fa-image text-slate-400 text-sm"></i>
+                        <input type="file" id="new-log-image" accept="image/*" class="text-xs text-slate-500 file:mr-3 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-[10px] file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100 cursor-pointer">
+                    </div>
+                </div>
+                
+                <div class="flex-1 overflow-y-auto custom-scrollbar border border-slate-200 rounded-xl p-3 bg-slate-50/50">
+                    <ul id="daily-log-list" class="space-y-3 text-xs"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="proj-status-write-modal" class="fixed inset-0 z-[150] hidden flex items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
         <div class="bg-white rounded-3xl shadow-2xl w-full max-w-5xl transform transition-all border border-slate-200 flex flex-col max-h-full overflow-hidden">
             <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-indigo-50">
@@ -205,64 +243,6 @@
             <div class="px-6 py-4 border-t border-slate-100 bg-white flex justify-end gap-3">
                 <button type="button" onclick="window.closeProjStatusWriteModal()" class="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors">취소</button>
                 <button type="button" onclick="window.saveProjStatus(this)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md transition-all"><i class="fa-solid fa-cloud-arrow-up mr-2"></i>현황 저장하기</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="md-log-modal" class="fixed inset-0 z-[120] hidden flex items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
-        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl transform transition-all border border-slate-200 flex flex-col max-h-[85vh] overflow-hidden">
-            <div class="px-6 py-4 border-b flex justify-between items-center bg-purple-50">
-                <div class="flex items-center gap-3">
-                    <h2 class="text-base font-extrabold text-purple-800"><i class="fa-solid fa-business-time text-purple-500 mr-1"></i> 일별 투입 공수(MD) 관리</h2>
-                    <span id="md-total-badge" class="text-[10px] bg-purple-600 text-white px-2 py-0.5 rounded-full font-bold shadow-sm">총 0 MD</span>
-                </div>
-                <button onclick="window.closeMdLogModal()" class="text-purple-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-lg"></i></button>
-            </div>
-            <div class="p-5 bg-white flex-1 flex flex-col overflow-hidden gap-4">
-                <input type="hidden" id="md-req-id">
-                <input type="hidden" id="editing-md-id">
-                <div class="bg-slate-50 p-3 rounded-lg border border-slate-200"><p class="text-xs font-bold text-purple-600" id="md-project-title">프로젝트명</p></div>
-                <div class="flex gap-2 items-center flex-wrap bg-purple-50/30 p-4 rounded-xl border border-purple-100">
-                    <input type="date" id="new-md-date" class="px-3 py-2 border rounded-lg text-xs font-bold w-32">
-                    <input type="number" id="new-md-val" step="0.1" class="px-3 py-2 border rounded-lg text-xs font-bold w-24 text-purple-700" placeholder="MD 입력">
-                    <input type="text" id="new-md-desc" class="flex-1 px-3 py-2 border rounded-lg text-xs" placeholder="작업 내용 (선택)" onkeypress="if(event.key==='Enter') window.saveMdLogItem()">
-                    <button type="button" id="btn-md-save" onclick="window.saveMdLogItem()" class="bg-purple-600 text-white px-4 py-2 rounded-lg text-xs font-bold">등록</button>
-                    <button type="button" id="btn-md-cancel" onclick="window.resetMdLogForm()" class="hidden bg-slate-200 text-slate-600 px-3 py-2 rounded-lg text-xs font-bold">취소</button>
-                </div>
-                <div class="flex-1 overflow-y-auto custom-scrollbar border border-slate-200 rounded-xl">
-                    <table class="w-full text-left border-collapse"><thead class="bg-slate-50 text-[10px] text-slate-500 sticky top-0"><tr><th class="p-3 text-center w-24">일자</th><th class="p-3 text-center w-20">투입 MD</th><th class="p-3">작업 내용</th><th class="p-3 text-center w-20">작업자</th><th class="p-3 text-center w-16">관리</th></tr></thead><tbody id="md-log-list" class="divide-y text-xs"></tbody></table>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="daily-log-modal" class="fixed inset-0 z-[120] hidden flex items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
-        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl transform transition-all border border-slate-200 flex flex-col max-h-[85vh] overflow-hidden">
-            <div class="px-6 py-4 border-b flex justify-between items-center bg-sky-50">
-                <h2 class="text-base font-extrabold text-sky-800"><i class="fa-solid fa-book text-sky-500 mr-1"></i> 생산일지 관리 (일별)</h2>
-                <button onclick="window.closeDailyLogModal()" class="text-sky-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-lg"></i></button>
-            </div>
-            <div class="p-5 bg-white flex-1 flex flex-col overflow-hidden gap-4">
-                <input type="hidden" id="log-req-id">
-                <input type="hidden" id="editing-log-id">
-                <div class="bg-slate-50 p-3 rounded-lg border border-slate-200"><p class="text-xs font-bold text-sky-600" id="log-project-title">프로젝트명</p></div>
-                
-                <div class="flex flex-col gap-2 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                    <div class="flex gap-2 items-center">
-                        <input type="date" id="new-log-date" class="px-3 py-2 border rounded-lg text-xs font-bold w-32">
-                        <input type="text" id="new-log-text" class="flex-1 px-3 py-2 border rounded-lg text-xs" placeholder="해당 일자의 작업 내용을 입력하세요..." onkeypress="if(event.key==='Enter') window.saveDailyLogItem()">
-                        <button type="button" id="btn-log-save" onclick="window.saveDailyLogItem()" class="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors">등록</button>
-                        <button type="button" id="btn-log-cancel" onclick="window.resetDailyLogForm()" class="hidden bg-slate-200 text-slate-600 px-3 py-2 rounded-lg text-xs font-bold">취소</button>
-                    </div>
-                    <div class="flex items-center gap-2 mt-1 pl-1">
-                        <i class="fa-regular fa-image text-slate-400 text-sm"></i>
-                        <input type="file" id="new-log-image" accept="image/*" class="text-xs text-slate-500 file:mr-3 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-[10px] file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100 cursor-pointer">
-                    </div>
-                </div>
-                
-                <div class="flex-1 overflow-y-auto custom-scrollbar border border-slate-200 rounded-xl p-3 bg-slate-50/50">
-                    <ul id="daily-log-list" class="space-y-3 text-xs"></ul>
-                </div>
             </div>
         </div>
     </div>
@@ -346,83 +326,30 @@
             </div>
         </div>
     </div>
-
-    <div id="write-modal" class="fixed inset-0 z-[150] hidden flex items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
-        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl transform transition-all border border-slate-200 flex flex-col max-h-full overflow-hidden">
-            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-blue-50">
-                <h2 class="text-lg font-extrabold text-blue-800 flex items-center gap-2" id="modal-write-title"><i class="fa-solid fa-pen"></i> 새 요청서 작성</h2>
-                <button onclick="window.closeWriteModal()" class="text-blue-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-xl"></i></button>
-            </div>
-            <div class="p-6 overflow-y-auto flex-1 space-y-4">
-                <div id="default-form-fields" class="space-y-4">
-                    <input type="text" id="req-project-code" placeholder="PJT 코드" class="w-full px-3 py-2 border rounded-lg text-sm">
-                    <input type="text" id="req-project-name" placeholder="프로젝트명" class="w-full px-3 py-2 border rounded-lg text-sm">
-                    <input type="text" id="req-title" placeholder="요청서 제목" class="w-full px-3 py-2 border rounded-lg text-sm">
-                    <input type="date" id="req-date" class="w-full px-3 py-2 border rounded-lg text-sm">
-                    <input type="number" id="req-md" placeholder="영업 MD" class="w-full px-3 py-2 border rounded-lg text-sm">
-                    <div id="mfg-md-section"><input type="number" id="req-mfg-md" placeholder="제조 MD" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
-                    <textarea id="req-content" placeholder="요청 내용" class="w-full h-32 px-3 py-2 border rounded-lg text-sm"></textarea>
-                    <input type="file" id="req-write-file" class="w-full px-3 py-2 border rounded-lg text-sm">
+    
+    <div id="md-log-modal" class="fixed inset-0 z-[120] hidden flex items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl transform transition-all border border-slate-200 flex flex-col max-h-[85vh] overflow-hidden">
+            <div class="px-6 py-4 border-b flex justify-between items-center bg-purple-50">
+                <div class="flex items-center gap-3">
+                    <h2 class="text-base font-extrabold text-purple-800"><i class="fa-solid fa-business-time text-purple-500 mr-1"></i> 일별 투입 공수(MD) 관리</h2>
+                    <span id="md-total-badge" class="text-[10px] bg-purple-600 text-white px-2 py-0.5 rounded-full font-bold shadow-sm">총 0 MD</span>
                 </div>
-                <div id="purchase-form-fields" class="hidden space-y-4">
-                    <input type="text" id="pur-project-code" placeholder="PJT 코드"> <input type="text" id="pur-project-name" placeholder="프로젝트명"> <input type="text" id="pur-md" placeholder="영업 MD"> <input type="text" id="pur-mfg-md" placeholder="제조 MD"> <input type="text" id="pur-company" placeholder="업체명"> <input type="text" id="pur-customer" placeholder="고객명"> <input type="text" id="pur-phone" placeholder="연락처"> <input type="text" id="pur-email" placeholder="이메일"> <input type="date" id="pur-date"> <input type="number" id="pur-qty" placeholder="수량"> <textarea id="pur-remarks" placeholder="비고"></textarea>
+                <button onclick="window.closeMdLogModal()" class="text-purple-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="p-5 bg-white flex-1 flex flex-col overflow-hidden gap-4">
+                <input type="hidden" id="md-req-id">
+                <input type="hidden" id="editing-md-id">
+                <div class="bg-slate-50 p-3 rounded-lg border border-slate-200"><p class="text-xs font-bold text-purple-600" id="md-project-title">프로젝트명</p></div>
+                <div class="flex gap-2 items-center flex-wrap bg-purple-50/30 p-4 rounded-xl border border-purple-100">
+                    <input type="date" id="new-md-date" class="px-3 py-2 border rounded-lg text-xs font-bold w-32">
+                    <input type="number" id="new-md-val" step="0.1" class="px-3 py-2 border rounded-lg text-xs font-bold w-24 text-purple-700" placeholder="MD 입력">
+                    <input type="text" id="new-md-desc" class="flex-1 px-3 py-2 border rounded-lg text-xs" placeholder="작업 내용 (선택)" onkeypress="if(event.key==='Enter') window.saveMdLogItem()">
+                    <button type="button" id="btn-md-save" onclick="window.saveMdLogItem()" class="bg-purple-600 text-white px-4 py-2 rounded-lg text-xs font-bold">등록</button>
+                    <button type="button" id="btn-md-cancel" onclick="window.resetMdLogForm()" class="hidden bg-slate-200 text-slate-600 px-3 py-2 rounded-lg text-xs font-bold">취소</button>
                 </div>
-            </div>
-            <div class="px-6 py-4 border-t border-slate-100 bg-white flex justify-end gap-3">
-                <button type="button" onclick="window.closeWriteModal()" class="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-500 bg-slate-100 hover:bg-slate-200">취소</button>
-                <button type="button" id="btn-save-req" onclick="window.saveRequest(this)" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold">저장하기</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="weekly-log-write-modal" class="fixed inset-0 z-[150] hidden flex items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
-        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl transform transition-all border border-slate-200 flex flex-col max-h-full overflow-hidden">
-            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-indigo-50">
-                <h2 class="text-lg font-extrabold text-indigo-800 flex items-center gap-2"><i class="fa-solid fa-calendar-week text-indigo-500"></i> 주간 업무 일지 작성</h2>
-                <button onclick="window.closeWeeklyLogWriteModal()" class="text-indigo-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-xl"></i></button>
-            </div>
-            <div class="p-6 overflow-y-auto flex-1 space-y-4 bg-slate-50">
-                <input type="hidden" id="weekly-id">
-                <div class="bg-white p-5 rounded-2xl border shadow-sm space-y-4">
-                    <div>
-                        <label class="block text-[11px] font-bold text-slate-500 mb-1">작성 주차</label>
-                        <input type="week" id="weekly-week" class="w-full px-3 py-2 border rounded-lg text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-[11px] font-bold text-slate-500 mb-1">금주 실적 및 차주 계획</label>
-                        <textarea id="weekly-content" class="w-full h-64 px-3 py-2 border rounded-lg text-sm" placeholder="업무 내용을 자유롭게 작성해주세요..."></textarea>
-                    </div>
+                <div class="flex-1 overflow-y-auto custom-scrollbar border border-slate-200 rounded-xl">
+                    <table class="w-full text-left border-collapse"><thead class="bg-slate-50 text-[10px] text-slate-500 sticky top-0"><tr><th class="p-3 text-center w-24">일자</th><th class="p-3 text-center w-20">투입 MD</th><th class="p-3">작업 내용</th><th class="p-3 text-center w-20">작업자</th><th class="p-3 text-center w-16">관리</th></tr></thead><tbody id="md-log-list" class="divide-y text-xs"></tbody></table>
                 </div>
-            </div>
-            <div class="px-6 py-4 border-t border-slate-100 bg-white flex justify-end gap-3">
-                <button type="button" onclick="window.closeWeeklyLogWriteModal()" class="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-500 bg-slate-100 hover:bg-slate-200">취소</button>
-                <button type="button" onclick="window.saveWeeklyLog()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold">저장하기</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="ai-modal" class="fixed inset-0 z-[60] hidden flex items-center justify-center bg-slate-900/70 backdrop-blur-sm">
-        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md border border-purple-200 flex flex-col relative overflow-hidden">
-            <div class="px-6 py-4 border-b flex justify-between items-center bg-white z-10">
-                <h2 class="text-lg font-extrabold text-slate-800"><i class="fa-solid fa-wand-magic-sparkles text-purple-500 mr-1"></i> AI 브리핑</h2>
-                <button onclick="window.closeAiModal()" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-xl"></i></button>
-            </div>
-            <div class="p-6 bg-slate-50/50 z-10 flex-1"><div id="ai-modal-content" class="text-sm font-medium text-slate-700 leading-relaxed whitespace-pre-wrap"></div></div>
-            <div class="px-6 py-4 bg-white border-t z-10"><button onclick="window.closeAiModal()" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-xl shadow-md">확인</button></div>
-        </div>
-    </div>
-
-    <div id="detail-modal" class="fixed inset-0 z-[80] hidden flex items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
-        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col max-h-full overflow-hidden">
-            <div class="px-8 py-5 border-b flex justify-between items-center bg-slate-50">
-                <h2 class="text-lg font-extrabold text-slate-800" id="detail-title">상세 보기</h2>
-                <button onclick="window.closeDetailModal()" class="text-slate-400 hover:text-rose-500 bg-white p-2 rounded-full shadow-sm"><i class="fa-solid fa-xmark text-lg"></i></button>
-            </div>
-            <div class="flex-1 overflow-y-auto p-8 custom-scrollbar bg-white">
-                <div id="detail-content-area" class="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap bg-slate-50 p-6 rounded-2xl border border-slate-200"></div>
-            </div>
-            <div class="px-8 py-4 border-t bg-slate-50 flex justify-end">
-                <button type="button" onclick="window.closeDetailModal()" class="px-6 py-2.5 rounded-xl text-sm font-bold bg-white border text-slate-600">닫기</button>
             </div>
         </div>
     </div>
@@ -555,129 +482,6 @@
                         </div>
                     </div>
                 </div>
-
-                <div class="bg-indigo-50/50 p-6 rounded-3xl border border-indigo-100 mt-2">
-                    <div class="flex items-center justify-between mb-4 border-b border-indigo-200 pb-3">
-                        <h2 class="text-lg font-black text-indigo-900 flex items-center gap-2"><i class="fa-solid fa-calendar-check text-indigo-500"></i> 기간별 프로젝트 상세 분석</h2>
-                        <div class="flex items-center gap-3">
-                            <select id="dash-time-unit" class="px-3 py-1.5 border border-indigo-200 rounded-lg text-xs font-bold text-indigo-700 bg-white shadow-sm outline-none cursor-pointer" onchange="window.toggleDashPeriod()">
-                                <option value="month">월간 조회</option>
-                                <option value="week">주간 조회</option>
-                            </select>
-                            <div class="flex items-center gap-2 bg-white border border-indigo-200 p-1.5 rounded-xl shadow-sm">
-                                <label class="text-xs font-black text-slate-600 ml-2"><i class="fa-solid fa-magnifying-glass text-indigo-500 mr-1"></i> 조회 기간</label>
-                                <input type="month" id="dash-month-select" class="px-3 py-1.5 border-0 rounded-lg text-xs font-bold text-indigo-700 bg-indigo-50 outline-none cursor-pointer" onchange="window.renderMonthlyDetail()">
-                                <input type="week" id="dash-week-select" class="hidden px-3 py-1.5 border-0 rounded-lg text-xs font-bold text-indigo-700 bg-indigo-50 outline-none cursor-pointer" onchange="window.renderMonthlyDetail()">
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                        <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm flex flex-col justify-center border-l-4 border-l-slate-400">
-                            <p class="text-[11px] font-bold text-slate-500 mb-1">대기 / 보류</p><p class="text-xl font-black text-slate-700" id="dash-period-pending">0</p>
-                        </div>
-                        <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm flex flex-col justify-center border-l-4 border-l-blue-400">
-                            <p class="text-[11px] font-bold text-slate-500 mb-1">작업 진행중</p><p class="text-xl font-black text-blue-700" id="dash-period-progress">0</p>
-                        </div>
-                        <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm flex flex-col justify-center border-l-4 border-l-rose-400">
-                            <p class="text-[11px] font-bold text-slate-500 mb-1">납기 임박 (D-7 이내)</p><p class="text-xl font-black text-rose-600" id="dash-period-imminent">0</p>
-                        </div>
-                        <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm flex flex-col justify-center border-l-4 border-l-fuchsia-400">
-                            <p class="text-[11px] font-bold text-slate-500 mb-1" title="해당 기간 가용 공수 대비 투입 MD">해당 기간 부하율</p>
-                            <p class="text-xl font-black text-fuchsia-600" id="dash-period-load">0%</p>
-                        </div>
-                    </div>
-                    
-                    <div id="dash-month-charts" class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                        <div class="col-span-1 bg-white rounded-2xl p-5 border border-indigo-100 shadow-sm flex flex-col h-[280px]">
-                            <h3 class="text-sm font-extrabold text-slate-700 mb-3 border-b border-slate-100 pb-2">주차별 완료(출하) 추이</h3>
-                            <div class="flex-1 relative w-full h-full pb-2"><canvas id="monthWeeklyTrendChart"></canvas></div>
-                        </div>
-                        <div class="col-span-1 bg-white rounded-2xl p-5 border border-indigo-100 shadow-sm flex flex-col h-[280px]">
-                            <h3 class="text-sm font-extrabold text-slate-700 mb-3 border-b border-slate-100 pb-2">계획공수 vs 실제 투입공수</h3>
-                            <div class="flex-1 relative w-full h-full pb-2"><canvas id="monthPlanVsActualChart"></canvas></div>
-                        </div>
-                        <div class="col-span-1 bg-white rounded-2xl p-5 border border-indigo-100 shadow-sm flex flex-col h-[280px]">
-                            <h3 class="text-sm font-extrabold text-slate-700 mb-3 border-b border-slate-100 pb-2">담당자별 진행 프로젝트</h3>
-                            <div class="flex-1 relative w-full h-full pb-2"><canvas id="projManagerChart"></canvas></div>
-                        </div>
-                    </div>
-
-                    <div id="dash-week-charts" class="hidden grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                        <div class="col-span-1 bg-white rounded-2xl p-5 border border-indigo-100 shadow-sm flex flex-col h-[280px]">
-                            <h3 class="text-sm font-extrabold text-slate-700 mb-3 border-b border-slate-100 pb-2">금주 계획 vs 실적 (MD)</h3>
-                            <div class="flex-1 relative w-full h-full pb-2"><canvas id="weekPlanVsActualChart"></canvas></div>
-                        </div>
-                        <div class="col-span-2 bg-white rounded-2xl p-5 border border-indigo-100 shadow-sm flex flex-col h-[280px] overflow-hidden">
-                            <h3 class="text-sm font-extrabold text-slate-700 mb-3 border-b border-slate-100 pb-2">금주 납기 예정 프로젝트 리스트 <span id="week-imminent-count" class="text-[10px] bg-rose-100 text-rose-600 px-2 py-0.5 rounded ml-2">0건</span></h3>
-                            <div class="flex-1 overflow-y-auto custom-scrollbar">
-                                <ul id="week-imminent-list" class="space-y-2"></ul>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="bg-white rounded-2xl p-0 border border-indigo-100 shadow-sm flex flex-col h-[350px] overflow-hidden">
-                        <div class="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                            <h3 class="text-sm font-extrabold text-slate-700">해당 기간 진행/활성 프로젝트 리스트</h3>
-                            <span class="text-[10px] font-bold text-indigo-600 bg-indigo-100 px-2 py-1 rounded-md" id="monthly-list-count">총 0건</span>
-                        </div>
-                        <div class="flex-1 overflow-y-auto custom-scrollbar p-0">
-                            <table class="w-full text-left border-collapse">
-                                <thead class="bg-white text-[10px] text-slate-600 sticky top-0 shadow-sm">
-                                    <tr>
-                                        <th class="p-3 font-bold border-b border-slate-200 text-center">파트</th>
-                                        <th class="p-3 font-bold border-b border-slate-200">PJT 코드</th>
-                                        <th class="p-3 font-bold border-b border-slate-200 truncate max-w-[150px]">프로젝트명</th>
-                                        <th class="p-3 font-bold border-b border-slate-200 text-center text-rose-500">예정출하일</th>
-                                        <th class="p-3 font-bold border-b border-slate-200 text-center text-emerald-600">진행률</th>
-                                        <th class="p-3 font-bold border-b border-slate-200 text-center">현재상태</th>
-                                        <th class="p-3 font-bold border-b border-slate-200 text-center text-slate-500">예정MD</th>
-                                        <th class="p-3 font-bold border-b border-slate-200 text-center bg-indigo-50 text-indigo-700" id="table-head-period-md">당월투입MD</th>
-                                        <th class="p-3 font-bold border-b border-slate-200 text-center text-purple-600">최종MD</th>
-                                        <th class="p-3 font-bold border-b border-slate-200 text-center text-amber-600">편차</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="dash-monthly-tbody" class="divide-y divide-slate-100 text-[11px]"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-                
-                <hr class="border-slate-200 my-4 border-dashed">
-                <div>
-                    <div class="flex items-center justify-between mb-4 border-b border-slate-200 pb-2">
-                        <h2 class="text-xl font-black text-slate-800 flex items-center gap-2"><i class="fa-solid fa-chart-pie text-emerald-500"></i> Request 현황 대시보드</h2>
-                        <span class="text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-full"><i class="fa-solid fa-circle text-[8px] text-emerald-400 mr-1 animate-pulse"></i>실시간 연동중</span>
-                    </div>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                        <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex items-center justify-between border-l-4 border-l-slate-400">
-                            <div><p class="text-xs font-bold text-slate-500 mb-1">요청 대기</p><p class="text-3xl font-black text-slate-700" id="dash-req-pending">0</p></div><i class="fa-solid fa-inbox text-3xl text-slate-200"></i>
-                        </div>
-                        <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex items-center justify-between border-l-4 border-l-blue-400">
-                            <div><p class="text-xs font-bold text-slate-500 mb-1">진행 중</p><p class="text-3xl font-black text-blue-700" id="dash-req-progress">0</p></div><i class="fa-solid fa-person-digging text-3xl text-blue-100"></i>
-                        </div>
-                        <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex items-center justify-between border-l-4 border-l-rose-400">
-                            <div><p class="text-xs font-bold text-slate-500 mb-1">이슈 (재검토)</p><p class="text-3xl font-black text-rose-600" id="dash-req-issue">0</p></div><i class="fa-solid fa-triangle-exclamation text-3xl text-rose-100"></i>
-                        </div>
-                        <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex items-center justify-between border-l-4 border-l-emerald-400">
-                            <div><p class="text-xs font-bold text-slate-500 mb-1">처리 완료</p><p class="text-3xl font-black text-emerald-600" id="dash-req-completed">0</p></div><i class="fa-solid fa-flag-checkered text-3xl text-emerald-100"></i>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div class="col-span-1 bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex flex-col h-[300px]">
-                            <h3 class="text-sm font-extrabold text-slate-700 mb-4 border-b border-slate-100 pb-3">업무 유형별 점유율</h3>
-                            <div class="flex-1 relative w-full h-full pb-4"><canvas id="reqPieChart"></canvas></div>
-                        </div>
-                        <div class="col-span-1 bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex flex-col h-[300px]">
-                            <h3 class="text-sm font-extrabold text-slate-700 mb-4 border-b border-slate-100 pb-3 flex justify-between">최근 7일 접수 동향 <span class="text-[10px] font-medium text-slate-400 font-mono">단위: 건</span></h3>
-                            <div class="flex-1 relative w-full h-full pb-4"><canvas id="reqTrendChart"></canvas></div>
-                        </div>
-                        <div class="col-span-1 bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex flex-col h-[300px]">
-                            <h3 class="text-sm font-extrabold text-slate-700 mb-4 border-b border-slate-100 pb-3 flex justify-between text-indigo-700">월별 총 공수 (MD) 현황 <span class="text-[10px] font-medium text-indigo-400 font-mono">단위: MD</span></h3>
-                            <div class="flex-1 relative w-full h-full pb-4"><canvas id="reqMonthlyMdChart"></canvas></div>
-                        </div>
-                    </div>
-                </div>
             </div>
 
             <div id="view-project-status" class="view-section hidden space-y-6">
@@ -703,35 +507,9 @@
                             </div>
                             <button onclick="window.toggleProjDashView('list')" id="btn-pd-list" class="px-3 py-1.5 text-xs font-bold bg-slate-200 shadow-inner rounded-md text-slate-700"><i class="fa-solid fa-list mr-1"></i>리스트</button>
                             <button onclick="window.toggleProjDashView('gantt')" id="btn-pd-gantt" class="px-3 py-1.5 text-xs font-bold bg-white border border-slate-200 hover:bg-slate-100 rounded-md text-slate-500"><i class="fa-solid fa-bars-staggered mr-1"></i>간트차트</button>
+                            <button onclick="window.toggleProjDashView('calendar')" id="btn-pd-calendar" class="px-3 py-1.5 text-xs font-bold bg-white border border-slate-200 hover:bg-slate-100 rounded-md text-slate-500"><i class="fa-regular fa-calendar mr-1"></i>달력뷰</button>
                             <button onclick="window.downloadProjDashExcel()" class="bg-emerald-500 text-white hover:bg-emerald-600 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-md ml-2"><i class="fa-solid fa-file-excel mr-1"></i> 다운로드</button>
                             <button onclick="window.openProjStatusWriteModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-md"><i class="fa-solid fa-plus mr-1"></i> 현황 등록</button>
-                        </div>
-                    </div>
-                    
-                    <div class="px-6 py-3 bg-white border-b border-slate-200 flex gap-4 flex-shrink-0 overflow-x-auto custom-scrollbar">
-                        <div class="w-48 flex-shrink-0 bg-slate-50 rounded-xl p-3 border border-slate-200 flex items-center justify-between shadow-sm">
-                            <span class="text-xs font-bold text-slate-500 flex items-center gap-1.5"><i class="fa-solid fa-pause text-slate-400"></i> 대기 / 보류</span>
-                            <span class="text-xl font-black text-slate-700" id="mini-dash-pending">0</span>
-                        </div>
-                        <div class="w-48 flex-shrink-0 bg-blue-50 rounded-xl p-3 border border-blue-100 flex items-center justify-between shadow-sm">
-                            <span class="text-xs font-bold text-blue-600 flex items-center gap-1.5"><i class="fa-solid fa-person-digging text-blue-400"></i> 진행 중</span>
-                            <span class="text-xl font-black text-blue-700" id="mini-dash-progress">0</span>
-                        </div>
-                        <div class="w-48 flex-shrink-0 bg-emerald-50 rounded-xl p-3 border border-emerald-100 flex items-center justify-between shadow-sm">
-                            <span class="text-xs font-bold text-emerald-600 flex items-center gap-1.5" id="mini-dash-completed-label"><i class="fa-solid fa-truck-fast text-emerald-400"></i> 출하 완료 (이번 달)</span>
-                            <span class="text-xl font-black text-emerald-700" id="mini-dash-completed">0</span>
-                        </div>
-                        <div class="flex-1 min-w-[200px] bg-rose-50 rounded-xl p-3 border border-rose-100 flex flex-col justify-center shadow-sm">
-                            <span class="text-xs font-bold text-rose-600 flex items-center gap-1.5 mb-1.5"><i class="fa-solid fa-clock text-rose-400"></i> 7일 이내 출하 예정 (D-7)</span>
-                            <div id="mini-dash-upcoming" class="flex flex-wrap gap-1.5">
-                                <span class="text-[10px] text-rose-400 font-bold">임박한 프로젝트 없음</span>
-                            </div>
-                        </div>
-                        <div class="flex-1 min-w-[200px] bg-orange-50 rounded-xl p-3 border border-orange-100 flex flex-col justify-center shadow-sm">
-                            <span class="text-xs font-bold text-orange-600 flex items-center gap-1.5 mb-1.5"><i class="fa-solid fa-stopwatch text-orange-400"></i> 14일 이내 출하 예정 (D-14)</span>
-                            <div id="mini-dash-upcoming-14" class="flex flex-wrap gap-1.5">
-                                <span class="text-[10px] text-orange-400 font-bold">임박한 프로젝트 없음</span>
-                            </div>
                         </div>
                     </div>
                     
@@ -787,57 +565,8 @@
                         </div>
                         <div id="proj-dash-gantt-content" class="bg-white rounded-xl shadow-sm border border-slate-200 min-h-full flex-1"></div>
                     </div>
-                </div>
-            </div>
-
-            <div id="view-requests" class="view-section hidden space-y-6">
-                <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                        <h3 class="font-extrabold text-slate-700 flex items-center gap-3">
-                            <span id="req-list-title">요청 목록</span>
-                            <div class="flex bg-slate-200/50 p-1 rounded-lg ml-2">
-                                <button onclick="window.toggleRequestView('list')" id="btn-view-list" class="px-3 py-1 text-xs font-bold bg-white shadow-sm rounded-md text-slate-700 transition-all"><i class="fa-solid fa-list mr-1"></i>목록 뷰</button>
-                                <button onclick="window.toggleRequestView('gantt')" id="btn-view-gantt" class="px-3 py-1 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all"><i class="fa-solid fa-bars-staggered mr-1"></i>간트차트 뷰</button>
-                            </div>
-                        </h3>
-                        <button onclick="window.openWriteModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-md transition-all">
-                            <i class="fa-solid fa-pen mr-1.5"></i> 새 요청서 작성
-                        </button>
-                    </div>
-                    <div id="request-list-container" class="overflow-x-auto min-h-[300px]">
-                        <table class="w-full text-left border-collapse">
-                            <thead class="bg-white border-b border-slate-200 text-[11px] text-slate-500 uppercase tracking-wider">
-                                <tr>
-                                    <th class="p-4 font-bold w-24">현재 상태</th>
-                                    <th class="p-4 font-bold min-w-[150px]">요청 제목 (프로젝트명)</th>
-                                    <th class="p-4 font-bold">요청자(팀)</th>
-                                    <th class="p-4 font-bold text-center">공수(MD)</th>
-                                    <th class="p-4 font-bold text-center">제조 일정 현황</th>
-                                    <th class="p-4 font-bold text-center">작업 관리 및 기능</th>
-                                </tr>
-                            </thead>
-                            <tbody id="request-tbody" class="divide-y divide-slate-100"></tbody>
-                        </table>
-                    </div>
-                    <div id="request-gantt-container" class="hidden overflow-x-auto min-h-[300px] p-6 bg-white custom-scrollbar">
-                        <div id="request-gantt-content"></div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="view-weekly-log" class="view-section hidden space-y-6">
-                <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[85vh]">
-                    <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 flex-shrink-0">
-                        <div class="flex items-center gap-4">
-                            <h3 class="font-extrabold text-slate-800 flex items-center gap-2 text-lg"><i class="fa-solid fa-calendar-week text-indigo-500"></i> 주간 업무 일지</h3>
-                        </div>
-                        <div class="flex gap-2 items-center">
-                            <input type="week" id="weekly-log-filter-week" class="px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-700 outline-none" onchange="window.loadWeeklyLogsData()">
-                            <button onclick="window.openWeeklyLogWriteModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-md"><i class="fa-solid fa-plus mr-1"></i> 업무 일지 작성</button>
-                        </div>
-                    </div>
-                    <div class="p-6 flex-1 overflow-y-auto bg-slate-50/50">
-                        <div id="weekly-log-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+                    <div id="proj-dash-calendar-container" class="hidden flex-1 overflow-auto bg-slate-50 border-t border-slate-200 custom-scrollbar p-6 flex flex-col">
+                        <div id="proj-dash-calendar-content" class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1"></div>
                     </div>
                 </div>
             </div>
