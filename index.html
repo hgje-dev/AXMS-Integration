@@ -129,7 +129,10 @@
                         <div class="flex items-center gap-4"><h3 class="font-extrabold text-slate-800 text-lg"><i class="fa-solid fa-table-list text-indigo-500"></i> <span id="pjt-dash-title-label">PJT 현황판</span></h3><div class="flex bg-slate-200/50 p-1 rounded-lg ml-2"><button onclick="window.switchProjPartTab('제조')" id="btn-part-mfg" class="px-4 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700">제조파트</button><button onclick="window.switchProjPartTab('광학')" id="btn-part-opt" class="px-4 py-1.5 text-xs font-bold text-slate-500 rounded-md">광학파트</button></div></div>
                         <div class="flex gap-2 items-center">
                             <button onclick="window.openTeamModal()" class="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-lg shadow-sm mr-2"><i class="fa-solid fa-users"></i> 팀원 관리</button>
-                            <input type="text" id="proj-search" placeholder="검색..." oninput="window.searchProjectBoard(this.value)" class="pl-3 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg outline-none w-32 font-bold">
+                            <div class="flex gap-2 items-center">
+    <input type="month" id="filter-month-select" onchange="window.filterByMonth(this.value)" class="pl-3 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg outline-none font-bold text-slate-500 cursor-pointer" title="월별 필터">
+    <input type="text" id="proj-search" placeholder="검색..." oninput="window.searchProjectBoard(this.value)" class="pl-3 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg outline-none w-32 font-bold">
+</div>
                             <button onclick="window.toggleProjDashView('list')" id="btn-pd-list" class="px-3 py-1.5 text-xs font-bold bg-slate-200 rounded-md text-slate-700">리스트</button>
                             <button onclick="window.toggleProjDashView('gantt')" id="btn-pd-gantt" class="px-3 py-1.5 text-xs font-bold bg-white border rounded-md text-slate-500">간트차트</button>
                             <button onclick="window.toggleProjDashView('calendar')" id="btn-pd-calendar" class="px-3 py-1.5 text-xs font-bold bg-white border rounded-md text-slate-500">달력뷰</button>
