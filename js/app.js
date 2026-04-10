@@ -1,3 +1,4 @@
+// js/app.js
 import './firebase.js';
 import './ui.js';
 import './auth.js';
@@ -6,6 +7,8 @@ import './project.js';
 import './request.js';
 import './weekly.js';
 import './simulation.js';
+import './workhours.js'; // 🌟 요거 한 줄 추가!
+import { initRouter } from './router.js';
 
 window.addEventListener('error', (e) => {
     console.error("🚨 문법 에러 발생 파일:", e.filename, "줄:", e.lineno, "메시지:", e.message);
