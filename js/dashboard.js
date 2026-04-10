@@ -4,7 +4,6 @@ import { collection, query, onSnapshot } from 'https://www.gstatic.com/firebasej
 let homeReqSnapshotUnsubscribe = null, homeProjSnapshotUnsubscribe = null, homeMdLogSnapshotUnsubscribe = null;
 let chartInstances = {};
 
-// 🌟 무적 방어: 데이터 강제 변환
 const getSafeString = (val) => {
     if (val === null || val === undefined) return '';
     return String(val);
