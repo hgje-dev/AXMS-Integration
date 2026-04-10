@@ -234,7 +234,7 @@
         </div>
     </aside>
 
-    <script type="module">
+<script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
         import { initializeFirestore, memoryLocalCache, collection, doc, setDoc, getDoc, getDocs, query, orderBy, deleteDoc, serverTimestamp, addDoc, onSnapshot, where, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -251,13 +251,17 @@
         const auth = getAuth(app);
         const db = initializeFirestore(app, { localCache: memoryLocalCache(), experimentalForceLongPolling: true });
 
-        // ===== 1. 전역 상태 및 헬퍼 함수 =====
-        window.currentUser=null; window.userProfile=null; window.allSystemUsers=[]; window.teamMembers=[]; window.allDashProjects=[]; window.allDashMdLogs=[]; window.currentProjectStatusList=[]; window.pjtCodeMasterList=[]; window.currentRequestList=[]; window.currentWeeklyLogList=[]; window.currentProcessData=[]; window.projectLogs=[]; window.masterPresets={}; window.projectCommentCounts={}; window.projectIssueCounts={}; window.projectLogCounts={}; window.currentSelectedMembers=[]; window.currentProjDashView='list'; window.currentProjPartTab='제조'; window.currentCategoryFilter='all'; window.currentReqView='list'; window.currentAppId=null; window.editingReqId=null; window.latestP50Md=0; window.originalProjectName=''; window.pendingSaveData=null; window.isProjectDirty=false; window.pendingAction=null; window.currentTab='hist'; window.latestHistData=null; window.latestTorData=null; window.theChart=null; window.dashChartObj=null; window.currentProjectId=null;
+        window.currentUser=null; window.userProfile=null; window.allSystemUsers=[]; window.teamMembers=[]; window.allDashProjects=[]; window.allDashMdLogs=[]; window.currentProjectStatusList=[]; window.pjtCodeMasterList=[]; window.currentRequestList=[]; window.currentWeeklyLogList=[]; window.currentProcessData=[]; window.projectCommentCounts={}; window.projectIssueCounts={}; window.projectLogCounts={}; window.currentSelectedMembers=[]; window.currentProjDashView='list'; window.currentProjPartTab='제조'; window.currentCategoryFilter='all'; window.currentReqView='list'; window.currentAppId=null; window.editingReqId=null; let chartInstances = {};
         let projectStatusSnapshotUnsubscribe=null, masterCodeSnapshotUnsubscribe=null, currentMdLogUnsubscribe=null, currentLogUnsubscribe=null, currentCommentUnsubscribe=null, currentIssueUnsubscribe=null, unsubscribeRequests=null, currentWeeklyLogUnsubscribe=null, homeReqSnapshotUnsubscribe=null, homeProjSnapshotUnsubscribe=null, homeMdLogSnapshotUnsubscribe=null, allUsersUnsubscribe=null, teamMembersUnsubscribe=null;
-        let chartInstances = {};
 
-        // 🌟 안전한 타임스탬프 변환 함수 (핵심 에러 방지)
-        const getSafeMillis = (val) => { if (!val) return 0; return typeof val.toMillis === 'function' ? val.toMillis() : val; };
+        // 🌟 안전한 밀리초 변환 (과거 날짜 에러 방지)
+        const getSafeMillis = (val) => { 
+            if (!val) return 0; 
+            if (typeof val.toMillis === 'function') return val.toMillis(); 
+            if (typeof val === 'number') return val;
+            if (typeof val === 'string') return new Date(val).getTime() || 0;
+            return 0; 
+        };
 
         window.getTriangularRandom=(min,mode,max)=>{let u=Math.random();let F=(mode-min)/(max-min);return u<=F?min+Math.sqrt(u*(max-min)*(mode-min)):max-Math.sqrt((1-u)*(max-min)*(max-mode));};
         window.getNormalRandom=(mean,stdDev)=>{let u1=Math.random();if(u1===0)u1=0.0001;return(Math.sqrt(-2.0*Math.log(u1))*Math.cos(2.0*Math.PI*Math.random()))*stdDev+mean;};
@@ -273,9 +277,8 @@
 
         window.toggleDarkMode=()=>{const h=document.documentElement,i=document.getElementById('dark-mode-icon');if(h.classList.contains('dark')){h.classList.remove('dark');localStorage.setItem('color-theme','light');if(i)i.className='fa-solid fa-moon';}else{h.classList.add('dark');localStorage.setItem('color-theme','dark');if(i)i.className='fa-solid fa-sun text-amber-400';}};
         window.toggleSidebar=(fShow)=>{const s=document.getElementById('sidebar'),b=document.getElementById('sidebar-backdrop');if(!s||!b)return;if(fShow===true||s.classList.contains('-translate-x-full')){s.classList.remove('-translate-x-full');b.classList.remove('hidden');}else{s.classList.add('-translate-x-full');b.classList.add('hidden');}};
-        window.toggleAuthMode=(m)=>{if(m==='signup'){document.getElementById('signup-fields')?.classList.remove('hidden');document.getElementById('action-buttons-login')?.classList.add('hidden');document.getElementById('action-buttons-signup')?.classList.remove('hidden');document.getElementById('login-view')?.classList.add('hidden');document.getElementById('signup-view')?.classList.remove('hidden');if(document.getElementById('auth-title'))document.getElementById('auth-title').innerText='AXBIS 계정 생성';document.getElementById('login-error')?.classList.add('hidden');}else{document.getElementById('signup-fields')?.classList.add('hidden');document.getElementById('action-buttons-login')?.classList.remove('hidden');document.getElementById('action-buttons-signup')?.classList.add('hidden');document.getElementById('login-view')?.classList.remove('hidden');document.getElementById('signup-view')?.classList.add('hidden');if(document.getElementById('auth-title'))document.getElementById('auth-title').innerText='AXBIS Cloud 접속';document.getElementById('signup-error')?.classList.add('hidden');}};
+        window.toggleAuthMode=(m)=>{if(m==='signup'){document.getElementById('signup-fields')?.classList.remove('hidden');document.getElementById('action-buttons-login')?.classList.add('hidden');document.getElementById('action-buttons-signup')?.classList.remove('hidden');document.getElementById('login-view')?.classList.add('hidden');document.getElementById('signup-view')?.classList.remove('hidden');}else{document.getElementById('signup-fields')?.classList.add('hidden');document.getElementById('action-buttons-login')?.classList.remove('hidden');document.getElementById('action-buttons-signup')?.classList.add('hidden');document.getElementById('login-view')?.classList.remove('hidden');document.getElementById('signup-view')?.classList.add('hidden');}};
 
-        // ===== 2. 사용자 인증 =====
         window.checkLogin=async()=>{const e=document.getElementById('login-id')?.value.trim();const p=document.getElementById('login-pw')?.value.trim();const err=document.getElementById('login-error');if(!e||!p){if(err){err.innerText="이메일과 비밀번호를 입력하세요.";err.classList.remove('hidden');}return;}try{await signInWithEmailAndPassword(auth,e,p);}catch(er){if(err){err.innerText="정보가 일치하지 않습니다.";err.classList.remove('hidden');}}};
         window.signUp=async()=>{const n=document.getElementById('login-name')?.value.trim()||document.getElementById('signup-name')?.value.trim();const t=document.getElementById('login-team')?.value||document.getElementById('signup-dept')?.value;const e=document.getElementById('login-id')?.value.trim()||document.getElementById('signup-id')?.value.trim();const p=document.getElementById('login-pw')?.value.trim()||document.getElementById('signup-pw')?.value.trim();const err=document.getElementById('login-error')||document.getElementById('signup-error');if(!n||!e||!p){if(err){err.innerHTML="모든 정보를 입력하세요.";err.classList.remove('hidden');}return;}if(p.length<6){if(err){err.innerHTML="비밀번호는 6자리 이상이어야 합니다.";err.classList.remove('hidden');}return;}try{const uC=await createUserWithEmailAndPassword(auth,e,p);await setDoc(doc(db,"users",uC.user.uid),{email:e,name:n,team:t,department:t,role:'pending',permissions:{collab:true,purchase:true,assembly:true,repair:true,'project-status':true,'weekly-log':true}});if(err){err.innerHTML="가입 성공! 관리자 승인 대기 중입니다.";err.className="text-emerald-500 text-[11px] font-bold text-center mt-2 bg-emerald-50 p-3 rounded-xl border border-emerald-100 break-words";err.classList.remove('hidden');}setTimeout(()=>window.logout(),3000);}catch(er){if(err){err.innerHTML=er.code==='auth/email-already-in-use'?"이미 가입된 이메일입니다.":er.message;err.className="text-rose-500 text-[11px] font-bold text-center mt-2 bg-rose-50 p-3 rounded-xl border border-rose-100 break-words";err.classList.remove('hidden');}}};
         window.logout=async()=>{await signOut(auth);location.reload();};
@@ -302,7 +305,6 @@
             }
         });
 
-        // ===== 3. 시스템 관리자 및 팀원 관리 =====
         window.openAdminModal=()=>{document.getElementById('admin-modal').classList.remove('hidden');document.getElementById('admin-modal').classList.add('flex');window.renderAdminUsers();};
         window.closeAdminModal=()=>{document.getElementById('admin-modal').classList.add('hidden');document.getElementById('admin-modal').classList.remove('flex');};
         window.renderAdminUsers=()=>{const tb=document.getElementById('admin-users-tbody');if(!tb)return;if(window.allSystemUsers.length===0){tb.innerHTML='<tr><td colspan="6" class="text-center p-6 text-slate-500 font-bold">등록된 사용자가 없습니다.</td></tr>';return;}let sortedUsers=[...window.allSystemUsers].sort((a,b)=>{if(a.role==='pending'&&b.role!=='pending')return-1;if(a.role!=='pending'&&b.role==='pending')return 1;return 0;});let html='';sortedUsers.forEach(u=>{const p=u.permissions||{};const isP=u.role==='pending';html+=`<tr class="hover:bg-slate-50 transition-colors ${isP?'bg-amber-50/50':''}"><td class="p-3 text-center font-bold text-slate-700">${u.name}</td><td class="p-3 text-center text-slate-600">${u.team||u.department||''}</td><td class="p-3 text-center text-slate-500">${u.email}</td><td class="p-3 text-center"><select class="border border-slate-300 rounded px-2 py-1.5 text-xs font-bold ${isP?'text-amber-600':'text-slate-600'}" onchange="window.updateUserRole('${u.uid}', this.value)"><option value="pending" ${u.role==='pending'?'selected':''}>승인 대기</option><option value="user" ${u.role==='user'?'selected':''}>일반 사용자</option><option value="master" ${u.role==='master'?'selected':''}>마스터</option><option value="admin" ${u.role==='admin'?'selected':''}>시스템 관리자</option></select></td><td class="p-3"><div class="flex flex-wrap gap-3 justify-center"><label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p.collab?'checked':''} onchange="window.updateUserPerm('${u.uid}','collab',this.checked)">협업</label><label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p.purchase?'checked':''} onchange="window.updateUserPerm('${u.uid}','purchase',this.checked)">구매</label><label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p.assembly?'checked':''} onchange="window.updateUserPerm('${u.uid}','assembly',this.checked)">조립</label><label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p.repair?'checked':''} onchange="window.updateUserPerm('${u.uid}','repair',this.checked)">수리/점검</label><label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p['project-status']?'checked':''} onchange="window.updateUserPerm('${u.uid}','project-status',this.checked)">PJT현황판</label><label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p['weekly-log']?'checked':''} onchange="window.updateUserPerm('${u.uid}','weekly-log',this.checked)">주간업무</label></div></td><td class="p-3 text-center"><div class="flex items-center justify-center gap-1">${isP?`<button onclick="window.updateUserRole('${u.uid}', 'user')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-2 py-1 rounded text-[10px] font-bold shadow-sm transition-colors whitespace-nowrap">승인하기</button>`:''}<button onclick="window.deleteUser('${u.uid}')" class="bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white px-2 py-1 rounded transition-colors"><i class="fa-solid fa-trash-can text-sm"></i></button></div></td></tr>`;});tb.innerHTML=html;};
@@ -316,7 +318,6 @@
         window.addTeamMember=async()=>{const n=document.getElementById('new-team-name').value.trim();const p=document.getElementById('new-team-part').value;if(!n)return window.showToast("사용자를 선택하세요.","error");if(window.teamMembers.find(t=>t.name===n))return window.showToast("이미 등록된 팀원입니다.","error");try{await addDoc(collection(db,"team_members"),{name:n,part:p,createdAt:Date.now()});document.getElementById('new-team-name').value='';window.showToast("팀원이 추가되었습니다.");}catch(e){window.showToast("오류 발생","error");}};
         window.deleteTeamMember=async(id)=>{if(!confirm("이 팀원을 삭제하시겠습니까?"))return;try{await deleteDoc(doc(db,"team_members",id));window.showToast("삭제되었습니다.");}catch(e){window.showToast("오류 발생","error");}};
 
-        // ===== 4. 네비게이션 및 대시보드 로직 =====
         window.openApp = function(viewId, title) {
             window.toggleSidebar(false); let permissionKey = viewId.replace('view-', ''); if (permissionKey.startsWith('project-status')) permissionKey = 'project-status';
             if (permissionKey !== 'dashboard-proj' && permissionKey !== 'simulation' && window.userProfile && window.userProfile.permissions && !window.userProfile.permissions[permissionKey]) { window.showToast("접근 권한이 없습니다.", "error"); return; }
@@ -375,7 +376,7 @@
             createChart('annualPlanVsActualChart', 'line', { labels: months, datasets: [ { label: '계획 MD', data: planData, borderColor: '#6366f1', backgroundColor: '#6366f1', tension: 0.3 }, { label: '투입 MD', data: actData, borderColor: '#a855f7', backgroundColor: '#a855f7', tension: 0.3 } ] }, { maintainAspectRatio: false });
         };
 
-        // ===== 5. PJT 현황판 로직 (에러 완벽 대응) =====
+        // 🌟 핵심 수정: 과거 데이터 호환되도록 로직 변경!
         window.loadCounts = function() {
             onSnapshot(collection(db, "project_comments"), snap => { window.projectCommentCounts = {}; snap.forEach(doc => { let d = doc.data(); if(d.projectId) window.projectCommentCounts[d.projectId] = (window.projectCommentCounts[d.projectId]||0)+1; }); if(window.currentProjDashView === 'list' && document.getElementById('view-project-status').classList.contains('hidden') === false) window.renderProjectStatusList(); });
             onSnapshot(collection(db, "project_issues"), snap => { window.projectIssueCounts = {}; snap.forEach(doc => { let d = doc.data(); if(d.projectId && !d.isResolved) window.projectIssueCounts[d.projectId] = (window.projectIssueCounts[d.projectId]||0)+1; }); if(window.currentProjDashView === 'list' && document.getElementById('view-project-status').classList.contains('hidden') === false) window.renderProjectStatusList(); });
@@ -391,7 +392,8 @@
                 window.currentProjectStatusList = []; let lastUpdated = 0;
                 snapshot.forEach(doc => { 
                     const data = doc.data(); 
-                    if(data.part === window.currentProjPartTab) window.currentProjectStatusList.push({ id: doc.id, ...data }); 
+                    const dataPart = data.part || '제조'; // 과거 데이터(part 필드 없는 데이터)도 제조 파트로 표시되도록 픽스!
+                    if(dataPart === window.currentProjPartTab) window.currentProjectStatusList.push({ id: doc.id, ...data }); 
                     let uTime = getSafeMillis(data.updatedAt);
                     if(uTime > lastUpdated) lastUpdated = uTime;
                 });
