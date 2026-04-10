@@ -70,11 +70,10 @@ window.initAuthListeners = () => {
             
             if(window.loadProjectCodeMaster) window.loadProjectCodeMaster(); 
             if(window.loadCounts) window.loadCounts(); 
+            // 🌟 로그인 완료 후 알림 리스너 시작!
+            if(window.loadNotifications) window.loadNotifications();
             if(window.navigateHome) window.navigateHome(); 
-            if(window.loadMasterPresets) window.loadMasterPresets(); 
-            if(window.loadAiApiSettingsToPanel) window.loadAiApiSettingsToPanel(); 
-            if(window.updateAiApiUi) window.updateAiApiUi();
-            if(window.loadSimilarProjectsList) setTimeout(() => window.loadSimilarProjectsList(), 1000); 
+            
             window.showToast("환영합니다, " + window.userProfile.name + "님!");
         } else { 
             window.currentUser=null; document.getElementById('login-modal')?.classList.remove('hidden'); 
@@ -83,7 +82,6 @@ window.initAuthListeners = () => {
     });
 };
 
-// 🌟 시스템 관리자 복구 로직
 window.openAdminModal = () => { document.getElementById('admin-modal').classList.remove('hidden'); document.getElementById('admin-modal').classList.add('flex'); window.renderAdminUsers(); };
 window.closeAdminModal = () => { document.getElementById('admin-modal').classList.add('hidden'); document.getElementById('admin-modal').classList.remove('flex'); };
 window.renderAdminUsers = () => {
