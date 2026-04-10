@@ -1,10 +1,20 @@
 <div class="space-y-4">
     <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-4 border-l-slate-300"><div class="flex justify-between items-center"><span class="text-[11px] font-bold text-slate-500"><i class="fa-solid fa-pause text-slate-400"></i> 대기 / 보류</span><span class="text-2xl font-black text-slate-700" id="mini-dash-pending">0</span></div></div>
-        <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-4 border-l-blue-400"><div class="flex justify-between items-center"><span class="text-[11px] font-bold text-blue-600"><i class="fa-solid fa-person-digging"></i> 진행 중</span><span class="text-2xl font-black text-blue-700" id="mini-dash-progress">0</span></div></div>
-        <div class="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 shadow-sm flex flex-col justify-center border-l-4 border-l-emerald-400"><div class="flex justify-between items-center"><span class="text-[11px] font-bold text-emerald-600" id="mini-dash-completed-label"><i class="fa-solid fa-truck-fast"></i> 출하 완료</span><span class="text-2xl font-black text-emerald-700" id="mini-dash-completed">0</span></div></div>
-        <div class="bg-rose-50 rounded-2xl p-4 border border-rose-100 shadow-sm flex flex-col justify-start border-l-4 border-l-rose-400 col-span-1 overflow-hidden relative"><span class="text-[11px] font-bold text-rose-600 mb-2"><i class="fa-solid fa-clock"></i> 7일 이내 출하 예정 (D-7)</span><div id="mini-dash-upcoming" class="flex flex-wrap gap-1 w-full mt-1"></div></div>
-        <div class="bg-orange-50 rounded-2xl p-4 border border-orange-100 shadow-sm flex flex-col justify-start border-l-4 border-l-orange-400 col-span-1 overflow-hidden relative"><span class="text-[11px] font-bold text-orange-600 mb-2"><i class="fa-solid fa-clock"></i> 14일 이내 출하 예정 (D-14)</span><div id="mini-dash-upcoming-14" class="flex flex-wrap gap-1 w-full mt-1"></div></div>
+        <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-4 border-l-slate-300 cursor-pointer hover:ring-2 ring-slate-200 transition-all" onclick="window.filterFromDashboard('pending')">
+            <div class="flex justify-between items-center"><span class="text-[11px] font-bold text-slate-500"><i class="fa-solid fa-pause text-slate-400"></i> 대기 / 보류</span><span class="text-2xl font-black text-slate-700" id="mini-dash-pending">0</span></div>
+        </div>
+        <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-4 border-l-blue-400 cursor-pointer hover:ring-2 ring-blue-200 transition-all" onclick="window.filterFromDashboard('progress')">
+            <div class="flex justify-between items-center"><span class="text-[11px] font-bold text-blue-600"><i class="fa-solid fa-person-digging"></i> 진행 중</span><span class="text-2xl font-black text-blue-700" id="mini-dash-progress">0</span></div>
+        </div>
+        <div class="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 shadow-sm flex flex-col justify-center border-l-4 border-l-emerald-400 cursor-pointer hover:ring-2 ring-emerald-300 transition-all" onclick="window.filterFromDashboard('completed')">
+            <div class="flex justify-between items-center"><span class="text-[11px] font-bold text-emerald-600" id="mini-dash-completed-label"><i class="fa-solid fa-truck-fast"></i> 출하 완료</span><span class="text-2xl font-black text-emerald-700" id="mini-dash-completed">0</span></div>
+        </div>
+        <div class="bg-rose-50 rounded-2xl p-4 border border-rose-100 shadow-sm flex flex-col justify-start border-l-4 border-l-rose-400 col-span-1 overflow-hidden relative">
+            <span class="text-[11px] font-bold text-rose-600 mb-2"><i class="fa-solid fa-clock"></i> 7일 이내 출하 예정 (D-7)</span><div id="mini-dash-upcoming" class="flex flex-wrap gap-1 w-full mt-1"></div>
+        </div>
+        <div class="bg-orange-50 rounded-2xl p-4 border border-orange-100 shadow-sm flex flex-col justify-start border-l-4 border-l-orange-400 col-span-1 overflow-hidden relative">
+            <span class="text-[11px] font-bold text-orange-600 mb-2"><i class="fa-solid fa-clock"></i> 14일 이내 출하 예정 (D-14)</span><div id="mini-dash-upcoming-14" class="flex flex-wrap gap-1 w-full mt-1"></div>
+        </div>
     </div>
 
     <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[80vh]">
@@ -15,7 +25,7 @@
                 <button onclick="window.openTeamModal()" class="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-lg shadow-sm mr-2 hover:bg-indigo-100 transition-colors"><i class="fa-solid fa-users"></i> 팀원 관리</button>
                 <div class="flex gap-2 items-center">
                     <input type="month" id="filter-month-select" onchange="window.filterByMonth(this.value)" class="pl-3 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg outline-none font-bold text-slate-500 cursor-pointer" title="월별 필터">
-                    <button onclick="window.clearMonthFilter()" class="px-2 py-1.5 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg shadow-sm transition-colors whitespace-nowrap">전체</button>
+                    <button onclick="window.filterFromDashboard('all')" class="px-3 py-1.5 text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-white rounded-lg shadow-sm transition-colors whitespace-nowrap"><i class="fa-solid fa-rotate-right"></i> 필터 초기화</button>
                     <input type="text" id="proj-search" placeholder="검색..." oninput="window.searchProjectBoard(this.value)" class="pl-3 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg outline-none w-32 font-bold focus:border-indigo-500">
                 </div>
                 <button onclick="window.toggleProjDashView('list')" id="btn-pd-list" class="px-3 py-1.5 text-xs font-bold bg-slate-200 rounded-md text-slate-700 transition-colors"><i class="fa-solid fa-list"></i> 리스트</button>
