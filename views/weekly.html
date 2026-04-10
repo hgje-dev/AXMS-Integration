@@ -1,4 +1,6 @@
-<section>
-  <h2>Weekly</h2>
-  <p>주간 업무일지 화면 조각</p>
-</section>
+<div class="space-y-6">
+    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[85vh]">
+        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 flex-shrink-0"><h3 class="font-extrabold text-slate-800 text-lg"><i class="fa-solid fa-calendar-week text-indigo-500"></i> 주간 업무 일지</h3><div class="flex gap-2 items-center"><input type="week" id="weekly-log-filter-week" class="px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-700 outline-indigo-500" onchange="window.loadWeeklyLogsData()"><button onclick="window.openWeeklyLogWriteModal()" class="bg-indigo-600 hover:bg-indigo-700 transition-colors text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow-md">작성</button></div></div>
+        <div class="p-6 flex-1 overflow-y-auto bg-slate-50/50"><div id="weekly-log-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div></div>
+    </div>
+</div>
