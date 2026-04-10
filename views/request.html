@@ -1,4 +1,6 @@
-<section>
-  <h2>Request</h2>
-  <p>요청서 화면 조각</p>
-</section>
+<div class="space-y-6">
+    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50"><h3 class="font-extrabold text-slate-700"><span id="req-list-title">요청 목록</span></h3><button onclick="window.openWriteModal()" class="bg-indigo-600 hover:bg-indigo-700 transition-colors text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm">새 요청서 작성</button></div>
+        <div id="request-list-container" class="overflow-x-auto min-h-[300px]"><table class="w-full text-left border-collapse"><thead class="bg-white border-b border-slate-200 text-[11px] text-slate-500 uppercase tracking-wider"><tr><th class="p-4 font-bold text-center">현재 상태</th><th class="p-4 font-bold">요청 제목 (프로젝트명)</th><th class="p-4 font-bold">요청자(팀)</th><th class="p-4 font-bold text-center">공수(MD)</th><th class="p-4 font-bold text-center">등록일</th><th class="p-4 font-bold text-center">기능</th></tr></thead><tbody id="request-tbody" class="divide-y divide-slate-100"></tbody></table></div>
+    </div>
+</div>
