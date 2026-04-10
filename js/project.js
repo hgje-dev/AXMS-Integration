@@ -8,7 +8,7 @@ let currentLogUnsubscribe = null;
 let currentCommentUnsubscribe = null;
 let currentIssueUnsubscribe = null;
 
-// 🌟 철통 방어 1: 날짜 변환 시 에러 절대 방지
+// 🌟 무적 방어 1: 날짜 변환 시 에러 절대 방지
 const getSafeMillis = (val) => { 
     try {
         if (!val) return 0; 
@@ -19,28 +19,18 @@ const getSafeMillis = (val) => {
     } catch(e) { return 0; }
 };
 
-// 🌟 철통 방어 2: 텍스트 강제 변환 (숫자로 인한 .replace 에러 원천 차단)
+// 🌟 무적 방어 2: 텍스트 강제 변환 (숫자로 인한 .replace 에러 원천 차단)
 const getSafeString = (val) => {
     if (val === null || val === undefined) return '';
     return String(val);
 };
 
 window.loadCounts = function() {
-    onSnapshot(collection(db, "project_comments"), snap => {
-        window.projectCommentCounts = {};
-        snap.forEach(doc => { let d = doc.data(); if(d.projectId) window.projectCommentCounts[d.projectId] = (window.projectCommentCounts[d.projectId]||0)+1; });
-        try { if(window.currentProjDashView === 'list' && !document.getElementById('view-project-status').classList.contains('hidden')) window.renderProjectStatusList(); } catch(e){}
-    });
-    onSnapshot(collection(db, "project_issues"), snap => {
-        window.projectIssueCounts = {};
-        snap.forEach(doc => { let d = doc.data(); if(d.projectId && !d.isResolved) window.projectIssueCounts[d.projectId] = (window.projectIssueCounts[d.projectId]||0)+1; });
-        try { if(window.currentProjDashView === 'list' && !document.getElementById('view-project-status').classList.contains('hidden')) window.renderProjectStatusList(); } catch(e){}
-    });
-    onSnapshot(collection(db, "daily_logs"), snap => {
-        window.projectLogCounts = {};
-        snap.forEach(doc => { let d = doc.data(); if(d.projectId) window.projectLogCounts[d.projectId] = (window.projectLogCounts[d.projectId]||0)+1; });
-        try { if(window.currentProjDashView === 'list' && !document.getElementById('view-project-status').classList.contains('hidden')) window.renderProjectStatusList(); } catch(e){}
-    });
+    try {
+        onSnapshot(collection(db, "project_comments"), snap => { window.projectCommentCounts = {}; snap.forEach(doc => { let d = doc.data(); if(d.projectId) window.projectCommentCounts[d.projectId] = (window.projectCommentCounts[d.projectId]||0)+1; }); try { if(window.currentProjDashView === 'list' && !document.getElementById('view-project-status').classList.contains('hidden')) window.renderProjectStatusList(); } catch(e){} });
+        onSnapshot(collection(db, "project_issues"), snap => { window.projectIssueCounts = {}; snap.forEach(doc => { let d = doc.data(); if(d.projectId && !d.isResolved) window.projectIssueCounts[d.projectId] = (window.projectIssueCounts[d.projectId]||0)+1; }); try { if(window.currentProjDashView === 'list' && !document.getElementById('view-project-status').classList.contains('hidden')) window.renderProjectStatusList(); } catch(e){} });
+        onSnapshot(collection(db, "daily_logs"), snap => { window.projectLogCounts = {}; snap.forEach(doc => { let d = doc.data(); if(d.projectId) window.projectLogCounts[d.projectId] = (window.projectLogCounts[d.projectId]||0)+1; }); try { if(window.currentProjDashView === 'list' && !document.getElementById('view-project-status').classList.contains('hidden')) window.renderProjectStatusList(); } catch(e){} });
+    } catch(e) { console.warn("카운트 로드 실패:", e); }
 };
 
 window.switchProjPartTab = function(part) {
@@ -56,22 +46,22 @@ window.filterByCategory = function(category) {
         if(window.currentProjDashView === 'gantt') window.renderProjGantt(); 
         else if(window.currentProjDashView === 'calendar') window.renderProjCalendar();
         else window.renderProjectStatusList(); 
-    } catch(e) {}
+    } catch(e) { console.error(e); }
 };
 
 window.searchProjectBoard = function(keyword) {
-    const k = getSafeString(keyword).toLowerCase();
-    document.querySelectorAll('#proj-dash-tbody tr').forEach(tr => {
-        const text = tr.innerText.toLowerCase();
-        tr.style.display = (text.includes(k) || window.matchString(k, text)) ? '' : 'none';
-    });
+    try {
+        const k = getSafeString(keyword).toLowerCase();
+        document.querySelectorAll('#proj-dash-tbody tr').forEach(tr => {
+            const text = tr.innerText.toLowerCase();
+            tr.style.display = (text.includes(k) || window.matchString(k, text)) ? '' : 'none';
+        });
+    } catch(e) {}
 };
 
-// 🌟 미니 대시보드 로직 (에러 발생 시에도 메인 렌더링에 영향 없도록 격리)
 window.updateMiniDashboard = function() {
     try {
-        let pending = 0, progress = 0, completedThisMonth = 0;
-        let upcomingCodes7 = [], upcomingCodes14 = [];
+        let pending = 0, progress = 0, completedThisMonth = 0; let upcomingCodes7 = [], upcomingCodes14 = [];
         const now = new Date(); const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
@@ -79,16 +69,10 @@ window.updateMiniDashboard = function() {
         if (completedLabel) completedLabel.innerHTML = `<i class="fa-solid fa-truck-fast text-emerald-400"></i> 출하 완료 (${now.getMonth() + 1}월)`;
 
         (window.currentProjectStatusList || []).forEach(item => {
-            const status = getSafeString(item.status);
-            const shipEn = getSafeString(item.d_shipEn);
-            const shipEst = getSafeString(item.d_shipEst);
-            const code = getSafeString(item.code) || '미지정';
-
+            const status = getSafeString(item.status); const shipEn = getSafeString(item.d_shipEn); const shipEst = getSafeString(item.d_shipEst); const code = getSafeString(item.code) || '미지정';
             if (status === 'pending' || status === 'rejected') pending++;
             else if (status === 'progress' || status === 'inspecting') progress++;
-            else if (status === 'completed') {
-                if (shipEn.startsWith(currentMonthStr) || (!shipEn && shipEst.startsWith(currentMonthStr))) completedThisMonth++;
-            }
+            else if (status === 'completed') { if (shipEn.startsWith(currentMonthStr) || (!shipEn && shipEst.startsWith(currentMonthStr))) completedThisMonth++; }
 
             if (status !== 'completed' && status !== 'rejected' && shipEst) {
                 const shipDate = new Date(shipEst);
@@ -106,144 +90,154 @@ window.updateMiniDashboard = function() {
         if(document.getElementById('mini-dash-completed')) document.getElementById('mini-dash-completed').innerText = completedThisMonth;
 
         const elUpcoming7 = document.getElementById('mini-dash-upcoming');
-        if(elUpcoming7) {
-            elUpcoming7.innerHTML = upcomingCodes7.length === 0 ? `<span class="text-[10px] text-rose-400 font-bold">임박한 프로젝트 없음</span>` : upcomingCodes7.map(u => {
-                let dText = u.dDay === 0 ? 'D-Day' : (u.dDay < 0 ? `지연` : `D-${u.dDay}`);
-                let bgClass = u.dDay <= 3 ? 'bg-rose-500 text-white border-rose-600' : 'bg-white text-rose-600 border-rose-200';
-                return `<span class="text-[10px] border px-1.5 py-0.5 rounded font-bold shadow-sm flex items-center gap-1 ${bgClass}">${u.code} <span class="opacity-80 text-[8px]">[${dText}]</span></span>`;
-            }).join('');
-        }
+        if(elUpcoming7) { elUpcoming7.innerHTML = upcomingCodes7.length === 0 ? `<span class="text-[10px] text-rose-400 font-bold">임박한 프로젝트 없음</span>` : upcomingCodes7.map(u => { let dText = u.dDay === 0 ? 'D-Day' : (u.dDay < 0 ? `지연` : `D-${u.dDay}`); let bgClass = u.dDay <= 3 ? 'bg-rose-500 text-white border-rose-600' : 'bg-white text-rose-600 border-rose-200'; return `<span class="text-[10px] border px-1.5 py-0.5 rounded font-bold shadow-sm flex items-center gap-1 ${bgClass}">${u.code} <span class="opacity-80 text-[8px]">[${dText}]</span></span>`; }).join(''); }
         const elUpcoming14 = document.getElementById('mini-dash-upcoming-14');
-        if(elUpcoming14) {
-            elUpcoming14.innerHTML = upcomingCodes14.length === 0 ? `<span class="text-[10px] text-orange-400 font-bold">임박한 프로젝트 없음</span>` : upcomingCodes14.map(u => `<span class="text-[10px] border px-1.5 py-0.5 rounded font-bold shadow-sm flex items-center gap-1 bg-white text-orange-600 border-orange-200">${u.code} <span class="opacity-80 text-[8px]">[D-${u.dDay}]</span></span>`).join('');
-        }
-    } catch(e) { console.warn("미니 대시보드 로드 에러:", e); }
+        if(elUpcoming14) { elUpcoming14.innerHTML = upcomingCodes14.length === 0 ? `<span class="text-[10px] text-orange-400 font-bold">임박한 프로젝트 없음</span>` : upcomingCodes14.map(u => `<span class="text-[10px] border px-1.5 py-0.5 rounded font-bold shadow-sm flex items-center gap-1 bg-white text-orange-600 border-orange-200">${u.code} <span class="opacity-80 text-[8px]">[D-${u.dDay}]</span></span>`).join(''); }
+    } catch(e) { console.warn("미니 대시보드 에러:", e); }
 };
 
 window.loadProjectStatusData = function() {
     if(projectStatusSnapshotUnsubscribe) projectStatusSnapshotUnsubscribe();
-    projectStatusSnapshotUnsubscribe = onSnapshot(query(collection(db, "projects_status")), (snapshot) => {
-        try {
-            window.currentProjectStatusList = []; 
-            let lastUpdated = 0;
-            const targetPart = window.currentProjPartTab === '광학' ? '광학' : '제조';
-            
-            snapshot.forEach(doc => { 
-                const data = doc.data(); 
-                const dataPart = getSafeString(data.part).trim() || '제조'; 
-                let isMatch = (targetPart === '광학') ? (dataPart === '광학') : (dataPart !== '광학');
-                if(isMatch) window.currentProjectStatusList.push({ id: doc.id, ...data }); 
-                let uTime = getSafeMillis(data.updatedAt);
-                if(uTime > lastUpdated) lastUpdated = uTime;
-            });
-            
-            window.currentProjectStatusList.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
-            
+    
+    try {
+        projectStatusSnapshotUnsubscribe = onSnapshot(query(collection(db, "projects_status")), (snapshot) => {
             try {
-                if (lastUpdated > 0) { 
-                    const lDate = new Date(lastUpdated); 
-                    const el = document.getElementById('pjt-last-update');
-                    if(el) el.innerText = `${lDate.getFullYear().toString().slice(2)}-${String(lDate.getMonth()+1).padStart(2,'0')}-${String(lDate.getDate()).padStart(2,'0')} ${String(lDate.getHours()).padStart(2,'0')}:${String(lDate.getMinutes()).padStart(2,'0')}`; 
-                }
-            } catch(e){}
+                window.currentProjectStatusList = []; 
+                let lastUpdated = 0;
+                const targetPart = window.currentProjPartTab === '광학' ? '광학' : '제조';
+                
+                snapshot.forEach(doc => { 
+                    const data = doc.data(); 
+                    const dataPart = getSafeString(data.part).trim() || '제조'; 
+                    let isMatch = (targetPart === '광학') ? (dataPart === '광학') : (dataPart !== '광학');
+                    if(isMatch) window.currentProjectStatusList.push({ id: doc.id, ...data }); 
+                    
+                    let uTime = getSafeMillis(data.updatedAt);
+                    if(uTime > lastUpdated) lastUpdated = uTime;
+                });
+                
+                window.currentProjectStatusList.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
+                
+                try {
+                    if (lastUpdated > 0) { 
+                        const lDate = new Date(lastUpdated); 
+                        const el = document.getElementById('pjt-last-update');
+                        if(el) el.innerText = `${lDate.getFullYear().toString().slice(2)}-${String(lDate.getMonth()+1).padStart(2,'0')}-${String(lDate.getDate()).padStart(2,'0')} ${String(lDate.getHours()).padStart(2,'0')}:${String(lDate.getMinutes()).padStart(2,'0')}`; 
+                    }
+                } catch(e){}
 
-            window.updateMiniDashboard();
-            
-        } catch(error) {
-            console.error("데이터 로드 중 에러:", error);
-        } finally {
-            // 🚨 무슨 일이 있어도 화면을 그리도록 finally에 배치!!
-            try {
-                if(window.currentProjDashView === 'gantt') window.renderProjGantt(); 
-                else if(window.currentProjDashView === 'calendar') window.renderProjCalendar();
-                else window.renderProjectStatusList();
-            } catch(renderError) {
-                console.error("최종 렌더링 호출 실패:", renderError);
-                const tbody = document.getElementById('proj-dash-tbody'); 
-                if(tbody) tbody.innerHTML = `<tr><td colspan="28" class="text-center p-6 text-rose-500 font-bold">오류 발생: 화면을 그릴 수 없습니다. (${renderError.message})</td></tr>`;
+                if(window.updateMiniDashboard) window.updateMiniDashboard();
+                
+            } catch(error) {
+                console.error("데이터 분류 중 에러:", error);
+            } finally {
+                // 🚨 무슨 일이 있어도 화면을 그리도록 finally에 배치
+                try {
+                    if(window.currentProjDashView === 'gantt') window.renderProjGantt(); 
+                    else if(window.currentProjDashView === 'calendar') window.renderProjCalendar();
+                    else window.renderProjectStatusList();
+                } catch(renderError) {
+                    console.error("렌더링 강제 실행 실패:", renderError);
+                    const tbody = document.getElementById('proj-dash-tbody'); 
+                    if(tbody) tbody.innerHTML = `<tr><td colspan="28" class="text-center p-6 text-rose-500 font-bold bg-rose-50">🚨 시스템 내부 오류로 화면을 그릴 수 없습니다.<br>${renderError.message}</td></tr>`;
+                }
             }
-        }
-    });
+        }, (error) => {
+            // 🚨 Firestore 규칙 등으로 읽기가 차단되었을 때의 경고
+            console.error("Firebase 읽기 에러:", error);
+            window.showToast("DB 접속 권한이 없거나 네트워크 오류입니다.", "error");
+            const tbody = document.getElementById('proj-dash-tbody'); 
+            if(tbody) tbody.innerHTML = `<tr><td colspan="28" class="text-center p-6 text-rose-500 font-bold bg-rose-50">🚨 DB 읽기 실패: ${error.message}</td></tr>`;
+        });
+    } catch(e) { console.error("onSnapshot 등록 에러:", e); }
 };
 
-// 🌟 불사조 렌더링 로직: 한 줄이 에러나도 전체가 죽지 않음!
+// 🌟 무적 방어 3: 한 줄이 에러나도 전체가 죽지 않는 불사조 렌더링
 window.renderProjectStatusList = function() {
     const tbody = document.getElementById('proj-dash-tbody'); if(!tbody) return;
     
-    let displayList = window.currentProjectStatusList || [];
-    if(window.currentCategoryFilter && window.currentCategoryFilter !== 'all') {
-        displayList = displayList.filter(item => getSafeString(item.category) === window.currentCategoryFilter);
-    }
-    
-    if(displayList.length === 0) { 
-        tbody.innerHTML = `<tr><td colspan="28" class="text-center p-6 text-slate-400 font-bold">등록된 PJT 현황이 없습니다.</td></tr>`; 
-        return; 
-    }
-    
-    const statusMap = { 'pending':'<span class="text-slate-500 bg-slate-100 px-2 py-0.5 rounded shadow-sm border border-slate-200">대기/보류</span>', 'progress':'<span class="text-blue-600 bg-blue-50 px-2 py-0.5 rounded shadow-sm border border-blue-200">진행중(제작)</span>', 'inspecting':'<span class="text-amber-600 bg-amber-50 px-2 py-0.5 rounded shadow-sm border border-amber-200">진행중(검수)</span>', 'completed':'<span class="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded shadow-sm border border-emerald-200">완료(출하)</span>', 'rejected':'<span class="text-rose-600 bg-rose-50 px-2 py-0.5 rounded shadow-sm border border-rose-200">보류/불가</span>' };
-    
-    let htmlStr = '';
-    displayList.forEach(item => {
-        try {
-            const currentMd = parseFloat(item.currentMd) || 0;
-            const outMd = parseFloat(item.outMd) || 0;
-            const fMd = parseFloat(item.finalMd) || (currentMd + outMd);
-            const fMdFixed = fMd.toFixed(1);
-            
-            const safeNameStr = getSafeString(item.name);
-            const safeCodeStr = getSafeString(item.code);
-            const safeCompStr = getSafeString(item.company);
-            const safeManagerStr = getSafeString(item.manager);
-            const safeCatStr = getSafeString(item.category);
-
-            const safeNameJs = safeNameStr.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, ' ').replace(/\r/g, '');
-            const safeNameHtml = safeNameStr.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            
-            let linksHtml = ''; 
-            if(item.links && Array.isArray(item.links) && item.links.length > 0) { 
-                linksHtml = item.links.map(lnk => `<a href="${getSafeString(lnk.url)}" target="_blank" title="${getSafeString(lnk.name)}" class="text-teal-500 hover:text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded transition-colors"><i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i></a>`).join(''); 
-            }
-            
-            let cCount = (window.projectCommentCounts && window.projectCommentCounts[item.id]) || 0; 
-            let iCount = (window.projectIssueCounts && window.projectIssueCounts[item.id]) || 0; 
-            let lCount = (window.projectLogCounts && window.projectLogCounts[item.id]) || 0;
-            
-            htmlStr += `<tr class="hover:bg-indigo-50/50 transition-colors cursor-pointer" onclick="window.editProjStatus('${item.id}')">
-                <td class="border border-slate-200 px-2 py-1 text-center bg-white sticky left-0 z-10" onclick="event.stopPropagation()"><button onclick="window.deleteProjStatus('${item.id}')" class="text-slate-400 hover:text-rose-500 mx-1"><i class="fa-solid fa-trash-can"></i></button></td>
-                <td class="border border-slate-200 px-2 py-1 text-center">${safeCatStr}</td>
-                <td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openCommentModal('${item.id}', '${safeNameJs}')" class="text-amber-400 hover:text-amber-500 relative"><i class="fa-regular fa-comment-dots text-lg"></i> ${cCount > 0 ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm">${cCount}</span>` : ''}</button></td>
-                <td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openIssueModal('${item.id}', '${safeNameJs}')" class="text-rose-400 hover:text-rose-500 relative"><i class="fa-solid fa-triangle-exclamation text-lg"></i> ${iCount > 0 ? `<span class="absolute -top-1 -right-2 bg-rose-100 text-rose-600 text-[9px] font-bold px-1 rounded-full shadow-sm">${iCount}</span>` : ''}</button></td>
-                <td class="border border-slate-200 px-2 py-1 text-center font-bold text-indigo-700">${safeCodeStr}</td>
-                <td class="border border-slate-200 px-2 py-1 truncate max-w-[150px]">${safeNameHtml}</td>
-                <td class="border border-slate-200 px-2 py-1 text-center">${safeCompStr}</td>
-                <td class="border border-slate-200 px-2 py-1 text-center font-black text-emerald-600">${item.progress || 0}%</td>
-                <td class="border border-slate-200 px-2 py-1 text-center">${statusMap[getSafeString(item.status)] || ''}</td>
-                <td class="border border-slate-200 px-2 py-1 text-center">${safeManagerStr}</td>
-                <td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openDailyLogModal('${item.id}', '${safeNameJs}', ${item.progress || 0})" class="text-sky-400 hover:text-sky-500 relative"><i class="fa-solid fa-book text-lg"></i> ${lCount > 0 ? `<span class="absolute -top-1 -right-2 bg-sky-100 text-sky-600 text-[9px] font-bold px-1 rounded-full shadow-sm">${lCount}</span>` : ''}</button></td>
-                <td class="border border-slate-200 px-2 py-1 text-center text-sky-600">${item.estMd || 0}</td>
-                <td class="border border-slate-200 px-1 py-1 text-center font-bold" onclick="event.stopPropagation()"><button onclick="window.openMdLogModal('${item.id}', '${safeNameJs}', ${currentMd})" class="text-purple-600 hover:bg-purple-50 w-full h-full py-0.5 rounded underline decoration-purple-300">${currentMd}</button></td>
-                <td class="border border-slate-200 px-2 py-1 text-center text-sky-600 font-bold">${fMdFixed}</td>
-                <td class="border border-slate-200 px-2 py-1 text-center text-amber-600">${item.totPers !== undefined ? item.totPers : ''}</td>
-                <td class="border border-slate-200 px-2 py-1 text-center text-amber-600">${item.outPers !== undefined ? item.outPers : ''}</td>
-                <td class="border border-slate-200 px-2 py-1 text-center text-amber-600">${item.outMd !== undefined ? item.outMd : ''}</td>
-                <td class="border border-slate-200 px-2 py-1 text-center bg-rose-50/50 text-rose-700">${getSafeString(item.d_shipEst)}</td>
-                <td class="border border-slate-200 px-2 py-1 text-center bg-indigo-50/50">${getSafeString(item.d_asmEst)}</td>
-                <td class="border border-slate-200 px-2 py-1 text-center bg-indigo-50/50">${getSafeString(item.d_asmEndEst)}</td>
-                <td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_asmSt)}</td>
-                <td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_asmEn)}</td>
-                <td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_insSt)}</td>
-                <td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_insEn)}</td>
-                <td class="border border-slate-200 px-2 py-1 text-center bg-rose-50/50 text-rose-700 font-bold">${getSafeString(item.d_shipEn)}</td>
-                <td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_setSt)}</td>
-                <td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_setEn)}</td>
-                <td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><div class="flex items-center justify-center gap-1 flex-wrap"><button onclick="window.openLinkModal('${item.id}', '${safeNameJs}')" class="text-slate-400 hover:text-teal-500 transition-colors bg-slate-50 px-1.5 py-0.5 rounded shadow-sm border border-slate-200"><i class="fa-solid fa-link"></i></button>${linksHtml}</div></td>
-            </tr>`;
-        } catch(rowErr) {
-            console.error("특정 행 렌더링 에러:", rowErr, item);
+    try {
+        let displayList = window.currentProjectStatusList || [];
+        if(window.currentCategoryFilter && window.currentCategoryFilter !== 'all') {
+            displayList = displayList.filter(item => getSafeString(item.category) === window.currentCategoryFilter);
         }
-    });
-    
-    tbody.innerHTML = htmlStr;
+        
+        if(displayList.length === 0) { 
+            tbody.innerHTML = `<tr><td colspan="28" class="text-center p-6 text-slate-400 font-bold">등록된 PJT 현황이 없습니다.</td></tr>`; 
+            return; 
+        }
+        
+        const statusMap = { 'pending':'<span class="text-slate-500 bg-slate-100 px-2 py-0.5 rounded shadow-sm border border-slate-200">대기/보류</span>', 'progress':'<span class="text-blue-600 bg-blue-50 px-2 py-0.5 rounded shadow-sm border border-blue-200">진행중(제작)</span>', 'inspecting':'<span class="text-amber-600 bg-amber-50 px-2 py-0.5 rounded shadow-sm border border-amber-200">진행중(검수)</span>', 'completed':'<span class="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded shadow-sm border border-emerald-200">완료(출하)</span>', 'rejected':'<span class="text-rose-600 bg-rose-50 px-2 py-0.5 rounded shadow-sm border border-rose-200">보류/불가</span>' };
+        
+        let htmlStr = '';
+        displayList.forEach(item => {
+            try {
+                const currentMd = parseFloat(item.currentMd) || 0;
+                const outMd = parseFloat(item.outMd) || 0;
+                const fMd = parseFloat(item.finalMd) || (currentMd + outMd);
+                const fMdFixed = fMd.toFixed(1);
+                
+                const safeNameStr = getSafeString(item.name);
+                const safeCodeStr = getSafeString(item.code);
+                const safeCompStr = getSafeString(item.company);
+                const safeManagerStr = getSafeString(item.manager);
+                const safeCatStr = getSafeString(item.category);
+                const safeStatus = getSafeString(item.status);
+
+                const safeNameJs = safeNameStr.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, ' ').replace(/\r/g, '');
+                const safeNameHtml = safeNameStr.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                
+                let linksHtml = ''; 
+                if(item.links && Array.isArray(item.links)) { 
+                    linksHtml = item.links.map(lnk => `<a href="${getSafeString(lnk?.url)}" target="_blank" title="${getSafeString(lnk?.name)}" class="text-teal-500 hover:text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded transition-colors"><i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i></a>`).join(''); 
+                }
+                
+                let cCount = (window.projectCommentCounts && window.projectCommentCounts[item.id]) || 0; 
+                let iCount = (window.projectIssueCounts && window.projectIssueCounts[item.id]) || 0; 
+                let lCount = (window.projectLogCounts && window.projectLogCounts[item.id]) || 0;
+                
+                htmlStr += `<tr class="hover:bg-indigo-50/50 transition-colors cursor-pointer" onclick="window.editProjStatus('${item.id}')">
+                    <td class="border border-slate-200 px-2 py-1 text-center bg-white sticky left-0 z-10" onclick="event.stopPropagation()"><button onclick="window.deleteProjStatus('${item.id}')" class="text-slate-400 hover:text-rose-500 mx-1"><i class="fa-solid fa-trash-can"></i></button></td>
+                    <td class="border border-slate-200 px-2 py-1 text-center">${safeCatStr}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openCommentModal('${item.id}', '${safeNameJs}')" class="text-amber-400 hover:text-amber-500 relative"><i class="fa-regular fa-comment-dots text-lg"></i> ${cCount > 0 ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm">${cCount}</span>` : ''}</button></td>
+                    <td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openIssueModal('${item.id}', '${safeNameJs}')" class="text-rose-400 hover:text-rose-500 relative"><i class="fa-solid fa-triangle-exclamation text-lg"></i> ${iCount > 0 ? `<span class="absolute -top-1 -right-2 bg-rose-100 text-rose-600 text-[9px] font-bold px-1 rounded-full shadow-sm">${iCount}</span>` : ''}</button></td>
+                    <td class="border border-slate-200 px-2 py-1 text-center font-bold text-indigo-700">${safeCodeStr}</td>
+                    <td class="border border-slate-200 px-2 py-1 truncate max-w-[150px]">${safeNameHtml}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center">${safeCompStr}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center font-black text-emerald-600">${parseFloat(item.progress) || 0}%</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center">${statusMap[safeStatus] || ''}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center">${safeManagerStr}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openDailyLogModal('${item.id}', '${safeNameJs}', ${parseFloat(item.progress) || 0})" class="text-sky-400 hover:text-sky-500 relative"><i class="fa-solid fa-book text-lg"></i> ${lCount > 0 ? `<span class="absolute -top-1 -right-2 bg-sky-100 text-sky-600 text-[9px] font-bold px-1 rounded-full shadow-sm">${lCount}</span>` : ''}</button></td>
+                    <td class="border border-slate-200 px-2 py-1 text-center text-sky-600">${parseFloat(item.estMd) || 0}</td>
+                    <td class="border border-slate-200 px-1 py-1 text-center font-bold" onclick="event.stopPropagation()"><button onclick="window.openMdLogModal('${item.id}', '${safeNameJs}', ${currentMd})" class="text-purple-600 hover:bg-purple-50 w-full h-full py-0.5 rounded underline decoration-purple-300">${currentMd}</button></td>
+                    <td class="border border-slate-200 px-2 py-1 text-center text-sky-600 font-bold">${fMdFixed}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center text-amber-600">${item.totPers !== undefined ? item.totPers : ''}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center text-amber-600">${item.outPers !== undefined ? item.outPers : ''}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center text-amber-600">${item.outMd !== undefined ? item.outMd : ''}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center bg-rose-50/50 text-rose-700">${getSafeString(item.d_shipEst)}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center bg-indigo-50/50">${getSafeString(item.d_asmEst)}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center bg-indigo-50/50">${getSafeString(item.d_asmEndEst)}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_asmSt)}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_asmEn)}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_insSt)}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_insEn)}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center bg-rose-50/50 text-rose-700 font-bold">${getSafeString(item.d_shipEn)}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_setSt)}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_setEn)}</td>
+                    <td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><div class="flex items-center justify-center gap-1 flex-wrap"><button onclick="window.openLinkModal('${item.id}', '${safeNameJs}')" class="text-slate-400 hover:text-teal-500 transition-colors bg-slate-50 px-1.5 py-0.5 rounded shadow-sm border border-slate-200"><i class="fa-solid fa-link"></i></button>${linksHtml}</div></td>
+                </tr>`;
+            } catch(rowErr) {
+                console.error("행 렌더링 에러:", rowErr, item);
+                htmlStr += `<tr><td colspan="28" class="text-center p-2 text-rose-500 bg-rose-50 font-bold text-[10px]">🚨 일부 행 데이터 오류 발생: ${rowErr.message}</td></tr>`;
+            }
+        });
+        
+        tbody.innerHTML = htmlStr;
+        
+    } catch (error) {
+        console.error("현황판 전체 렌더링 치명적 오류:", error);
+        tbody.innerHTML = `<tr><td colspan="28" class="text-center p-6 text-rose-600 bg-rose-50 font-bold text-sm">🚨 데이터를 화면에 표시하는 중 오류가 발생했습니다.<br>원인: ${error.message}</td></tr>`;
+    }
 };
 
 window.openProjStatusWriteModal = function() {
@@ -280,12 +274,12 @@ window.addProjectMember = function(name) { if(!name) return; if(!window.currentS
 window.removeProjectMember = function(name) { window.currentSelectedMembers = window.currentSelectedMembers.filter(n => n !== name); window.renderSelectedMembers(); };
 window.renderSelectedMembers = function() { const container = document.getElementById('ps-selected-members'); document.getElementById('ps-members').value = window.currentSelectedMembers.join(', '); container.innerHTML = window.currentSelectedMembers.map(name => `<span class="bg-indigo-100 text-indigo-700 px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1.5 shadow-sm">${name} <i class="fa-solid fa-xmark cursor-pointer hover:text-rose-500 bg-white/50 rounded-full px-1 py-0.5" onclick="window.removeProjectMember('${name}')"></i></span>`).join(''); };
 
-// 🌟 간트 차트
+// 간트 차트 및 달력도 에러 방어 처리
 window.toggleProjDashView = function(view) {
     window.currentProjDashView = view;
     document.getElementById('proj-dash-list-container').classList.add('hidden'); document.getElementById('proj-dash-gantt-container').classList.add('hidden'); document.getElementById('proj-dash-calendar-container').classList.add('hidden');
-    ['list', 'gantt', 'calendar'].forEach(b => document.getElementById(`btn-pd-${b}`).className = "px-3 py-1.5 text-xs font-bold bg-white border border-slate-200 hover:bg-slate-100 rounded-md text-slate-500 transition-all");
-    document.getElementById(`btn-pd-${view}`).className = "px-3 py-1.5 text-xs font-bold bg-slate-200 shadow-inner rounded-md text-slate-700 transition-all";
+    ['list', 'gantt', 'calendar'].forEach(b => {const btn = document.getElementById(`btn-pd-${b}`); if(btn) btn.className = "px-3 py-1.5 text-xs font-bold bg-white border border-slate-200 hover:bg-slate-100 rounded-md text-slate-500 transition-all";});
+    const activeBtn = document.getElementById(`btn-pd-${view}`); if(activeBtn) activeBtn.className = "px-3 py-1.5 text-xs font-bold bg-slate-200 shadow-inner rounded-md text-slate-700 transition-all";
     if(view === 'list') document.getElementById('proj-dash-list-container').classList.remove('hidden');
     else if(view === 'gantt') { document.getElementById('proj-dash-gantt-container').classList.remove('hidden'); window.renderProjGantt(); }
     else if(view === 'calendar') { document.getElementById('proj-dash-calendar-container').classList.remove('hidden'); window.renderProjCalendar(); }
@@ -297,7 +291,6 @@ window.renderProjGantt = function() {
         let displayList = window.currentProjectStatusList || [];
         if(window.currentCategoryFilter && window.currentCategoryFilter !== 'all') displayList = displayList.filter(item => getSafeString(item.category) === window.currentCategoryFilter);
         const projects = displayList.filter(p => p.d_asmSt || p.d_asmEst);
-        
         if(projects.length === 0) { container.innerHTML = '<div class="text-center p-10 text-slate-500">표시할 일정 데이터가 없습니다.</div>'; return; }
 
         let minDate = new Date(); let maxDate = new Date(); let hasDates = false;
@@ -400,29 +393,3 @@ window.renderProjCalendar = function() {
         container.innerHTML = `<div class="text-center p-10 text-rose-500 font-bold">🚨 달력 렌더링 에러: ${e.message}</div>`;
     }
 };
-
-// PJT 코드 마스터
-window.openProjCodeMasterModal = function() { 
-    document.getElementById('proj-code-master-modal').classList.remove('hidden'); 
-    document.getElementById('proj-code-master-modal').classList.add('flex'); 
-    window.loadProjectCodeMaster(); 
-};
-window.closeProjCodeMasterModal = function() { document.getElementById('proj-code-master-modal').classList.add('hidden'); document.getElementById('proj-code-master-modal').classList.remove('flex'); };
-window.loadProjectCodeMaster = function() {
-    if(masterCodeSnapshotUnsubscribe) masterCodeSnapshotUnsubscribe();
-    masterCodeSnapshotUnsubscribe = onSnapshot(collection(db, "project_codes"), (snapshot) => {
-        window.pjtCodeMasterList = []; 
-        snapshot.forEach(doc => { window.pjtCodeMasterList.push({ id: doc.id, ...doc.data() }); });
-        window.pjtCodeMasterList.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
-        window.renderProjCodeMasterList();
-    });
-};
-window.renderProjCodeMasterList = function() { const tbody = document.getElementById('pjt-code-tbody'); if(!tbody) return; if(window.pjtCodeMasterList.length === 0) { tbody.innerHTML = `<tr><td colspan="4" class="text-center p-6 text-slate-400 font-bold">등록된 PJT 코드가 없습니다.</td></tr>`; return; } tbody.innerHTML = window.pjtCodeMasterList.map(c => `<tr class="hover:bg-slate-50 transition-colors"><td class="p-3 font-bold text-indigo-600">${getSafeString(c.code)}</td><td class="p-3 font-bold text-slate-700">${getSafeString(c.name)}</td><td class="p-3 text-slate-600">${getSafeString(c.company)}</td><td class="p-3 text-center"><button onclick="window.deleteProjectCode('${c.id}')" class="text-slate-400 hover:text-rose-500 p-1"><i class="fa-solid fa-trash-can"></i></button></td></tr>`).join(''); };
-window.addProjectCode = async function() { const code = document.getElementById('new-pjt-code').value.trim(); const name = document.getElementById('new-pjt-name').value.trim(); const comp = document.getElementById('new-pjt-company').value.trim(); if(!code || !name || !comp) { window.showToast("코드, 명칭, 업체명을 모두 입력해주세요.", "error"); return; } try { window.pjtCodeMasterList.unshift({ id: 'temp-'+Date.now(), code: code, name: name, company: comp, createdAt: Date.now() }); window.renderProjCodeMasterList(); await addDoc(collection(db, "project_codes"), { code: code, name: name, company: comp, createdAt: Date.now() }); window.showToast("마스터 코드가 등록되었습니다."); document.getElementById('new-pjt-code').value = ''; document.getElementById('new-pjt-name').value = ''; document.getElementById('new-pjt-company').value = ''; } catch(e) { window.showToast("등록 실패", "error"); } };
-window.toggleBulkPjtInput = function() { document.getElementById('bulk-pjt-section').classList.toggle('hidden'); };
-window.bulkAddProjectCodes = async function() { const text = document.getElementById('bulk-pjt-input').value; if(!text.trim()) return window.showToast("데이터를 붙여넣어 주세요.", "error"); const lines = text.split('\n'); const validItems = []; for(let line of lines) { if(!line.trim()) continue; let parts = line.split('\t'); if(parts.length < 2) parts = line.split(','); if(parts.length < 2) parts = line.trim().split(/\s{2,}/); if(parts.length >= 2) { let code = parts[0].trim(); let name = parts[1].trim(); let company = parts.length > 2 ? parts[2].trim() : '-'; if(code && name) validItems.push({ code, name, company }); } } if(validItems.length === 0) return window.showToast("등록할 유효한 데이터가 없습니다.", "error"); window.showToast(`${validItems.length}건의 코드를 서버에 등록 중입니다...`, "success"); try { for(let i=0; i<validItems.length; i+=400) { const chunk = validItems.slice(i, i+400); const batch = writeBatch(db); chunk.forEach((item, idx) => { const docRef = doc(collection(db, "project_codes")); batch.set(docRef, { code: item.code, name: item.name, company: item.company, createdAt: Date.now() + i + idx }); }); await batch.commit(); } window.showToast(`총 ${validItems.length}건 일괄 등록 완료!`); document.getElementById('bulk-pjt-input').value = ''; window.toggleBulkPjtInput(); } catch(e) { window.showToast("일괄 등록 중 오류 발생", "error"); console.error(e); } };
-window.deleteProjectCode = async function(id) { if(!confirm("해당 마스터 코드를 삭제하시겠습니까?")) return; window.pjtCodeMasterList = window.pjtCodeMasterList.filter(c => c.id !== id); window.renderProjCodeMasterList(); try { if(id && !String(id).startsWith('temp-')) { await deleteDoc(doc(db, "project_codes", id)); } window.showToast("삭제되었습니다."); } catch(e) { window.showToast("삭제 실패", "error"); } };
-window.deleteAllProjectCodes = async function() { if(!confirm("⚠️ 경고: 등록된 모든 마스터 코드를 정말 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.")) return; const pwd = prompt("전체 삭제를 진행하려면 아래 텍스트를 정확히 입력하세요.\n[ 삭제확인 ]"); if(pwd !== '삭제확인') return window.showToast("입력이 일치하지 않아 취소되었습니다.", "error"); window.showToast("전체 데이터를 삭제 중입니다. 잠시만 기다려주세요...", "success"); try { const snap = await getDocs(query(collection(db, "project_codes"))); let batches = []; let currentBatch = writeBatch(db); let count = 0; snap.forEach(doc => { currentBatch.delete(doc.ref); count++; if (count % 400 === 0) { batches.push(currentBatch.commit()); currentBatch = writeBatch(db); } }); if (count % 400 !== 0) batches.push(currentBatch.commit()); await Promise.all(batches); window.showToast(`총 ${count}건의 마스터 코드가 완전히 삭제되었습니다.`); } catch(e) { window.showToast("전체 삭제 중 오류가 발생했습니다.", "error"); console.error(e); } };
-
-window.showAutocomplete = function(inputEl, nameId, compId, isNameSearch=false) { let listId = inputEl.id + '-autocomplete-list'; let listEl = document.getElementById(listId); if(!listEl) { listEl = document.createElement('div'); listEl.id = listId; listEl.className = "absolute z-50 w-[150%] max-w-[400px] bg-white border border-slate-200 shadow-2xl rounded-xl mt-1 hidden max-h-60 overflow-y-auto custom-scrollbar"; inputEl.parentNode.style.position = 'relative'; inputEl.parentNode.appendChild(listEl); document.addEventListener('click', (e) => { if(e.target !== inputEl && !listEl.contains(e.target)) listEl.classList.add('hidden'); }); } const queryStr = inputEl.value; let matches = window.pjtCodeMasterList; if(queryStr.trim() !== '') matches = window.pjtCodeMasterList.filter(c => window.matchString(queryStr, getSafeString(c.code)) || window.matchString(queryStr, getSafeString(c.name)) || window.matchString(queryStr, getSafeString(c.company))); matches = matches.slice(0, 100); if(matches.length === 0) { listEl.innerHTML = `<div class="p-3 text-xs text-slate-400 text-center font-bold">검색 결과 없음<br><span class="text-[9px] font-normal">(직접 입력하여 사용 가능)</span></div>`; } else { listEl.innerHTML = matches.map(c => `<div class="p-3 text-xs hover:bg-indigo-50 cursor-pointer border-b border-slate-100 last:border-0 transition-colors" onclick="window.selectAutocomplete('${inputEl.id}', '${nameId}', '${compId}', '${getSafeString(c.code)}', '${getSafeString(c.name)}', '${getSafeString(c.company)}', ${isNameSearch})"><div class="font-black text-indigo-600 mb-0.5">${getSafeString(c.code)}</div><div class="text-slate-700 font-bold truncate">${getSafeString(c.name)} <span class="text-slate-400 font-medium ml-1">(${getSafeString(c.company)})</span></div></div>`).join(''); } listEl.classList.remove('hidden'); };
-window.selectAutocomplete = function(inputId, nameId, compId, code, name, company, isNameSearch) { if(isNameSearch) { document.getElementById(inputId).value = name; if(nameId && document.getElementById(nameId)) document.getElementById(nameId).value = code; } else { document.getElementById(inputId).value = code; if(nameId && document.getElementById(nameId)) document.getElementById(nameId).value = name; } if(compId && document.getElementById(compId)) document.getElementById(compId).value = company; document.getElementById(inputId + '-autocomplete-list').classList.add('hidden'); };
