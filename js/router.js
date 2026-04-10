@@ -5,7 +5,18 @@ const routes = {
     'project-status-opt': { url: './views/project.html', init: () => { window.currentProjPartTab = '광학'; if(window.loadProjectStatusData) window.loadProjectStatusData(); } },
     'weekly-log': { url: './views/weekly.html', init: () => { document.getElementById('weekly-log-filter-week').value = window.getWeekString(new Date()); if(window.loadWeeklyLogsData) window.loadWeeklyLogsData(); } },
     'simulation': { url: './views/simulation.html', init: () => { if(window.handleTypeChange) window.handleTypeChange(); if(window.setupAutoSaveTriggers) window.setupAutoSaveTriggers(); } },
-    'workhours': { url: './views/workhours.html', init: () => { console.log('투입공수 현황 로드!'); } },
+   // js/router.js 안의 routes 부분 수정!
+    
+    // 🌟 새로 추가되는 투입공수 현황 라우트 (수정됨!)
+    'workhours': { 
+        url: './views/workhours.html', 
+        init: () => { 
+            // 뷰가 로드되면 현재 날짜 기준으로 주차 세팅하고 데이터 로드!
+            const weekInput = document.getElementById('workhours-week-picker');
+            if(weekInput) weekInput.value = window.getWeekString(new Date());
+            if(window.loadWorkhoursData) window.loadWorkhoursData(); 
+        } 
+    },
     'collab': { url: './views/request.html', init: () => { window.currentAppId = 'collab'; if(window.loadRequestsData) window.loadRequestsData('collab'); } },
     'purchase': { url: './views/request.html', init: () => { window.currentAppId = 'purchase'; if(window.loadRequestsData) window.loadRequestsData('purchase'); } },
     'assembly': { url: './views/request.html', init: () => { window.currentAppId = 'assembly'; if(window.loadRequestsData) window.loadRequestsData('assembly'); } },
