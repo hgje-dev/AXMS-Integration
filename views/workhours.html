@@ -1,72 +1,51 @@
-<div class="flex flex-col gap-6 h-full min-h-[80vh]">
-    
-    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-5 flex flex-wrap gap-4 items-center justify-between">
-        <div class="flex items-center gap-3">
-            <h2 class="text-lg font-black text-slate-800 flex items-center gap-2">
-                <div class="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shadow-sm"><i class="fa-solid fa-calendar-days text-xl"></i></div>
-                개인별 투입공수 현황
-            </h2>
+<div id="workhours-modal" class="fixed inset-0 z-[200] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-indigo-50">
+            <h2 class="text-base font-extrabold text-indigo-800"><i class="fa-solid fa-pen-to-square"></i> 투입 공수 등록</h2>
+            <button onclick="window.closeWorkhoursModal()" class="text-indigo-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-xl"></i></button>
         </div>
-        <div class="flex items-center gap-3">
-            <div class="flex items-center bg-slate-50 border border-slate-200 rounded-xl p-1 shadow-sm">
-                <button class="px-3 py-1.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg transition-all"><i class="fa-solid fa-chevron-left"></i></button>
-                <input type="week" id="workhours-week-picker" class="bg-transparent border-none text-sm font-black text-slate-700 outline-none text-center cursor-pointer w-40">
-                <button class="px-3 py-1.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg transition-all"><i class="fa-solid fa-chevron-right"></i></button>
+        <div class="p-6 bg-slate-50 flex flex-col gap-4">
+            <input type="hidden" id="wh-id">
+            
+            <div class="grid grid-cols-2 gap-3">
+                <div><label class="block text-[11px] font-bold text-slate-500 mb-1">작업자</label><input type="text" id="wh-author-name" class="w-full border px-3 py-2 rounded-lg text-sm bg-slate-100 font-bold" readonly></div>
+                <div><label class="block text-[11px] font-bold text-slate-500 mb-1">작업 일자</label><input type="date" id="wh-date" class="w-full border px-3 py-2 rounded-lg text-sm font-bold text-indigo-700 outline-indigo-500"></div>
             </div>
-            <button class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-colors flex items-center gap-2"><i class="fa-solid fa-plus"></i> 공수 등록</button>
-        </div>
-    </div>
 
-    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex-1 flex flex-col">
-        <div class="overflow-x-auto flex-1">
-            <table class="w-full text-left border-collapse min-w-[1000px]">
-                <thead class="bg-slate-50 text-slate-600 sticky top-0 z-10 shadow-sm border-b border-slate-200">
-                    <tr>
-                        <th class="p-4 font-black text-center w-24 border-r border-slate-200">팀/파트</th>
-                        <th class="p-4 font-black text-center w-28 border-r border-slate-200">이름</th>
-                        <th class="p-3 text-center border-r border-slate-200 w-[16%]">
-                            <div class="text-xl font-black text-slate-800">01</div><div class="text-xs font-bold text-slate-400">수</div>
-                        </th>
-                        <th class="p-3 text-center border-r border-slate-200 w-[16%]">
-                            <div class="text-xl font-black text-slate-800">02</div><div class="text-xs font-bold text-slate-400">목</div>
-                        </th>
-                        <th class="p-3 text-center border-r border-slate-200 w-[16%]">
-                            <div class="text-xl font-black text-slate-800">03</div><div class="text-xs font-bold text-slate-400">금</div>
-                        </th>
-                        <th class="p-3 text-center border-r border-slate-200 w-[16%] bg-rose-50/50">
-                            <div class="text-xl font-black text-rose-500">04</div><div class="text-xs font-bold text-rose-400">토</div>
-                        </th>
-                        <th class="p-3 text-center w-[16%] bg-rose-50/50">
-                            <div class="text-xl font-black text-rose-500">05</div><div class="text-xs font-bold text-rose-400">일</div>
-                        </th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100 text-sm">
-                    <tr class="hover:bg-slate-50/50 transition-colors">
-                        <td class="p-4 text-center font-bold text-slate-500 border-r border-slate-100 bg-slate-50/30" rowspan="2">제조기술팀</td>
-                        <td class="p-4 text-center font-black text-slate-700 border-r border-slate-100 bg-white">홍승현</td>
-                        <td class="p-2 border-r border-slate-100 align-top">
-                            <div class="bg-indigo-50 border border-indigo-100 text-indigo-700 px-2 py-1.5 rounded-lg text-[11px] font-bold shadow-sm cursor-pointer hover:shadow-md transition-shadow mb-1">[사내] RMOH2601-OA<br><span class="text-slate-500 font-medium">셋업 / 8h</span></div>
-                        </td>
-                        <td class="p-2 border-r border-slate-100 align-top">
-                            <div class="bg-indigo-50 border border-indigo-100 text-indigo-700 px-2 py-1.5 rounded-lg text-[11px] font-bold shadow-sm cursor-pointer hover:shadow-md transition-shadow mb-1">[사내] RMOH2601-OA<br><span class="text-slate-500 font-medium">셋업 / 8h</span></div>
-                        </td>
-                        <td class="p-2 border-r border-slate-100 align-top"></td>
-                        <td class="p-2 border-r border-slate-100 align-top bg-rose-50/30"></td>
-                        <td class="p-2 align-top bg-rose-50/30"></td>
-                    </tr>
-                    <tr class="hover:bg-slate-50/50 transition-colors">
-                        <td class="p-4 text-center font-black text-slate-700 border-r border-slate-100 bg-white">박원범</td>
-                        <td class="p-2 border-r border-slate-100 align-top">
-                            <div class="bg-white border border-slate-200 text-slate-700 px-2 py-1.5 rounded-lg text-[11px] font-bold shadow-sm cursor-pointer hover:border-indigo-400 transition-colors mb-1">[사내] PMOB2602BW<br><span class="text-slate-500 font-medium">조립 / 4h</span></div>
-                        </td>
-                        <td class="p-2 border-r border-slate-100 align-top"></td>
-                        <td class="p-2 border-r border-slate-100 align-top"></td>
-                        <td class="p-2 border-r border-slate-100 align-top bg-rose-50/30"></td>
-                        <td class="p-2 align-top bg-rose-50/30"></td>
-                    </tr>
-                </tbody>
-            </table>
+            <div>
+                <label class="block text-[11px] font-bold text-slate-500 mb-1">프로젝트 선택 (코드 또는 명칭)</label>
+                <select id="wh-project" class="w-full border px-3 py-2 rounded-lg text-sm font-bold text-slate-700 outline-indigo-500">
+                    </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 mb-1">작업 분류</label>
+                    <select id="wh-type" class="w-full border px-3 py-2 rounded-lg text-sm outline-indigo-500">
+                        <option value="조립">조립 (Assembly)</option>
+                        <option value="셋업">셋업 (Setup)</option>
+                        <option value="검수">검수 (Inspection)</option>
+                        <option value="가공">가공 (Machining)</option>
+                        <option value="설계">설계 (Design)</option>
+                        <option value="기타">기타 (Others)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 mb-1">투입 시간 (Hours)</label>
+                    <div class="relative">
+                        <input type="number" id="wh-hours" min="0.5" step="0.5" class="w-full border px-3 py-2 rounded-lg text-sm text-right font-black text-indigo-600 outline-indigo-500 pr-8" placeholder="예: 4">
+                        <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">h</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="wh-delete-wrap" class="hidden mt-2 text-right">
+                <button onclick="window.deleteWorkhours()" class="text-[11px] text-rose-500 font-bold hover:underline"><i class="fa-solid fa-trash-can"></i> 이 공수 기록 삭제하기</button>
+            </div>
+        </div>
+        <div class="px-6 py-4 border-t flex justify-end gap-2 bg-white">
+            <button onclick="window.closeWorkhoursModal()" class="px-4 py-2 rounded-lg text-sm font-bold bg-slate-100 hover:bg-slate-200 text-slate-600">취소</button>
+            <button onclick="window.saveWorkhours()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg text-sm font-bold shadow-sm">저장</button>
         </div>
     </div>
 </div>
