@@ -17,7 +17,7 @@ const getSafeMillis = (val) => {
     return 0; 
 };
 
-// 카운트(뱃지) 데이터 로드 (안전 처리)
+// 카운트(뱃지) 데이터 로드
 window.loadCounts = function() {
     onSnapshot(collection(db, "project_comments"), snap => {
         window.projectCommentCounts = {};
@@ -62,53 +62,75 @@ window.searchProjectBoard = function(keyword) {
 window.loadProjectStatusData = function() {
     if(projectStatusSnapshotUnsubscribe) projectStatusSnapshotUnsubscribe();
     projectStatusSnapshotUnsubscribe = onSnapshot(query(collection(db, "projects_status")), (snapshot) => {
-        window.currentProjectStatusList = []; let lastUpdated = 0;
-        
-        snapshot.forEach(doc => { 
-            const data = doc.data(); 
-            // 파트가 없는 예전 데이터는 기본으로 '제조' 파트에 보이게 설정!
-            const dataPart = data.part || '제조'; 
-            if(dataPart === window.currentProjPartTab) window.currentProjectStatusList.push({ id: doc.id, ...data }); 
-            let uTime = getSafeMillis(data.updatedAt);
-            if(uTime > lastUpdated) lastUpdated = uTime;
-        });
-        
-        if (lastUpdated > 0) { 
-            const lDate = new Date(lastUpdated); 
-            const el = document.getElementById('pjt-last-update');
-            if(el) el.innerText = `${lDate.getFullYear().toString().slice(2)}-${String(lDate.getMonth()+1).padStart(2,'0')}-${String(lDate.getDate()).padStart(2,'0')} ${String(lDate.getHours()).padStart(2,'0')}:${String(lDate.getMinutes()).padStart(2,'0')}`; 
+        try {
+            window.currentProjectStatusList = []; 
+            let lastUpdated = 0;
+            const targetPart = window.currentProjPartTab === '광학' ? '광학' : '제조';
+            
+            snapshot.forEach(doc => { 
+                const data = doc.data(); 
+                const dataPart = String(data.part || '').trim(); 
+                
+                // 🚨 광학이 아니면 모두 제조 파트에 띄워줌 (part 필드가 없던 과거 데이터들 완벽 포용)
+                let isMatch = false;
+                if (targetPart === '광학') {
+                    isMatch = (dataPart === '광학');
+                } else {
+                    isMatch = (dataPart !== '광학');
+                }
+
+                if(isMatch) {
+                    window.currentProjectStatusList.push({ id: doc.id, ...data }); 
+                }
+                
+                let uTime = getSafeMillis(data.updatedAt);
+                if(uTime > lastUpdated) lastUpdated = uTime;
+            });
+            
+            if (lastUpdated > 0) { 
+                const lDate = new Date(lastUpdated); 
+                const el = document.getElementById('pjt-last-update');
+                if(el) el.innerText = `${lDate.getFullYear().toString().slice(2)}-${String(lDate.getMonth()+1).padStart(2,'0')}-${String(lDate.getDate()).padStart(2,'0')} ${String(lDate.getHours()).padStart(2,'0')}:${String(lDate.getMinutes()).padStart(2,'0')}`; 
+            }
+            
+            window.currentProjectStatusList.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
+            
+            if(window.updateMiniDashboard) window.updateMiniDashboard();
+            
+            if(window.currentProjDashView === 'gantt') window.renderProjGantt(); 
+            else if(window.currentProjDashView === 'calendar') window.renderProjCalendar();
+            else window.renderProjectStatusList();
+        } catch(error) {
+            console.error("데이터 로드 중 에러:", error);
         }
-        
-        window.currentProjectStatusList.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
-        
-        if(window.updateMiniDashboard) window.updateMiniDashboard();
-        
-        if(window.currentProjDashView === 'gantt') window.renderProjGantt(); 
-        else if(window.currentProjDashView === 'calendar') window.renderProjCalendar();
-        else window.renderProjectStatusList();
     });
 };
 
-// 🌟 철통 방어 2: 렌더링 에러 완벽 차단 로직 적용
+// 🌟 철통 방어 2: 렌더링 시 숫자나 undefined가 섞여서 .replace()가 터지는 현상 원천 차단
 window.renderProjectStatusList = function() {
     const tbody = document.getElementById('proj-dash-tbody'); if(!tbody) return;
     
-    let displayList = window.currentProjectStatusList || [];
-    if(window.currentCategoryFilter && window.currentCategoryFilter !== 'all') {
-        displayList = displayList.filter(item => item.category === window.currentCategoryFilter);
-    }
-    
-    if(displayList.length === 0) { 
-        tbody.innerHTML = `<tr><td colspan="28" class="text-center p-6 text-slate-400 font-bold">등록된 PJT 현황이 없습니다.</td></tr>`; 
-        return; 
-    }
-    
-    const statusMap = { 'pending':'<span class="text-slate-500 bg-slate-100 px-2 py-0.5 rounded shadow-sm border border-slate-200">대기/보류</span>', 'progress':'<span class="text-blue-600 bg-blue-50 px-2 py-0.5 rounded shadow-sm border border-blue-200">진행중(제작)</span>', 'inspecting':'<span class="text-amber-600 bg-amber-50 px-2 py-0.5 rounded shadow-sm border border-amber-200">진행중(검수)</span>', 'completed':'<span class="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded shadow-sm border border-emerald-200">완료(출하)</span>', 'rejected':'<span class="text-rose-600 bg-rose-50 px-2 py-0.5 rounded shadow-sm border border-rose-200">보류/불가</span>' };
-    
     try {
+        let displayList = window.currentProjectStatusList || [];
+        if(window.currentCategoryFilter && window.currentCategoryFilter !== 'all') {
+            displayList = displayList.filter(item => item.category === window.currentCategoryFilter);
+        }
+        
+        if(displayList.length === 0) { 
+            tbody.innerHTML = `<tr><td colspan="28" class="text-center p-6 text-slate-400 font-bold">등록된 PJT 현황이 없습니다.</td></tr>`; 
+            return; 
+        }
+        
+        const statusMap = { 'pending':'<span class="text-slate-500 bg-slate-100 px-2 py-0.5 rounded shadow-sm border border-slate-200">대기/보류</span>', 'progress':'<span class="text-blue-600 bg-blue-50 px-2 py-0.5 rounded shadow-sm border border-blue-200">진행중(제작)</span>', 'inspecting':'<span class="text-amber-600 bg-amber-50 px-2 py-0.5 rounded shadow-sm border border-amber-200">진행중(검수)</span>', 'completed':'<span class="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded shadow-sm border border-emerald-200">완료(출하)</span>', 'rejected':'<span class="text-rose-600 bg-rose-50 px-2 py-0.5 rounded shadow-sm border border-rose-200">보류/불가</span>' };
+        
         let htmlStr = '';
         displayList.forEach(item => {
-            // 숫자나 undefined가 섞여서 .replace()가 터지는 현상 원천 차단 (무조건 String 형변환)
+            const currentMd = parseFloat(item.currentMd) || 0;
+            const outMd = parseFloat(item.outMd) || 0;
+            const fMd = parseFloat(item.finalMd) || (currentMd + outMd);
+            const fMdFixed = fMd.toFixed(1);
+            
+            // 데이터 무조건 문자열(String)로 강제 변환하여 에러 차단
             const safeNameStr = String(item.name || '');
             const safeCodeStr = String(item.code || '');
             const safeCompStr = String(item.company || '');
@@ -118,20 +140,14 @@ window.renderProjectStatusList = function() {
             const safeNameJs = safeNameStr.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, ' ').replace(/\r/g, '');
             const safeNameHtml = safeNameStr.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             
-            const currentMd = parseFloat(item.currentMd) || 0;
-            const outMd = parseFloat(item.outMd) || 0;
-            const fMd = parseFloat(item.finalMd) || (currentMd + outMd);
-            const fMdFixed = fMd.toFixed(1);
-            
-            let linksHtml = '';
-            if(item.links && Array.isArray(item.links) && item.links.length > 0) {
-                linksHtml = item.links.map(lnk => `<a href="${lnk.url}" target="_blank" title="${lnk.name}" class="text-teal-500 hover:text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded transition-colors"><i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i></a>`).join('');
+            let linksHtml = ''; 
+            if(item.links && Array.isArray(item.links) && item.links.length > 0) { 
+                linksHtml = item.links.map(lnk => `<a href="${lnk.url}" target="_blank" title="${lnk.name}" class="text-teal-500 hover:text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded transition-colors"><i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i></a>`).join(''); 
             }
-
-            // 카운트 로드 딜레이로 인한 undefined 에러 차단
-            const cCount = (window.projectCommentCounts && window.projectCommentCounts[item.id]) || 0;
-            const iCount = (window.projectIssueCounts && window.projectIssueCounts[item.id]) || 0;
-            const lCount = (window.projectLogCounts && window.projectLogCounts[item.id]) || 0;
+            
+            let cCount = (window.projectCommentCounts && window.projectCommentCounts[item.id]) || 0; 
+            let iCount = (window.projectIssueCounts && window.projectIssueCounts[item.id]) || 0; 
+            let lCount = (window.projectLogCounts && window.projectLogCounts[item.id]) || 0;
             
             htmlStr += `<tr class="hover:bg-indigo-50/50 transition-colors cursor-pointer" onclick="window.editProjStatus('${item.id}')">
                 <td class="border border-slate-200 px-2 py-1 text-center bg-white sticky left-0 z-10" onclick="event.stopPropagation()"><button onclick="window.deleteProjStatus('${item.id}')" class="text-slate-400 hover:text-rose-500 mx-1"><i class="fa-solid fa-trash-can"></i></button></td>
@@ -161,17 +177,13 @@ window.renderProjectStatusList = function() {
                 <td class="border border-slate-200 px-2 py-1 text-center bg-rose-50/50 text-rose-700 font-bold">${item.d_shipEn || ''}</td>
                 <td class="border border-slate-200 px-2 py-1 text-center">${item.d_setSt || ''}</td>
                 <td class="border border-slate-200 px-2 py-1 text-center">${item.d_setEn || ''}</td>
-                <td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()">
-                    <div class="flex items-center justify-center gap-1 flex-wrap">
-                        <button onclick="window.openLinkModal('${item.id}', '${safeNameJs}')" class="text-slate-400 hover:text-teal-500 transition-colors bg-slate-50 px-1.5 py-0.5 rounded shadow-sm border border-slate-200"><i class="fa-solid fa-link"></i></button>
-                        ${linksHtml}
-                    </div>
-                </td>
+                <td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><div class="flex items-center justify-center gap-1 flex-wrap"><button onclick="window.openLinkModal('${item.id}', '${safeNameJs}')" class="text-slate-400 hover:text-teal-500 transition-colors bg-slate-50 px-1.5 py-0.5 rounded shadow-sm border border-slate-200"><i class="fa-solid fa-link"></i></button>${linksHtml}</div></td>
             </tr>`;
         });
+        
         tbody.innerHTML = htmlStr;
+        
     } catch (error) {
-        // 🚨 에러가 발생해도 화면이 하얗게 멈추지 않고 원인을 알려주도록 처리
         console.error("현황판 렌더링 치명적 오류:", error);
         tbody.innerHTML = `<tr><td colspan="28" class="text-center p-6 text-rose-600 bg-rose-50 font-bold text-sm">🚨 데이터를 화면에 표시하는 중 오류가 발생했습니다.<br>원인: ${error.message}</td></tr>`;
     }
@@ -204,18 +216,19 @@ window.saveProjStatus = async function(btn) {
     const data = { code: code, name: name, company: document.getElementById('ps-company').value, part: document.getElementById('ps-part').value, category: document.getElementById('ps-category').value, status: document.getElementById('ps-status').value, progress: parseInt(document.getElementById('ps-progress-pct').value) || 0, manager: document.getElementById('ps-manager').value, members: document.getElementById('ps-members').value, estMd: parseFloat(document.getElementById('ps-est-md').value) || 0, outMd: outMd, finalMd: currentMd + outMd, totPers: parseInt(document.getElementById('ps-tot-pers').value)||0, outPers: parseInt(document.getElementById('ps-out-pers').value)||0, d_rcvEst: document.getElementById('ps-d-rcv-est').value, d_asmEst: document.getElementById('ps-d-asm-est').value, d_asmEndEst: document.getElementById('ps-d-asm-end-est').value, d_shipEst: document.getElementById('ps-d-ship-est').value, d_asmSt: document.getElementById('ps-d-asm-st').value, d_asmEn: document.getElementById('ps-d-asm-en').value, d_insSt: document.getElementById('ps-d-ins-st').value, d_insEn: document.getElementById('ps-d-ins-en').value, d_shipEn: document.getElementById('ps-d-ship-en').value, d_setSt: document.getElementById('ps-d-set-st').value, d_setEn: document.getElementById('ps-d-set-en').value, updatedAt: serverTimestamp() };
     try { if(id) { await setDoc(doc(db, "projects_status", id), data, { merge: true }); window.showToast("수정되었습니다."); } else { data.createdAt = serverTimestamp(); data.currentMd = 0; await addDoc(collection(db, "projects_status"), data); window.showToast("등록되었습니다."); } window.closeProjStatusWriteModal(); } catch(e) { window.showToast("오류 발생", "error"); } finally { btn.disabled = false; btn.innerHTML = '현황 저장하기'; }
 };
+
 window.deleteProjStatus = async function(id) { if(!confirm("삭제하시겠습니까?")) return; try { await deleteDoc(doc(db, "projects_status", id)); window.showToast("삭제되었습니다."); } catch(e) { window.showToast("삭제 실패", "error"); } };
 window.calcFinalMd = function() { const curMd = parseFloat(document.getElementById('ps-current-md').value) || 0; const outMd = parseFloat(document.getElementById('ps-out-md').value) || 0; document.getElementById('ps-final-md').value = (curMd + outMd).toFixed(1); };
 window.addProjectMember = function(name) { if(!name) return; if(!window.currentSelectedMembers.includes(name)) { window.currentSelectedMembers.push(name); window.renderSelectedMembers(); } document.getElementById('ps-member-add').value = ''; };
 window.removeProjectMember = function(name) { window.currentSelectedMembers = window.currentSelectedMembers.filter(n => n !== name); window.renderSelectedMembers(); };
 window.renderSelectedMembers = function() { const container = document.getElementById('ps-selected-members'); document.getElementById('ps-members').value = window.currentSelectedMembers.join(', '); container.innerHTML = window.currentSelectedMembers.map(name => `<span class="bg-indigo-100 text-indigo-700 px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1.5 shadow-sm">${name} <i class="fa-solid fa-xmark cursor-pointer hover:text-rose-500 bg-white/50 rounded-full px-1 py-0.5" onclick="window.removeProjectMember('${name}')"></i></span>`).join(''); };
 
-// 🌟 간트 차트 (숫자 에러 방지 String 변환 포함)
+// 🌟 간트 차트
 window.toggleProjDashView = function(view) {
     window.currentProjDashView = view;
     document.getElementById('proj-dash-list-container').classList.add('hidden'); document.getElementById('proj-dash-gantt-container').classList.add('hidden'); document.getElementById('proj-dash-calendar-container').classList.add('hidden');
-    ['list', 'gantt', 'calendar'].forEach(b => document.getElementById(`btn-pd-${b}`).className = "px-3 py-1.5 text-xs font-bold bg-white border border-slate-200 hover:bg-slate-100 rounded-md text-slate-500 transition-all");
-    document.getElementById(`btn-pd-${view}`).className = "px-3 py-1.5 text-xs font-bold bg-slate-200 shadow-inner rounded-md text-slate-700 transition-all";
+    ['list', 'gantt', 'calendar'].forEach(b => {const btn = document.getElementById(`btn-pd-${b}`); if(btn) btn.className = "px-3 py-1.5 text-xs font-bold bg-white border border-slate-200 hover:bg-slate-100 rounded-md text-slate-500 transition-all";});
+    const activeBtn = document.getElementById(`btn-pd-${view}`); if(activeBtn) activeBtn.className = "px-3 py-1.5 text-xs font-bold bg-slate-200 shadow-inner rounded-md text-slate-700 transition-all";
     if(view === 'list') document.getElementById('proj-dash-list-container').classList.remove('hidden');
     else if(view === 'gantt') { document.getElementById('proj-dash-gantt-container').classList.remove('hidden'); window.renderProjGantt(); }
     else if(view === 'calendar') { document.getElementById('proj-dash-calendar-container').classList.remove('hidden'); window.renderProjCalendar(); }
@@ -223,9 +236,10 @@ window.toggleProjDashView = function(view) {
 
 window.renderProjGantt = function() {
     const container = document.getElementById('proj-dash-gantt-content');
-    let displayList = window.currentProjectStatusList;
+    let displayList = window.currentProjectStatusList || [];
     if(window.currentCategoryFilter && window.currentCategoryFilter !== 'all') displayList = displayList.filter(item => item.category === window.currentCategoryFilter);
     const projects = displayList.filter(p => p.d_asmSt || p.d_asmEst);
+    
     if(projects.length === 0) { container.innerHTML = '<div class="text-center p-10 text-slate-500">표시할 일정 데이터가 없습니다.</div>'; return; }
 
     let minDate = new Date(); let maxDate = new Date(); let hasDates = false;
@@ -234,6 +248,7 @@ window.renderProjGantt = function() {
         dates.forEach(d => { if(!hasDates) { minDate = new Date(d); maxDate = new Date(d); hasDates = true; } if(d < minDate) minDate = new Date(d); if(d > maxDate) maxDate = new Date(d); });
     });
     if(!hasDates) { container.innerHTML = '<div class="text-center p-10 text-slate-500">표시할 일정 데이터가 없습니다.</div>'; return; }
+    
     minDate.setDate(minDate.getDate() - 5); maxDate.setDate(maxDate.getDate() + 10);
     const totalDays = Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24)); const dayWidth = 24; const today = new Date(); today.setHours(0,0,0,0); let todayOffset = -1;
 
@@ -269,9 +284,10 @@ window.renderProjGantt = function() {
     setTimeout(() => { const scrollContainer = document.getElementById('proj-dash-gantt-container'); if(scrollContainer && todayOffset > 0) scrollContainer.scrollLeft = todayOffset - 200; }, 100);
 };
 
+// 🌟 달력 뷰
 window.renderProjCalendar = function() {
     const container = document.getElementById('proj-dash-calendar-content');
-    let displayList = window.currentProjectStatusList;
+    let displayList = window.currentProjectStatusList || [];
     if(window.currentCategoryFilter && window.currentCategoryFilter !== 'all') displayList = displayList.filter(item => item.category === window.currentCategoryFilter);
     
     const now = new Date(); const year = now.getFullYear(); const month = now.getMonth();
