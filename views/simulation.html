@@ -1,4 +1,109 @@
-<section>
-  <h2>Simulation</h2>
-  <p>공수 시뮬레이션 화면 조각</p>
-</section>
+<div class="flex items-center justify-between gap-2 overflow-x-auto bg-slate-50 p-3 rounded-2xl border shadow-sm">
+    <div class="flex items-center gap-2">
+        <button onclick="window.saveToFirestore(false)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold border border-indigo-200 shadow-sm flex items-center gap-2 transition-colors"><i class="fa-solid fa-cloud-arrow-up"></i> 클라우드 저장</button>
+        <button onclick="window.exportToExcel()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-colors shadow-sm flex items-center gap-2"><i class="fa-solid fa-file-excel"></i> 엑셀 다운로드</button>
+    </div>
+</div>
+
+<div class="bg-white rounded-3xl shadow-sm border p-6 flex flex-wrap gap-8 items-center justify-between">
+    <div class="flex items-center gap-8 w-full">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-500 shadow-sm"><i class="fa-solid fa-calculator text-lg"></i></div>
+            <div class="flex flex-col"><span class="text-[10px] font-bold text-indigo-500 mb-1">산출 기법</span><select id="sim-method" class="border-0 p-0 text-sm font-extrabold bg-transparent cursor-pointer outline-none" onchange="window.handleMethodChange()"><option value="mc">🎲 몬테카를로 (Monte Carlo)</option><option value="pert">🎯 3점 추정 (Triangular)</option></select></div>
+        </div>
+        <div class="w-px h-10 bg-slate-200 hidden md:block"></div>
+        <div class="flex items-center gap-4 flex-1">
+            <div class="w-12 h-12 rounded-2xl bg-purple-50 flex items-center justify-center text-purple-500 shadow-sm"><i class="fa-solid fa-industry text-lg"></i></div>
+            <div class="flex flex-col flex-1"><span class="text-[10px] font-bold text-purple-500 mb-1">설비 프리셋</span>
+                <div class="flex items-center gap-2">
+                    <select id="eq-type" class="border rounded-xl px-4 py-2 text-sm font-extrabold bg-slate-50 cursor-pointer outline-purple-500 flex-1" onchange="window.handleTypeChange()"></select>
+                    <button onclick="window.saveCurrentAsPreset()" class="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap admin-only">현재 설정 등록</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+    <div class="lg:col-span-7 space-y-8">
+        <section class="bg-white rounded-3xl shadow-sm border overflow-hidden"><div class="px-8 py-5 border-b bg-slate-50"><h2 class="text-sm font-extrabold flex items-center gap-2"><i class="fa-solid fa-id-card text-slate-400"></i> 프로젝트 정보</h2></div><div class="p-8 grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50/30"><div><label class="block text-[11px] font-bold text-slate-500 mb-1">코드</label><input type="text" id="project-code" class="w-full border rounded-2xl px-4 py-3 text-sm outline-indigo-500 calc-trigger"></div><div><label class="block text-[11px] font-bold text-slate-500 mb-1">명칭</label><input type="text" id="project-name" class="w-full border rounded-2xl px-4 py-3 text-sm outline-indigo-500 calc-trigger"></div><div><label class="block text-[11px] font-bold text-slate-500 mb-1">담당자</label><input type="text" id="manager-name" class="w-full border rounded-2xl px-4 py-3 text-sm outline-indigo-500 calc-trigger"></div></div></section>
+        
+        <section class="bg-white rounded-3xl shadow-sm border overflow-hidden">
+            <div class="px-8 py-5 border-b bg-slate-50"><h2 class="text-sm font-extrabold flex items-center gap-2"><i class="fa-solid fa-sliders text-slate-400"></i> 기본 설정</h2></div>
+            <div class="p-8 grid grid-cols-2 gap-6 bg-slate-50/30">
+                <div><label class="block text-[11px] font-bold text-slate-500 mb-1">장비 제작 대수 (대)</label><input type="number" id="equip-qty" value="1" min="1" class="w-full border rounded-2xl px-4 py-3 text-right font-black text-indigo-700 calc-trigger outline-indigo-500"></div>
+                <div><label class="block text-[11px] font-bold text-slate-500 mb-1">적용 학습 곡선 (%)</label><input type="number" id="learning-curve" value="95" min="50" max="100" class="w-full border rounded-2xl px-4 py-3 text-right font-bold calc-trigger outline-indigo-500"></div>
+                <div class="mc-only">
+                    <label class="block text-[11px] font-bold text-indigo-600 mb-1">MC 시뮬레이션 횟수</label>
+                    <input type="number" id="mc-iterations" value="5000" class="w-full border border-indigo-200 bg-indigo-50/30 rounded-2xl px-4 py-3 text-right font-bold text-indigo-900 calc-trigger outline-indigo-500">
+                </div>
+                <div class="mc-only">
+                    <label class="block text-[11px] font-bold text-indigo-600 mb-1">데이터 불확실성 (%)</label>
+                    <input type="number" id="mc-uncertainty" value="5" class="w-full border border-indigo-200 bg-indigo-50/30 rounded-2xl px-4 py-3 text-right font-bold text-indigo-900 calc-trigger outline-indigo-500">
+                </div>
+            </div>
+        </section>
+
+        <section class="bg-white rounded-3xl shadow-sm border overflow-hidden border-l-8 border-l-indigo-500"><div class="px-8 py-5 border-b flex justify-between items-center"><h2 class="text-sm font-extrabold flex items-center gap-2"><i class="fa-solid fa-list-ol text-indigo-500"></i> 산출 기준 데이터</h2><button onclick="window.addProcessRow()" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-4 py-2 rounded-xl text-xs font-bold transition-colors admin-only">+ 추가</button></div><div class="overflow-x-auto max-h-[500px]"><table class="min-w-full divide-y divide-slate-200"><thead class="bg-slate-50 sticky top-0" id="process-thead"></thead><tbody class="bg-white divide-y" id="process-tbody"></tbody></table></div></section>
+        
+        <div id="dynamic-unit-sections" class="space-y-6"></div>
+
+        <section class="bg-white rounded-3xl shadow-sm border overflow-hidden">
+            <div class="px-8 py-5 border-b bg-slate-50"><h2 class="text-sm font-extrabold flex items-center gap-2"><i class="fa-solid fa-users-gear text-slate-400"></i> 리스크 및 자원 운영</h2></div>
+            <div class="p-8 flex flex-col gap-6 bg-slate-50/30">
+                <div class="grid grid-cols-3 gap-4 bg-white p-4 rounded-2xl border">
+                    <div class="col-span-3 text-xs font-bold text-indigo-700 mb-2">조립 공정 투입 인원 숙련도 (명) - <span class="text-slate-500">총 <span id="out-total-personnel">0</span>명 / 평균 <span id="out-avg-skill">1.0</span>x</span></div>
+                    <div class="bg-slate-50 rounded-xl p-3 border"><label class="text-[10px] font-bold text-slate-500 block mb-1">🚀 고급 (0.8x)</label><input type="number" id="p-senior" value="0" min="0" class="w-full border-0 bg-transparent text-right font-black text-indigo-700 text-lg focus:ring-0 p-0 calc-trigger"></div>
+                    <div class="bg-indigo-50/50 rounded-xl p-3 border border-indigo-200"><label class="text-[10px] font-bold text-indigo-600 block mb-1">✅ 중급 (1.0x)</label><input type="number" id="p-mid" value="4" min="0" class="w-full border-0 bg-transparent text-right font-black text-indigo-700 text-lg focus:ring-0 p-0 calc-trigger"></div>
+                    <div class="bg-slate-50 rounded-xl p-3 border"><label class="text-[10px] font-bold text-slate-500 block mb-1">🐢 초급 (1.2x)</label><input type="number" id="p-junior" value="0" min="0" class="w-full border-0 bg-transparent text-right font-black text-indigo-700 text-lg focus:ring-0 p-0 calc-trigger"></div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div><label class="block text-[11px] font-bold text-slate-500 mb-1">난이도 보정</label><input type="number" id="diff-multiplier" value="1.0" step="0.1" class="w-full border rounded-2xl px-4 py-3 text-right font-bold text-slate-800 calc-trigger outline-indigo-500"></div>
+                    <div><label class="block text-[11px] font-bold text-slate-500 mb-1">재작업률 (%)</label><input type="number" id="rework-rate" value="2" min="0" class="w-full border rounded-2xl px-4 py-3 text-right font-bold text-slate-800 calc-trigger outline-indigo-500"></div>
+                    <div><label class="block text-[11px] font-bold text-slate-500 mb-1">버퍼 (%)</label><input type="number" id="buffer-rate" value="3" min="0" class="w-full border rounded-2xl px-4 py-3 text-right font-bold text-slate-800 calc-trigger outline-indigo-500"></div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 border-t pt-6">
+                    <div><label class="block text-[11px] font-bold text-slate-500 mb-1">프로젝트 시작일</label><input type="date" id="start-date" class="w-full border rounded-2xl px-4 py-3 text-sm font-bold text-slate-700 calc-trigger outline-indigo-500"></div>
+                    <div><label class="block text-[11px] font-bold text-purple-600 mb-1">목표 조립 완료일</label><input type="date" id="target-date" class="w-full border border-purple-300 bg-white rounded-2xl px-4 py-3 text-sm font-bold text-purple-700 calc-trigger outline-purple-500"></div>
+                    <div><label class="block text-[11px] font-bold text-rose-600 mb-1">출하 예정일</label><input type="date" id="shipping-date" class="w-full border border-rose-300 bg-rose-50 rounded-2xl px-4 py-3 text-sm font-bold text-rose-800 calc-trigger outline-rose-500"></div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 border-t pt-6">
+                    <div><label class="block text-[11px] font-bold text-sky-600 mb-1">사내 가용 인력 (명)</label><input type="number" id="internal-personnel" value="4" min="0" class="w-full border border-sky-300 bg-sky-50 rounded-2xl px-4 py-3 text-right font-black text-sky-900 calc-trigger outline-sky-500"></div>
+                    <div><label class="block text-[11px] font-bold text-emerald-600 mb-1">1MD 인건비(원)</label><input type="number" id="labor-cost" value="300000" class="w-full border border-emerald-200 bg-emerald-50 rounded-2xl px-4 py-3 text-right font-bold text-emerald-900 calc-trigger outline-emerald-500"></div>
+                    <div><label class="block text-[11px] font-bold text-amber-600 mb-1">예상 기타 경비(원)</label><input type="number" id="planned-expense" value="0" min="0" class="w-full border border-amber-200 bg-amber-50 rounded-2xl px-4 py-3 text-right font-bold text-amber-900 calc-trigger outline-amber-500"></div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <div class="lg:col-span-5 space-y-8 lg:sticky lg:top-24">
+        <section class="glass-dark rounded-3xl shadow-2xl text-white p-8 relative overflow-hidden">
+            <div class="flex justify-between items-center mb-8 relative z-10"><h2 class="text-lg font-extrabold flex items-center gap-3 text-slate-100 tracking-wide"><i class="fa-solid fa-bolt text-indigo-400"></i> 시뮬레이션 결과</h2><span class="text-[10px] font-bold bg-slate-800/80 px-3 py-1.5 rounded-full text-slate-300 border border-slate-700 backdrop-blur-sm"><span id="out-iters">5000</span> Iterations</span></div>
+            <div class="bg-slate-800/60 backdrop-blur-xl rounded-[1.5rem] p-7 border border-slate-700 mb-6 shadow-2xl relative overflow-hidden z-10"><div class="absolute left-0 top-0 w-1.5 h-full bg-gradient-to-b from-indigo-400 to-purple-500"></div><div class="flex justify-between items-start gap-6"><div class="flex-1"><p class="text-indigo-300 text-[11px] font-extrabold mb-2">P50 (평균 공수)</p><div class="flex items-baseline gap-2"><span id="out-p50-md" class="text-6xl font-black text-white">0.0</span><span class="text-lg font-bold text-slate-400">MD</span></div></div><div class="text-right flex-shrink-0 pt-2 min-w-[130px]"><p class="text-slate-400 text-[10px] font-bold mb-2">완료 예정일</p><div class="text-2xl font-black text-white mb-2"><span id="out-p50-date">-</span></div><div class="text-[11px] text-indigo-300 font-bold bg-indigo-500/10 px-3 py-1 rounded-full"><span id="out-p50-dur">0</span>일 소요</div></div></div></div>
+            <div class="grid grid-cols-2 gap-4 relative z-10"><div class="bg-slate-800/40 rounded-2xl p-5 border border-slate-700/60 relative overflow-hidden"><div class="absolute left-0 top-0 w-1 h-full bg-emerald-500"></div><p class="text-emerald-400 text-[10px] font-extrabold mb-2">P10 (낙관)</p><div class="font-bold text-2xl text-slate-100"><span id="out-p10-md">0.0</span><span class="text-xs text-slate-500 ml-1">MD</span></div></div><div class="bg-slate-800/40 rounded-2xl p-5 border border-slate-700/60 relative overflow-hidden"><div class="absolute left-0 top-0 w-1 h-full bg-rose-500"></div><p class="text-rose-400 text-[10px] font-extrabold mb-2">P90 (안전)</p><div class="font-bold text-2xl text-slate-100"><span id="out-p90-md">0.0</span><span class="text-xs text-slate-500 ml-1">MD</span></div></div></div>
+        </section>
+
+        <section class="bg-white rounded-3xl shadow-sm border overflow-hidden flex flex-col p-6 h-[300px]">
+            <h3 class="text-xs font-extrabold text-slate-700 mb-2 border-b pb-2">📊 공수 확률 분포</h3>
+            <div class="flex-1 relative w-full h-full"><canvas id="chart-canvas"></canvas></div>
+        </section>
+
+        <section class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-3xl shadow-2xl p-7 text-white border border-slate-700 flex flex-col gap-4">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h3 class="text-[13px] font-black flex items-center gap-2 text-indigo-300"><i class="fa-solid fa-robot text-lg"></i> AI Insight & Report</h3>
+                    <p class="text-[11px] text-slate-400 font-semibold mt-1">입력된 데이터를 바탕으로 리스크를 분석합니다.</p>
+                </div>
+                <button onclick="window.generateGroqInsight()" class="bg-indigo-500/20 hover:bg-indigo-500/40 text-indigo-200 border border-indigo-500/30 px-3 py-2 rounded-lg text-xs font-bold transition-all shadow-md whitespace-nowrap">분석 실행</button>
+            </div>
+            <div id="ai-briefing-text" class="text-sm text-slate-300 leading-relaxed"></div>
+        </section>
+    </div>
+</div>
+
+<div class="w-full mt-4">
+    <section class="bg-white rounded-3xl shadow-sm border overflow-hidden">
+        <div class="bg-slate-50 px-8 py-5 border-b"><h2 class="text-base font-extrabold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-layer-group text-indigo-500"></i> 전체 공정 타임라인 (Gantt Chart)</h2></div>
+        <div class="p-8 overflow-x-auto min-h-[250px]"><div id="gantt-container" class="min-w-[900px]"></div></div>
+    </section>
+</div>
