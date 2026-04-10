@@ -386,20 +386,38 @@
         window.filterByCategory = function(category) { window.currentCategoryFilter = category; if(window.currentProjDashView === 'gantt') window.renderProjGantt(); else if(window.currentProjDashView === 'calendar') window.renderProjCalendar(); else window.renderProjectStatusList(); };
         window.searchProjectBoard = function(keyword) { const k = keyword.toLowerCase(); document.querySelectorAll('#proj-dash-tbody tr').forEach(tr => { const text = tr.innerText.toLowerCase(); tr.style.display = (text.includes(k) || window.matchString(k, text)) ? '' : 'none'; }); };
         
-        window.loadProjectStatusData = function() {
+       window.loadProjectStatusData = function() {
             if(projectStatusSnapshotUnsubscribe) projectStatusSnapshotUnsubscribe();
+            
             projectStatusSnapshotUnsubscribe = onSnapshot(query(collection(db, "projects_status")), (snapshot) => {
-                window.currentProjectStatusList = []; let lastUpdated = 0;
+                window.currentProjectStatusList = []; 
+                let lastUpdated = 0;
+                
                 snapshot.forEach(doc => { 
                     const data = doc.data(); 
-                    const dataPart = data.part || '제조'; // 과거 데이터(part 필드 없는 데이터)도 제조 파트로 표시되도록 픽스!
-                    if(dataPart === window.currentProjPartTab) window.currentProjectStatusList.push({ id: doc.id, ...data }); 
+                    // 공백이나 잘못된 데이터로 인한 필터링 오류 방지
+                    const dataPart = data.part ? String(data.part).trim() : '제조'; 
+                    
+                    if(dataPart === window.currentProjPartTab) {
+                        window.currentProjectStatusList.push({ id: doc.id, ...data }); 
+                    }
+                    
                     let uTime = getSafeMillis(data.updatedAt);
                     if(uTime > lastUpdated) lastUpdated = uTime;
                 });
-                if (lastUpdated > 0) { const lDate = new Date(lastUpdated); document.getElementById('pjt-last-update').innerText = `${lDate.getFullYear().toString().slice(2)}-${String(lDate.getMonth()+1).padStart(2,'0')}-${String(lDate.getDate()).padStart(2,'0')} ${String(lDate.getHours()).padStart(2,'0')}:${String(lDate.getMinutes()).padStart(2,'0')}`; }
+                
+                // 🚨 진짜 범인 검거: HTML에 pjt-last-update 요소가 없어서 나던 렌더링 중단 에러 방어
+                const updateEl = document.getElementById('pjt-last-update');
+                if (lastUpdated > 0 && updateEl) { 
+                    const lDate = new Date(lastUpdated); 
+                    updateEl.innerText = `${lDate.getFullYear().toString().slice(2)}-${String(lDate.getMonth()+1).padStart(2,'0')}-${String(lDate.getDate()).padStart(2,'0')} ${String(lDate.getHours()).padStart(2,'0')}:${String(lDate.getMinutes()).padStart(2,'0')}`; 
+                }
+                
                 window.currentProjectStatusList.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
-                if(window.currentProjDashView === 'gantt') window.renderProjGantt(); else if(window.currentProjDashView === 'calendar') window.renderProjCalendar(); else window.renderProjectStatusList();
+                
+                if(window.currentProjDashView === 'gantt') window.renderProjGantt(); 
+                else if(window.currentProjDashView === 'calendar') window.renderProjCalendar(); 
+                else window.renderProjectStatusList(); // 이제 여기서 멈추지 않고 테이블을 정상적으로 그립니다!
             });
         };
         
