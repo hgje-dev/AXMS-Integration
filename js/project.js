@@ -1,4 +1,5 @@
 // js/project.js
+
 import { db } from './firebase.js';
 import { collection, doc, setDoc, getDoc, getDocs, addDoc, deleteDoc, query, onSnapshot, where, serverTimestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
@@ -15,15 +16,15 @@ const getSafeString = (val) => { if (val === null || val === undefined) return '
 
 window.filterFromDashboard = function(status) {
     window.currentStatusFilter = status;
-    window.openApp('view-project-status', 'PJT 현황판');
+    window.openApp('project-status', 'PJT 현황판');
     setTimeout(() => { window.renderProjectStatusList(); }, 200);
 };
 
 window.loadCounts = function() {
     try {
-        onSnapshot(collection(db, "project_comments"), snap => { window.projectCommentCounts = {}; snap.forEach(doc => { let d = doc.data(); if(d.projectId) window.projectCommentCounts[d.projectId] = (window.projectCommentCounts[d.projectId]||0)+1; }); if(window.currentProjDashView === 'list' && !document.getElementById('view-project-status').classList.contains('hidden')) window.renderProjectStatusList(); });
-        onSnapshot(collection(db, "project_issues"), snap => { window.projectIssueCounts = {}; snap.forEach(doc => { let d = doc.data(); if(d.projectId && !d.isResolved) window.projectIssueCounts[d.projectId] = (window.projectIssueCounts[d.projectId]||0)+1; }); if(window.currentProjDashView === 'list' && !document.getElementById('view-project-status').classList.contains('hidden')) window.renderProjectStatusList(); });
-        onSnapshot(collection(db, "daily_logs"), snap => { window.projectLogCounts = {}; snap.forEach(doc => { let d = doc.data(); if(d.projectId) window.projectLogCounts[d.projectId] = (window.projectLogCounts[d.projectId]||0)+1; }); if(window.currentProjDashView === 'list' && !document.getElementById('view-project-status').classList.contains('hidden')) window.renderProjectStatusList(); });
+        onSnapshot(collection(db, "project_comments"), snap => { window.projectCommentCounts = {}; snap.forEach(doc => { let d = doc.data(); if(d.projectId) window.projectCommentCounts[d.projectId] = (window.projectCommentCounts[d.projectId]||0)+1; }); if(window.currentProjDashView === 'list' && !document.getElementById('view-project-status')?.classList.contains('hidden')) window.renderProjectStatusList(); });
+        onSnapshot(collection(db, "project_issues"), snap => { window.projectIssueCounts = {}; snap.forEach(doc => { let d = doc.data(); if(d.projectId && !d.isResolved) window.projectIssueCounts[d.projectId] = (window.projectIssueCounts[d.projectId]||0)+1; }); if(window.currentProjDashView === 'list' && !document.getElementById('view-project-status')?.classList.contains('hidden')) window.renderProjectStatusList(); });
+        onSnapshot(collection(db, "daily_logs"), snap => { window.projectLogCounts = {}; snap.forEach(doc => { let d = doc.data(); if(d.projectId) window.projectLogCounts[d.projectId] = (window.projectLogCounts[d.projectId]||0)+1; }); if(window.currentProjDashView === 'list' && !document.getElementById('view-project-status')?.classList.contains('hidden')) window.renderProjectStatusList(); });
     } catch(e) {}
 };
 
@@ -109,8 +110,7 @@ window.loadProjectStatusData = function() {
 
 window.currentMonthFilter = '';
 window.filterByMonth = function(monthStr) {
-    window.currentMonthFilter = monthStr;
-    window.updateMiniDashboard();
+    window.currentMonthFilter = monthStr; window.updateMiniDashboard();
     if(window.currentProjDashView === 'gantt') window.renderProjGantt(); 
     else if(window.currentProjDashView === 'calendar') window.renderProjCalendar();
     else window.renderProjectStatusList();
@@ -336,6 +336,7 @@ window.renderProjCalendar = function() {
     } catch(e) {}
 };
 
+
 // ==========================================================
 // 🚨 알림 및 멘션 (Notification & Mention) 로직 🚨
 // ==========================================================
@@ -348,7 +349,7 @@ window.handleMention = function(inputEl) {
     const lastAtSignIndex = textBeforeCursor.lastIndexOf('@');
     
     if (lastAtSignIndex !== -1 && !textBeforeCursor.slice(lastAtSignIndex).includes(' ')) {
-        const query = textBeforeCursor.slice(lastAtSignIndex + 1); // @ 이후 입력된 텍스트 추출
+        const query = textBeforeCursor.slice(lastAtSignIndex + 1); // @ 이후 입력된 텍스트 추출 (초성 포함)
         
         let wrapper = document.getElementById('mention-autocomplete-wrapper');
         if (!wrapper) {
@@ -360,7 +361,7 @@ window.handleMention = function(inputEl) {
             inputEl.parentNode.appendChild(wrapper);
         }
 
-        // 등록된 전체 사용자에서 초성 또는 일치 검색
+        // 등록된 전체 사용자에서 초성 또는 일치 검색 (window.matchString 활용)
         const matches = query ? (window.allSystemUsers || []).filter(u => window.matchString(query, u.name)) : (window.allSystemUsers || []);
         
         if (matches.length === 0) {
@@ -485,7 +486,7 @@ window.renderNotifications = function(notifs, unreadCount) {
 window.readAndNavigateNotification = async function(notifId, projectId) {
     try {
         await setDoc(doc(db, "notifications", notifId), { isRead: true }, { merge: true });
-        window.openApp('project-status-mfg', 'PJT-제조파트 현황'); // 현황판으로 이동
+        window.openApp('project-status', 'PJT 현황판'); // 현황판으로 이동
         setTimeout(() => { window.editProjStatus(projectId); }, 500); // 0.5초 뒤 해당 PJT 모달창 열기
     } catch(e) { console.error(e); }
 };
@@ -538,7 +539,6 @@ window.openDailyLogModal = function(projectId) { const proj = window.currentProj
 window.loadDailyLogs = function(projectId) { if (currentLogUnsubscribe) currentLogUnsubscribe(); currentLogUnsubscribe = onSnapshot(query(collection(db, "daily_logs"), where("projectId", "==", projectId)), (snapshot) => { window.currentDailyLogs = []; snapshot.forEach(doc => window.currentDailyLogs.push({ id: doc.id, ...doc.data() })); window.currentDailyLogs.sort((a, b) => { const dateA = a.date || ''; const dateB = b.date || ''; if (dateA !== dateB) return dateB.localeCompare(dateA); return getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt); }); window.renderDailyLogs(window.currentDailyLogs); }); };
 window.renderDailyLogs = function(logs) { const list = document.getElementById('daily-log-list'); if (logs.length === 0) { list.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 생산일지가 없습니다.</div>'; return; } list.innerHTML = logs.map(log => { const safeContent = String(log.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>'); const imgHtml = log.imageUrl ? `<div class="mt-3 rounded-lg overflow-hidden border border-slate-200 w-fit max-w-[300px]"><img src="${log.imageUrl}" class="w-full h-auto cursor-pointer" onclick="window.open('${log.imageUrl}')"></div>` : ''; return `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1 hover:shadow-md transition-shadow"><div class="flex justify-between items-center"><div class="flex items-center gap-3"><span class="font-bold text-sky-600 text-xs flex items-center gap-1"><i class="fa-regular fa-calendar text-sky-400"></i> ${log.date}</span><span class="font-black text-slate-700 text-sm">${log.authorName}</span></div><div class="flex gap-2">${(log.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin') ? `<button onclick="window.editDailyLog('${log.id}')" class="text-slate-400 hover:text-sky-500 transition-colors" title="수정"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteDailyLog('${log.id}')" class="text-slate-400 hover:text-rose-500 transition-colors" title="삭제"><i class="fa-solid fa-trash-can"></i></button>` : ''}</div></div><div class="text-slate-700 font-medium text-[13px] pl-1 mt-2 break-words leading-relaxed">${safeContent}</div>${imgHtml}</div>`; }).join(''); };
 
-// 🌟 멘션 저장 연동
 window.saveDailyLogItem = async function() { 
     const projectId = document.getElementById('log-req-id').value; const logId = document.getElementById('editing-log-id').value; const date = document.getElementById('new-log-date').value; const content = document.getElementById('new-log-text').value.trim(); const fileInput = document.getElementById('new-log-image'); const progressVal = parseInt(document.getElementById('log-project-progress').value) || 0; const purchaseRateVal = parseInt(document.getElementById('log-project-purchase-rate').value) || 0; 
     if(!date || (!content && fileInput.files.length === 0)) return window.showToast("날짜와 내용을 입력하거나 사진을 첨부하세요.", "error"); 
@@ -569,7 +569,6 @@ window.openCommentModal = function(projectId) { const proj = window.currentProje
 window.loadComments = function(projectId) { if (currentCommentUnsubscribe) currentCommentUnsubscribe(); currentCommentUnsubscribe = onSnapshot(query(collection(db, "project_comments"), where("projectId", "==", projectId)), (snapshot) => { window.currentComments = []; snapshot.forEach(doc => window.currentComments.push({ id: doc.id, ...doc.data() })); const topLevel = window.currentComments.filter(c => !c.parentId).sort((a,b) => getSafeMillis(a.createdAt) - getSafeMillis(b.createdAt)); const replies = window.currentComments.filter(c => c.parentId).sort((a,b) => getSafeMillis(a.createdAt) - getSafeMillis(b.createdAt)); topLevel.forEach(c => { c.replies = replies.filter(r => r.parentId === c.id); }); window.renderComments(topLevel); }); };
 window.renderComments = function(topLevelComments) { const list = document.getElementById('comment-list'); if (topLevelComments.length === 0) { list.innerHTML = '<div class="text-center p-10 text-slate-400 font-bold">등록된 코멘트가 없습니다.</div>'; return; } list.innerHTML = topLevelComments.map(c => { const safeContent = String(c.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>'); const cImgHtml = c.imageUrl ? `<div class="mt-3 rounded-lg overflow-hidden border border-slate-200 w-fit max-w-[300px]"><img src="${c.imageUrl}" class="w-full h-auto cursor-pointer" onclick="window.open('${c.imageUrl}')"></div>` : ''; let repliesHtml = ''; if(c.replies && c.replies.length > 0) { repliesHtml += '<div class="pl-4 border-l-[3px] border-indigo-100/60 space-y-2 mt-4 pt-2 ml-2">'; c.replies.forEach(r => { const safeReplyContent = String(r.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>'); const rImgHtml = r.imageUrl ? `<div class="mt-2 rounded-lg overflow-hidden border border-slate-200 w-fit max-w-[200px]"><img src="${r.imageUrl}" class="w-full h-auto cursor-pointer" onclick="window.open('${r.imageUrl}')"></div>` : ''; repliesHtml += `<div class="bg-slate-50 p-4 rounded-xl border border-slate-100"><div class="flex justify-between items-start mb-2"><div class="flex items-center gap-2"><i class="fa-solid fa-reply text-[10px] text-slate-400 rotate-180 scale-y-[-1]"></i><span class="font-black text-slate-700 text-sm">${r.authorName}</span><span class="text-xs font-medium text-slate-400">${window.getDateTimeStr(new Date(getSafeMillis(r.createdAt)))}</span></div><div class="flex gap-2">${(r.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin') ? `<button onclick="window.editComment('${r.id}')" class="text-slate-400 hover:text-amber-500 px-1"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteComment('${r.id}')" class="text-slate-400 hover:text-rose-500 px-1"><i class="fa-solid fa-trash-can"></i></button>` : ''}</div></div><div class="text-slate-700 text-[13px] font-medium pl-6 break-words">${safeReplyContent}</div>${rImgHtml}</div>`; }); repliesHtml += '</div>'; } return `<div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm"><div class="flex justify-between items-start mb-3"><div class="flex items-center gap-2"><span class="font-black text-slate-800 text-[15px]">${c.authorName}</span><span class="text-xs font-medium text-slate-400">${window.getDateTimeStr(new Date(getSafeMillis(c.createdAt)))}</span></div><div class="flex gap-2"><button onclick="window.setReplyTo('${c.id}', '${c.authorName}')" class="text-[11px] bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 px-3 py-1 rounded-lg font-bold transition-colors shadow-sm">답글달기</button>${(c.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin') ? `<button onclick="window.editComment('${c.id}')" class="text-slate-400 hover:text-amber-500 px-1"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteComment('${c.id}')" class="text-slate-400 hover:text-rose-500 px-1"><i class="fa-solid fa-trash-can"></i></button>` : ''}</div></div><div class="text-slate-800 text-[14px] font-medium pl-1 mb-2 break-words leading-relaxed">${safeContent}</div>${cImgHtml}${repliesHtml}</div>`; }).join(''); };
 
-// 🌟 멘션 저장 연동
 window.saveCommentItem = async function() { 
     const projectId = document.getElementById('cmt-req-id').value; const content = document.getElementById('new-cmt-text').value.trim(); const parentId = document.getElementById('reply-to-id').value || null; const editId = document.getElementById('editing-cmt-id').value; const fileInput = document.getElementById('new-cmt-image'); 
     if(!content && fileInput.files.length === 0) return window.showToast("코멘트 내용이나 사진을 첨부하세요.", "error"); 
@@ -599,7 +598,6 @@ window.openIssueModal = function(projectId) { const proj = window.currentProject
 window.loadIssues = function(projectId) { if (currentIssueUnsubscribe) currentIssueUnsubscribe(); currentIssueUnsubscribe = onSnapshot(query(collection(db, "project_issues"), where("projectId", "==", projectId)), (snapshot) => { window.currentIssues = []; snapshot.forEach(doc => { const data = doc.data(); window.currentIssues.push({ id: doc.id, ...data }); }); window.currentIssues.sort((a,b) => getSafeMillis(a.createdAt) - getSafeMillis(b.createdAt)); window.renderIssues(window.currentIssues); }); };
 window.renderIssues = function(issues) { const list = document.getElementById('issue-list'); if (issues.length === 0) { list.innerHTML = '<div class="text-center p-10 text-slate-400 font-bold">등록된 이슈가 없습니다.</div>'; return; } list.innerHTML = issues.map(iss => { const safeText = String(iss.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>'); return `<div class="bg-white p-4 rounded-xl border ${iss.isResolved ? 'border-slate-200 bg-slate-50' : 'border-rose-200 shadow-sm'} flex items-start gap-3 transition-all"><div class="mt-0.5"><input type="checkbox" ${iss.isResolved ? 'checked' : ''} onchange="window.toggleIssueStatus('${iss.id}', this.checked)" class="w-5 h-5 text-rose-500 rounded border-gray-300 cursor-pointer accent-rose-500 shadow-sm"></div><div class="flex-1 flex flex-col gap-1"><div class="flex justify-between items-center"><span class="font-bold text-sm ${iss.isResolved ? 'text-slate-400' : 'text-rose-600'}">${iss.authorName}</span><div class="flex gap-2">${(iss.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin') ? `<button onclick="window.editIssue('${iss.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteIssue('${iss.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button>` : ''}</div></div><div class="text-[13px] font-medium mt-1 leading-relaxed ${iss.isResolved ? 'text-slate-400 line-through' : 'text-slate-700'} break-words">${safeText}</div></div></div>`; }).join(''); };
 
-// 🌟 멘션 저장 연동
 window.saveIssueItem = async function() { 
     const projectId = document.getElementById('issue-req-id').value; const editId = document.getElementById('editing-issue-id').value; const content = document.getElementById('new-issue-text').value.trim(); 
     if(!content) return window.showToast("이슈 내용을 입력하세요.", "error"); 
@@ -624,7 +622,7 @@ window.editMdLog = function(id) { const log = window.currentMdLogs.find(l => l.i
 window.deleteMdLog = async function(id, projectId) { if(!confirm("이 MD 내역을 삭제하시겠습니까?")) return; try { await deleteDoc(doc(db, "project_md_logs", id)); await window.updateProjectTotalMd(projectId); window.showToast("삭제되었습니다."); window.resetMdLogForm(); } catch(e) { window.showToast("삭제 실패", "error"); } };
 window.updateProjectTotalMd = async function(projectId) { const snap = await getDocs(query(collection(db, "project_md_logs"), where("projectId", "==", projectId))); let total = 0; snap.forEach(doc => { total += parseFloat(doc.data().md) || 0; }); const projRef = doc(db, "projects_status", projectId); const projSnap = await getDoc(projRef); if(projSnap.exists()) { const outMd = parseFloat(projSnap.data().outMd) || 0; await setDoc(projRef, { currentMd: total, finalMd: total + outMd }, { merge: true }); } };
 window.closeMdLogModal = function() { document.getElementById('md-log-modal').classList.add('hidden'); document.getElementById('md-log-modal').classList.remove('flex'); if (currentMdLogUnsubscribe) { currentMdLogUnsubscribe(); currentMdLogUnsubscribe = null; } };
-window.resetMdLogForm = function() { document.getElementById('editing-md-id').value = ''; document.getElementById('new-md-date').value = window.getLocalDateStr(new Date()); document.getElementById('new-md-val').value = ''; document.getElementById('new-md-desc').value = ''; document.getElementById('btn-md-save').innerText = '등록'; document.getElementById('btn-md-cancel').classList.add('hidden'); };
+window.resetMdLogForm = function() { document.getElementById('editing-log-id').value = ''; document.getElementById('new-md-date').value = window.getLocalDateStr(new Date()); document.getElementById('new-md-val').value = ''; document.getElementById('new-md-desc').value = ''; document.getElementById('btn-md-save').innerText = '등록'; document.getElementById('btn-md-cancel').classList.add('hidden'); };
 
 // --- 7. 문서 링크 (Links) ---
 window.openLinkModal = function(projectId) { const proj = window.currentProjectStatusList.find(p => p.id === projectId); if(!proj) return; document.getElementById('link-req-id').value = projectId; document.getElementById('new-link-name').value = ''; document.getElementById('new-link-url').value = ''; document.getElementById('link-modal').classList.remove('hidden'); document.getElementById('link-modal').classList.add('flex'); window.renderLinksList(projectId); };
