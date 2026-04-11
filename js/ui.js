@@ -40,8 +40,16 @@ window.toggleAuthMode = (mode) => {
     } 
 };
 
-// 🌟 멘션 텍스트 파란색 변환 마법사
+// 🌟 멘션 텍스트 & URL 자동 하이퍼링크 변환 마법사
 window.formatMentions = (text) => {
     if(!text) return '';
-    return text.replace(/@([가-힣a-zA-Z0-9_]+)/g, '<span class="text-blue-600 font-extrabold bg-blue-50 px-1.5 py-0.5 rounded shadow-sm border border-blue-200">@$1</span>');
+    
+    // 1. 멘션 파란색 뱃지 처리 (@이름)
+    let formatted = text.replace(/@([가-힣a-zA-Z0-9_]+)/g, '<span class="text-blue-600 font-extrabold bg-blue-50 px-1.5 py-0.5 rounded shadow-sm border border-blue-200">@$1</span>');
+    
+    // 2. URL 자동 링크 변환 (http 또는 https로 시작하는 주소를 <a> 태그로 감싸기)
+    // <br> 같은 html 태그를 삼키지 않도록 < 기호 제외하고 매칭!
+    formatted = formatted.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" class="text-sky-500 hover:text-sky-700 underline break-all font-bold" onclick="event.stopPropagation()">$1</a>');
+    
+    return formatted;
 };
