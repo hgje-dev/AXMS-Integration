@@ -238,3 +238,18 @@ window.processMentions = async function(content, projectId, typeDesc) {
         }
     }
 };
+// 화면 빈 공간(바탕) 클릭 시 열려있는 팝업(알림창, 멘션창) 닫기
+document.addEventListener('click', (e) => {
+    // 1. 알림창 닫기
+    const notiDropdown = document.getElementById('notification-dropdown');
+    if(notiDropdown && !notiDropdown.classList.contains('hidden') && !e.target.closest('.relative.cursor-pointer')) {
+        notiDropdown.classList.add('hidden');
+    }
+    
+    // 2. 멘션창 닫기
+    const mentionDropdown = document.getElementById('mention-dropdown');
+    // 멘션창 내부를 클릭한 게 아니라면 숨김 처리
+    if(mentionDropdown && !mentionDropdown.classList.contains('hidden') && !e.target.closest('#mention-dropdown')) {
+        mentionDropdown.classList.add('hidden');
+    }
+});
