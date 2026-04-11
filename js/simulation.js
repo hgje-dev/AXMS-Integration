@@ -37,7 +37,7 @@ window.parseJsonLikeText = (rawText) => {
     if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
         candidates.push(raw.slice(firstBrace, lastBrace + 1));
     }
-    for (const candidate of candidates) { try { return JSON.parse(candidate); } catch (_) {} }
+    for (const candidate of candidates) { try { JSON.parse(candidate); return JSON.parse(candidate); } catch (_) {} }
     throw new Error('AI 응답을 JSON으로 해석하지 못했습니다.');
 };
 
@@ -76,15 +76,15 @@ window.setDefaultPreset = async () => {
 window.deleteCurrentPreset = async () => { 
     const id = document.getElementById('eq-type')?.value; if(!id) return;
     if(Object.keys(window.masterPresets).length <= 1) return window.showToast("최소 1개는 유지해야 합니다.", "error");
-    if(confirm("삭제하시겠습니까?")) { 
+    if(window.confirm("삭제하시겠습니까?")) { 
         await deleteDoc(doc(db, "master_presets", id)); delete window.masterPresets[id]; 
         window.refreshPresetDropdown(); window.handleTypeChange(); window.showToast("삭제됨."); 
     } 
 };
 
 window.saveCurrentAsPreset = async () => { 
-    const id = prompt("ID (예: new_type_01):"); if(!id) return; 
-    const label = prompt("이름 (예: 신규 검사기):"); if(!label) return;
+    const id = window.prompt("ID (예: new_type_01):"); if(!id) return; 
+    const label = window.prompt("이름 (예: 신규 검사기):"); if(!label) return;
     const pData = { 
         label: label, 
         processHeaders: ["공정명", "타입구분", "투입(명)", "입력(MD/일)"], 
@@ -147,8 +147,8 @@ window.handleMethodChange = () => {
 };
 
 window.debouncedRunSimulation = () => { 
-    clearTimeout(simTimer); 
-    simTimer = setTimeout(() => { window.runSimulation(); }, 300); 
+    window.clearTimeout(simTimer); 
+    simTimer = window.setTimeout(() => { window.runSimulation(); }, 300); 
 };
 
 window.addProcessRow = () => { window.currentProcessData.push({name:"신규 공정",q:1,m:1.0,pType:'md'}); window.renderProcessTable(); window.debouncedRunSimulation(); };
@@ -313,9 +313,9 @@ const AI_PROVIDER_CONFIG = {
 
 window.getAiApiSettings = () => {
     return { 
-        provider: localStorage.getItem('axms_ai_provider') || 'groq', 
-        model: localStorage.getItem('axms_ai_model') || 'llama-3.3-70b-versatile', 
-        key: localStorage.getItem('axms_ai_key') || localStorage.getItem('axms_groq_key') || '' 
+        provider: window.localStorage.getItem('axms_ai_provider') || 'groq', 
+        model: window.localStorage.getItem('axms_ai_model') || 'llama-3.3-70b-versatile', 
+        key: window.localStorage.getItem('axms_ai_key') || window.localStorage.getItem('axms_groq_key') || '' 
     };
 };
 
@@ -330,7 +330,7 @@ window.saveAiApiSettings = () => {
     const model = document.getElementById('ai-api-model')?.value || AI_PROVIDER_CONFIG[provider].defaultModel;
     const key = document.getElementById('ai-api-key')?.value.trim();
     if (!key) return window.showToast('API 키를 입력해주세요.', 'error');
-    localStorage.setItem('axms_ai_provider', provider); localStorage.setItem('axms_ai_model', model); localStorage.setItem('axms_ai_key', key);
+    window.localStorage.setItem('axms_ai_provider', provider); window.localStorage.setItem('axms_ai_model', model); window.localStorage.setItem('axms_ai_key', key);
     window.showToast('AI API 설정이 저장되었습니다.'); window.toggleAiApiPanel(false);
 };
 
@@ -344,7 +344,7 @@ window.fetchAiContent = async (promptText) => {
             body: JSON.stringify({ model: settings.model, messages: [ { role: 'system', content: '전문 PMO로서 핵심만 JSON으로 반환하세요.' }, { role: 'user', content: promptText } ], temperature: 0.7 })
         }
     };
-    const res = await fetch(req.url, req.options);
+    const res = await window.fetch(req.url, req.options);
     if (!res.ok) throw new Error('API 호출 실패');
     const data = await res.json();
     return data?.choices?.[0]?.message?.content || '';
