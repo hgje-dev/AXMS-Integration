@@ -9,38 +9,56 @@ let chartInstances = {};
 window.currentDashStats = {};
 window.currentPeriodProjects = [];
 
-const getSafeString = (val) => {
-    return (val === null || val === undefined) ? '' : String(val);
+const getSafeString = function(val) {
+    if (val === null || val === undefined) {
+        return '';
+    }
+    return String(val);
 };
 
 window.loadHomeDashboards = function() {
     try {
+        // 관리자 권한 확인 후 엑셀 다운로드 버튼 노출
         const exportBtn = document.getElementById('btn-export-dash');
-        if (exportBtn && window.userProfile?.role === 'admin') {
+        if (exportBtn && window.userProfile && window.userProfile.role === 'admin') {
             exportBtn.classList.remove('hidden');
         }
 
-        if (homeReqSnapshotUnsubscribe) homeReqSnapshotUnsubscribe();
-        if (homeProjSnapshotUnsubscribe) homeProjSnapshotUnsubscribe();
-        if (homeMdLogSnapshotUnsubscribe) homeMdLogSnapshotUnsubscribe();
+        if (homeReqSnapshotUnsubscribe) {
+            homeReqSnapshotUnsubscribe();
+        }
+        if (homeProjSnapshotUnsubscribe) {
+            homeProjSnapshotUnsubscribe();
+        }
+        if (homeMdLogSnapshotUnsubscribe) {
+            homeMdLogSnapshotUnsubscribe();
+        }
         
-        homeProjSnapshotUnsubscribe = onSnapshot(collection(db, "projects_status"), (snapshot) => { 
+        homeProjSnapshotUnsubscribe = onSnapshot(collection(db, "projects_status"), function(snapshot) { 
             window.allDashProjects = []; 
-            snapshot.forEach(docSnap => {
-                window.allDashProjects.push({ id: docSnap.id, ...docSnap.data() });
+            snapshot.forEach(function(docSnap) {
+                let data = docSnap.data();
+                data.id = docSnap.id;
+                window.allDashProjects.push(data);
             }); 
-            if (window.processDashboardData) window.processDashboardData(); 
+            if (window.processDashboardData) {
+                window.processDashboardData(); 
+            }
         });
 
-        homeMdLogSnapshotUnsubscribe = onSnapshot(collection(db, "project_md_logs"), (snapshot) => { 
+        homeMdLogSnapshotUnsubscribe = onSnapshot(collection(db, "project_md_logs"), function(snapshot) { 
             window.allDashMdLogs = []; 
-            snapshot.forEach(docSnap => {
-                window.allDashMdLogs.push({ id: docSnap.id, ...docSnap.data() });
+            snapshot.forEach(function(docSnap) {
+                let data = docSnap.data();
+                data.id = docSnap.id;
+                window.allDashMdLogs.push(data);
             }); 
-            if (window.processDashboardData) window.processDashboardData(); 
+            if (window.processDashboardData) {
+                window.processDashboardData(); 
+            }
         });
 
-        setTimeout(() => { 
+        setTimeout(function() { 
             const periodMonthInput = document.getElementById('period-value-month');
             if (periodMonthInput && !periodMonthInput.value) {
                 window.changePeriodType(); 
@@ -54,34 +72,53 @@ window.loadHomeDashboards = function() {
 
 window.processDashboardData = function() {
     try {
+        // 1. 기준 연도 동적 자동 생성
         let years = new Set(); 
         const currentYear = new Date().getFullYear(); 
         years.add(currentYear);
         
-        (window.allDashProjects || []).forEach(p => { 
-            if (p.d_shipEst) years.add(parseInt(p.d_shipEst.substring(0, 4))); 
-            if (p.d_shipEn) years.add(parseInt(p.d_shipEn.substring(0, 4))); 
-        });
+        if (window.allDashProjects) {
+            window.allDashProjects.forEach(function(p) { 
+                if (p.d_shipEst) {
+                    years.add(parseInt(p.d_shipEst.substring(0, 4))); 
+                }
+                if (p.d_shipEn) {
+                    years.add(parseInt(p.d_shipEn.substring(0, 4))); 
+                }
+            });
+        }
         
-        (window.allDashMdLogs || []).forEach(l => { 
-            if (l.date) years.add(parseInt(l.date.substring(0, 4))); 
-        });
+        if (window.allDashMdLogs) {
+            window.allDashMdLogs.forEach(function(l) { 
+                if (l.date) {
+                    years.add(parseInt(l.date.substring(0, 4))); 
+                }
+            });
+        }
         
-        let yearArray = Array.from(years).filter(y => !isNaN(y) && y > 2000).sort((a, b) => a - b);
+        let yearArray = Array.from(years).filter(function(y) {
+            return !isNaN(y) && y > 2000;
+        }).sort(function(a, b) {
+            return a - b;
+        });
+
         const yearSelect = document.getElementById('dash-year-select');
-        
+        let selectedYearStr = currentYear.toString();
+
         if (yearSelect) {
             const currentVal = yearSelect.value || currentYear.toString(); 
             yearSelect.innerHTML = '';
-            yearArray.forEach(y => { 
-                yearSelect.innerHTML += `<option value="${y}" ${y.toString() === currentVal ? 'selected' : ''}>${y}년</option>`; 
+            yearArray.forEach(function(y) { 
+                let isSelected = (y.toString() === currentVal) ? 'selected' : '';
+                yearSelect.innerHTML += '<option value="' + y + '" ' + isSelected + '>' + y + '년</option>'; 
             });
             if (yearSelect.value !== currentVal) {
                 yearSelect.value = currentVal;
             }
+            selectedYearStr = yearSelect.value;
         }
 
-        const year = yearSelect?.value || currentYear.toString(); 
+        const year = selectedYearStr; 
         let stats = { estMd: 0, curMd: 0, completed: 0, delayed: 0, pending: 0, progress: 0, inspecting: 0, rejected: 0 }; 
         let annualPlanData = Array(12).fill(0); 
         let annualActData = Array(12).fill(0); 
@@ -89,73 +126,102 @@ window.processDashboardData = function() {
         let totalShipErrorDays = 0; 
         let shipErrorCount = 0;
 
-        (window.allDashProjects || []).forEach(data => {
-            const shipEn = getSafeString(data.d_shipEn);
-            const shipEst = getSafeString(data.d_shipEst);
-            const status = getSafeString(data.status);
-            
-            let isInYear = (shipEn.startsWith(year) || shipEst.startsWith(year) || ['pending', 'progress', 'inspecting'].includes(status));
-            if (!isInYear) return;
-            
-            stats[status] = (stats[status] || 0) + 1;
-            
-            if (shipEst.startsWith(year)) { 
-                let mIdx = parseInt(shipEst.split('-')[1]) - 1; 
-                if (mIdx >= 0 && mIdx < 12) {
-                    annualPlanData[mIdx] += parseFloat(data.estMd) || 0; 
+        if (window.allDashProjects) {
+            window.allDashProjects.forEach(function(data) {
+                const shipEn = getSafeString(data.d_shipEn);
+                const shipEst = getSafeString(data.d_shipEst);
+                const status = getSafeString(data.status);
+                
+                let isInYear = false;
+                if (shipEn.startsWith(year) || shipEst.startsWith(year) || status === 'pending' || status === 'progress' || status === 'inspecting') {
+                    isInYear = true;
                 }
-            }
-            
-            if (status === 'completed' && (shipEn.startsWith(year) || shipEst.startsWith(year))) {
-                stats.completed++; 
-                let targetDate = shipEn || shipEst;
-                if (targetDate.startsWith(year)) { 
-                    let mIdx = parseInt(targetDate.split('-')[1]) - 1; 
+
+                if (!isInYear) return;
+                
+                if (stats[status] !== undefined) {
+                    stats[status] = stats[status] + 1;
+                } else {
+                    stats[status] = 1;
+                }
+                
+                if (shipEst.startsWith(year)) { 
+                    let mIdx = parseInt(shipEst.split('-')[1]) - 1; 
                     if (mIdx >= 0 && mIdx < 12) {
-                        monthlyCompleted[mIdx]++; 
+                        annualPlanData[mIdx] += parseFloat(data.estMd) || 0; 
                     }
                 }
-            }
-            
-            stats.estMd += parseFloat(data.estMd) || 0;
-            
-            if (status !== 'completed' && shipEst) { 
-                const diffTime = new Date(shipEst).getTime() - new Date().getTime();
-                if (diffTime / (1000 * 60 * 60 * 24) <= 7) {
-                    stats.delayed++; 
+                
+                if (status === 'completed' && (shipEn.startsWith(year) || shipEst.startsWith(year))) {
+                    stats.completed++; 
+                    let targetDate = shipEn || shipEst;
+                    if (targetDate.startsWith(year)) { 
+                        let mIdx = parseInt(targetDate.split('-')[1]) - 1; 
+                        if (mIdx >= 0 && mIdx < 12) {
+                            monthlyCompleted[mIdx]++; 
+                        }
+                    }
                 }
-            }
-            
-            if (shipEn && shipEst && status === 'completed') {
-                const enD = new Date(shipEn);
-                const estD = new Date(shipEst);
-                if (!isNaN(enD.getTime()) && !isNaN(estD.getTime())) { 
-                    totalShipErrorDays += (enD.getTime() - estD.getTime()) / (1000 * 60 * 60 * 24); 
-                    shipErrorCount++; 
+                
+                stats.estMd += parseFloat(data.estMd) || 0;
+                
+                if (status !== 'completed' && shipEst) { 
+                    const diffTime = new Date(shipEst).getTime() - new Date().getTime();
+                    if (diffTime / (1000 * 60 * 60 * 24) <= 7) {
+                        stats.delayed++; 
+                    }
                 }
-            }
-        });
+                
+                if (shipEn && shipEst && status === 'completed') {
+                    const enD = new Date(shipEn);
+                    const estD = new Date(shipEst);
+                    if (!isNaN(enD.getTime()) && !isNaN(estD.getTime())) { 
+                        totalShipErrorDays += (enD.getTime() - estD.getTime()) / (1000 * 60 * 60 * 24); 
+                        shipErrorCount++; 
+                    }
+                }
+            });
+        }
 
-        (window.allDashMdLogs || []).forEach(log => { 
-            const date = getSafeString(log.date); 
-            if (date.startsWith(year)) { 
-                let md = parseFloat(log.md) || 0; 
-                stats.curMd += md; 
-                let mIdx = parseInt(date.split('-')[1]) - 1; 
-                if (mIdx >= 0 && mIdx < 12) {
-                    annualActData[mIdx] += md; 
-                }
-            } 
-        });
+        if (window.allDashMdLogs) {
+            window.allDashMdLogs.forEach(function(log) { 
+                const date = getSafeString(log.date); 
+                if (date.startsWith(year)) { 
+                    let md = parseFloat(log.md) || 0; 
+                    stats.curMd += md; 
+                    let mIdx = parseInt(date.split('-')[1]) - 1; 
+                    if (mIdx >= 0 && mIdx < 12) {
+                        annualActData[mIdx] += md; 
+                    }
+                } 
+            });
+        }
+
+        // 엑셀 추출용 글로벌 변수 저장
+        let finalAvgShipError = 0;
+        if (shipErrorCount > 0) {
+            finalAvgShipError = Math.round(totalShipErrorDays / shipErrorCount);
+        }
 
         window.currentDashStats = { 
-            year: year, 
-            ...stats, 
-            avgShipError: shipErrorCount > 0 ? Math.round(totalShipErrorDays / shipErrorCount) : 0 
+            year: year,
+            pending: stats.pending,
+            progress: stats.progress,
+            inspecting: stats.inspecting,
+            completed: stats.completed,
+            rejected: stats.rejected,
+            delayed: stats.delayed,
+            estMd: stats.estMd,
+            curMd: stats.curMd,
+            avgShipError: finalAvgShipError
         };
 
         const dashTeamCountEl = document.getElementById('dash-team-count');
-        if (dashTeamCountEl) dashTeamCountEl.innerText = `${window.teamMembers?.length || 0}명`;
+        if (dashTeamCountEl) {
+            let tCount = 0;
+            if (window.teamMembers) tCount = window.teamMembers.length;
+            dashTeamCountEl.innerText = tCount + '명';
+        }
         
         const elCompleted = document.getElementById('dash-pd-completed');
         if (elCompleted) elCompleted.innerText = stats.completed;
@@ -171,19 +237,32 @@ window.processDashboardData = function() {
         
         const elVariance = document.getElementById('dash-pd-variance');
         if (elVariance) {
-            elVariance.innerText = stats.estMd > 0 ? ((stats.curMd - stats.estMd) / stats.estMd * 100).toFixed(1) + '%' : '0%';
+            if (stats.estMd > 0) {
+                let varianceVal = ((stats.curMd - stats.estMd) / stats.estMd * 100).toFixed(1);
+                elVariance.innerText = varianceVal + '%';
+            } else {
+                elVariance.innerText = '0%';
+            }
         }
         
         const elShipError = document.getElementById('dash-pd-ship-error');
-        if (elShipError) elShipError.innerText = window.currentDashStats.avgShipError;
+        if (elShipError) elShipError.innerText = finalAvgShipError;
         
         const elWorkload = document.getElementById('dash-pd-workload');
         if (elWorkload) {
-            elWorkload.innerText = window.teamMembers?.length > 0 ? (stats.curMd / (window.teamMembers.length * 240) * 100).toFixed(1) + '%' : '0%';
+            if (window.teamMembers && window.teamMembers.length > 0) {
+                let workLoadVal = (stats.curMd / (window.teamMembers.length * 240) * 100).toFixed(1);
+                elWorkload.innerText = workLoadVal + '%';
+            } else {
+                elWorkload.innerText = '0%';
+            }
         }
 
         window.renderCharts(stats, monthlyCompleted, annualPlanData, annualActData);
-        window.processPeriodData();
+        
+        if (window.processPeriodData) {
+            window.processPeriodData();
+        }
 
     } catch(e) { 
         console.error("연간 데이터 연산 오류:", e); 
@@ -191,18 +270,26 @@ window.processDashboardData = function() {
 };
 
 window.renderCharts = function(stats, monthlyCompleted, planData, actData) {
-    const createChart = (id, type, data, options) => {
+    const createChart = function(id, type, data, options) {
         const canvas = document.getElementById(id); 
         if (!canvas) return;
-        if (chartInstances[id]) chartInstances[id].destroy();
+        if (chartInstances[id]) {
+            chartInstances[id].destroy();
+        }
         chartInstances[id] = new Chart(canvas.getContext('2d'), { type: type, data: data, options: options });
     };
 
-    // 🌟 파이 차트 수정: padding을 넉넉히 주어 잘림 방지
+    // 1. 파이 차트
+    let pendingCnt = stats.pending || 0;
+    let progressCnt = stats.progress || 0;
+    let inspectingCnt = stats.inspecting || 0;
+    let completedCnt = stats.completed || 0;
+    let rejectedCnt = stats.rejected || 0;
+
     createChart('projPieChart', 'doughnut', {
         labels: ['대기/보류', '제작중', '검수중', '완료', '불가'],
         datasets: [{ 
-            data: [stats.pending || 0, stats.progress || 0, stats.inspecting || 0, stats.completed || 0, stats.rejected || 0], 
+            data: [pendingCnt, progressCnt, inspectingCnt, completedCnt, rejectedCnt], 
             backgroundColor: ['#94a3b8', '#3b82f6', '#f59e0b', '#10b981', '#f43f5e'], 
             borderWidth: 2, 
             borderColor: '#ffffff', 
@@ -213,13 +300,14 @@ window.renderCharts = function(stats, monthlyCompleted, planData, actData) {
         cutout: '65%', 
         maintainAspectRatio: false, 
         layout: {
-            padding: 15 // 차트가 박스에 닿지 않도록 여백 추가
+            padding: 15
         },
         plugins: { 
             legend: { position: 'bottom', labels: { usePointStyle: true, padding: 15, font: {size: 11} } } 
         } 
     });
 
+    // 2. 바 차트
     const months = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
     createChart('projMonthlyChart', 'bar', { 
         labels: months, 
@@ -239,6 +327,7 @@ window.renderCharts = function(stats, monthlyCompleted, planData, actData) {
         plugins: { legend: { display: false } } 
     });
 
+    // 3. 라인 차트
     const ctxElement = document.getElementById('annualPlanVsActualChart');
     const ctx = ctxElement ? ctxElement.getContext('2d') : null;
     let gradPlan = null;
@@ -299,7 +388,11 @@ window.renderCharts = function(stats, monthlyCompleted, planData, actData) {
 
 window.changePeriodType = function() {
     const typeSelect = document.getElementById('period-type-select');
-    const type = typeSelect ? typeSelect.value : 'month';
+    let type = 'month';
+    if (typeSelect) {
+        type = typeSelect.value;
+    }
+    
     const mInput = document.getElementById('period-value-month');
     const wInput = document.getElementById('period-value-week');
     
@@ -307,8 +400,10 @@ window.changePeriodType = function() {
         if (mInput) mInput.classList.remove('hidden'); 
         if (wInput) wInput.classList.add('hidden'); 
         if (mInput && !mInput.value) { 
-            const d = new Date(); 
-            mInput.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; 
+            const d = new Date();
+            let monthStr = String(d.getMonth() + 1);
+            if (monthStr.length === 1) monthStr = '0' + monthStr;
+            mInput.value = d.getFullYear() + '-' + monthStr; 
         } 
     } else { 
         if (mInput) mInput.classList.add('hidden'); 
@@ -317,14 +412,26 @@ window.changePeriodType = function() {
             wInput.value = window.getWeekString(new Date()); 
         } 
     }
-    window.processPeriodData();
+    
+    if (window.processPeriodData) {
+        window.processPeriodData();
+    }
 };
 
 window.processPeriodData = function() {
     const typeSelect = document.getElementById('period-type-select');
-    const type = typeSelect ? typeSelect.value : 'month';
-    const valInput = type === 'month' ? document.getElementById('period-value-month') : document.getElementById('period-value-week');
-    const val = valInput ? valInput.value : '';
+    let type = 'month';
+    if (typeSelect) type = typeSelect.value;
+    
+    let valInput = null;
+    if (type === 'month') {
+        valInput = document.getElementById('period-value-month');
+    } else {
+        valInput = document.getElementById('period-value-week');
+    }
+    
+    let val = '';
+    if (valInput) val = valInput.value;
     
     if (!val || !window.allDashProjects) return;
 
@@ -334,8 +441,10 @@ window.processPeriodData = function() {
     if (type === 'month') { 
         const parts = val.split('-'); 
         if (parts.length === 2) {
-            start = `${val}-01`; 
-            end = `${val}-${new Date(parts[0], parts[1], 0).getDate()}`; 
+            start = val + '-01'; 
+            let lastDayObj = new Date(parts[0], parts[1], 0);
+            let lastDayStr = lastDayObj.getDate().toString();
+            end = val + '-' + lastDayStr; 
         }
     } else { 
         if (window.getDatesFromWeek) { 
@@ -345,23 +454,40 @@ window.processPeriodData = function() {
         } 
     }
 
-    let pending = 0, progress = 0, urgent = 0, periodMdTotal = 0, mgrCounts = {}; 
-    const list = [];
+    let pending = 0;
+    let progress = 0;
+    let urgent = 0;
+    let periodMdTotal = 0;
+    let mgrCounts = {}; 
+    let list = [];
     
-    (window.allDashProjects || []).forEach(p => {
-        let relevant = (['pending', 'progress', 'inspecting'].includes(p.status) || (p.d_shipEn >= start && p.d_shipEn <= end) || (p.d_shipEst >= start && p.d_shipEst <= end));
+    window.allDashProjects.forEach(function(p) {
+        let relevant = false;
+        if (p.status === 'pending' || p.status === 'progress' || p.status === 'inspecting') {
+            relevant = true;
+        }
+        if (p.d_shipEn && p.d_shipEn >= start && p.d_shipEn <= end) {
+            relevant = true;
+        }
+        if (p.d_shipEst && p.d_shipEst >= start && p.d_shipEst <= end) {
+            relevant = true;
+        }
+        
         if (!relevant) return;
         
         let pMd = 0; 
-        (window.allDashMdLogs || []).forEach(l => { 
-            if (l.projectId === p.id && l.date >= start && l.date <= end) { 
-                pMd += parseFloat(l.md) || 0; 
-                periodMdTotal += parseFloat(l.md) || 0; 
-            } 
-        });
+        if (window.allDashMdLogs) {
+            window.allDashMdLogs.forEach(function(l) { 
+                if (l.projectId === p.id && l.date >= start && l.date <= end) { 
+                    let logMd = parseFloat(l.md) || 0;
+                    pMd += logMd; 
+                    periodMdTotal += logMd; 
+                } 
+            });
+        }
         
         if (p.status === 'pending') pending++; 
-        if (['progress', 'inspecting'].includes(p.status)) progress++;
+        if (p.status === 'progress' || p.status === 'inspecting') progress++;
         
         if (p.status !== 'completed' && p.d_shipEst) { 
             const urgentTime = new Date(p.d_shipEst).getTime() - new Date().getTime();
@@ -370,11 +496,17 @@ window.processPeriodData = function() {
             }
         }
         
-        if (p.manager && ['progress', 'inspecting'].includes(p.status)) {
-            mgrCounts[p.manager] = (mgrCounts[p.manager] || 0) + 1;
+        if (p.manager && (p.status === 'progress' || p.status === 'inspecting')) {
+            if (mgrCounts[p.manager] !== undefined) {
+                mgrCounts[p.manager]++;
+            } else {
+                mgrCounts[p.manager] = 1;
+            }
         }
         
-        list.push({ ...p, periodMd: pMd });
+        let projectDataCopy = Object.assign({}, p);
+        projectDataCopy.periodMd = pMd;
+        list.push(projectDataCopy);
     });
 
     window.currentPeriodProjects = list;
@@ -403,10 +535,18 @@ window.processPeriodData = function() {
     const elPeriodTotalMd = document.getElementById('pd-period-total-md');
     if (elPeriodTotalMd) elPeriodTotalMd.innerText = periodMdTotal.toFixed(1);
 
-    const teamCount = window.teamMembers?.length || 0;
     const elPeriodWorkload = document.getElementById('pd-period-workload');
     if (elPeriodWorkload) {
-        elPeriodWorkload.innerText = teamCount > 0 ? (periodMdTotal / (teamCount * (type === 'month' ? 20 : 5)) * 100).toFixed(1) + '%' : '0%';
+        let teamCount = 0;
+        if (window.teamMembers) teamCount = window.teamMembers.length;
+        
+        if (teamCount > 0) {
+            let workingDays = (type === 'month') ? 20 : 5;
+            let pWorkload = (periodMdTotal / (teamCount * workingDays)) * 100;
+            elPeriodWorkload.innerText = pWorkload.toFixed(1) + '%';
+        } else {
+            elPeriodWorkload.innerText = '0%';
+        }
     }
 
     const tbody = document.getElementById('period-table-body');
@@ -414,50 +554,61 @@ window.processPeriodData = function() {
         if (list.length === 0) {
             tbody.innerHTML = '<tr><td colspan="10" class="text-center p-6 text-slate-400 font-bold">내역 없음</td></tr>';
         } else {
-            const sortedList = list.sort((a, b) => b.periodMd - a.periodMd);
+            const sortedList = list.sort(function(a, b) {
+                return b.periodMd - a.periodMd;
+            });
+            
             const statusMap = { 'pending':'대기/보류', 'progress':'진행중', 'inspecting':'검수중', 'completed':'완료', 'rejected':'불가' };
             
             let htmlStr = '';
-            sortedList.forEach(p => {
+            sortedList.forEach(function(p) {
                 const safePart = p.part || '-';
                 const safeCode = p.code || '-';
                 const safeName = p.name || '-';
                 const safeEst = p.d_shipEst || '-';
                 const safeProg = p.progress || 0;
-                const safeStatus = statusMap[p.status] || p.status;
+                
+                let safeStatus = p.status;
+                if (statusMap[p.status]) safeStatus = statusMap[p.status];
+                
                 const safeEstMd = p.estMd || 0;
                 const safePeriodMd = p.periodMd.toFixed(1);
                 const safeFinalMd = p.finalMd || 0;
-                const diffMd = (parseFloat(p.finalMd || 0) - parseFloat(p.estMd || 0)).toFixed(1);
                 
-                htmlStr += `<tr class="hover:bg-slate-50 border-b border-slate-100">
-                    <td class="p-2 text-center">${safePart}</td>
-                    <td class="p-2 text-center font-bold text-indigo-700">${safeCode}</td>
-                    <td class="p-2 font-bold truncate max-w-[160px]" title="${safeName}">${safeName}</td>
-                    <td class="p-2 text-center text-rose-500 font-bold">${safeEst}</td>
-                    <td class="p-2 text-center text-emerald-600 font-bold">${safeProg}%</td>
-                    <td class="p-2 text-center text-slate-500">${safeStatus}</td>
-                    <td class="p-2 text-center">${safeEstMd}</td>
-                    <td class="p-2 text-center font-black text-indigo-600 bg-indigo-50/30">${safePeriodMd}</td>
-                    <td class="p-2 text-center text-purple-600 font-bold">${safeFinalMd}</td>
-                    <td class="p-2 text-center font-bold">${diffMd}</td>
-                </tr>`;
+                let valFinal = parseFloat(p.finalMd || 0);
+                let valEst = parseFloat(p.estMd || 0);
+                const diffMd = (valFinal - valEst).toFixed(1);
+                
+                htmlStr += '<tr class="hover:bg-slate-50 border-b border-slate-100">';
+                htmlStr += '<td class="p-2 text-center">' + safePart + '</td>';
+                htmlStr += '<td class="p-2 text-center font-bold text-indigo-700">' + safeCode + '</td>';
+                htmlStr += '<td class="p-2 font-bold truncate max-w-[160px]" title="' + safeName + '">' + safeName + '</td>';
+                htmlStr += '<td class="p-2 text-center text-rose-500 font-bold">' + safeEst + '</td>';
+                htmlStr += '<td class="p-2 text-center text-emerald-600 font-bold">' + safeProg + '%</td>';
+                htmlStr += '<td class="p-2 text-center text-slate-500">' + safeStatus + '</td>';
+                htmlStr += '<td class="p-2 text-center">' + safeEstMd + '</td>';
+                htmlStr += '<td class="p-2 text-center font-black text-indigo-600 bg-indigo-50/30">' + safePeriodMd + '</td>';
+                htmlStr += '<td class="p-2 text-center text-purple-600 font-bold">' + safeFinalMd + '</td>';
+                htmlStr += '<td class="p-2 text-center font-bold">' + diffMd + '</td>';
+                htmlStr += '</tr>';
             });
             tbody.innerHTML = htmlStr;
         }
         
         const countLabel = document.getElementById('period-table-count');
-        if (countLabel) countLabel.innerText = `총 ${list.length}건`;
+        if (countLabel) countLabel.innerText = '총 ' + list.length + '건';
     }
     
     renderPeriodCharts(type, val, list, mgrCounts, periodMdTotal);
 };
 
 function renderPeriodCharts(type, val, projects, mgrCounts, periodMdTotal) {
-    const createChart = (id, cType, data, options) => {
+    const createChart = function(id, cType, data, options) {
         const canvas = document.getElementById(id); 
         if (!canvas) return;
-        if (chartInstances[id]) chartInstances[id].destroy();
+        if (chartInstances[id]) {
+            chartInstances[id].destroy();
+        }
         chartInstances[id] = new Chart(canvas.getContext('2d'), { type: cType, data: data, options: options });
     };
 
@@ -467,7 +618,7 @@ function renderPeriodCharts(type, val, projects, mgrCounts, periodMdTotal) {
     if (type === 'month') { 
         labels1 = ['1주', '2주', '3주', '4주', '5주', '6주']; 
         data1 = [0, 0, 0, 0, 0, 0]; 
-        projects.forEach(p => { 
+        projects.forEach(function(p) { 
             if (p.status === 'completed' && p.d_shipEn && p.d_shipEn.startsWith(val)) { 
                 const parts = p.d_shipEn.split('-');
                 if(parts.length >= 3) {
@@ -480,7 +631,7 @@ function renderPeriodCharts(type, val, projects, mgrCounts, periodMdTotal) {
     } else { 
         labels1 = ['월', '화', '수', '목', '금']; 
         data1 = [0, 0, 0, 0, 0]; 
-        projects.forEach(p => { 
+        projects.forEach(function(p) { 
             if (p.status === 'completed' && p.d_shipEn) { 
                 const dDate = new Date(p.d_shipEn);
                 if (!isNaN(dDate.getTime())) {
@@ -517,7 +668,7 @@ function renderPeriodCharts(type, val, projects, mgrCounts, periodMdTotal) {
     });
     
     let estTotal = 0; 
-    projects.forEach(p => {
+    projects.forEach(function(p) {
         estTotal += parseFloat(p.estMd) || 0;
     });
     
@@ -541,11 +692,19 @@ function renderPeriodCharts(type, val, projects, mgrCounts, periodMdTotal) {
     let mgrL = Object.keys(mgrCounts);
     let mgrD = Object.values(mgrCounts);
     
+    let chartLabels = ['없음'];
+    let chartData = [0];
+    
+    if (mgrL.length > 0) {
+        chartLabels = mgrL;
+        chartData = mgrD;
+    }
+    
     createChart('periodChart3', 'bar', { 
-        labels: mgrL.length > 0 ? mgrL : ['없음'], 
+        labels: chartLabels, 
         datasets: [{ 
             label: '진행중 PJT', 
-            data: mgrD.length > 0 ? mgrD : [0], 
+            data: chartData, 
             backgroundColor: '#8b5cf6', 
             borderRadius: 6 
         }] 
@@ -561,34 +720,34 @@ function renderPeriodCharts(type, val, projects, mgrCounts, periodMdTotal) {
 }
 
 // ==========================================
-// 🌟 엑셀 다운로드 (디자인 고급화)
+// 🌟 엑셀 다운로드 (관리자 전용)
 // ==========================================
 window.exportDashboardExcel = async function() {
-    if (window.userProfile?.role !== 'admin') {
-        return window.showToast('보고서 다운로드는 관리자만 가능합니다.', 'error');
+    if (window.userProfile && window.userProfile.role !== 'admin') {
+        if (window.showToast) {
+            window.showToast('보고서 다운로드는 관리자만 가능합니다.', 'error');
+        }
+        return;
     }
+    
     if (typeof ExcelJS === 'undefined') {
-        return window.showToast("ExcelJS 모듈이 로드되지 않았습니다. 인터넷 연결을 확인해주세요.", "error");
+        if (window.showToast) {
+            window.showToast("ExcelJS 모듈이 로드되지 않았습니다. 인터넷 연결을 확인해주세요.", "error");
+        }
+        return;
     }
 
     try {
-        window.showToast("엑셀 보고서를 생성 중입니다...", "success");
+        if (window.showToast) {
+            window.showToast("엑셀 파일을 생성 중입니다...", "success");
+        }
         const wb = new ExcelJS.Workbook();
         
-        // 🌟 1. 연간 시트 (디자인 개선)
+        // 1. 연간 시트
         const ws1 = wb.addWorksheet('연간_현황_요약', { views: [{ showGridLines: false }] });
         ws1.columns = [{ width: 25 }, { width: 20 }];
-        
-        // 타이틀 병합 및 꾸미기
-        ws1.mergeCells('A1:B1');
-        const titleCell1 = ws1.getCell('A1');
-        titleCell1.value = `📊 [${window.currentDashStats.year}년] 프로젝트 연간 현황 요약`;
-        titleCell1.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
-        titleCell1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } }; // Indigo-600
-        titleCell1.alignment = { vertical: 'middle', horizontal: 'center' };
-        ws1.getRow(1).height = 30;
-        
-        ws1.addRow([]); // 빈 줄
+        ws1.getCell('A1').value = '[' + window.currentDashStats.year + '년] 프로젝트 연간 현황 요약';
+        ws1.getCell('A1').font = { bold: true, size: 14 };
         
         const sumData = [
             ['지표', '수치'],
@@ -601,93 +760,84 @@ window.exportDashboardExcel = async function() {
             ['목표대비 출하 평균 오차', window.currentDashStats.avgShipError + ' 일']
         ];
         
-        sumData.forEach((row, i) => {
+        sumData.forEach(function(row, i) {
             let r = ws1.addRow(row);
             if (i === 0) { 
-                r.font = { bold: true, color: { argb: 'FFFFFFFF' } }; 
-                r.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF64748B' } }; // Slate-500
-                r.alignment = { horizontal: 'center' };
-            } else {
-                r.getCell(1).font = { bold: true, color: { argb: 'FF334155' } }; // Slate-700
-                r.getCell(2).alignment = { horizontal: 'right' };
+                r.font = { bold: true }; 
+                r.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } }; 
             }
-            r.eachCell(c => { 
+            r.eachCell(function(c) { 
                 c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }; 
             });
         });
 
-        // 🌟 2. 기간별 상세 시트 (디자인 개선)
+        // 2. 기간별 상세 시트
         const typeSelect = document.getElementById('period-type-select');
-        const periodTypeStr = (typeSelect && typeSelect.value === 'month') 
-            ? document.getElementById('period-value-month')?.value 
-            : document.getElementById('period-value-week')?.value;
+        let periodTypeStr = '';
+        if (typeSelect && typeSelect.value === 'month') {
+            let mEl = document.getElementById('period-value-month');
+            if (mEl) periodTypeStr = mEl.value;
+        } else {
+            let wEl = document.getElementById('period-value-week');
+            if (wEl) periodTypeStr = wEl.value;
+        }
             
         const ws2 = wb.addWorksheet('조회기간_프로젝트상세', { views: [{ showGridLines: false }] });
         ws2.columns = [
-            { width: 12 }, { width: 18 }, { width: 45 }, { width: 15 }, { width: 12 }, 
-            { width: 15 }, { width: 12 }, { width: 15 }, { width: 12 }, { width: 12 }
+            { width: 10 }, { width: 15 }, { width: 40 }, { width: 15 }, { width: 10 }, 
+            { width: 15 }, { width: 12 }, { width: 15 }, { width: 12 }, { width: 10 }
         ];
         
-        // 타이틀 병합
-        ws2.mergeCells('A1:J1');
-        const titleCell2 = ws2.getCell('A1');
-        titleCell2.value = `📅 [${periodTypeStr}] 기간 내 프로젝트 리스트`;
-        titleCell2.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
-        titleCell2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0EA5E9' } }; // Sky-500
-        titleCell2.alignment = { vertical: 'middle', horizontal: 'center' };
-        ws2.getRow(1).height = 30;
+        ws2.getCell('A1').value = '[' + periodTypeStr + '] 기간 내 프로젝트 리스트';
+        ws2.getCell('A1').font = { bold: true, size: 14 };
 
-        ws2.addRow([]); // 빈 줄
-
-        const headers = ['파트', 'PJT 코드', '프로젝트명', '예정출하일', '진행률(%)', '현재상태', '예정MD', '기간내 투입MD', '최종MD', '편차'];
+        const headers = ['파트', 'PJT 코드', '프로젝트명', '예정출하일', '진행률(%)', '현재상태', '예정MD', '해당기간 투입MD', '최종MD', '편차'];
         let hr = ws2.addRow(headers);
         hr.font = { bold: true, color: { argb: 'FFFFFFFF' } }; 
-        hr.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF475569' } }; // Slate-600
-        hr.eachCell(c => { 
+        hr.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } };
+        hr.eachCell(function(c) { 
             c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }; 
-            c.alignment = { horizontal: 'center', vertical: 'middle' }; 
+            c.alignment = { horizontal: 'center' }; 
         });
-        ws2.getRow(3).height = 25;
 
         const sMap = { 'pending': '대기/보류', 'progress': '진행중', 'inspecting': '검수중', 'completed': '완료', 'rejected': '불가' };
-        const sortedProjects = [...window.currentPeriodProjects].sort((a, b) => b.periodMd - a.periodMd);
         
-        sortedProjects.forEach((p, index) => {
+        const sortedProjects = window.currentPeriodProjects.slice().sort(function(a, b) {
+            return b.periodMd - a.periodMd;
+        });
+        
+        sortedProjects.forEach(function(p) {
+            let safeStatus = p.status;
+            if (sMap[p.status]) safeStatus = sMap[p.status];
+            
             let variance = (parseFloat(p.finalMd || 0) - parseFloat(p.estMd || 0)).toFixed(1);
+            
             let row = ws2.addRow([
                 p.part || '-', 
                 p.code || '-', 
                 p.name || '-', 
                 p.d_shipEst || '-', 
                 p.progress || 0, 
-                sMap[p.status] || p.status, 
-                parseFloat(p.estMd || 0), 
-                parseFloat(p.periodMd.toFixed(1)), 
-                parseFloat(p.finalMd || 0), 
-                parseFloat(variance)
+                safeStatus, 
+                p.estMd || 0, 
+                parseFloat(p.periodMd).toFixed(1), 
+                p.finalMd || 0, 
+                variance
             ]);
             
-            // 데이터 셀 스타일 적용
-            row.eachCell((c, colNumber) => { 
-                c.border = { top: { style: 'thin', color: {argb: 'FFCBD5E1'} }, left: { style: 'thin', color: {argb: 'FFCBD5E1'} }, bottom: { style: 'thin', color: {argb: 'FFCBD5E1'} }, right: { style: 'thin', color: {argb: 'FFCBD5E1'} } }; 
-                c.alignment = { vertical: 'middle' };
-                if ([1, 2, 4, 5, 6].includes(colNumber)) c.alignment.horizontal = 'center'; // 문자열, 날짜, 퍼센트 중앙정렬
-                if ([7, 8, 9, 10].includes(colNumber)) {
-                    c.alignment.horizontal = 'right'; // 숫자는 우측정렬
-                    c.numFmt = '#,##0.0'; 
-                }
+            row.eachCell(function(c) { 
+                c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }; 
             });
-            // 지그재그 배경색
-            if (index % 2 === 1) {
-                row.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } }; });
-            }
         });
 
         const buffer = await wb.xlsx.writeBuffer();
-        saveAs(new Blob([buffer]), `AXMS_월말보고서_${new Date().toISOString().split('T')[0]}.xlsx`);
+        let todayStr = new Date().toISOString().split('T')[0];
+        saveAs(new Blob([buffer]), 'AXMS_월말보고서_' + todayStr + '.xlsx');
         
     } catch (e) { 
         console.error(e); 
-        window.showToast("엑셀 파일 생성 중 오류가 발생했습니다.", "error"); 
+        if (window.showToast) {
+            window.showToast("엑셀 파일 생성 중 오류가 발생했습니다.", "error"); 
+        }
     }
 };
