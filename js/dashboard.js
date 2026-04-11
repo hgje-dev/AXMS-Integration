@@ -1,8 +1,7 @@
 /* eslint-disable */
 import { db } from './firebase.js';
-import { collection, query, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { collection, onSnapshot } from '[https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js](https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js)';
 
-let homeReqSnapshotUnsubscribe = null;
 let homeProjSnapshotUnsubscribe = null;
 let homeMdLogSnapshotUnsubscribe = null;
 let chartInstances = {};
@@ -24,7 +23,6 @@ window.loadHomeDashboards = function() {
             exportBtn.classList.remove('hidden');
         }
 
-        if (homeReqSnapshotUnsubscribe) homeReqSnapshotUnsubscribe();
         if (homeProjSnapshotUnsubscribe) homeProjSnapshotUnsubscribe();
         if (homeMdLogSnapshotUnsubscribe) homeMdLogSnapshotUnsubscribe();
         
