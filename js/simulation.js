@@ -1,6 +1,6 @@
 /* eslint-disable */
 import { db } from './firebase.js';
-import { collection, doc, setDoc, getDoc, getDocs, addDoc, deleteDoc, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { collection, doc, setDoc, getDoc, getDocs, addDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 let simTimer = null;
 window.draggedUnitInfo = null;
@@ -205,20 +205,17 @@ window.runSimulation = () => {
         if(document.getElementById('out-total-personnel')) document.getElementById('out-total-personnel').innerText=rP; 
         if(document.getElementById('out-avg-skill')) document.getElementById('out-avg-skill').innerText=sMult.toFixed(2);
         
-        const inP = parseInt(document.getElementById('internal-personnel')?.value)||0;
         const lCost = parseFloat(document.getElementById('labor-cost')?.value)||300000; 
         const pExp = parseFloat(document.getElementById('planned-expense')?.value)||0; 
         const stD = document.getElementById('start-date')?.value || window.getLocalDateStr(new Date());
-        const tgD = document.getElementById('target-date')?.value;
         
         let lR = Math.max(0.7, Math.pow(curve, Math.log2(qty))); 
-        let bArr = new Float32Array(iters), rArr = new Float32Array(iters), tMd = 0, scDays = 0;
+        let bArr = new Float32Array(iters), rArr = new Float32Array(iters), tMd = 0;
         
-        window.currentProcessData.forEach((p,i) => {
+        window.currentProcessData.forEach((p) => {
             let pt = p.pType||'md';
             if(pt==='auto') { let um=0; (p.unitData||[]).forEach(u=>um+=(parseFloat(u.q)||0)*(parseFloat(u.m)||0)); tMd+=um; } 
             else if(pt==='md') tMd+=(parseFloat(p.q)||0)*(parseFloat(p.m)||0); 
-            else if(pt.startsWith('schedule')) scDays+=parseFloat(p.m)||0;
         });
 
         for(let i=0; i<iters; i++) {
@@ -288,15 +285,7 @@ window.renderGanttChart = () => {
         
         let leftPct = (curDayOffset / totalDays) * 100; let widthPct = (days / totalDays) * 100;
         let sStr = window.getLocalDateStr(startD).substring(5).replace('-','/'); let eStr = window.getLocalDateStr(endD).substring(5).replace('-','/');
-        html += `<div class="flex items-center text-xs group z-10">
-            <div class="w-56 font-bold truncate pr-4 text-right">${item.name}</div>
-            <div class="flex-1 relative h-7 bg-slate-100 rounded-full overflow-visible border border-slate-200">
-                <div class="gantt-bar absolute top-0 h-full rounded-full bg-indigo-400 flex items-center justify-center px-2" style="left: ${leftPct}%; width: ${widthPct}%; min-width: 70px;">
-                     <span class="text-white text-[10px] font-bold">${days.toFixed(1)}일</span>
-                </div>
-            </div>
-            <div class="w-[100px] text-left text-slate-400 font-mono text-[11px] pl-4">${sStr} ~ ${eStr}</div>
-        </div>`;
+        html += `<div class="flex items-center text-xs group z-10"><div class="w-56 font-bold truncate pr-4 text-right">${item.name}</div><div class="flex-1 relative h-7 bg-slate-100 rounded-full overflow-visible border border-slate-200"><div class="gantt-bar absolute top-0 h-full rounded-full bg-indigo-400 flex items-center justify-center px-2" style="left: ${leftPct}%; width: ${widthPct}%; min-width: 70px;"><span class="text-white text-[10px] font-bold">${days.toFixed(1)}일</span></div></div><div class="w-[100px] text-left text-slate-400 font-mono text-[11px] pl-4">${sStr} ~ ${eStr}</div></div>`;
         curDayOffset += days;
     });
     html += '</div>'; ganttEl.innerHTML = html;
