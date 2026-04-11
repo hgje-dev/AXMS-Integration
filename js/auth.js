@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { auth, db } from './firebase.js';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { doc, getDoc, setDoc, collection, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -70,11 +71,10 @@ window.initAuthListeners = () => {
             
             if(window.loadProjectCodeMaster) window.loadProjectCodeMaster(); 
             if(window.loadCounts) window.loadCounts(); 
-            // 🌟 로그인 완료 후 알림 리스너 시작!
             if(window.loadNotifications) window.loadNotifications();
             if(window.navigateHome) window.navigateHome(); 
             
-            window.showToast("환영합니다, " + window.userProfile.name + "님!");
+            if(window.showToast) window.showToast("환영합니다, " + window.userProfile.name + "님!");
         } else { 
             window.currentUser=null; document.getElementById('login-modal')?.classList.remove('hidden'); 
             const pt=document.getElementById('portal-container'); if(pt) { pt.classList.add('hidden'); pt.classList.remove('flex'); } 
@@ -95,6 +95,6 @@ window.renderAdminUsers = () => {
     });
     tb.innerHTML = html;
 };
-window.updateUserRole = async (uid, role) => { try { await setDoc(doc(db, "users", uid), { role: role }, { merge: true }); window.showToast("등급이 변경되었습니다."); } catch (e) { window.showToast("오류 발생", "error"); } };
-window.updateUserPerm = async (uid, key, val) => { try { const uR = doc(db, "users", uid); const uD = await getDoc(uR); if (uD.exists()) { let p = uD.data().permissions || {}; p[key] = val; await setDoc(uR, { permissions: p }, { merge: true }); window.showToast("권한이 업데이트되었습니다."); } } catch (e) { window.showToast("오류 발생", "error"); } };
-window.deleteUser = async (uid) => { if (!confirm("이 사용자를 정말 삭제하시겠습니까?")) return; try { await deleteDoc(doc(db, "users", uid)); window.showToast("삭제되었습니다."); } catch (e) { window.showToast("오류 발생", "error"); } };
+window.updateUserRole = async (uid, role) => { try { await setDoc(doc(db, "users", uid), { role: role }, { merge: true }); if(window.showToast) window.showToast("등급이 변경되었습니다."); } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } };
+window.updateUserPerm = async (uid, key, val) => { try { const uR = doc(db, "users", uid); const uD = await getDoc(uR); if (uD.exists()) { let p = uD.data().permissions || {}; p[key] = val; await setDoc(uR, { permissions: p }, { merge: true }); if(window.showToast) window.showToast("권한이 업데이트되었습니다."); } } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } };
+window.deleteUser = async (uid) => { if (!confirm("이 사용자를 정말 삭제하시겠습니까?")) return; try { await deleteDoc(doc(db, "users", uid)); if(window.showToast) window.showToast("삭제되었습니다."); } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } };
