@@ -63,4 +63,85 @@
             <div class="flex-1 relative w-full h-full pb-2"><canvas id="annualPlanVsActualChart"></canvas></div>
         </div>
     </div>
+
+    <div class="mt-8 border-t border-slate-200 pt-8 flex flex-col gap-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between mb-2">
+            <div>
+                <h2 class="text-xl font-black text-indigo-800 flex items-center gap-2"><i class="fa-regular fa-calendar-check text-indigo-500"></i> 기간별 프로젝트 상세 분석</h2>
+            </div>
+            <div class="flex items-center gap-2 mt-4 md:mt-0">
+                <select id="period-type-select" class="bg-white border border-slate-200 shadow-sm px-3 py-2 rounded-xl text-sm font-bold text-slate-700 outline-none cursor-pointer hover:border-indigo-300 transition-colors" onchange="window.changePeriodType()">
+                    <option value="month">월간 조회</option>
+                    <option value="week">주간 조회</option>
+                </select>
+                <div class="flex items-center gap-2 bg-white border border-slate-200 shadow-sm px-3 py-1.5 rounded-xl focus-within:border-indigo-400 transition-colors">
+                    <i class="fa-solid fa-magnifying-glass text-slate-400"></i>
+                    <label class="text-xs font-bold text-slate-600 ml-1">조회 기간</label>
+                    <input type="month" id="period-value-month" class="px-2 py-1 border-0 text-sm font-black text-indigo-700 bg-transparent outline-none cursor-pointer" onchange="window.processPeriodData()">
+                    <input type="week" id="period-value-week" class="px-2 py-1 border-0 text-sm font-black text-indigo-700 bg-transparent outline-none cursor-pointer hidden" onchange="window.processPeriodData()">
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[3px] border-l-slate-400">
+                <p class="text-[11px] font-bold text-slate-500 mb-1">대기 / 보류</p>
+                <p class="text-2xl font-black text-slate-700" id="pd-period-pending">0</p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[3px] border-l-blue-400">
+                <p class="text-[11px] font-bold text-slate-500 mb-1">작업 진행중</p>
+                <p class="text-2xl font-black text-blue-600" id="pd-period-progress">0</p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[3px] border-l-rose-400">
+                <p class="text-[11px] font-bold text-slate-500 mb-1">납기 임박 (D-7 이내)</p>
+                <p class="text-2xl font-black text-rose-600" id="pd-period-urgent">0</p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[3px] border-l-emerald-400">
+                <p class="text-[11px] font-bold text-slate-500 mb-1">해당 기간 부하율</p>
+                <p class="text-2xl font-black text-emerald-600" id="pd-period-workload">0.0%</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="bg-white rounded-3xl p-6 border shadow-sm flex flex-col h-[320px]">
+                <h3 class="text-sm font-extrabold text-slate-700 mb-4 border-b border-slate-100 pb-3" id="chart-title-1">주차별 완료(출하) 추이</h3>
+                <div class="flex-1 relative w-full h-full pb-2"><canvas id="periodChart1"></canvas></div>
+            </div>
+            <div class="bg-white rounded-3xl p-6 border shadow-sm flex flex-col h-[320px]">
+                <h3 class="text-sm font-extrabold text-slate-700 mb-4 border-b border-slate-100 pb-3" id="chart-title-2">계획공수 vs 실제 투입공수</h3>
+                <div class="flex-1 relative w-full h-full pb-2"><canvas id="periodChart2"></canvas></div>
+            </div>
+            <div class="bg-white rounded-3xl p-6 border shadow-sm flex flex-col h-[320px]">
+                <h3 class="text-sm font-extrabold text-slate-700 mb-4 border-b border-slate-100 pb-3">담당자별 진행 프로젝트</h3>
+                <div class="flex-1 relative w-full h-full pb-2"><canvas id="periodChart3"></canvas></div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col mt-4">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 class="font-extrabold text-slate-800 text-sm">해당 기간 진행/활성 프로젝트 리스트</h3>
+                <span class="bg-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-1 rounded" id="period-table-count">총 0건</span>
+            </div>
+            <div class="overflow-x-auto custom-scrollbar max-h-[400px]">
+                <table class="w-full text-left border-collapse text-[11px] whitespace-nowrap">
+                    <thead class="bg-white text-slate-500 sticky top-0 z-10 shadow-sm border-b">
+                        <tr>
+                            <th class="p-3 font-bold text-center">파트</th>
+                            <th class="p-3 font-bold text-center">PJT 코드</th>
+                            <th class="p-3 font-bold">프로젝트명</th>
+                            <th class="p-3 font-bold text-center text-rose-500">예정출하일</th>
+                            <th class="p-3 font-bold text-center text-emerald-500">진행률</th>
+                            <th class="p-3 font-bold text-center">현재상태</th>
+                            <th class="p-3 font-bold text-center">예정MD</th>
+                            <th class="p-3 font-bold text-center bg-indigo-50/50 text-indigo-700" id="th-period-md">해당월 투입MD</th>
+                            <th class="p-3 font-bold text-center text-purple-600">최종MD</th>
+                            <th class="p-3 font-bold text-center text-amber-500">편차</th>
+                        </tr>
+                    </thead>
+                    <tbody id="period-table-body" class="divide-y divide-slate-100 text-slate-700">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 </div>
