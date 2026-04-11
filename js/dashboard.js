@@ -1,7 +1,8 @@
 /* eslint-disable */
 import { db } from './firebase.js';
-import { collection, onSnapshot } from '[https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js](https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js)';
+import { collection, query, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
+let homeReqSnapshotUnsubscribe = null;
 let homeProjSnapshotUnsubscribe = null;
 let homeMdLogSnapshotUnsubscribe = null;
 let chartInstances = {};
@@ -66,6 +67,7 @@ window.processDashboardData = function() {
         
         if (window.allDashProjects) {
             window.allDashProjects.forEach(function(p) { 
+                if (p.d_shipEst) years.add(parseInt(p.d_shipEst.substring(0, 4))); 
                 if (p.d_shipEn) years.add(parseInt(p.d_shipEn.substring(0, 4))); 
             });
         }
@@ -113,7 +115,7 @@ window.processDashboardData = function() {
                 const status = getSafeString(data.status);
                 
                 let isInYear = false;
-                if (shipEn.startsWith(year) || status === 'pending' || status === 'progress' || status === 'inspecting') {
+                if (shipEn.startsWith(year) || shipEst.startsWith(year) || status === 'pending' || status === 'progress' || status === 'inspecting') {
                     isInYear = true;
                 }
 
@@ -125,18 +127,21 @@ window.processDashboardData = function() {
                     stats[status] = 1;
                 }
                 
-                if (shipEn.startsWith(year)) { 
-                    let mIdx = parseInt(shipEn.split('-')[1]) - 1; 
+                if (shipEst.startsWith(year)) { 
+                    let mIdx = parseInt(shipEst.split('-')[1]) - 1; 
                     if (mIdx >= 0 && mIdx < 12) {
                         annualPlanData[mIdx] += parseFloat(data.estMd) || 0; 
                     }
                 }
                 
-                if (status === 'completed' && shipEn.startsWith(year)) {
+                if (status === 'completed' && (shipEn.startsWith(year) || shipEst.startsWith(year))) {
                     stats.completed++; 
-                    let mIdx = parseInt(shipEn.split('-')[1]) - 1; 
-                    if (mIdx >= 0 && mIdx < 12) {
-                        monthlyCompleted[mIdx]++; 
+                    let targetDate = shipEn || shipEst;
+                    if (targetDate.startsWith(year)) { 
+                        let mIdx = parseInt(targetDate.split('-')[1]) - 1; 
+                        if (mIdx >= 0 && mIdx < 12) {
+                            monthlyCompleted[mIdx]++; 
+                        }
                     }
                 }
                 
@@ -549,14 +554,14 @@ window.exportDashboardExcel = async function() {
         if (window.showToast) window.showToast('보고서 다운로드는 관리자만 가능합니다.', 'error');
         return;
     }
-    if (typeof ExcelJS === 'undefined') {
+    if (typeof window.ExcelJS === 'undefined') {
         if (window.showToast) window.showToast("ExcelJS 모듈이 로드되지 않았습니다. 인터넷 연결을 확인해주세요.", "error");
         return;
     }
 
     try {
         if (window.showToast) window.showToast("엑셀 파일을 생성 중입니다...", "success");
-        const wb = new ExcelJS.Workbook();
+        const wb = new window.ExcelJS.Workbook();
         
         const ws1 = wb.addWorksheet('연간_현황_요약', { views: [{ showGridLines: false }] });
         ws1.columns = [{ width: 25 }, { width: 20 }];
@@ -615,7 +620,7 @@ window.exportDashboardExcel = async function() {
 
         const buffer = await wb.xlsx.writeBuffer();
         let todayStr = new Date().toISOString().split('T')[0];
-        saveAs(new Blob([buffer]), 'AXMS_월말보고서_' + todayStr + '.xlsx');
+        window.saveAs(new Blob([buffer]), 'AXMS_월말보고서_' + todayStr + '.xlsx');
         
     } catch (e) { 
         console.error(e); 
