@@ -38,7 +38,7 @@ window.loadHomeDashboards = function() {
 
 window.processDashboardData = function() {
     try {
-        // 1. 기준 연도 동적 자동 생성
+        // 1. 기준 연도 동적 자동 생성 (과거/미래 데이터 감지하여 자동 년도 추가)
         let years = new Set(); const currentYear = new Date().getFullYear(); years.add(currentYear);
         (window.allDashProjects || []).forEach(p => { if(p.d_shipEst) years.add(parseInt(p.d_shipEst.substring(0,4))); if(p.d_shipEn) years.add(parseInt(p.d_shipEn.substring(0,4))); });
         (window.allDashMdLogs || []).forEach(l => { if(l.date) years.add(parseInt(l.date.substring(0,4))); });
@@ -60,6 +60,7 @@ window.processDashboardData = function() {
             const shipEn = getSafeString(data.d_shipEn), shipEst = getSafeString(data.d_shipEst), status = getSafeString(data.status);
             let isInYear = (shipEn.startsWith(year) || shipEst.startsWith(year) || ['pending','progress','inspecting'].includes(status));
             if(!isInYear) return;
+            
             stats[status] = (stats[status] || 0) + 1;
             if(shipEst.startsWith(year)) { let mIdx = parseInt(shipEst.split('-')[1]) - 1; if(mIdx >= 0 && mIdx < 12) annualPlanData[mIdx] += parseFloat(data.estMd) || 0; }
             if(status === 'completed' && (shipEn.startsWith(year) || shipEst.startsWith(year))) {
@@ -102,33 +103,34 @@ window.renderCharts = function(stats, monthlyCompleted, planData, actData) {
         chartInstances[id] = new Chart(canvas.getContext('2d'), { type, data, options });
     };
 
-    // 🌟 파이 차트 고급화 (도넛 형태, 보더 라운딩 처리)
+    // 🌟 1. 파이 차트 고급화 (도넛 형태, 보더 라운딩 처리, 간격 추가)
     createChart('projPieChart', 'doughnut', {
         labels: ['대기/보류', '제작중', '검수중', '완료', '불가'],
         datasets: [{ 
             data: [stats.pending||0, stats.progress||0, stats.inspecting||0, stats.completed||0, stats.rejected||0], 
             backgroundColor: ['#94a3b8', '#3b82f6', '#f59e0b', '#10b981', '#f43f5e'], 
-            borderWidth: 2, borderColor: '#ffffff', hoverOffset: 6 
+            borderWidth: 3, borderColor: '#ffffff', borderRadius: 4, hoverOffset: 6 
         }]
-    }, { cutout: '70%', maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20 } } } });
+    }, { cutout: '70%', maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20, font: {size: 11} } } } });
 
+    // 2. 바 차트 (막대 곡선 처리)
     const months = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
     createChart('projMonthlyChart', 'bar', { 
         labels: months, datasets: [{ label: '출하 완료', data: monthlyCompleted, backgroundColor: '#10b981', borderRadius: 6, maxBarThickness: 30 }] 
-    }, { maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, border: { dash: [4, 4] } } }, plugins: { legend: { display: false } } });
+    }, { maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { stepSize: 1 }, border: { dash: [4, 4] } } }, plugins: { legend: { display: false } } });
 
-    // 🌟 라인 차트 고급화 (Gradient 배경 채우기, 라인 곡선)
+    // 🌟 3. 라인 차트 고급화 (Gradient 배경 채우기, 라인 곡선)
     const ctx = document.getElementById('annualPlanVsActualChart')?.getContext('2d');
-    let gradientPlan = ctx ? ctx.createLinearGradient(0, 0, 0, 300) : null;
-    let gradientAct = ctx ? ctx.createLinearGradient(0, 0, 0, 300) : null;
-    if(gradientPlan) { gradientPlan.addColorStop(0, 'rgba(203, 213, 225, 0.4)'); gradientPlan.addColorStop(1, 'rgba(203, 213, 225, 0)'); }
-    if(gradientAct) { gradientAct.addColorStop(0, 'rgba(99, 102, 241, 0.4)'); gradientAct.addColorStop(1, 'rgba(99, 102, 241, 0)'); }
+    let gradPlan = ctx ? ctx.createLinearGradient(0, 0, 0, 300) : null;
+    let gradAct = ctx ? ctx.createLinearGradient(0, 0, 0, 300) : null;
+    if(gradPlan) { gradPlan.addColorStop(0, 'rgba(203, 213, 225, 0.4)'); gradPlan.addColorStop(1, 'rgba(203, 213, 225, 0)'); }
+    if(gradAct) { gradAct.addColorStop(0, 'rgba(99, 102, 241, 0.4)'); gradAct.addColorStop(1, 'rgba(99, 102, 241, 0)'); }
 
     createChart('annualPlanVsActualChart', 'line', { 
         labels: months, 
         datasets: [
-            { label: '계획 MD', data: planData, borderColor: '#cbd5e1', backgroundColor: gradientPlan, fill: true, tension: 0.4, borderWidth: 3, pointRadius: 4, pointHoverRadius: 6 }, 
-            { label: '실적 MD', data: actData, borderColor: '#6366f1', backgroundColor: gradientAct, fill: true, tension: 0.4, borderWidth: 3, pointRadius: 4, pointHoverRadius: 6 }
+            { label: '계획 MD', data: planData, borderColor: '#cbd5e1', backgroundColor: gradPlan, fill: true, tension: 0.4, borderWidth: 3, pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: '#fff', pointBorderWidth: 2 }, 
+            { label: '실적 MD', data: actData, borderColor: '#6366f1', backgroundColor: gradAct, fill: true, tension: 0.4, borderWidth: 3, pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: '#fff', pointBorderWidth: 2 }
         ] 
     }, { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, border: { dash: [4, 4] } } }, plugins: { legend: { position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 8 } } } });
 };
@@ -163,9 +165,13 @@ window.processPeriodData = function() {
 
     window.currentPeriodProjects = list;
 
-    document.getElementById('pd-period-pending').innerText = pending; document.getElementById('pd-period-progress').innerText = progress; document.getElementById('pd-period-urgent').innerText = urgent;
-    
-    // 🌟 총 투입 공수 수치 업데이트
+    // 🌟 직관적인 텍스트 업데이트
+    if (type === 'month') { document.getElementById('label-period-md').innerText = "월간 총 투입 공수"; document.getElementById('th-period-md').innerText = "해당월 투입MD"; }
+    else { document.getElementById('label-period-md').innerText = "주간 총 투입 공수"; document.getElementById('th-period-md').innerText = "해당주 투입MD"; }
+
+    document.getElementById('pd-period-pending').innerText = pending; 
+    document.getElementById('pd-period-progress').innerText = progress; 
+    document.getElementById('pd-period-urgent').innerText = urgent;
     if(document.getElementById('pd-period-total-md')) document.getElementById('pd-period-total-md').innerText = periodMdTotal.toFixed(1);
 
     const team = window.teamMembers?.length || 0;
@@ -175,9 +181,9 @@ window.processPeriodData = function() {
     if(tbody) {
         tbody.innerHTML = list.sort((a,b) => b.periodMd - a.periodMd).map(p => {
             const statusMap = { 'pending':'대기/보류', 'progress':'진행중', 'inspecting':'검수중', 'completed':'완료', 'rejected':'불가' };
-            return `<tr class="hover:bg-slate-50 border-b">
+            return `<tr class="hover:bg-slate-50 border-b border-slate-100">
                 <td class="p-2 text-center">${p.part||'-'}</td><td class="p-2 text-center font-bold text-indigo-700">${p.code||'-'}</td>
-                <td class="p-2 font-bold truncate max-w-[160px]" title="${p.name||'-'}">${p.name||'-'}</td><td class="p-2 text-center text-rose-500">${p.d_shipEst||'-'}</td>
+                <td class="p-2 font-bold truncate max-w-[160px]" title="${p.name||'-'}">${p.name||'-'}</td><td class="p-2 text-center text-rose-500 font-bold">${p.d_shipEst||'-'}</td>
                 <td class="p-2 text-center text-emerald-600 font-bold">${p.progress||0}%</td><td class="p-2 text-center text-slate-500">${statusMap[p.status]||p.status}</td>
                 <td class="p-2 text-center">${p.estMd||0}</td><td class="p-2 text-center font-black text-indigo-600 bg-indigo-50/30">${p.periodMd.toFixed(1)}</td>
                 <td class="p-2 text-center text-purple-600 font-bold">${p.finalMd||0}</td><td class="p-2 text-center font-bold">${(parseFloat(p.finalMd||0) - parseFloat(p.estMd||0)).toFixed(1)}</td>
@@ -199,36 +205,34 @@ function renderPeriodCharts(type, val, projects, mgrCounts, periodMdTotal) {
     if (type === 'month') { labels = ['1주','2주','3주','4주','5주','6주']; data = [0,0,0,0,0,0]; projects.forEach(p => { if (p.status === 'completed' && p.d_shipEn?.startsWith(val)) { data[Math.min(5, Math.floor((parseInt(p.d_shipEn.split('-')[2])-1)/7))]++; } }); }
     else { labels = ['월','화','수','목','금']; data = [0,0,0,0,0]; projects.forEach(p => { if (p.status === 'completed' && p.d_shipEn) { const d = new Date(p.d_shipEn).getDay()-1; if(d>=0 && d<5) data[d]++; } }); }
     
-    // 주차별 선그래프 곡선화
-    createChart('periodChart1', 'line', { labels, datasets: [{ label: '완료 건수', data, borderColor: '#10b981', backgroundColor: '#10b981', tension: 0.4, borderWidth: 3, pointRadius: 4 }] }, { maintainAspectRatio: false, scales: { x:{grid:{display:false}}, y: { beginAtZero: true, ticks: { stepSize: 1 }, border: { dash: [4, 4] } } }, plugins: { legend: { display: false } } });
+    // 🌟 곡선 라인 차트 고급화
+    createChart('periodChart1', 'line', { labels, datasets: [{ label: '완료 건수', data, borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.2)', fill: true, tension: 0.4, borderWidth: 3, pointRadius: 4, pointBackgroundColor: '#fff', pointBorderWidth: 2 }] }, { maintainAspectRatio: false, scales: { x:{grid:{display:false}}, y: { beginAtZero: true, ticks: { stepSize: 1 }, border: { dash: [4, 4] } } }, plugins: { legend: { display: false } } });
     
     let est = 0; projects.forEach(p => est += parseFloat(p.estMd) || 0);
-    createChart('periodChart2', 'bar', { labels: ['현재 기간'], datasets: [{ label: '계획 MD', data: [est], backgroundColor: '#cbd5e1', borderRadius: 6 }, { label: '실적 MD', data: [periodMdTotal], backgroundColor: '#6366f1', borderRadius: 6 }] }, { maintainAspectRatio: false, scales: { x:{grid:{display:false}}, y: { beginAtZero: true, border: { dash: [4, 4] } } }, plugins: { legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8 } } } });
+    createChart('periodChart2', 'bar', { labels: ['현재 기간'], datasets: [{ label: '계획 MD', data: [est], backgroundColor: '#cbd5e1', borderRadius: 6, maxBarThickness: 60 }, { label: '실적 MD', data: [periodMdTotal], backgroundColor: '#6366f1', borderRadius: 6, maxBarThickness: 60 }] }, { maintainAspectRatio: false, scales: { x:{grid:{display:false}}, y: { beginAtZero: true, border: { dash: [4, 4] } } }, plugins: { legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8 } } } });
 
     let mgrL = Object.keys(mgrCounts), mgrD = Object.values(mgrCounts);
     createChart('periodChart3', 'bar', { labels: mgrL.length?mgrL:['없음'], datasets: [{ label: '진행중 PJT', data: mgrD.length?mgrD:[0], backgroundColor: '#8b5cf6', borderRadius: 6 }] }, { indexAxis: 'y', maintainAspectRatio: false, scales: { x: { beginAtZero: true, ticks: { stepSize: 1 }, border: { dash: [4, 4] } }, y:{grid:{display:false}} }, plugins: { legend: { display: false } } });
 }
 
 // ==========================================
-// 🌟 관리자 전용 대시보드 엑셀 추출 기능
+// 🌟 엑셀 다운로드 (관리자 전용)
 // ==========================================
 window.exportDashboardExcel = async function() {
     if (window.userProfile?.role !== 'admin') return window.showToast('보고서 다운로드는 관리자만 가능합니다.', 'error');
-    if (typeof ExcelJS === 'undefined') return window.showToast("ExcelJS 모듈이 로드되지 않았습니다.", "error");
+    if (typeof ExcelJS === 'undefined') return window.showToast("ExcelJS 모듈이 로드되지 않았습니다. 인터넷 연결을 확인해주세요.", "error");
 
     try {
         window.showToast("엑셀 파일을 생성 중입니다...", "success");
         const wb = new ExcelJS.Workbook();
         
-        // 시트 1: 연간 현황 요약
+        // 1. 연간 시트
         const ws1 = wb.addWorksheet('연간_현황_요약', {views: [{showGridLines: false}]});
         ws1.columns = [{ width: 25 }, { width: 20 }];
-        
         ws1.getCell('A1').value = `[${window.currentDashStats.year}년] 프로젝트 연간 현황 요약`;
         ws1.getCell('A1').font = { bold: true, size: 14 };
-        ws1.getCell('A1').fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFE2E8F0'} };
         
-        const summaryData = [
+        const sumData = [
             ['지표', '수치'],
             ['완료(출하) 건수', window.currentDashStats.completed + '건'],
             ['대기/보류 건수', window.currentDashStats.pending + '건'],
@@ -239,42 +243,36 @@ window.exportDashboardExcel = async function() {
             ['목표대비 출하 평균 오차', window.currentDashStats.avgShipError + ' 일']
         ];
         
-        summaryData.forEach((row, i) => {
+        sumData.forEach((row, i) => {
             let r = ws1.addRow(row);
             if (i === 0) { r.font = {bold: true}; r.fill = {type: 'pattern', pattern:'solid', fgColor:{argb:'FFF1F5F9'}}; }
             r.eachCell(c => { c.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; });
         });
 
-        // 시트 2: 기간별 프로젝트 목록 상세
-        const periodTypeStr = document.getElementById('period-type-select')?.value === 'month' ? document.getElementById('period-value-month')?.value : document.getElementById('period-value-week')?.value;
+        // 2. 기간별 상세 시트
+        const pType = document.getElementById('period-type-select')?.value === 'month' ? document.getElementById('period-value-month')?.value : document.getElementById('period-value-week')?.value;
         const ws2 = wb.addWorksheet('조회기간_프로젝트상세', {views: [{showGridLines: false}]});
         ws2.columns = [{ width: 10 }, { width: 15 }, { width: 40 }, { width: 15 }, { width: 10 }, { width: 15 }, { width: 12 }, { width: 15 }, { width: 12 }, { width: 10 }];
         
-        ws2.getCell('A1').value = `[${periodTypeStr}] 조회 기간 프로젝트 리스트`;
+        ws2.getCell('A1').value = `[${pType}] 기간 내 프로젝트 리스트`;
         ws2.getCell('A1').font = { bold: true, size: 14 };
-        ws2.getCell('A1').fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFE0E7FF'} };
 
-        const headers = ['파트', 'PJT 코드', '프로젝트명', '예정출하일', '진행률(%)', '현재상태', '예정MD', '기간내 투입MD', '최종MD', '편차'];
+        const headers = ['파트', 'PJT 코드', '프로젝트명', '예정출하일', '진행률(%)', '현재상태', '예정MD', '해당기간 투입MD', '최종MD', '편차'];
         let hr = ws2.addRow(headers);
         hr.font = {bold: true, color: {argb: 'FFFFFFFF'}}; hr.fill = {type: 'pattern', pattern:'solid', fgColor:{argb:'FF4F46E5'}};
         hr.eachCell(c => { c.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; c.alignment = {horizontal: 'center'}; });
 
-        const statusMap = { 'pending':'대기/보류', 'progress':'진행중', 'inspecting':'검수중', 'completed':'완료', 'rejected':'불가' };
+        const sMap = { 'pending':'대기/보류', 'progress':'진행중', 'inspecting':'검수중', 'completed':'완료', 'rejected':'불가' };
         window.currentPeriodProjects.sort((a,b) => b.periodMd - a.periodMd).forEach(p => {
             let row = ws2.addRow([
-                p.part || '-', p.code || '-', p.name || '-', p.d_shipEst || '-', 
-                p.progress || 0, statusMap[p.status] || p.status, 
-                p.estMd || 0, parseFloat(p.periodMd).toFixed(1), p.finalMd || 0, 
-                (parseFloat(p.finalMd||0) - parseFloat(p.estMd||0)).toFixed(1)
+                p.part||'-', p.code||'-', p.name||'-', p.d_shipEst||'-', p.progress||0, 
+                sMap[p.status]||p.status, p.estMd||0, parseFloat(p.periodMd).toFixed(1), 
+                p.finalMd||0, (parseFloat(p.finalMd||0) - parseFloat(p.estMd||0)).toFixed(1)
             ]);
             row.eachCell(c => { c.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; });
         });
 
         const buffer = await wb.xlsx.writeBuffer();
-        saveAs(new Blob([buffer]), `AXMS_대시보드_보고서_${new Date().toISOString().split('T')[0]}.xlsx`);
-        
-    } catch (e) {
-        console.error(e);
-        window.showToast("엑셀 파일 생성 중 오류가 발생했습니다.", "error");
-    }
+        saveAs(new Blob([buffer]), `AXMS_월말보고서_${new Date().toISOString().split('T')[0]}.xlsx`);
+    } catch (e) { console.error(e); window.showToast("엑셀 파일 생성 중 오류가 발생했습니다.", "error"); }
 };
