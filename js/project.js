@@ -3,14 +3,12 @@ import { db } from './firebase.js';
 import { collection, doc, setDoc, getDoc, getDocs, addDoc, deleteDoc, query, onSnapshot, where, serverTimestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 let projectStatusSnapshotUnsubscribe = null;
-let masterCodeSnapshotUnsubscribe = null;
-let currentMdLogUnsubscribe = null;
-let currentLogUnsubscribe = null;
-let currentCommentUnsubscribe = null;
-let currentIssueUnsubscribe = null;
-
 window.currentStatusFilter = 'all';
 window.calendarCurrentDate = new Date();
+window.currentComments = []; 
+window.currentDailyLogs = []; 
+window.currentMdLogs = []; 
+window.currentIssues = [];
 
 const getSafeMillis = (val) => { try { if (!val) return 0; if (typeof val.toMillis === 'function') return val.toMillis(); if (typeof val === 'number') return val; if (typeof val === 'string') return new Date(val).getTime() || 0; return 0; } catch(e) { return 0; } };
 const getSafeString = (val) => { if (val === null || val === undefined) return ''; return String(val); };
@@ -23,10 +21,10 @@ window.filterFromDashboard = function(status) {
 
 window.loadCounts = function() {
     try {
-        onSnapshot(collection(db, "project_comments"), snap => { window.projectCommentCounts = {}; snap.forEach(doc => { let d = doc.data(); if(d.projectId) window.projectCommentCounts[d.projectId] = (window.projectCommentCounts[d.projectId]||0)+1; }); try { if(window.currentProjDashView === 'list' && !document.getElementById('view-project-status').classList.contains('hidden')) window.renderProjectStatusList(); } catch(e){} });
-        onSnapshot(collection(db, "project_issues"), snap => { window.projectIssueCounts = {}; snap.forEach(doc => { let d = doc.data(); if(d.projectId && !d.isResolved) window.projectIssueCounts[d.projectId] = (window.projectIssueCounts[d.projectId]||0)+1; }); try { if(window.currentProjDashView === 'list' && !document.getElementById('view-project-status').classList.contains('hidden')) window.renderProjectStatusList(); } catch(e){} });
-        onSnapshot(collection(db, "daily_logs"), snap => { window.projectLogCounts = {}; snap.forEach(doc => { let d = doc.data(); if(d.projectId) window.projectLogCounts[d.projectId] = (window.projectLogCounts[d.projectId]||0)+1; }); try { if(window.currentProjDashView === 'list' && !document.getElementById('view-project-status').classList.contains('hidden')) window.renderProjectStatusList(); } catch(e){} });
-    } catch(e) { console.warn("카운트 로드 실패:", e); }
+        onSnapshot(collection(db, "project_comments"), snap => { window.projectCommentCounts = {}; snap.forEach(doc => { let d = doc.data(); if(d.projectId) window.projectCommentCounts[d.projectId] = (window.projectCommentCounts[d.projectId]||0)+1; }); if(window.currentProjDashView === 'list' && !document.getElementById('view-project-status')?.classList.contains('hidden')) window.renderProjectStatusList(); });
+        onSnapshot(collection(db, "project_issues"), snap => { window.projectIssueCounts = {}; snap.forEach(doc => { let d = doc.data(); if(d.projectId && !d.isResolved) window.projectIssueCounts[d.projectId] = (window.projectIssueCounts[d.projectId]||0)+1; }); if(window.currentProjDashView === 'list' && !document.getElementById('view-project-status')?.classList.contains('hidden')) window.renderProjectStatusList(); });
+        onSnapshot(collection(db, "daily_logs"), snap => { window.projectLogCounts = {}; snap.forEach(doc => { let d = doc.data(); if(d.projectId) window.projectLogCounts[d.projectId] = (window.projectLogCounts[d.projectId]||0)+1; }); if(window.currentProjDashView === 'list' && !document.getElementById('view-project-status')?.classList.contains('hidden')) window.renderProjectStatusList(); });
+    } catch(e) {}
 };
 
 window.switchProjPartTab = function(part) {
@@ -36,138 +34,141 @@ window.switchProjPartTab = function(part) {
     window.loadProjectStatusData();
 };
 
+window.filterProjectStatus = function(status) {
+    window.currentStatusFilter = status;
+    if(window.currentProjDashView === 'gantt') window.renderProjGantt(); 
+    else if(window.currentProjDashView === 'calendar') window.renderProjCalendar(); 
+    else window.renderProjectStatusList();
+};
+
 window.filterByCategory = function(category) { 
     window.currentCategoryFilter = category; 
-    try { if(window.currentProjDashView === 'gantt') window.renderProjGantt(); else if(window.currentProjDashView === 'calendar') window.renderProjCalendar(); else window.renderProjectStatusList(); } catch(e) { console.error(e); }
+    if(window.currentProjDashView === 'gantt') window.renderProjGantt(); else if(window.currentProjDashView === 'calendar') window.renderProjCalendar(); else window.renderProjectStatusList();
 };
 
 window.searchProjectBoard = function(keyword) {
-    try { const k = getSafeString(keyword).toLowerCase(); document.querySelectorAll('#proj-dash-tbody tr').forEach(tr => { const text = tr.innerText.toLowerCase(); tr.style.display = (text.includes(k) || window.matchString(k, text)) ? '' : 'none'; }); } catch(e) {}
+    const k = getSafeString(keyword).toLowerCase(); document.querySelectorAll('#proj-dash-tbody tr').forEach(tr => { const text = tr.innerText.toLowerCase(); tr.style.display = (text.includes(k) || window.matchString(k, text)) ? '' : 'none'; });
 };
 
 window.updateMiniDashboard = function() {
-    try {
-        let pending = 0, progress = 0, completedThisMonth = 0; let upcomingCodes7 = [], upcomingCodes14 = [];
-        const now = new Date(); const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    let pending = 0, progress = 0, completedThisMonth = 0; let upcomingCodes7 = [], upcomingCodes14 = [];
+    const now = new Date(); const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const completedLabel = document.getElementById('mini-dash-completed-label');
+    if (completedLabel) completedLabel.innerHTML = `<i class="fa-solid fa-truck-fast text-emerald-400"></i> 출하 완료 (${now.getMonth() + 1}월)`;
 
-        const completedLabel = document.getElementById('mini-dash-completed-label');
-        if (completedLabel) completedLabel.innerHTML = `<i class="fa-solid fa-truck-fast text-emerald-400"></i> 출하 완료 (${now.getMonth() + 1}월)`;
+    (window.currentProjectStatusList || []).forEach(item => {
+        const status = getSafeString(item.status); const shipEn = getSafeString(item.d_shipEn); const shipEst = getSafeString(item.d_shipEst); const code = getSafeString(item.code) || '미지정';
+        if (status === 'pending' || status === 'rejected') pending++;
+        else if (status === 'progress' || status === 'inspecting') progress++;
+        else if (status === 'completed') { if (shipEn.startsWith(currentMonthStr) || (!shipEn && shipEst.startsWith(currentMonthStr))) completedThisMonth++; }
 
-        (window.currentProjectStatusList || []).forEach(item => {
-            const status = getSafeString(item.status); const shipEn = getSafeString(item.d_shipEn); const shipEst = getSafeString(item.d_shipEst); const code = getSafeString(item.code) || '미지정';
-            if (status === 'pending' || status === 'rejected') pending++;
-            else if (status === 'progress' || status === 'inspecting') progress++;
-            else if (status === 'completed') { if (shipEn.startsWith(currentMonthStr) || (!shipEn && shipEst.startsWith(currentMonthStr))) completedThisMonth++; }
-
-            if (status !== 'completed' && status !== 'rejected' && shipEst) {
-                const shipDate = new Date(shipEst);
-                if(!isNaN(shipDate.getTime())) {
-                    const diffDays = Math.ceil((shipDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-                    if (diffDays >= 0 && diffDays <= 7) upcomingCodes7.push({ code: code, dDay: diffDays });
-                    else if (diffDays < 0) upcomingCodes7.push({ code: code, dDay: diffDays });
-                    else if (diffDays > 7 && diffDays <= 14) upcomingCodes14.push({ code: code, dDay: diffDays });
-                }
+        if (status !== 'completed' && status !== 'rejected' && shipEst) {
+            const shipDate = new Date(shipEst);
+            if(!isNaN(shipDate.getTime())) {
+                const diffDays = Math.ceil((shipDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                if (diffDays >= 0 && diffDays <= 7) upcomingCodes7.push({ code: code, dDay: diffDays });
+                else if (diffDays < 0) upcomingCodes7.push({ code: code, dDay: diffDays });
+                else if (diffDays > 7 && diffDays <= 14) upcomingCodes14.push({ code: code, dDay: diffDays });
             }
-        });
+        }
+    });
 
-        if(document.getElementById('mini-dash-pending')) document.getElementById('mini-dash-pending').innerText = pending;
-        if(document.getElementById('mini-dash-progress')) document.getElementById('mini-dash-progress').innerText = progress;
-        if(document.getElementById('mini-dash-completed')) document.getElementById('mini-dash-completed').innerText = completedThisMonth;
+    if(document.getElementById('mini-dash-pending')) document.getElementById('mini-dash-pending').innerText = pending;
+    if(document.getElementById('mini-dash-progress')) document.getElementById('mini-dash-progress').innerText = progress;
+    if(document.getElementById('mini-dash-completed')) document.getElementById('mini-dash-completed').innerText = completedThisMonth;
 
-        const elUpcoming7 = document.getElementById('mini-dash-upcoming');
-        if(elUpcoming7) { elUpcoming7.innerHTML = upcomingCodes7.length === 0 ? `<span class="text-[10px] text-rose-400 font-bold">임박한 프로젝트 없음</span>` : upcomingCodes7.map(u => { let dText = u.dDay === 0 ? 'D-Day' : (u.dDay < 0 ? `지연` : `D-${u.dDay}`); let bgClass = u.dDay <= 3 ? 'bg-rose-500 text-white border-rose-600' : 'bg-white text-rose-600 border-rose-200'; return `<span class="text-[10px] border px-1.5 py-0.5 rounded font-bold shadow-sm flex items-center gap-1 ${bgClass}">${u.code} <span class="opacity-80 text-[8px]">[${dText}]</span></span>`; }).join(''); }
-        const elUpcoming14 = document.getElementById('mini-dash-upcoming-14');
-        if(elUpcoming14) { elUpcoming14.innerHTML = upcomingCodes14.length === 0 ? `<span class="text-[10px] text-orange-400 font-bold">임박한 프로젝트 없음</span>` : upcomingCodes14.map(u => `<span class="text-[10px] border px-1.5 py-0.5 rounded font-bold shadow-sm flex items-center gap-1 bg-white text-orange-600 border-orange-200">${u.code} <span class="opacity-80 text-[8px]">[D-${u.dDay}]</span></span>`).join(''); }
-    } catch(e) { console.warn("미니 대시보드 에러:", e); }
+    const elUpcoming7 = document.getElementById('mini-dash-upcoming');
+    if(elUpcoming7) { elUpcoming7.innerHTML = upcomingCodes7.length === 0 ? `<span class="text-[10px] text-rose-400 font-bold w-full text-center mt-1">임박한 프로젝트 없음</span>` : upcomingCodes7.map(u => { let dText = u.dDay === 0 ? 'D-Day' : (u.dDay < 0 ? `지연` : `D-${u.dDay}`); let bgClass = u.dDay <= 3 ? 'bg-rose-500 text-white border-rose-600' : 'bg-white text-rose-600 border-rose-200'; return `<span class="text-[10px] border px-1.5 py-0.5 rounded font-bold shadow-sm flex items-center gap-1 ${bgClass}">${u.code} <span class="opacity-80 text-[8px]">[${dText}]</span></span>`; }).join(''); }
+    const elUpcoming14 = document.getElementById('mini-dash-upcoming-14');
+    if(elUpcoming14) { elUpcoming14.innerHTML = upcomingCodes14.length === 0 ? `<span class="text-[10px] text-orange-400 font-bold w-full text-center mt-1">임박한 프로젝트 없음</span>` : upcomingCodes14.map(u => `<span class="text-[10px] border px-1.5 py-0.5 rounded font-bold shadow-sm flex items-center gap-1 bg-white text-orange-600 border-orange-200">${u.code} <span class="opacity-80 text-[8px]">[D-${u.dDay}]</span></span>`).join(''); }
 };
 
 window.loadProjectStatusData = function() {
     if(projectStatusSnapshotUnsubscribe) projectStatusSnapshotUnsubscribe();
-    try {
-        projectStatusSnapshotUnsubscribe = onSnapshot(query(collection(db, "projects_status")), (snapshot) => {
-            try {
-                window.currentProjectStatusList = []; let lastUpdated = 0; const targetPart = window.currentProjPartTab === '광학' ? '광학' : '제조';
-                snapshot.forEach(doc => { 
-                    const data = doc.data(); const dataPart = getSafeString(data.part).trim() || '제조'; 
-                    let isMatch = (targetPart === '광학') ? (dataPart === '광학') : (dataPart !== '광학');
-                    if(isMatch) window.currentProjectStatusList.push({ id: doc.id, ...data }); 
-                    let uTime = getSafeMillis(data.updatedAt); if(uTime > lastUpdated) lastUpdated = uTime;
-                });
-                window.currentProjectStatusList.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
-                try {
-                    if (lastUpdated > 0) { 
-                        const lDate = new Date(lastUpdated); const el = document.getElementById('pjt-last-update');
-                        if(el) el.innerText = `${lDate.getFullYear().toString().slice(2)}-${String(lDate.getMonth()+1).padStart(2,'0')}-${String(lDate.getDate()).padStart(2,'0')} ${String(lDate.getHours()).padStart(2,'0')}:${String(lDate.getMinutes()).padStart(2,'0')}`; 
-                    }
-                } catch(e){}
-                if(window.updateMiniDashboard) window.updateMiniDashboard();
-            } catch(error) { console.error("데이터 분류 중 에러:", error); } finally {
-                try {
-                    if(window.currentProjDashView === 'gantt') window.renderProjGantt(); 
-                    else if(window.currentProjDashView === 'calendar') window.renderProjCalendar();
-                    else window.renderProjectStatusList();
-                } catch(renderError) { console.error("렌더링 실패:", renderError); }
-            }
+    projectStatusSnapshotUnsubscribe = onSnapshot(collection(db, "projects_status"), (snapshot) => {
+        window.currentProjectStatusList = []; let lastUpdated = 0; const targetPart = window.currentProjPartTab === '광학' ? '광학' : '제조';
+        snapshot.forEach(doc => { 
+            const data = doc.data(); const dataPart = getSafeString(data.part).trim() || '제조'; 
+            if((targetPart === '광학' && dataPart === '광학') || (targetPart !== '광학' && dataPart !== '광학')) { window.currentProjectStatusList.push({ id: doc.id, ...data }); }
+            let uTime = getSafeMillis(data.updatedAt); if(uTime > lastUpdated) lastUpdated = uTime;
         });
-    } catch(e) { console.error("onSnapshot 에러:", e); }
+        window.currentProjectStatusList.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
+        const el = document.getElementById('pjt-last-update');
+        if (lastUpdated > 0 && el) { 
+            const lDate = new Date(lastUpdated); 
+            el.innerText = `${lDate.getFullYear().toString().slice(2)}-${String(lDate.getMonth()+1).padStart(2,'0')}-${String(lDate.getDate()).padStart(2,'0')} ${String(lDate.getHours()).padStart(2,'0')}:${String(lDate.getMinutes()).padStart(2,'0')}`; 
+            document.getElementById('pjt-last-update-wrapper')?.classList.remove('hidden');
+        }
+        window.updateMiniDashboard();
+        if(window.currentProjDashView === 'gantt') window.renderProjGantt(); 
+        else if(window.currentProjDashView === 'calendar') window.renderProjCalendar();
+        else window.renderProjectStatusList();
+    });
+};
+
+window.currentMonthFilter = '';
+window.filterByMonth = function(monthStr) {
+    window.currentMonthFilter = monthStr; window.updateMiniDashboard();
+    if(window.currentProjDashView === 'gantt') window.renderProjGantt(); 
+    else if(window.currentProjDashView === 'calendar') window.renderProjCalendar();
+    else window.renderProjectStatusList();
+};
+window.clearMonthFilter = function() {
+    const el = document.getElementById('filter-month-select'); if(el) el.value = '';
+    window.filterByMonth('');
 };
 
 window.renderProjectStatusList = function() {
     const tbody = document.getElementById('proj-dash-tbody'); if(!tbody) return;
-    try {
-        let displayList = window.currentProjectStatusList || [];
-        if(window.currentCategoryFilter && window.currentCategoryFilter !== 'all') { displayList = displayList.filter(item => getSafeString(item.category) === window.currentCategoryFilter); }
-        if(window.currentStatusFilter && window.currentStatusFilter !== 'all') { displayList = displayList.filter(item => { if (window.currentStatusFilter === 'progress') return item.status === 'progress' || item.status === 'inspecting'; return item.status === window.currentStatusFilter; }); }
+    let displayList = window.currentProjectStatusList || [];
+    
+    if(window.currentCategoryFilter && window.currentCategoryFilter !== 'all') displayList = displayList.filter(item => getSafeString(item.category) === window.currentCategoryFilter);
+    if(window.currentStatusFilter && window.currentStatusFilter !== 'all') displayList = displayList.filter(item => { if (window.currentStatusFilter === 'progress') return item.status === 'progress' || item.status === 'inspecting'; return item.status === window.currentStatusFilter; });
+    if(window.currentMonthFilter) { displayList = displayList.filter(item => { const sEst = item.d_shipEst || ''; const sEn = item.d_shipEn || ''; const aEst = item.d_asmEst || ''; const aEn = item.d_asmEn || ''; return sEst.startsWith(window.currentMonthFilter) || sEn.startsWith(window.currentMonthFilter) || aEst.startsWith(window.currentMonthFilter) || aEn.startsWith(window.currentMonthFilter); }); }
+    if(displayList.length === 0) { tbody.innerHTML = `<tr><td colspan="28" class="text-center p-10 text-slate-400 font-bold border-b border-slate-100 bg-white">해당 조건의 프로젝트가 없습니다.</td></tr>`; return; }
+    
+    const statusMap = { 'pending':'<span class="text-slate-500 bg-slate-100 px-2 py-0.5 rounded shadow-sm border border-slate-200">대기/보류</span>', 'progress':'<span class="text-blue-600 bg-blue-50 px-2 py-0.5 rounded shadow-sm border border-blue-200">진행중(제작)</span>', 'inspecting':'<span class="text-amber-600 bg-amber-50 px-2 py-0.5 rounded shadow-sm border border-amber-200">진행중(검수)</span>', 'completed':'<span class="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded shadow-sm border border-emerald-200">완료(출하)</span>', 'rejected':'<span class="text-rose-600 bg-rose-50 px-2 py-0.5 rounded shadow-sm border border-rose-200">보류/불가</span>' };
+    
+    tbody.innerHTML = displayList.map(item => {
+        const currentMd = parseFloat(item.currentMd) || 0; const outMd = parseFloat(item.outMd) || 0; const fMd = parseFloat(item.finalMd) || (currentMd + outMd); const fMdFixed = fMd.toFixed(1);
+        const safeNameStr = getSafeString(item.name); const safeCodeStr = getSafeString(item.code); const safeCompStr = getSafeString(item.company); const safeManagerStr = getSafeString(item.manager); const safeCatStr = getSafeString(item.category); const safeStatus = getSafeString(item.status);
+        const safeNameHtml = safeNameStr.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         
-        if(displayList.length === 0) { tbody.innerHTML = `<tr><td colspan="28" class="text-center p-6 text-slate-400 font-bold">등록된 PJT 현황이 없습니다.</td></tr>`; return; }
+        let linksHtml = ''; if(item.links && Array.isArray(item.links) && item.links.length > 0) { linksHtml = item.links.map(lnk => `<button onclick="event.stopPropagation(); window.open('${lnk.url}', '_blank')" title="${getSafeString(lnk.name)}" class="text-teal-500 hover:text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded shadow-sm transition-colors ml-1"><i class="fa-solid fa-link text-[10px]"></i></button>`).join(''); }
+        let cCount = window.projectCommentCounts?.[item.id] || 0; let iCount = window.projectIssueCounts?.[item.id] || 0; let lCount = window.projectLogCounts?.[item.id] || 0;
         
-        const statusMap = { 'pending':'<span class="text-slate-500 bg-slate-100 px-2 py-0.5 rounded shadow-sm border border-slate-200">대기/보류</span>', 'progress':'<span class="text-blue-600 bg-blue-50 px-2 py-0.5 rounded shadow-sm border border-blue-200">진행중(제작)</span>', 'inspecting':'<span class="text-amber-600 bg-amber-50 px-2 py-0.5 rounded shadow-sm border border-amber-200">진행중(검수)</span>', 'completed':'<span class="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded shadow-sm border border-emerald-200">완료(출하)</span>', 'rejected':'<span class="text-rose-600 bg-rose-50 px-2 py-0.5 rounded shadow-sm border border-rose-200">보류/불가</span>' };
-        
-        let htmlStr = '';
-        displayList.forEach(item => {
-            try {
-                const currentMd = parseFloat(item.currentMd) || 0; const outMd = parseFloat(item.outMd) || 0; const fMd = parseFloat(item.finalMd) || (currentMd + outMd); const fMdFixed = fMd.toFixed(1);
-                const safeNameStr = getSafeString(item.name); const safeCodeStr = getSafeString(item.code); const safeCompStr = getSafeString(item.company); const safeManagerStr = getSafeString(item.manager); const safeCatStr = getSafeString(item.category); const safeStatus = getSafeString(item.status);
-                const safeNameJs = safeNameStr.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, ' ').replace(/\r/g, ''); const safeNameHtml = safeNameStr.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                
-                let linksHtml = ''; if(item.links && Array.isArray(item.links) && item.links.length > 0) { linksHtml = item.links.map(lnk => `<a href="${getSafeString(lnk?.url)}" target="_blank" title="${getSafeString(lnk?.name)}" class="text-teal-500 hover:text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded transition-colors"><i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i></a>`).join(''); }
-                let cCount = (window.projectCommentCounts && window.projectCommentCounts[item.id]) || 0; let iCount = (window.projectIssueCounts && window.projectIssueCounts[item.id]) || 0; let lCount = (window.projectLogCounts && window.projectLogCounts[item.id]) || 0;
-                
-                htmlStr += `<tr class="hover:bg-indigo-50/50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.editProjStatus('${item.id}')">
-                    <td class="border border-slate-200 px-2 py-1 text-center bg-white sticky left-0 z-10" onclick="event.stopPropagation()"><button onclick="window.deleteProjStatus('${item.id}')" class="text-slate-300 hover:bg-rose-50 hover:text-rose-500 p-1.5 rounded transition-all"><i class="fa-solid fa-trash-can"></i></button></td>
-                    <td class="border border-slate-200 px-2 py-1 text-center">${safeCatStr}</td>
-                    <td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openCommentModal('${item.id}', '${safeNameJs}')" class="text-amber-400 hover:text-amber-500 relative"><i class="fa-regular fa-comment-dots text-lg"></i> ${cCount > 0 ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm">${cCount}</span>` : ''}</button></td>
-                    <td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openIssueModal('${item.id}', '${safeNameJs}')" class="text-rose-400 hover:text-rose-500 relative"><i class="fa-solid fa-triangle-exclamation text-lg"></i> ${iCount > 0 ? `<span class="absolute -top-1 -right-2 bg-rose-100 text-rose-600 text-[9px] font-bold px-1 rounded-full shadow-sm">${iCount}</span>` : ''}</button></td>
-                    <td class="border border-slate-200 px-2 py-1 text-center font-bold text-indigo-700">${safeCodeStr}</td>
-                    <td class="border border-slate-200 px-2 py-1 truncate max-w-[150px]">${safeNameHtml}</td>
-                    <td class="border border-slate-200 px-2 py-1 text-center">${safeCompStr}</td>
-                    <td class="border border-slate-200 px-2 py-1 text-center font-black text-emerald-600">${parseFloat(item.progress) || 0}%</td>
-                    <td class="border border-slate-200 px-2 py-1 text-center">${statusMap[safeStatus] || ''}</td>
-                    <td class="border border-slate-200 px-2 py-1 text-center">${safeManagerStr}</td>
-                    <td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openDailyLogModal('${item.id}', '${safeNameJs}', ${parseFloat(item.progress) || 0})" class="text-sky-400 hover:text-sky-500 relative"><i class="fa-solid fa-book text-lg"></i> ${lCount > 0 ? `<span class="absolute -top-1 -right-2 bg-sky-100 text-sky-600 text-[9px] font-bold px-1 rounded-full shadow-sm">${lCount}</span>` : ''}</button></td>
-                    <td class="border border-slate-200 px-2 py-1 text-center text-sky-600">${parseFloat(item.estMd) || 0}</td>
-                    <td class="border border-slate-200 px-1 py-1 text-center font-bold" onclick="event.stopPropagation()"><button onclick="window.openMdLogModal('${item.id}', '${safeNameJs}', ${currentMd})" class="text-purple-600 hover:bg-purple-50 w-full h-full py-0.5 rounded underline decoration-purple-300">${currentMd}</button></td>
-                    <td class="border border-slate-200 px-2 py-1 text-center text-sky-600 font-bold">${fMdFixed}</td>
-                    <td class="border border-slate-200 px-2 py-1 text-center text-amber-600">${item.totPers !== undefined ? item.totPers : ''}</td>
-                    <td class="border border-slate-200 px-2 py-1 text-center text-amber-600">${item.outPers !== undefined ? item.outPers : ''}</td>
-                    <td class="border border-slate-200 px-2 py-1 text-center text-amber-600">${item.outMd !== undefined ? item.outMd : ''}</td>
-                    <td class="border border-slate-200 px-2 py-1 text-center bg-rose-50/50 text-rose-700">${getSafeString(item.d_shipEst)}</td>
-                    <td class="border border-slate-200 px-2 py-1 text-center bg-indigo-50/50">${getSafeString(item.d_asmEst)}</td>
-                    <td class="border border-slate-200 px-2 py-1 text-center bg-indigo-50/50">${getSafeString(item.d_asmEndEst)}</td>
-                    <td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_asmSt)}</td>
-                    <td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_asmEn)}</td>
-                    <td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_insSt)}</td>
-                    <td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_insEn)}</td>
-                    <td class="border border-slate-200 px-2 py-1 text-center bg-rose-50/50 text-rose-700 font-bold">${getSafeString(item.d_shipEn)}</td>
-                    <td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_setSt)}</td>
-                    <td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_setEn)}</td>
-                    <td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><div class="flex items-center justify-center gap-1 flex-wrap"><button onclick="window.openLinkModal('${item.id}', '${safeNameJs}')" class="text-slate-400 hover:text-teal-500 transition-colors bg-slate-50 px-1.5 py-0.5 rounded shadow-sm border border-slate-200"><i class="fa-solid fa-link"></i></button>${linksHtml}</div></td>
-                </tr>`;
-            } catch(rowErr) {}
-        });
-        tbody.innerHTML = htmlStr;
-    } catch (error) { tbody.innerHTML = `<tr><td colspan="28" class="text-center p-6 text-rose-600 bg-rose-50 font-bold text-sm">🚨 오류 발생: ${error.message}</td></tr>`; }
+        return `<tr class="hover:bg-indigo-50/50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.editProjStatus('${item.id}')">
+            <td class="px-2 py-2 text-center bg-white sticky left-0 z-10 border-r border-slate-100" onclick="event.stopPropagation()"><button onclick="window.deleteProjStatus('${item.id}')" class="text-slate-300 hover:bg-rose-50 hover:text-rose-500 p-1.5 rounded transition-all"><i class="fa-solid fa-trash-can"></i></button></td>
+            <td class="px-2 py-2 text-center">${item.category || ''}</td>
+            <td class="px-2 py-2 text-center" onclick="event.stopPropagation()"><button onclick="window.openCommentModal('${item.id}')" class="${cCount>0?'text-amber-500':'text-slate-300 hover:text-amber-500'} relative transition-colors"><i class="fa-regular fa-comment-dots text-lg"></i> ${cCount > 0 ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-black px-1 rounded-full shadow-sm">${cCount}</span>` : ''}</button></td>
+            <td class="px-2 py-2 text-center" onclick="event.stopPropagation()"><button onclick="window.openIssueModal('${item.id}')" class="${iCount>0?'text-rose-500':'text-slate-300 hover:text-rose-500'} relative transition-colors"><i class="fa-solid fa-triangle-exclamation text-lg"></i> ${iCount > 0 ? `<span class="absolute -top-1 -right-2 bg-rose-100 text-rose-600 text-[9px] font-black px-1 rounded-full shadow-sm">${iCount}</span>` : ''}</button></td>
+            <td class="px-2 py-2 text-center font-bold text-indigo-700">${safeCodeStr}</td>
+            <td class="px-2 py-2 truncate max-w-[180px] font-bold text-slate-700" title="${safeNameHtml}">${safeNameHtml}</td>
+            <td class="px-2 py-2 text-center text-slate-500 truncate max-w-[100px]">${safeCompStr}</td>
+            <td class="px-2 py-2 text-center font-black text-emerald-600 text-xs">${item.progress || 0}%</td>
+            <td class="px-2 py-2 text-center">${statusMap[safeStatus] || ''}</td>
+            <td class="px-2 py-2 text-center font-bold text-slate-600">${safeManagerStr}</td>
+            <td class="px-2 py-2 text-center" onclick="event.stopPropagation()"><button onclick="window.openDailyLogModal('${item.id}')" class="${lCount>0?'text-sky-500':'text-slate-300 hover:text-sky-500'} relative transition-colors"><i class="fa-solid fa-book text-lg"></i> ${lCount > 0 ? `<span class="absolute -top-1 -right-2 bg-sky-100 text-sky-600 text-[9px] font-black px-1 rounded-full shadow-sm">${lCount}</span>` : ''}</button></td>
+            <td class="px-2 py-2 text-center text-sky-600">${item.estMd || 0}</td>
+            <td class="px-1 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openMdLogModal('${item.id}')" class="text-purple-600 hover:bg-purple-100 bg-purple-50 font-extrabold w-full h-full py-1 rounded transition-colors shadow-sm border border-purple-100">${Number(currentMd.toFixed(1))}</button></td>
+            <td class="px-2 py-2 text-center text-sky-700 font-extrabold">${fMdFixed}</td>
+            <td class="px-2 py-2 text-center text-amber-600">${item.totPers !== undefined ? item.totPers : ''}</td>
+            <td class="px-2 py-2 text-center text-amber-600">${item.outPers !== undefined ? item.outPers : ''}</td>
+            <td class="px-2 py-2 text-center text-amber-600">${item.outMd !== undefined ? item.outMd : ''}</td>
+            <td class="px-2 py-2 text-center bg-rose-50/50 text-rose-600">${getSafeString(item.d_shipEst)}</td>
+            <td class="px-2 py-2 text-center bg-indigo-50/50">${getSafeString(item.d_asmEst)}</td>
+            <td class="px-2 py-2 text-center bg-indigo-50/50">${getSafeString(item.d_asmEndEst)}</td>
+            <td class="px-2 py-2 text-center text-indigo-700 font-bold">${getSafeString(item.d_asmSt)}</td>
+            <td class="px-2 py-2 text-center text-indigo-700 font-bold">${getSafeString(item.d_asmEn)}</td>
+            <td class="px-2 py-2 text-center">${getSafeString(item.d_insSt)}</td>
+            <td class="px-2 py-2 text-center">${getSafeString(item.d_insEn)}</td>
+            <td class="px-2 py-2 text-center bg-rose-50 text-rose-700 font-bold border-x border-rose-100 shadow-inner">${getSafeString(item.d_shipEn)}</td>
+            <td class="px-2 py-2 text-center">${getSafeString(item.d_setSt)}</td>
+            <td class="px-2 py-2 text-center">${getSafeString(item.d_setEn)}</td>
+            <td class="px-2 py-2 text-center border-l border-slate-100" onclick="event.stopPropagation()"><div class="flex items-center justify-center flex-wrap"><button onclick="window.openLinkModal('${item.id}')" class="text-slate-300 hover:text-teal-500 hover:bg-teal-50 transition-colors px-1.5 py-1 rounded"><i class="fa-solid fa-link text-sm"></i></button>${linksHtml}</div></td>
+        </tr>`;
+    }).join('');
 };
 
 window.openProjStatusWriteModal = function() {
@@ -199,27 +200,64 @@ window.editProjStatus = function(id) {
     document.getElementById('proj-status-write-modal').classList.remove('hidden'); document.getElementById('proj-status-write-modal').classList.add('flex');
 };
 
-window.saveProjStatus = async function(btn) {
-    const id = document.getElementById('ps-id').value; const code = document.getElementById('ps-code').value; const name = document.getElementById('ps-name').value;
-    if(!code || !name) return window.showToast("코드와 이름을 입력하세요.", "error");
-    btn.disabled = true; btn.innerHTML = '저장중...';
-    const currentMd = parseFloat(document.getElementById('ps-current-md').value) || 0; const outMd = parseFloat(document.getElementById('ps-out-md').value) || 0;
-    const data = { 
-        code: code, name: name, company: document.getElementById('ps-company').value, part: document.getElementById('ps-part').value, 
-        category: document.getElementById('ps-category').value, status: document.getElementById('ps-status').value, 
-        progress: parseInt(document.getElementById('ps-progress-pct').value) || 0, manager: document.getElementById('ps-manager').value, 
-        members: document.getElementById('ps-members').value, estMd: parseFloat(document.getElementById('ps-est-md').value) || 0, 
-        outMd: outMd, finalMd: currentMd + outMd, totPers: parseInt(document.getElementById('ps-tot-pers').value)||0, outPers: parseInt(document.getElementById('ps-out-pers').value)||0, updatedAt: Date.now() 
-    };
-    
-    const dateMappings = { 'd_rcvEst': 'ps-d-rcv-est', 'd_asmEst': 'ps-d-asm-est', 'd_asmEndEst': 'ps-d-asm-end-est', 'd_shipEst': 'ps-d-ship-est', 'd_asmSt': 'ps-d-asm-st', 'd_asmEn': 'ps-d-asm-en', 'd_insSt': 'ps-d-ins-st', 'd_insEn': 'ps-d-ins-en', 'd_shipEn': 'ps-d-ship-en', 'd_setSt': 'ps-d-set-st', 'd_setEn': 'ps-d-set-en' };
-    for (const [key, elementId] of Object.entries(dateMappings)) { const el = document.getElementById(elementId); if (el) data[key] = el.value; }
+// 🌟 현황 등록 저장 오류 완벽 수정 (철통 방어!)
+window.saveProjStatus = async function() {
+    try {
+        const btn = document.getElementById('btn-proj-save'); 
+        if(btn) { btn.disabled = true; btn.innerHTML = '저장중...'; }
+        
+        const id = document.getElementById('ps-id')?.value; 
+        const code = document.getElementById('ps-code')?.value; 
+        const name = document.getElementById('ps-name')?.value;
+        if(!code || !name) { 
+            if(btn){btn.disabled=false;btn.innerHTML='저장하기';} 
+            return window.showToast("코드와 이름을 입력하세요.", "error"); 
+        }
 
-    try { 
-        if(id) { await setDoc(doc(db, "projects_status", id), data, { merge: true }); window.showToast("수정되었습니다."); } 
-        else { data.createdAt = Date.now(); data.currentMd = 0; await addDoc(collection(db, "projects_status"), data); window.showToast("등록되었습니다."); } 
+        const currentMd = parseFloat(document.getElementById('ps-current-md')?.value) || 0; 
+        const outMd = parseFloat(document.getElementById('ps-out-md')?.value) || 0;
+        
+        const data = { 
+            code: code, 
+            name: name, 
+            company: document.getElementById('ps-company')?.value || '', 
+            part: document.getElementById('ps-part')?.value || '제조', 
+            category: document.getElementById('ps-category')?.value || '설비', 
+            status: document.getElementById('ps-status')?.value || 'pending', 
+            progress: parseInt(document.getElementById('ps-progress-pct')?.value) || 0, 
+            manager: document.getElementById('ps-manager')?.value || '', 
+            members: document.getElementById('ps-members')?.value || '', 
+            estMd: parseFloat(document.getElementById('ps-est-md')?.value) || 0, 
+            outMd: outMd, 
+            finalMd: currentMd + outMd, 
+            totPers: parseInt(document.getElementById('ps-tot-pers')?.value)||0, 
+            outPers: parseInt(document.getElementById('ps-out-pers')?.value)||0, 
+            updatedAt: Date.now() 
+        };
+        
+        const dateMappings = { 'd_rcvEst': 'ps-d-rcv-est', 'd_asmEst': 'ps-d-asm-est', 'd_asmEndEst': 'ps-d-asm-end-est', 'd_shipEst': 'ps-d-ship-est', 'd_asmSt': 'ps-d-asm-st', 'd_asmEn': 'ps-d-asm-en', 'd_insSt': 'ps-d-ins-st', 'd_insEn': 'ps-d-ins-en', 'd_shipEn': 'ps-d-ship-en', 'd_setSt': 'ps-d-set-st', 'd_setEn': 'ps-d-set-en' };
+        for (const [key, elementId] of Object.entries(dateMappings)) { 
+            const el = document.getElementById(elementId); 
+            if (el) data[key] = el.value || ''; 
+        }
+
+        if(id) { 
+            await setDoc(doc(db, "projects_status", id), data, { merge: true }); 
+            window.showToast("수정되었습니다."); 
+        } else { 
+            data.createdAt = Date.now(); 
+            data.currentMd = 0; 
+            await addDoc(collection(db, "projects_status"), data); 
+            window.showToast("등록되었습니다."); 
+        } 
         window.closeProjStatusWriteModal(); 
-    } catch(e) { window.showToast("오류 발생", "error"); } finally { btn.disabled = false; btn.innerHTML = '저장하기'; }
+        if(btn){btn.disabled=false;btn.innerHTML='저장하기';}
+    } catch(error) {
+        console.error("저장 에러:", error);
+        window.showToast("오류 발생: " + error.message, "error");
+        const btn = document.getElementById('btn-proj-save');
+        if(btn){btn.disabled=false;btn.innerHTML='저장하기';}
+    }
 };
 
 window.deleteProjStatus = async function(id) { if(!confirm("삭제하시겠습니까?")) return; try { await deleteDoc(doc(db, "projects_status", id)); window.showToast("삭제되었습니다."); } catch(e) { window.showToast("삭제 실패", "error"); } };
@@ -238,7 +276,6 @@ window.toggleProjDashView = function(view) {
     else if(view === 'calendar') { document.getElementById('proj-dash-calendar-container').classList.remove('hidden'); window.renderProjCalendar(); }
 };
 
-// 🌟 간트 차트 (오늘 기준선 문자열 비교로 강제 일치)
 window.renderProjGantt = function() {
     const container = document.getElementById('proj-dash-gantt-content');
     try {
@@ -256,7 +293,6 @@ window.renderProjGantt = function() {
             dates.forEach(d => { if(!hasDates) { minDate = new Date(d); maxDate = new Date(d); hasDates = true; } if(d < minDate) minDate = new Date(d); if(d > maxDate) maxDate = new Date(d); });
         });
         
-        // 🔥 무조건 "오늘"이 포함되도록 minDate와 maxDate 강제 조정
         const today = new Date(); today.setHours(0,0,0,0);
         if(today < minDate) minDate = new Date(today);
         if(today > maxDate) maxDate = new Date(today);
@@ -349,7 +385,7 @@ window.renderProjCalendar = function() {
 
 
 // ==========================================================
-// 🚨 알림 및 멘션 (Notification & Mention) 로직 🚨
+// 🚨 알림 및 멘션 (Notification & Mention) 로직 (본인 알림 허용)
 // ==========================================================
 
 window.handleMention = function(inputEl) {
@@ -359,7 +395,7 @@ window.handleMention = function(inputEl) {
     const lastAtSignIndex = textBeforeCursor.lastIndexOf('@');
     
     if (lastAtSignIndex !== -1 && !textBeforeCursor.slice(lastAtSignIndex).includes(' ')) {
-        const query = textBeforeCursor.slice(lastAtSignIndex + 1);
+        const query = textBeforeCursor.slice(lastAtSignIndex + 1); 
         
         let wrapper = document.getElementById('mention-autocomplete-wrapper');
         if (!wrapper) {
@@ -423,13 +459,13 @@ window.processMentions = async function(content, projectId, typeStr) {
         
         for(const name of mentions) {
             const user = window.allSystemUsers.find(u => u.name === name);
-            if(user && user.uid !== window.currentUser.uid) { 
+            if(user) { // 🔥 본인 멘션도 알림이 가도록 수정!
                 const newNotifRef = doc(collection(db, "notifications"));
                 batch.set(newNotifRef, {
                     recipientUid: user.uid,
                     senderName: window.userProfile.name,
                     message: `[${projName}] ${typeStr}에 멘션을 남겼습니다: "${content.substring(0, 20)}..."`,
-                    projectId: projectId,
+                    projectId: projectId || '',
                     type: typeStr,
                     isRead: false,
                     createdAt: Date.now()
@@ -437,7 +473,12 @@ window.processMentions = async function(content, projectId, typeStr) {
                 count++;
             }
         }
-        if(count > 0) { try { await batch.commit(); } catch(e) {} }
+        if(count > 0) { 
+            try { 
+                await batch.commit(); 
+                window.showToast(`${count}건의 멘션 알림이 전송되었습니다.`);
+            } catch(e) { console.error("알림 발송 실패", e); } 
+        }
     }
 };
 
@@ -634,7 +675,7 @@ window.deleteIssue = async function(id) { if(!confirm("이 이슈를 삭제하�
 window.closeIssueModal = function() { document.getElementById('issue-modal').classList.add('hidden'); document.getElementById('issue-modal').classList.remove('flex'); if (currentIssueUnsubscribe) { currentIssueUnsubscribe(); currentIssueUnsubscribe = null; } };
 
 // 투입 MD (MD Log)
-window.openMdLogModal = function(projectId) { const proj = window.currentProjectStatusList.find(p => p.id === projectId); if(!proj) return; document.getElementById('md-req-id').value = projectId; document.getElementById('md-project-title').innerText = proj.name || ''; document.getElementById('md-total-badge').innerText = `총 ${proj.currentMd || 0} MD`; window.resetMdLogForm(); document.getElementById('md-log-modal').classList.remove('hidden'); document.getElementById('md-log-modal').classList.add('flex'); window.loadMdLogs(projectId); };
+window.openMdLogModal = function(projectId) { const proj = window.currentProjectStatusList.find(p => p.id === projectId); if(!proj) return; document.getElementById('md-req-id').value = projectId; window.resetMdLogForm(); document.getElementById('md-log-modal').classList.remove('hidden'); document.getElementById('md-log-modal').classList.add('flex'); window.loadMdLogs(projectId); };
 window.loadMdLogs = function(projectId) { if (currentMdLogUnsubscribe) currentMdLogUnsubscribe(); currentMdLogUnsubscribe = onSnapshot(query(collection(db, "project_md_logs"), where("projectId", "==", projectId)), (snapshot) => { window.currentMdLogs = []; let totalMd = 0; snapshot.forEach(doc => { const data = doc.data(); window.currentMdLogs.push({ id: doc.id, ...data }); totalMd += parseFloat(data.md) || 0; }); window.currentMdLogs.sort((a, b) => { const dateA = a.date || ''; const dateB = b.date || ''; if (dateA !== dateB) return dateB.localeCompare(dateA); return getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt); }); const badge = document.getElementById('md-total-badge'); if(badge) badge.innerText = `총 ${totalMd.toFixed(1)} MD`; window.renderMdLogs(window.currentMdLogs); }); };
 window.renderMdLogs = function(logs) { 
     const list = document.getElementById('md-log-list'); 
@@ -649,7 +690,7 @@ window.editMdLog = function(id) { const log = window.currentMdLogs.find(l => l.i
 window.deleteMdLog = async function(id, projectId) { if(!confirm("이 MD 내역을 삭제하시겠습니까?")) return; try { await deleteDoc(doc(db, "project_md_logs", id)); await window.updateProjectTotalMd(projectId); window.showToast("삭제되었습니다."); window.resetMdLogForm(); } catch(e) { window.showToast("삭제 실패", "error"); } };
 window.updateProjectTotalMd = async function(projectId) { const snap = await getDocs(query(collection(db, "project_md_logs"), where("projectId", "==", projectId))); let total = 0; snap.forEach(doc => { total += parseFloat(doc.data().md) || 0; }); const projRef = doc(db, "projects_status", projectId); const projSnap = await getDoc(projRef); if(projSnap.exists()) { const outMd = parseFloat(projSnap.data().outMd) || 0; await setDoc(projRef, { currentMd: total, finalMd: total + outMd }, { merge: true }); } };
 window.closeMdLogModal = function() { document.getElementById('md-log-modal').classList.add('hidden'); document.getElementById('md-log-modal').classList.remove('flex'); if (currentMdLogUnsubscribe) { currentMdLogUnsubscribe(); currentMdLogUnsubscribe = null; } };
-window.resetMdLogForm = function() { document.getElementById('editing-md-id').value = ''; document.getElementById('new-md-date').value = window.getLocalDateStr(new Date()); document.getElementById('new-md-val').value = ''; document.getElementById('new-md-desc').value = ''; document.getElementById('btn-md-save').innerText = '등록'; document.getElementById('btn-md-cancel').classList.add('hidden'); };
+window.resetMdLogForm = function() { document.getElementById('editing-log-id').value = ''; document.getElementById('new-md-date').value = window.getLocalDateStr(new Date()); document.getElementById('new-md-val').value = ''; document.getElementById('new-md-desc').value = ''; document.getElementById('btn-md-save').innerText = '등록'; document.getElementById('btn-md-cancel').classList.add('hidden'); };
 
 // 문서 링크 (Links)
 window.openLinkModal = function(projectId) { const proj = window.currentProjectStatusList.find(p => p.id === projectId); if(!proj) return; document.getElementById('link-req-id').value = projectId; document.getElementById('link-project-title').innerText = proj.name || ''; document.getElementById('new-link-name').value = ''; document.getElementById('new-link-url').value = ''; document.getElementById('link-modal').classList.remove('hidden'); document.getElementById('link-modal').classList.add('flex'); window.renderLinksList(projectId); };
