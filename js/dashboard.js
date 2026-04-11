@@ -15,7 +15,6 @@ const getSafeString = (val) => {
 
 window.loadHomeDashboards = function() {
     try {
-        // 관리자 권한 확인 후 엑셀 다운로드 버튼 노출
         const exportBtn = document.getElementById('btn-export-dash');
         if (exportBtn && window.userProfile?.role === 'admin') {
             exportBtn.classList.remove('hidden');
@@ -55,7 +54,6 @@ window.loadHomeDashboards = function() {
 
 window.processDashboardData = function() {
     try {
-        // 1. 기준 연도 동적 자동 생성
         let years = new Set(); 
         const currentYear = new Date().getFullYear(); 
         years.add(currentYear);
@@ -150,7 +148,6 @@ window.processDashboardData = function() {
             } 
         });
 
-        // 엑셀 추출용 글로벌 변수 저장
         window.currentDashStats = { 
             year: year, 
             ...stats, 
@@ -201,26 +198,28 @@ window.renderCharts = function(stats, monthlyCompleted, planData, actData) {
         chartInstances[id] = new Chart(canvas.getContext('2d'), { type: type, data: data, options: options });
     };
 
-    // 1. 파이 차트 (도넛 형태)
+    // 🌟 파이 차트 수정: padding을 넉넉히 주어 잘림 방지
     createChart('projPieChart', 'doughnut', {
         labels: ['대기/보류', '제작중', '검수중', '완료', '불가'],
         datasets: [{ 
             data: [stats.pending || 0, stats.progress || 0, stats.inspecting || 0, stats.completed || 0, stats.rejected || 0], 
             backgroundColor: ['#94a3b8', '#3b82f6', '#f59e0b', '#10b981', '#f43f5e'], 
-            borderWidth: 3, 
+            borderWidth: 2, 
             borderColor: '#ffffff', 
             borderRadius: 4, 
-            hoverOffset: 6 
+            hoverOffset: 4 
         }]
     }, { 
-        cutout: '70%', 
+        cutout: '65%', 
         maintainAspectRatio: false, 
+        layout: {
+            padding: 15 // 차트가 박스에 닿지 않도록 여백 추가
+        },
         plugins: { 
-            legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20, font: {size: 11} } } 
+            legend: { position: 'bottom', labels: { usePointStyle: true, padding: 15, font: {size: 11} } } 
         } 
     });
 
-    // 2. 바 차트 (막대 곡선 처리)
     const months = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
     createChart('projMonthlyChart', 'bar', { 
         labels: months, 
@@ -240,7 +239,6 @@ window.renderCharts = function(stats, monthlyCompleted, planData, actData) {
         plugins: { legend: { display: false } } 
     });
 
-    // 3. 라인 차트 (그라데이션 및 곡선)
     const ctxElement = document.getElementById('annualPlanVsActualChart');
     const ctx = ctxElement ? ctxElement.getContext('2d') : null;
     let gradPlan = null;
@@ -563,7 +561,7 @@ function renderPeriodCharts(type, val, projects, mgrCounts, periodMdTotal) {
 }
 
 // ==========================================
-// 🌟 엑셀 다운로드 (관리자 전용)
+// 🌟 엑셀 다운로드 (디자인 고급화)
 // ==========================================
 window.exportDashboardExcel = async function() {
     if (window.userProfile?.role !== 'admin') {
@@ -574,14 +572,23 @@ window.exportDashboardExcel = async function() {
     }
 
     try {
-        window.showToast("엑셀 파일을 생성 중입니다...", "success");
+        window.showToast("엑셀 보고서를 생성 중입니다...", "success");
         const wb = new ExcelJS.Workbook();
         
-        // 1. 연간 시트
+        // 🌟 1. 연간 시트 (디자인 개선)
         const ws1 = wb.addWorksheet('연간_현황_요약', { views: [{ showGridLines: false }] });
         ws1.columns = [{ width: 25 }, { width: 20 }];
-        ws1.getCell('A1').value = `[${window.currentDashStats.year}년] 프로젝트 연간 현황 요약`;
-        ws1.getCell('A1').font = { bold: true, size: 14 };
+        
+        // 타이틀 병합 및 꾸미기
+        ws1.mergeCells('A1:B1');
+        const titleCell1 = ws1.getCell('A1');
+        titleCell1.value = `📊 [${window.currentDashStats.year}년] 프로젝트 연간 현황 요약`;
+        titleCell1.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+        titleCell1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } }; // Indigo-600
+        titleCell1.alignment = { vertical: 'middle', horizontal: 'center' };
+        ws1.getRow(1).height = 30;
+        
+        ws1.addRow([]); // 빈 줄
         
         const sumData = [
             ['지표', '수치'],
@@ -597,15 +604,19 @@ window.exportDashboardExcel = async function() {
         sumData.forEach((row, i) => {
             let r = ws1.addRow(row);
             if (i === 0) { 
-                r.font = { bold: true }; 
-                r.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } }; 
+                r.font = { bold: true, color: { argb: 'FFFFFFFF' } }; 
+                r.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF64748B' } }; // Slate-500
+                r.alignment = { horizontal: 'center' };
+            } else {
+                r.getCell(1).font = { bold: true, color: { argb: 'FF334155' } }; // Slate-700
+                r.getCell(2).alignment = { horizontal: 'right' };
             }
             r.eachCell(c => { 
                 c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }; 
             });
         });
 
-        // 2. 기간별 상세 시트
+        // 🌟 2. 기간별 상세 시트 (디자인 개선)
         const typeSelect = document.getElementById('period-type-select');
         const periodTypeStr = (typeSelect && typeSelect.value === 'month') 
             ? document.getElementById('period-value-month')?.value 
@@ -613,28 +624,36 @@ window.exportDashboardExcel = async function() {
             
         const ws2 = wb.addWorksheet('조회기간_프로젝트상세', { views: [{ showGridLines: false }] });
         ws2.columns = [
-            { width: 10 }, { width: 15 }, { width: 40 }, { width: 15 }, { width: 10 }, 
-            { width: 15 }, { width: 12 }, { width: 15 }, { width: 12 }, { width: 10 }
+            { width: 12 }, { width: 18 }, { width: 45 }, { width: 15 }, { width: 12 }, 
+            { width: 15 }, { width: 12 }, { width: 15 }, { width: 12 }, { width: 12 }
         ];
         
-        ws2.getCell('A1').value = `[${periodTypeStr}] 기간 내 프로젝트 리스트`;
-        ws2.getCell('A1').font = { bold: true, size: 14 };
+        // 타이틀 병합
+        ws2.mergeCells('A1:J1');
+        const titleCell2 = ws2.getCell('A1');
+        titleCell2.value = `📅 [${periodTypeStr}] 기간 내 프로젝트 리스트`;
+        titleCell2.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+        titleCell2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0EA5E9' } }; // Sky-500
+        titleCell2.alignment = { vertical: 'middle', horizontal: 'center' };
+        ws2.getRow(1).height = 30;
 
-        const headers = ['파트', 'PJT 코드', '프로젝트명', '예정출하일', '진행률(%)', '현재상태', '예정MD', '해당기간 투입MD', '최종MD', '편차'];
+        ws2.addRow([]); // 빈 줄
+
+        const headers = ['파트', 'PJT 코드', '프로젝트명', '예정출하일', '진행률(%)', '현재상태', '예정MD', '기간내 투입MD', '최종MD', '편차'];
         let hr = ws2.addRow(headers);
         hr.font = { bold: true, color: { argb: 'FFFFFFFF' } }; 
-        hr.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } };
+        hr.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF475569' } }; // Slate-600
         hr.eachCell(c => { 
             c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }; 
-            c.alignment = { horizontal: 'center' }; 
+            c.alignment = { horizontal: 'center', vertical: 'middle' }; 
         });
+        ws2.getRow(3).height = 25;
 
         const sMap = { 'pending': '대기/보류', 'progress': '진행중', 'inspecting': '검수중', 'completed': '완료', 'rejected': '불가' };
-        
-        // 데이터 정렬 복사본 생성
         const sortedProjects = [...window.currentPeriodProjects].sort((a, b) => b.periodMd - a.periodMd);
         
-        sortedProjects.forEach(p => {
+        sortedProjects.forEach((p, index) => {
+            let variance = (parseFloat(p.finalMd || 0) - parseFloat(p.estMd || 0)).toFixed(1);
             let row = ws2.addRow([
                 p.part || '-', 
                 p.code || '-', 
@@ -642,14 +661,26 @@ window.exportDashboardExcel = async function() {
                 p.d_shipEst || '-', 
                 p.progress || 0, 
                 sMap[p.status] || p.status, 
-                p.estMd || 0, 
-                parseFloat(p.periodMd).toFixed(1), 
-                p.finalMd || 0, 
-                (parseFloat(p.finalMd || 0) - parseFloat(p.estMd || 0)).toFixed(1)
+                parseFloat(p.estMd || 0), 
+                parseFloat(p.periodMd.toFixed(1)), 
+                parseFloat(p.finalMd || 0), 
+                parseFloat(variance)
             ]);
-            row.eachCell(c => { 
-                c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }; 
+            
+            // 데이터 셀 스타일 적용
+            row.eachCell((c, colNumber) => { 
+                c.border = { top: { style: 'thin', color: {argb: 'FFCBD5E1'} }, left: { style: 'thin', color: {argb: 'FFCBD5E1'} }, bottom: { style: 'thin', color: {argb: 'FFCBD5E1'} }, right: { style: 'thin', color: {argb: 'FFCBD5E1'} } }; 
+                c.alignment = { vertical: 'middle' };
+                if ([1, 2, 4, 5, 6].includes(colNumber)) c.alignment.horizontal = 'center'; // 문자열, 날짜, 퍼센트 중앙정렬
+                if ([7, 8, 9, 10].includes(colNumber)) {
+                    c.alignment.horizontal = 'right'; // 숫자는 우측정렬
+                    c.numFmt = '#,##0.0'; 
+                }
             });
+            // 지그재그 배경색
+            if (index % 2 === 1) {
+                row.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } }; });
+            }
         });
 
         const buffer = await wb.xlsx.writeBuffer();
