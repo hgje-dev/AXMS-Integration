@@ -214,7 +214,6 @@ window.toggleAuthMode = function(mode) {
     } 
 };
 
-// 🌟 멘션 텍스트 & URL 자동 하이퍼링크 변환 마법사 🌟
 window.formatMentions = function(text) {
     if(!text) return '';
     let formatted = text.replace(/@([가-힣a-zA-Z0-9_]+)/g, '<span class="text-blue-600 font-extrabold bg-blue-50 px-1.5 py-0.5 rounded shadow-sm border border-blue-200">@$1</span>');
@@ -555,7 +554,7 @@ window.deleteSelectedProjectCodes = async function() {
     const checkedBoxes = document.querySelectorAll('.pjt-checkbox:checked');
     if (checkedBoxes.length === 0) return;
     
-    if (!confirm('선택한 ' + checkedBoxes.length + '개의 프로젝트 코드를 삭제하시겠습니까?\\n(현황판 데이터는 유지됩니다)')) {
+    if (!confirm('선택한 ' + checkedBoxes.length + '개의 프로젝트 코드를 삭제하시겠습니까? (현황판 데이터는 유지됩니다)')) {
         return;
     }
     
@@ -723,7 +722,7 @@ window.addProjectCode = async function() {
 };
 
 window.deleteProjectCode = async function(id) {
-    if(!confirm("이 마스터 코드를 삭제하시겠습니까?\\n(기존에 등록된 현황 데이터는 삭제되지 않습니다)")) return;
+    if(!confirm("이 마스터 코드를 삭제하시겠습니까? (기존에 등록된 현황 데이터는 삭제되지 않습니다)")) return;
     try {
         await deleteDoc(doc(db, "pjt_code_master", id));
         window.showToast("삭제되었습니다.");
@@ -772,8 +771,10 @@ window.showAutocomplete = function(inputEl, targetId1, targetId2, isNameSearch) 
         let dropHtml = '';
         matches.forEach(function(m) {
             let safeCompany = m.company || '업체미상';
+            let safeName = m.name.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+            
             dropHtml += '<li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-slate-700 font-bold text-xs border-b border-slate-50 last:border-0 truncate transition-colors" ';
-            dropHtml += 'onmousedown="window.selectAutocomplete(\'' + m.code + '\', \'' + m.name.replace(/'/g, "\\\\'") + '\', \'' + m.company + '\', \'' + inputEl.id + '\', \'' + targetId1 + '\', \'' + targetId2 + '\')">';
+            dropHtml += 'onmousedown="window.selectAutocomplete(\'' + m.code + '\', \'' + safeName + '\', \'' + m.company + '\', \'' + inputEl.id + '\', \'' + targetId1 + '\', \'' + targetId2 + '\')">';
             dropHtml += '<span class="text-indigo-600">[' + m.code + ']</span> ' + m.name + ' <span class="text-[10px] text-slate-400">(' + safeCompany + ')</span>';
             dropHtml += '</li>';
         });
