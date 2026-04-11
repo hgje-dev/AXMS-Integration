@@ -52,3 +52,189 @@ window.formatMentions = (text) => {
     
     return formatted;
 };
+// ============================================================================
+// 🔔 알림(Notification) 및 멘션(Mention) 시스템 복구 코드
+// ============================================================================
+import { db } from './firebase.js';
+import { collection, addDoc, query, where, onSnapshot, doc, setDoc, getDocs, writeBatch } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+// 1. 알림창 열기/닫기 토글 기능
+window.toggleNotifications = function(event) {
+    if(event) event.stopPropagation();
+    const dropdown = document.getElementById('notification-dropdown');
+    if(dropdown) dropdown.classList.toggle('hidden');
+};
+
+// 화면 빈 곳 클릭 시 알림창 닫히도록 처리
+document.addEventListener('click', (e) => {
+    const dropdown = document.getElementById('notification-dropdown');
+    if(dropdown && !dropdown.classList.contains('hidden') && !e.target.closest('.relative.cursor-pointer')) {
+        dropdown.classList.add('hidden');
+    }
+});
+
+// 2. 알림 데이터 로드 (Firebase 실시간 연동)
+let notiUnsubscribe = null;
+window.loadNotifications = function() {
+    if (!window.currentUser) return;
+    if (notiUnsubscribe) notiUnsubscribe();
+    
+    const q = query(collection(db, "notifications"), where("targetUid", "==", window.currentUser.uid));
+    notiUnsubscribe = onSnapshot(q, (snapshot) => {
+        let notis = [];
+        let unreadCount = 0;
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            notis.push({ id: doc.id, ...data });
+            if (!data.isRead) unreadCount++;
+        });
+        
+        notis.sort((a, b) => b.createdAt - a.createdAt);
+        
+        // 알림 뱃지 숫자 업데이트
+        const badgeWrap = document.getElementById('notification-badge');
+        const countEl = document.getElementById('notification-count');
+        if (badgeWrap && countEl) {
+            if (unreadCount > 0) {
+                badgeWrap.classList.remove('hidden');
+                countEl.innerText = unreadCount > 99 ? '99+' : unreadCount;
+            } else {
+                badgeWrap.classList.add('hidden');
+            }
+        }
+        
+        // 알림 리스트 HTML 렌더링
+        const listEl = document.getElementById('notification-list');
+        if (listEl) {
+            if (notis.length === 0) {
+                listEl.innerHTML = '<div class="p-6 text-center text-slate-400 text-xs font-bold">새로운 알림이 없습니다.</div>';
+            } else {
+                listEl.innerHTML = notis.map(n => `
+                    <div class="p-3 hover:bg-slate-50 cursor-pointer transition-colors ${n.isRead ? 'opacity-50' : 'bg-indigo-50/40'}" onclick="window.readNotification('${n.id}')">
+                        <div class="text-[11px] font-bold text-indigo-600 mb-1">${n.type || '알림'}</div>
+                        <div class="text-xs text-slate-700 font-bold leading-relaxed break-words">${n.message}</div>
+                        <div class="text-[10px] text-slate-400 mt-1.5">${window.getDateTimeStr ? window.getDateTimeStr(new Date(n.createdAt)) : new Date(n.createdAt).toLocaleString()}</div>
+                    </div>
+                `).join('');
+            }
+        }
+    });
+};
+
+// 단일 알림 클릭 시 읽음 처리
+window.readNotification = async function(id) {
+    try { await setDoc(doc(db, "notifications", id), { isRead: true }, { merge: true }); } catch(e) {}
+};
+
+// 모두 읽음 처리 버튼
+window.markAllNotificationsRead = async function() {
+    if(!window.currentUser) return;
+    try {
+        const q = query(collection(db, "notifications"), where("targetUid", "==", window.currentUser.uid), where("isRead", "==", false));
+        const snapshot = await getDocs(q);
+        const batch = writeBatch(db);
+        snapshot.forEach(d => { batch.update(d.ref, { isRead: true }); });
+        await batch.commit();
+    } catch(e) {}
+};
+
+// 알림 전체 삭제 버튼
+window.deleteAllNotifications = async function() {
+    if(!window.currentUser || !confirm("모든 알림을 삭제하시겠습니까?")) return;
+    try {
+        const q = query(collection(db, "notifications"), where("targetUid", "==", window.currentUser.uid));
+        const snapshot = await getDocs(q);
+        const batch = writeBatch(db);
+        snapshot.forEach(d => { batch.delete(d.ref); });
+        await batch.commit();
+        window.showToast("알림이 모두 삭제되었습니다.");
+    } catch(e) {}
+};
+
+// 3. 멘션 기능 처리 (@ 입력 시 유저 검색 드롭다운)
+window.handleMention = function(textarea) {
+    const val = textarea.value;
+    const cursorInfo = textarea.selectionStart;
+    const textBeforeCursor = val.substring(0, cursorInfo);
+    // '@' 뒤에 한글/영문/숫자가 오는 패턴을 감지
+    const mentionMatch = textBeforeCursor.match(/@([가-힣a-zA-Z0-9_]*)$/);
+    
+    let dropdown = document.getElementById('mention-dropdown');
+    
+    // 드롭다운 UI가 HTML에 없으면 동적으로 바디에 추가
+    if(!dropdown) {
+        dropdown = document.createElement('ul');
+        dropdown.id = 'mention-dropdown';
+        dropdown.className = 'hidden absolute z-[9999] bg-white border border-indigo-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-48 custom-scrollbar py-1';
+        document.body.appendChild(dropdown);
+    }
+
+    if (mentionMatch) {
+        const searchKeyword = mentionMatch[1].toLowerCase();
+        const users = window.allSystemUsers || [];
+        // 입력한 키워드가 이름에 포함된 유저 필터링
+        const filteredUsers = users.filter(u => u.name.toLowerCase().includes(searchKeyword));
+        
+        if (filteredUsers.length > 0) {
+            // 현재 텍스트 에어리어의 화면 위치를 계산해서 그 밑에 팝업 띄우기
+            const rect = textarea.getBoundingClientRect();
+            dropdown.style.left = `${rect.left + window.scrollX}px`;
+            dropdown.style.top = `${rect.bottom + window.scrollY + 5}px`;
+            dropdown.classList.remove('hidden');
+            
+            dropdown.innerHTML = filteredUsers.map(u => `
+                <li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-slate-700 font-bold text-xs border-b border-slate-50 last:border-0 flex items-center justify-between transition-colors" 
+                    onmousedown="window.insertMention('${textarea.id}', '${u.name}', ${mentionMatch.index}, ${cursorInfo})">
+                    <span>${u.name}</span> <span class="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-normal">${u.team||'소속없음'}</span>
+                </li>
+            `).join('');
+        } else {
+            dropdown.classList.add('hidden');
+        }
+    } else {
+        dropdown.classList.add('hidden');
+    }
+};
+
+// 멘션 목록에서 클릭 시 텍스트 에어리어에 이름 완성하여 삽입
+window.insertMention = function(textareaId, name, startIndex, endIndex) {
+    const textarea = document.getElementById(textareaId);
+    if(!textarea) return;
+    const val = textarea.value;
+    const before = val.substring(0, startIndex);
+    const after = val.substring(endIndex);
+    // '@이름 ' 형태로 삽입
+    textarea.value = `${before}@${name} ${after}`;
+    textarea.focus();
+    document.getElementById('mention-dropdown')?.classList.add('hidden');
+};
+
+// 4. 작성 완료 시 본문에서 멘션을 감지하여 DB에 알림 발송
+window.processMentions = async function(content, projectId, typeDesc) {
+    if(!content) return;
+    // 본문에서 '@이름' 추출
+    const mentions = content.match(/@([가-힣a-zA-Z0-9_]+)/g);
+    if(!mentions) return;
+    
+    const users = window.allSystemUsers || [];
+    // 중복 멘션 제거
+    const targetNames = [...new Set(mentions.map(m => m.replace('@', '')))];
+    
+    for (const tName of targetNames) {
+        const targetUser = users.find(u => u.name === tName);
+        // 자기 자신을 멘션한 게 아니라면 알림 발송
+        if (targetUser && targetUser.uid !== window.currentUser?.uid) {
+            try {
+                await addDoc(collection(db, "notifications"), {
+                    targetUid: targetUser.uid,
+                    senderName: window.userProfile?.name || '시스템',
+                    type: typeDesc || '멘션',
+                    message: `📢 ${window.userProfile?.name}님이 [${typeDesc || '문서'}]에서 회원님을 언급했습니다.`,
+                    projectId: projectId || null,
+                    isRead: false,
+                    createdAt: Date.now()
+                });
+            } catch(e) { console.error("멘션 발송 에러:", e); }
+        }
+    }
+};
