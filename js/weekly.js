@@ -19,15 +19,15 @@ window.switchWeeklyTab = function(tabName) {
     const viewMy = document.getElementById('weekly-my-view');
 
     if(tabName === 'team') {
-        btnTeam.className = "px-6 py-2 text-sm font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-2";
-        btnMy.className = "px-6 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-2";
-        viewTeam.classList.remove('hidden');
-        viewMy.classList.add('hidden');
+        if(btnTeam) btnTeam.className = "px-6 py-2 text-sm font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-2";
+        if(btnMy) btnMy.className = "px-6 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-2";
+        if(viewTeam) viewTeam.classList.remove('hidden');
+        if(viewMy) viewMy.classList.add('hidden');
     } else {
-        btnMy.className = "px-6 py-2 text-sm font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-2";
-        btnTeam.className = "px-6 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-2";
-        viewMy.classList.remove('hidden');
-        viewTeam.classList.add('hidden');
+        if(btnMy) btnMy.className = "px-6 py-2 text-sm font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-2";
+        if(btnTeam) btnTeam.className = "px-6 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-2";
+        if(viewMy) viewMy.classList.remove('hidden');
+        if(viewTeam) viewTeam.classList.add('hidden');
     }
 };
 
@@ -44,7 +44,9 @@ window.changeWeeklyWeek = function(offset) {
 // 데이터 로드 및 렌더링
 // ==========================================
 window.loadWeeklyLogsData = function() { 
-    const w = document.getElementById('weekly-log-filter-week').value; 
+    const weekInput = document.getElementById('weekly-log-filter-week');
+    if(!weekInput) return;
+    const w = weekInput.value; 
     if(!w) return; 
     
     // 1. 업무 일지 로드
@@ -57,7 +59,6 @@ window.loadWeeklyLogsData = function() {
             const data = { id: d.id, ...d.data() };
             window.currentWeeklyLogList.push(data);
             
-            // 제출 완료된 항목만 대시보드 통계에 반영
             if(data.isSubmitted) {
                 statSub++;
                 if(data.issues && data.issues.trim() !== '') statIssue++;
@@ -93,7 +94,6 @@ window.loadWeeklyLogsData = function() {
 window.checkMissingMembers = function() {
     if(!window.teamMembers || window.teamMembers.length === 0) return;
     
-    // 현재 주차 제출 완료된 UID 목록
     const submittedUids = window.currentWeeklyLogList.filter(l => l.isSubmitted).map(l => l.authorUid);
     
     let missing = [];
@@ -148,7 +148,6 @@ window.renderWeeklyLogs = function() {
         });
     }
 
-    // 최신순 정렬
     displayList.sort((a,b) => (b.updatedAt||0) - (a.updatedAt||0));
 
     if(displayList.length === 0) {
@@ -166,7 +165,6 @@ window.renderWeeklyLogs = function() {
             tasksByDay[safeDay].push(t);
         });
 
-        // 요일 순서대로 정렬
         let sortedDays = Object.keys(tasksByDay).sort((a, b) => (orderMap[a]||0) - (orderMap[b]||0));
 
         let tasksHtml = sortedDays.map(day => {
@@ -178,7 +176,6 @@ window.renderWeeklyLogs = function() {
                                 : `<span class="text-[10px] font-bold border border-slate-200 text-slate-500 px-1.5 py-0.5 rounded shadow-sm bg-white">보류</span>`);
                 
                 let locBadge = `<span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded ml-1"><i class="fa-solid fa-building text-[9px]"></i> ${t.loc||'사내'}</span>`;
-                
                 let safeContent = window.formatMentions ? window.formatMentions(String(t.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')) : t.content;
                 
                 dayHtml += `<li class="flex justify-between items-start gap-4 hover:bg-slate-50 p-1.5 rounded-lg transition-colors group">
@@ -241,19 +238,26 @@ window.renderWeeklyLogs = function() {
 // 일지 작성 모달 관리
 // ==========================================
 window.openWeeklyLogWriteModal = function(editId = null) { 
-    const w = document.getElementById('weekly-log-filter-week').value;
+    const weekInput = document.getElementById('weekly-log-filter-week');
+    if (!weekInput) {
+        return window.showToast("오류: HTML 파일이 최신버전이 아닙니다. weekly.html을 교체해주세요.", "error");
+    }
+    const w = weekInput.value;
     let existingLog = null;
     
-    // 특정 ID로 편집 열기 (관리자 수정 등) or 본인의 이번 주 Draft 열기
+    // 이벤트 객체가 넘어올 수 있으므로 typeof 검사
     if (editId && typeof editId === 'string') {
         existingLog = window.currentWeeklyLogList.find(l => l.id === editId);
     } else {
         existingLog = window.currentWeeklyLogList.find(l => l.authorUid === window.currentUser?.uid && l.week === w);
     }
 
-    document.getElementById('weekly-draft-id').value = existingLog ? existingLog.id : '';
-    
-    // Task ID 매핑 보정 (예전 데이터 호환용)
+    const draftIdEl = document.getElementById('weekly-draft-id');
+    if(!draftIdEl) {
+        return window.showToast("오류: HTML 파일이 최신버전이 아닙니다. weekly.html을 교체해주세요.", "error");
+    }
+
+    draftIdEl.value = existingLog ? existingLog.id : '';
     window.draftTasks = existingLog && existingLog.tasks ? existingLog.tasks.map((t, i) => ({...t, id: t.id || Date.now() + i})) : [];
     
     document.getElementById('wl-issues').value = existingLog ? (existingLog.issues || '') : '';
@@ -271,7 +275,6 @@ window.openWeeklyLogWriteModal = function(editId = null) {
         badge.innerText = "작성 중 (임시저장됨)";
     }
 
-    // 폼 초기화
     document.getElementById('wl-new-content').value = '';
     window.renderDraftTasks();
 
@@ -281,39 +284,46 @@ window.openWeeklyLogWriteModal = function(editId = null) {
 };
 
 window.closeWeeklyLogWriteModal = function() { 
-    document.getElementById('weekly-log-write-modal').classList.add('hidden'); 
-    document.getElementById('weekly-log-write-modal').classList.remove('flex'); 
+    const modal = document.getElementById('weekly-log-write-modal');
+    if(modal) {
+        modal.classList.add('hidden'); 
+        modal.classList.remove('flex'); 
+    }
 };
 
 window.editWeeklyLog = function(id) {
     const log = window.currentWeeklyLogList.find(l => l.id === id);
     if(!log) return;
-    window.openWeeklyLogWriteModal(id); // 명시적으로 ID 전달하여 버그 방지
+    window.openWeeklyLogWriteModal(id);
 };
 
-// 임시 Task 추가
 window.addWeeklyTaskRow = function() {
+    const contentEl = document.getElementById('wl-new-content');
+    if(!contentEl) return;
+
     const day = document.getElementById('wl-new-day').value;
     const status = document.getElementById('wl-new-status').value;
     const loc = document.getElementById('wl-new-loc').value;
-    const content = document.getElementById('wl-new-content').value.trim();
+    const content = contentEl.value.trim();
 
     if(!content) {
         return window.showToast("업무 내용을 입력하세요.", "warning");
     }
 
     window.draftTasks.push({ day, status, loc, content, id: Date.now() });
-    document.getElementById('wl-new-content').value = '';
+    contentEl.value = '';
     window.renderDraftTasks();
 };
 
 window.removeWeeklyTaskRow = function(taskId) {
-    window.draftTasks = window.draftTasks.filter(t => t.id != taskId); // 타입 무관 비교
+    window.draftTasks = window.draftTasks.filter(t => String(t.id) !== String(taskId));
     window.renderDraftTasks();
 };
 
 window.renderDraftTasks = function() {
     const listEl = document.getElementById('wl-task-list');
+    if(!listEl) return;
+
     if(window.draftTasks.length === 0) {
         listEl.innerHTML = '<div class="text-center p-4 text-[11px] font-bold text-slate-400 bg-slate-100 rounded-xl border border-slate-200 border-dashed">추가된 업무가 없습니다.</div>';
         return;
@@ -336,14 +346,20 @@ window.renderDraftTasks = function() {
 };
 
 window.saveWeeklyLog = async function(isFinalSubmit) { 
-    const id = document.getElementById('weekly-draft-id').value; 
-    const week = document.getElementById('weekly-log-filter-week').value; 
+    const draftIdEl = document.getElementById('weekly-draft-id');
+    const weekEl = document.getElementById('weekly-log-filter-week');
+    
+    if(!draftIdEl || !weekEl) {
+        return window.showToast("오류: HTML 파일이 최신버전이 아닙니다. weekly.html을 교체해주세요.", "error");
+    }
+
+    const id = draftIdEl.value; 
+    const week = weekEl.value; 
     
     if(window.draftTasks.length === 0 && isFinalSubmit) {
         return window.showToast("제출할 업무 내역을 1개 이상 추가해주세요.", "error");
     }
 
-    // 수정 시 기존 작성자 정보 덮어쓰기 방지
     let authorUid = window.currentUser?.uid || 'unknown';
     let authorName = window.userProfile?.name || 'unknown';
     let authorTeam = window.userProfile?.team || window.userProfile?.department || '';
@@ -363,11 +379,11 @@ window.saveWeeklyLog = async function(isFinalSubmit) {
         authorName: authorName,
         authorTeam: authorTeam,
         tasks: window.draftTasks,
-        issues: document.getElementById('wl-issues').value.trim(),
-        projectCode: document.getElementById('wl-pjt-code').value,
-        projectName: document.getElementById('wl-pjt-name').value.trim(),
-        totalHours: parseInt(document.getElementById('wl-time-h').value) || 0,
-        totalMins: parseInt(document.getElementById('wl-time-m').value) || 0,
+        issues: document.getElementById('wl-issues')?.value.trim() || '',
+        projectCode: document.getElementById('wl-pjt-code')?.value || '',
+        projectName: document.getElementById('wl-pjt-name')?.value.trim() || '',
+        totalHours: parseInt(document.getElementById('wl-time-h')?.value) || 0,
+        totalMins: parseInt(document.getElementById('wl-time-m')?.value) || 0,
         isSubmitted: isFinalSubmit,
         updatedAt: Date.now()
     };
