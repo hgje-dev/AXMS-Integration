@@ -1,9 +1,11 @@
+/* eslint-disable */
 import { db } from './firebase.js';
-import { collection, addDoc, query, where, onSnapshot, doc, setDoc, getDocs, writeBatch } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { collection, addDoc, query, where, onSnapshot, doc, setDoc, getDocs, writeBatch, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 window.currentUser = null; window.userProfile = null; window.allSystemUsers = []; window.teamMembers = []; window.allDashProjects = []; window.allDashMdLogs = []; window.currentProjectStatusList = []; window.pjtCodeMasterList = []; window.currentRequestList = []; window.currentWeeklyLogList = []; window.currentProcessData = []; window.projectLogs = []; window.masterPresets = {}; window.projectCommentCounts = {}; window.projectIssueCounts = {}; window.projectLogCounts = {}; window.currentSelectedMembers = [];
 window.currentProjDashView = 'list'; window.currentProjPartTab = '제조'; window.currentCategoryFilter = 'all'; window.currentReqView = 'list'; window.currentAppId = null; window.editingReqId = null; window.latestP50Md = 0; window.originalProjectName = ''; window.pendingSaveData = null; window.isProjectDirty = false; window.pendingAction = null; window.currentTab = 'hist'; window.latestHistData = null; window.latestTorData = null; window.theChart = null; window.dashChartObj = null; window.currentProjectId = null;
 
+// 공통 날짜 및 유틸 함수
 window.getTriangularRandom = (min, mode, max) => { let u=Math.random(); let F=(mode-min)/(max-min); return u<=F ? min+Math.sqrt(u*(max-min)*(mode-min)) : max-Math.sqrt((1-u)*(max-min)*(max-mode)); };
 window.getNormalRandom = (mean, stdDev) => { let u1=Math.random(); if(u1===0) u1=0.0001; return (Math.sqrt(-2.0*Math.log(u1))*Math.cos(2.0*Math.PI*Math.random()))*stdDev + mean; };
 window.getLocalDateStr = (d) => (!d||isNaN(d.getTime()))?"":d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,'0')+"-"+String(d.getDate()).padStart(2,'0');
@@ -26,11 +28,10 @@ window.matchString = (q, t) => { if(!q) return true; if(!t) return false; q=q.to
 
 window.toggleDarkMode = () => { const h=document.documentElement, i=document.getElementById('dark-mode-icon'); if(h.classList.contains('dark')) { h.classList.remove('dark'); localStorage.setItem('color-theme', 'light'); if(i) i.className='fa-solid fa-moon'; } else { h.classList.add('dark'); localStorage.setItem('color-theme', 'dark'); if(i) i.className='fa-solid fa-sun text-amber-400'; } };
 
-// 🚨 햄버거 메뉴 버그 수정 완료: 명시적 boolean 값에 철저히 따르도록 변경
 window.toggleSidebar = (forceShow) => { 
     const s = document.getElementById('sidebar'); const b = document.getElementById('sidebar-backdrop'); if(!s || !b) return; 
     const isClosed = s.classList.contains('-translate-x-full');
-    const show = typeof forceShow === 'boolean' ? forceShow : isClosed; // true면 열고, false면 닫고, 값 없으면 반전
+    const show = typeof forceShow === 'boolean' ? forceShow : isClosed; 
     
     if(show) { s.classList.remove('-translate-x-full'); b.classList.remove('hidden'); } 
     else { s.classList.add('-translate-x-full'); b.classList.add('hidden'); } 
@@ -111,7 +112,213 @@ window.processMentions = async function(content, projectId, type) {
     }
 };
 
+// ==========================================
+// 🏷️ PJT 코드 마스터 관리 및 자동완성 로직
+// ==========================================
+
+window.openProjCodeMasterModal = function() {
+    document.getElementById('proj-code-master-modal').classList.remove('hidden');
+    document.getElementById('proj-code-master-modal').classList.add('flex');
+    if(window.pjtCodeMasterList.length === 0) {
+        window.loadProjectCodeMaster();
+    } else {
+        window.renderProjectCodeMaster();
+    }
+};
+
+window.closeProjCodeMasterModal = function() {
+    document.getElementById('proj-code-master-modal').classList.add('hidden');
+    document.getElementById('proj-code-master-modal').classList.remove('flex');
+};
+
+let pjtCodeMasterUnsubscribe = null;
+window.loadProjectCodeMaster = function() {
+    if (pjtCodeMasterUnsubscribe) pjtCodeMasterUnsubscribe();
+    
+    pjtCodeMasterUnsubscribe = onSnapshot(collection(db, "pjt_code_master"), function(snapshot) {
+        window.pjtCodeMasterList = [];
+        snapshot.forEach(function(docSnap) {
+            let data = docSnap.data();
+            data.id = docSnap.id;
+            window.pjtCodeMasterList.push(data);
+        });
+        
+        window.pjtCodeMasterList.sort(function(a, b) {
+            return (b.createdAt || 0) - (a.createdAt || 0);
+        });
+        
+        const modal = document.getElementById('proj-code-master-modal');
+        if(modal && !modal.classList.contains('hidden')) {
+            window.renderProjectCodeMaster();
+        }
+    });
+};
+
+window.renderProjectCodeMaster = function() {
+    const tbody = document.getElementById('pjt-code-tbody');
+    if(!tbody) return;
+    
+    if(window.pjtCodeMasterList.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center p-6 text-slate-400 font-bold">등록된 코드가 없습니다.</td></tr>';
+        return;
+    }
+    
+    let htmlStr = '';
+    window.pjtCodeMasterList.forEach(function(p) {
+        let safeCode = p.code || '-';
+        let safeName = p.name || '-';
+        let safeCompany = p.company || '-';
+        
+        htmlStr += '<tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">';
+        htmlStr += '<td class="p-3 font-bold text-indigo-700 w-32">' + safeCode + '</td>';
+        htmlStr += '<td class="p-3 font-bold text-slate-700">' + safeName + '</td>';
+        htmlStr += '<td class="p-3 text-slate-500 w-32">' + safeCompany + '</td>';
+        htmlStr += '<td class="p-3 text-center w-20">';
+        htmlStr += '<button onclick="window.deleteProjectCode(\'' + p.id + '\')" class="text-slate-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-trash-can"></i></button>';
+        htmlStr += '</td></tr>';
+    });
+    tbody.innerHTML = htmlStr;
+};
+
+// 🌟 PJT 코드 등록 시 중복 검사 및 알림 기능 🌟
+window.addProjectCode = async function() {
+    const codeEl = document.getElementById('new-pjt-code');
+    const nameEl = document.getElementById('new-pjt-name');
+    const companyEl = document.getElementById('new-pjt-company');
+    
+    const code = codeEl.value.trim();
+    const name = nameEl.value.trim();
+    const company = companyEl.value.trim();
+
+    if(!code || !name) {
+        return window.showToast("PJT 코드와 프로젝트명을 모두 입력해 주세요.", "error");
+    }
+
+    // 🚨 중복 검사 로직 (동일한 코드나 이름이 있는지 확인)
+    const isDuplicate = window.pjtCodeMasterList.some(function(p) {
+        return p.code === code || p.name === name;
+    });
+    
+    if (isDuplicate) {
+        return window.showToast("🚨 이미 동일한 PJT 코드 또는 프로젝트명이 존재합니다!", "error");
+    }
+
+    try {
+        await addDoc(collection(db, "pjt_code_master"), {
+            code: code, 
+            name: name, 
+            company: company,
+            authorUid: window.currentUser ? window.currentUser.uid : 'unknown',
+            authorName: window.userProfile ? window.userProfile.name : 'unknown',
+            createdAt: Date.now()
+        });
+        
+        window.showToast("프로젝트 코드가 성공적으로 등록되었습니다.");
+        codeEl.value = ''; 
+        nameEl.value = ''; 
+        companyEl.value = '';
+    } catch(e) {
+        window.showToast("등록 실패", "error");
+    }
+};
+
+window.deleteProjectCode = async function(id) {
+    if(!confirm("이 마스터 코드를 삭제하시겠습니까?\n(기존에 등록된 현황 데이터는 삭제되지 않습니다)")) return;
+    try {
+        await deleteDoc(doc(db, "pjt_code_master", id));
+        window.showToast("삭제되었습니다.");
+    } catch(e) {
+        window.showToast("삭제 실패", "error");
+    }
+};
+
+window.toggleBulkPjtInput = function() {
+    window.showToast("일괄 등록 기능은 준비 중입니다.", "success");
+};
+
+// 프로젝트 현황판 PJT 검색 자동완성 
+window.showAutocomplete = function(inputEl, targetId1, targetId2, isNameSearch) {
+    const val = inputEl.value.trim().toLowerCase();
+    let dropdown = document.getElementById('pjt-autocomplete-dropdown');
+    
+    if(!dropdown) {
+        dropdown = document.createElement('ul');
+        dropdown.id = 'pjt-autocomplete-dropdown';
+        dropdown.className = 'absolute z-[9999] bg-white border border-indigo-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-full custom-scrollbar py-1';
+        document.body.appendChild(dropdown);
+    }
+
+    if(val.length < 1) { 
+        dropdown.classList.add('hidden'); 
+        return; 
+    }
+
+    const matches = window.pjtCodeMasterList.filter(function(p) {
+        if (isNameSearch) {
+            return p.name.toLowerCase().includes(val) || window.matchString(val, p.name);
+        } else {
+            return p.code.toLowerCase().includes(val);
+        }
+    });
+
+    if(matches.length > 0) {
+        const rect = inputEl.getBoundingClientRect();
+        dropdown.style.left = (rect.left + window.scrollX) + 'px';
+        dropdown.style.top = (rect.bottom + window.scrollY + 5) + 'px';
+        dropdown.style.width = rect.width + 'px';
+        dropdown.classList.remove('hidden');
+
+        let dropHtml = '';
+        matches.forEach(function(m) {
+            let safeCompany = m.company || '업체미상';
+            dropHtml += '<li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-slate-700 font-bold text-xs border-b border-slate-50 last:border-0 truncate transition-colors" ';
+            dropHtml += 'onmousedown="window.selectAutocomplete(\'' + m.code + '\', \'' + m.name.replace(/'/g, "\\'") + '\', \'' + m.company + '\', \'' + inputEl.id + '\', \'' + targetId1 + '\', \'' + targetId2 + '\')">';
+            dropHtml += '<span class="text-indigo-600">[' + m.code + ']</span> ' + m.name + ' <span class="text-[10px] text-slate-400">(' + safeCompany + ')</span>';
+            dropHtml += '</li>';
+        });
+        dropdown.innerHTML = dropHtml;
+    } else {
+        dropdown.classList.add('hidden');
+    }
+};
+
+window.selectAutocomplete = function(code, name, company, sourceId, targetId1, targetId2) {
+    const sourceEl = document.getElementById(sourceId);
+    const t1 = document.getElementById(targetId1);
+    const t2 = document.getElementById(targetId2);
+
+    if(sourceId === 'ps-code') { 
+        sourceEl.value = code; 
+        if(t1) t1.value = name; 
+        if(t2) t2.value = company; 
+    } else { 
+        sourceEl.value = name; 
+        if(t1) t1.value = code; 
+        if(t2) t2.value = company; 
+    }
+
+    const drop = document.getElementById('pjt-autocomplete-dropdown');
+    if (drop) {
+        drop.classList.add('hidden');
+    }
+};
+
+// ==========================================
+// 클릭 시 팝업 닫기 공통 이벤트 핸들러
+// ==========================================
 document.addEventListener('click', (e) => {
-    const n = document.getElementById('notification-dropdown'); if(n && !n.classList.contains('hidden') && !e.target.closest('.relative.cursor-pointer')) n.classList.add('hidden');
-    const m = document.getElementById('mention-dropdown'); if(m && !m.classList.contains('hidden') && !e.target.closest('#mention-dropdown')) m.classList.add('hidden');
+    const n = document.getElementById('notification-dropdown'); 
+    if(n && !n.classList.contains('hidden') && !e.target.closest('.relative.cursor-pointer')) {
+        n.classList.add('hidden');
+    }
+    
+    const m = document.getElementById('mention-dropdown'); 
+    if(m && !m.classList.contains('hidden') && !e.target.closest('#mention-dropdown')) {
+        m.classList.add('hidden');
+    }
+    
+    const d = document.getElementById('pjt-autocomplete-dropdown');
+    if(d && !d.classList.contains('hidden') && !e.target.closest('#pjt-autocomplete-dropdown') && !e.target.closest('input[oninput*="showAutocomplete"]')) {
+        d.classList.add('hidden');
+    }
 });
