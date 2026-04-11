@@ -1,9 +1,8 @@
 /* eslint-disable */
 import { db } from './firebase.js';
-import { collection, doc, setDoc, getDoc, getDocs, addDoc, deleteDoc, query, onSnapshot, where, serverTimestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { collection, doc, setDoc, getDoc, getDocs, addDoc, deleteDoc, query, onSnapshot, where, writeBatch } from '[https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js](https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js)';
 
 let projectStatusSnapshotUnsubscribe = null;
-let masterCodeSnapshotUnsubscribe = null;
 let currentMdLogUnsubscribe = null;
 let currentLogUnsubscribe = null;
 let currentCommentUnsubscribe = null;
@@ -171,11 +170,10 @@ window.getFilteredProjects = function() {
     
     if(window.currentMonthFilter) { 
         list = list.filter(item => { 
-            const sEst = item.d_shipEst || ''; 
             const sEn = item.d_shipEn || ''; 
             const aEst = item.d_asmEst || ''; 
             const aEn = item.d_asmEn || ''; 
-            return sEst.startsWith(window.currentMonthFilter) || sEn.startsWith(window.currentMonthFilter) || aEst.startsWith(window.currentMonthFilter) || aEn.startsWith(window.currentMonthFilter); 
+            return sEn.startsWith(window.currentMonthFilter) || aEst.startsWith(window.currentMonthFilter) || aEn.startsWith(window.currentMonthFilter); 
         }); 
     }
 
@@ -223,7 +221,7 @@ window.updateMiniDashboard = function() {
             } else if (status === 'progress' || status === 'inspecting') {
                 progress++;
             } else if (status === 'completed') { 
-                if (shipEn.startsWith(currentMonthStr) || (!shipEn && shipEst.startsWith(currentMonthStr))) {
+                if (shipEn.startsWith(currentMonthStr)) {
                     completedThisMonth++; 
                 }
             }
@@ -1510,3 +1508,5 @@ window.deleteLinkItem = async function(projectId, index) {
         window.renderLinksList(projectId); 
     } catch(e) { window.showToast("삭제 실패", "error"); } 
 };
+
+}
