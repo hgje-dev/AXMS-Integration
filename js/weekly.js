@@ -11,24 +11,12 @@ window.draftTasks = [];
 window.wlInvolvedProjects = []; 
 window.activeWeeklyTab = 'team'; 
 
-const getEl = function(id) { 
-    return document.getElementById(id); 
-};
-const setVal = function(id, val) { 
-    const el = getEl(id); 
-    if (el) el.value = val; 
-};
-const setText = function(id, txt) { 
-    const el = getEl(id); 
-    if (el) el.innerText = txt; 
-};
-
 window.switchWeeklyTab = function(tabName) {
     window.activeWeeklyTab = tabName;
-    const btnTeam = getEl('tab-team-btn');
-    const btnMy = getEl('tab-my-btn');
-    const viewTeam = getEl('weekly-team-view');
-    const viewMy = getEl('weekly-my-view');
+    const btnTeam = document.getElementById('tab-team-btn');
+    const btnMy = document.getElementById('tab-my-btn');
+    const viewTeam = document.getElementById('weekly-team-view');
+    const viewMy = document.getElementById('weekly-my-view');
 
     if (tabName === 'team') {
         if (btnTeam) btnTeam.className = "px-6 py-2 text-sm font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-2";
@@ -49,13 +37,14 @@ window.handleWeekChange = function(val) {
     if (parts.length === 2) {
         const year = parts[0];
         const week = parseInt(parts[1], 10);
-        setText('weekly-display-text', year + ', ' + week + '번째 주');
+        const displayEl = document.getElementById('weekly-display-text');
+        if (displayEl) displayEl.innerText = year + ', ' + week + '번째 주';
     }
     window.loadWeeklyLogsData();
 };
 
 window.changeWeeklyWeek = function(offset) {
-    const weekInput = getEl('weekly-log-filter-week');
+    const weekInput = document.getElementById('weekly-log-filter-week');
     if (!weekInput) return;
     
     if (!weekInput.value && window.getWeekString) {
@@ -77,7 +66,7 @@ window.changeWeeklyWeek = function(offset) {
 };
 
 window.openTeamModal = function() {
-    const m = getEl('team-modal');
+    const m = document.getElementById('team-modal');
     if (m) { 
         m.classList.remove('hidden'); 
         m.classList.add('flex'); 
@@ -86,7 +75,7 @@ window.openTeamModal = function() {
     if (typeof window.populateUserDropdowns === 'function') {
         window.populateUserDropdowns();
     } else {
-        const sel = getEl('new-team-name');
+        const sel = document.getElementById('new-team-name');
         if (sel && window.allSystemUsers) {
             sel.innerHTML = '<option value="">선택</option>' + window.allSystemUsers.map(function(u) { 
                 return '<option value="' + u.name + '" data-uid="' + u.uid + '">' + u.name + ' (' + (u.team || '소속없음') + ')</option>'; 
@@ -97,8 +86,8 @@ window.openTeamModal = function() {
     if (typeof window.renderTeamMembers === 'function') {
         window.renderTeamMembers();
     } else {
-        const tbody = getEl('team-list-tbody');
-        const count = getEl('team-modal-count');
+        const tbody = document.getElementById('team-list-tbody');
+        const count = document.getElementById('team-modal-count');
         const list = window.teamMembers || [];
         if (count) count.innerText = '총 ' + list.length + '명';
         if (tbody) {
@@ -114,7 +103,7 @@ window.openTeamModal = function() {
 };
 
 window.closeTeamModal = function() {
-    const m = getEl('team-modal');
+    const m = document.getElementById('team-modal');
     if (m) { 
         m.classList.add('hidden'); 
         m.classList.remove('flex'); 
@@ -122,8 +111,8 @@ window.closeTeamModal = function() {
 };
 
 window.addTeamMember = async function() {
-    const sel = getEl('new-team-name');
-    const partSel = getEl('new-team-part');
+    const sel = document.getElementById('new-team-name');
+    const partSel = document.getElementById('new-team-part');
     if (!sel || !sel.value) { 
         if (window.showToast) window.showToast("사용자를 선택하세요.", "error"); 
         return; 
@@ -161,11 +150,16 @@ window.deleteTeamMember = async function(id) {
 };
 
 window.loadWeeklyLogsData = function() { 
-    const weekInput = getEl('weekly-log-filter-week');
+    const weekInput = document.getElementById('weekly-log-filter-week');
     if (!weekInput || !weekInput.value) return;
     const w = weekInput.value; 
 
-    window.handleWeekChange(w);
+    // 무한 루프 방지를 위해 텍스트만 업데이트
+    const parts = w.split('-W');
+    if (parts.length === 2) {
+        const displayEl = document.getElementById('weekly-display-text');
+        if (displayEl) displayEl.innerText = parts[0] + ', ' + parseInt(parts[1], 10) + '번째 주';
+    }
     
     if (currentWeeklyLogUnsubscribe) currentWeeklyLogUnsubscribe(); 
     currentWeeklyLogUnsubscribe = onSnapshot(query(collection(db, "weekly_logs_v2"), where("week", "==", w)), function(s) { 
@@ -190,10 +184,10 @@ window.loadWeeklyLogsData = function() {
             }
         }); 
 
-        setText('stat-submitted', statSub);
-        setText('stat-completed', statComp);
-        setText('stat-progress', statProg);
-        setText('stat-issue', statIssue);
+        const subEl = document.getElementById('stat-submitted'); if (subEl) subEl.innerText = statSub;
+        const compEl = document.getElementById('stat-completed'); if (compEl) compEl.innerText = statComp;
+        const progEl = document.getElementById('stat-progress'); if (progEl) progEl.innerText = statProg;
+        const issEl = document.getElementById('stat-issue'); if (issEl) issEl.innerText = statIssue;
 
         window.renderWeeklyLogs(); 
         window.checkMissingMembers();
@@ -228,11 +222,11 @@ window.checkMissingMembers = function() {
         }
     });
 
-    const card = getEl('missing-members-card');
+    const card = document.getElementById('missing-members-card');
     if (!card) return;
 
-    const listEl = getEl('missing-members-list');
-    const countEl = getEl('missing-count');
+    const listEl = document.getElementById('missing-members-list');
+    const countEl = document.getElementById('missing-count');
     
     if (missing.length > 0) {
         card.classList.remove('hidden');
@@ -256,11 +250,11 @@ window.filterWeeklyLogs = function() {
 };
 
 window.renderWeeklyLogs = function() { 
-    const feed = getEl('weekly-log-feed'); 
+    const feed = document.getElementById('weekly-log-feed'); 
     if (!feed) return; 
 
-    const searchNameEl = getEl('weekly-search-name');
-    const searchContentEl = getEl('weekly-search-content');
+    const searchNameEl = document.getElementById('weekly-search-name');
+    const searchContentEl = document.getElementById('weekly-search-content');
     
     const searchName = searchNameEl ? searchNameEl.value.toLowerCase() : '';
     const searchContent = searchContentEl ? searchContentEl.value.toLowerCase() : '';
@@ -372,8 +366,8 @@ window.renderWeeklyLogs = function() {
 };
 
 window.addWlProject = function() {
-    const inputEl = getEl('wl-pjt-input');
-    const codeEl = getEl('wl-temp-pjt-code');
+    const inputEl = document.getElementById('wl-pjt-input');
+    const codeEl = document.getElementById('wl-temp-pjt-code');
     if (!inputEl) return;
     
     const name = inputEl.value.trim();
@@ -391,7 +385,7 @@ window.removeWlProject = function(index) {
 };
 
 window.renderWlProjects = function() {
-    const container = getEl('wl-pjt-tags');
+    const container = document.getElementById('wl-pjt-tags');
     if (!container) return;
     container.innerHTML = window.wlInvolvedProjects.map(function(p, i) {
         return '<span class="bg-slate-100 text-slate-700 border border-slate-200 px-2 py-1 rounded-lg text-xs font-bold shadow-sm flex items-center gap-1"><i class="fa-solid fa-folder-open text-indigo-400"></i> ' + p.name + ' <button onclick="window.removeWlProject(' + i + ')" class="text-slate-400 hover:text-rose-500 ml-1 transition-colors"><i class="fa-solid fa-xmark"></i></button></span>';
@@ -399,7 +393,7 @@ window.renderWlProjects = function() {
 };
 
 window.openWeeklyLogWriteModal = function(editId) { 
-    const weekInput = getEl('weekly-log-filter-week');
+    const weekInput = document.getElementById('weekly-log-filter-week');
     if (!weekInput) {
         if (window.showToast) window.showToast("오류: HTML 파일이 최신버전이 아닙니다.", "error");
         return;
@@ -414,16 +408,16 @@ window.openWeeklyLogWriteModal = function(editId) {
         existingLog = window.currentWeeklyLogList.find(function(l) { return l.authorUid === (window.currentUser ? window.currentUser.uid : null) && l.week === w; });
     }
 
-    const draftIdEl = getEl('weekly-draft-id');
+    const draftIdEl = document.getElementById('weekly-draft-id');
     if (draftIdEl) draftIdEl.value = existingLog ? existingLog.id : '';
     
     window.draftTasks = existingLog && existingLog.tasks ? existingLog.tasks.map(function(t, i) { 
         return Object.assign({}, t, { id: t.id || Date.now() + i }); 
     }) : [];
     
-    const issuesEl = getEl('wl-issues'); if (issuesEl) issuesEl.value = existingLog ? (existingLog.issues || '') : '';
-    const timeHEl = getEl('wl-time-h'); if (timeHEl) timeHEl.value = existingLog ? (existingLog.totalHours || '') : '';
-    const timeMEl = getEl('wl-time-m'); if (timeMEl) timeMEl.value = existingLog ? (existingLog.totalMins || '') : '';
+    const issuesEl = document.getElementById('wl-issues'); if (issuesEl) issuesEl.value = existingLog ? (existingLog.issues || '') : '';
+    const timeHEl = document.getElementById('wl-time-h'); if (timeHEl) timeHEl.value = existingLog ? (existingLog.totalHours || '') : '';
+    const timeMEl = document.getElementById('wl-time-m'); if (timeMEl) timeMEl.value = existingLog ? (existingLog.totalMins || '') : '';
 
     if (existingLog && existingLog.involvedProjects && Array.isArray(existingLog.involvedProjects)) {
         window.wlInvolvedProjects = existingLog.involvedProjects.slice();
@@ -434,7 +428,7 @@ window.openWeeklyLogWriteModal = function(editId) {
     }
     window.renderWlProjects();
 
-    const badge = getEl('write-status-badge');
+    const badge = document.getElementById('write-status-badge');
     if (badge) {
         if (existingLog && existingLog.isSubmitted) {
             badge.className = "bg-emerald-100 text-emerald-600 text-[10px] px-2 py-0.5 rounded-full font-bold ml-2 shadow-sm";
@@ -445,12 +439,12 @@ window.openWeeklyLogWriteModal = function(editId) {
         }
     }
 
-    const contentEl = getEl('wl-new-content');
+    const contentEl = document.getElementById('wl-new-content');
     if (contentEl) contentEl.value = '';
     
     window.renderDraftTasks();
 
-    const modal = getEl('weekly-log-write-modal');
+    const modal = document.getElementById('weekly-log-write-modal');
     if (modal) {
         modal.classList.remove('hidden'); 
         modal.classList.add('flex'); 
@@ -458,7 +452,7 @@ window.openWeeklyLogWriteModal = function(editId) {
 };
 
 window.closeWeeklyLogWriteModal = function() { 
-    const modal = getEl('weekly-log-write-modal');
+    const modal = document.getElementById('weekly-log-write-modal');
     if (modal) {
         modal.classList.add('hidden'); 
         modal.classList.remove('flex'); 
@@ -472,15 +466,15 @@ window.editWeeklyLog = function(id) {
 };
 
 window.addWeeklyTaskRow = function() {
-    const contentEl = getEl('wl-new-content');
+    const contentEl = document.getElementById('wl-new-content');
     if (!contentEl) {
         if (window.showToast) window.showToast("입력창을 찾을 수 없습니다.", "error");
         return;
     }
 
-    const dayEl = getEl('wl-new-day');
-    const statusEl = getEl('wl-new-status');
-    const locEl = getEl('wl-new-loc');
+    const dayEl = document.getElementById('wl-new-day');
+    const statusEl = document.getElementById('wl-new-status');
+    const locEl = document.getElementById('wl-new-loc');
 
     const day = dayEl ? dayEl.value : '기타';
     const status = statusEl ? statusEl.value : '진행 중';
@@ -525,8 +519,8 @@ window.renderDraftTasks = function() {
 };
 
 window.saveWeeklyLog = async function(isFinalSubmit) { 
-    const draftIdEl = getEl('weekly-draft-id');
-    const weekEl = getEl('weekly-log-filter-week');
+    const draftIdEl = document.getElementById('weekly-draft-id');
+    const weekEl = document.getElementById('weekly-log-filter-week');
     
     if (!draftIdEl || !weekEl) {
         if (window.showToast) window.showToast("오류: HTML 로딩이 완료되지 않았습니다.", "error");
@@ -554,9 +548,9 @@ window.saveWeeklyLog = async function(isFinalSubmit) {
         }
     }
 
-    const issuesEl = getEl('wl-issues');
-    const hEl = getEl('wl-time-h');
-    const mEl = getEl('wl-time-m');
+    const issuesEl = document.getElementById('wl-issues');
+    const hEl = document.getElementById('wl-time-h');
+    const mEl = document.getElementById('wl-time-m');
 
     let fullTextToScan = (issuesEl ? issuesEl.value.trim() : '') + ' ';
     window.draftTasks.forEach(function(t) { fullTextToScan += t.content + ' '; });
@@ -617,7 +611,7 @@ window.toggleScheduleComplete = async function(id, isCompleted) {
 };
 
 window.renderKanbanBoard = function() {
-    const board = getEl('weekly-kanban-board');
+    const board = document.getElementById('weekly-kanban-board');
     if (!board) return;
 
     const days = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일'];
@@ -652,14 +646,14 @@ window.renderKanbanBoard = function() {
 
 window.openScheduleModal = function(day) {
     if (!day) day = '월요일';
-    setVal('sch-id', '');
-    setVal('sch-day', day);
-    setVal('sch-category', '휴가/반차');
-    setVal('sch-time', '');
-    setVal('sch-content', '');
-    setText('sch-modal-title', '추가');
+    const idEl = document.getElementById('sch-id'); if (idEl) idEl.value = '';
+    const dayEl = document.getElementById('sch-day'); if (dayEl) dayEl.value = day;
+    const catEl = document.getElementById('sch-category'); if (catEl) catEl.value = '휴가/반차';
+    const timeEl = document.getElementById('sch-time'); if (timeEl) timeEl.value = '';
+    const contEl = document.getElementById('sch-content'); if (contEl) contEl.value = '';
+    const titleEl = document.getElementById('sch-modal-title'); if (titleEl) titleEl.innerText = '추가';
     
-    const modal = getEl('schedule-modal');
+    const modal = document.getElementById('schedule-modal');
     if (modal) {
         modal.classList.remove('hidden');
         modal.classList.add('flex');
@@ -667,7 +661,7 @@ window.openScheduleModal = function(day) {
 };
 
 window.closeScheduleModal = function() {
-    const modal = getEl('schedule-modal');
+    const modal = document.getElementById('schedule-modal');
     if (modal) {
         modal.classList.add('hidden');
         modal.classList.remove('flex');
@@ -678,14 +672,14 @@ window.editSchedule = function(id) {
     const s = window.currentScheduleList.find(function(x) { return x.id === id; });
     if (!s) return;
     
-    setVal('sch-id', id);
-    setVal('sch-day', s.day);
-    setVal('sch-category', s.category);
-    setVal('sch-time', s.time || '');
-    setVal('sch-content', s.content || '');
-    setText('sch-modal-title', '수정');
+    const idEl = document.getElementById('sch-id'); if (idEl) idEl.value = id;
+    const dayEl = document.getElementById('sch-day'); if (dayEl) dayEl.value = s.day;
+    const catEl = document.getElementById('sch-category'); if (catEl) catEl.value = s.category;
+    const timeEl = document.getElementById('sch-time'); if (timeEl) timeEl.value = s.time || '';
+    const contEl = document.getElementById('sch-content'); if (contEl) contEl.value = s.content || '';
+    const titleEl = document.getElementById('sch-modal-title'); if (titleEl) titleEl.innerText = '수정';
     
-    const modal = getEl('schedule-modal');
+    const modal = document.getElementById('schedule-modal');
     if (modal) {
         modal.classList.remove('hidden');
         modal.classList.add('flex');
@@ -693,12 +687,12 @@ window.editSchedule = function(id) {
 };
 
 window.saveSchedule = async function() {
-    const idEl = getEl('sch-id');
-    const weekEl = getEl('weekly-log-filter-week');
-    const dayEl = getEl('sch-day');
-    const categoryEl = getEl('sch-category');
-    const timeEl = getEl('sch-time');
-    const contentEl = getEl('sch-content');
+    const idEl = document.getElementById('sch-id');
+    const weekEl = document.getElementById('weekly-log-filter-week');
+    const dayEl = document.getElementById('sch-day');
+    const categoryEl = document.getElementById('sch-category');
+    const timeEl = document.getElementById('sch-time');
+    const contentEl = document.getElementById('sch-content');
 
     if (!idEl || !weekEl || !dayEl || !categoryEl || !contentEl) return;
 
