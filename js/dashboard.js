@@ -1,6 +1,6 @@
 /* eslint-disable */
 import { db } from './firebase.js';
-import { collection, query, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { collection, onSnapshot } from '[https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js](https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js)';
 
 let homeReqSnapshotUnsubscribe = null;
 let homeProjSnapshotUnsubscribe = null;
@@ -257,7 +257,7 @@ window.renderCharts = function(stats, monthlyCompleted, planData, actData) {
         if (chartInstances[id]) {
             chartInstances[id].destroy();
         }
-        chartInstances[id] = new Chart(canvas.getContext('2d'), { type: type, data: data, options: options });
+        chartInstances[id] = new window.Chart(canvas.getContext('2d'), { type: type, data: data, options: options });
     };
 
     let pendingCnt = stats.pending || 0;
@@ -493,7 +493,7 @@ function renderPeriodCharts(type, val, projects, mgrCounts, periodMdTotal) {
         const canvas = document.getElementById(id); 
         if (!canvas) return;
         if (chartInstances[id]) chartInstances[id].destroy();
-        chartInstances[id] = new Chart(canvas.getContext('2d'), { type: cType, data: data, options: options });
+        chartInstances[id] = new window.Chart(canvas.getContext('2d'), { type: cType, data: data, options: options });
     };
 
     let labels1 = []; let data1 = [];
