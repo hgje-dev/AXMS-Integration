@@ -1,147 +1,171 @@
-<div class="flex flex-col gap-6">
-    <div class="flex flex-col md:flex-row md:items-center justify-between mb-2 border-b border-slate-200 pb-4">
-        <div>
-            <h2 class="text-xl font-black text-slate-800 flex items-center gap-2"><i class="fa-solid fa-chart-line text-indigo-500"></i> 프로젝트 통합 대시보드 (연간)</h2>
-            <p class="text-xs text-slate-500 mt-1">제조 및 광학 파트 통합 데이터 기준</p>
-        </div>
-        <div class="flex items-center gap-3 mt-4 md:mt-0">
-            <div class="bg-white border border-slate-200 shadow-sm px-4 py-2 rounded-xl flex items-center gap-2">
-                <i class="fa-solid fa-users text-slate-400"></i>
-                <span class="text-xs font-bold text-slate-600">팀 총 인원수</span>
-                <span id="dash-team-count" class="text-sm font-black text-indigo-600 ml-1 border-l pl-2">0명</span>
-            </div>
-            <div class="flex items-center gap-2 bg-white border border-slate-200 shadow-sm px-3 py-1.5 rounded-xl">
-                <i class="fa-regular fa-calendar text-slate-400"></i>
-                <label class="text-xs font-bold text-slate-600 ml-1">기준 연도</label>
-                <select id="dash-year-select" class="px-2 py-1 border-0 text-sm font-black text-indigo-700 bg-transparent outline-none cursor-pointer" onchange="window.processDashboardData()"></select>
-            </div>
-        </div>
-    </div>
+import { db } from './firebase.js';
+import { collection, query, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-2">
-        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[3px] border-l-emerald-400">
-            <p class="text-[11px] font-bold text-slate-500 mb-1">완료 (출하)</p>
-            <p class="text-2xl font-black text-emerald-600" id="dash-pd-completed">0</p>
-        </div>
-        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[3px] border-l-sky-400">
-            <p class="text-[11px] font-bold text-slate-500 mb-1">목표대비 출하 오차(평균)</p>
-            <p class="text-2xl font-black text-sky-600"><span id="dash-pd-ship-error">0</span><span class="text-[10px] text-slate-400 ml-1">일</span></p>
-        </div>
-        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[3px] border-l-indigo-400">
-            <p class="text-[11px] font-bold text-slate-500 mb-1">총 예정 공수</p>
-            <p class="text-2xl font-black text-indigo-600"><span id="dash-pd-estMd">0.0</span><span class="text-[10px] text-slate-400 ml-1">MD</span></p>
-        </div>
-        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[3px] border-l-purple-400">
-            <p class="text-[11px] font-bold text-slate-500 mb-1">총 투입 공수</p>
-            <p class="text-2xl font-black text-purple-600"><span id="dash-pd-curMd">0.0</span><span class="text-[10px] text-slate-400 ml-1">MD</span></p>
-        </div>
-        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[3px] border-l-amber-400">
-            <p class="text-[11px] font-bold text-slate-500 mb-1">계획대비 편차율</p>
-            <p class="text-2xl font-black text-amber-600" id="dash-pd-variance">0%</p>
-        </div>
-        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[3px] border-l-fuchsia-400">
-            <p class="text-[11px] font-bold text-slate-500 mb-1">팀 연간 부하율</p>
-            <p class="text-2xl font-black text-fuchsia-600" id="dash-pd-workload">0.0%</p>
-        </div>
-        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[3px] border-l-rose-400">
-            <p class="text-[11px] font-bold text-slate-500 mb-1">지연/위험 PJT 수</p>
-            <p class="text-2xl font-black text-rose-600" id="dash-pd-delayed">0</p>
-        </div>
-    </div>
+let homeReqSnapshotUnsubscribe = null, homeProjSnapshotUnsubscribe = null, homeMdLogSnapshotUnsubscribe = null;
+let chartInstances = {};
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div class="bg-white rounded-3xl p-6 border shadow-sm flex flex-col h-[320px]">
-            <h3 class="text-sm font-extrabold text-slate-700 mb-4 border-b border-slate-100 pb-3">프로젝트 진행상태 비율</h3>
-            <div class="flex-1 relative w-full h-full pb-2"><canvas id="projPieChart"></canvas></div>
-        </div>
-        <div class="bg-white rounded-3xl p-6 border shadow-sm flex flex-col h-[320px]">
-            <h3 class="text-sm font-extrabold text-slate-700 mb-4 border-b border-slate-100 pb-3">월별 출하(완료) 추이 (해당 연도 1~12월)</h3>
-            <div class="flex-1 relative w-full h-full pb-2"><canvas id="projMonthlyChart"></canvas></div>
-        </div>
-        <div class="bg-white rounded-3xl p-6 border shadow-sm flex flex-col h-[320px]">
-            <h3 class="text-sm font-extrabold text-slate-700 mb-4 border-b border-slate-100 pb-3">월별 계획공수 vs 실제 투입공수</h3>
-            <div class="flex-1 relative w-full h-full pb-2"><canvas id="annualPlanVsActualChart"></canvas></div>
-        </div>
-    </div>
+const getSafeString = (val) => (val === null || val === undefined) ? '' : String(val);
 
-    <div class="mt-8 border-t border-slate-200 pt-8 flex flex-col gap-6">
-        <div class="flex flex-col md:flex-row md:items-center justify-between mb-2">
-            <div>
-                <h2 class="text-xl font-black text-indigo-800 flex items-center gap-2"><i class="fa-regular fa-calendar-check text-indigo-500"></i> 기간별 프로젝트 상세 분석</h2>
-            </div>
-            <div class="flex items-center gap-2 mt-4 md:mt-0">
-                <select id="period-type-select" class="bg-white border border-slate-200 shadow-sm px-3 py-2 rounded-xl text-sm font-bold text-slate-700 outline-none cursor-pointer hover:border-indigo-300 transition-colors" onchange="window.changePeriodType()">
-                    <option value="month">월간 조회</option>
-                    <option value="week">주간 조회</option>
-                </select>
-                <div class="flex items-center gap-2 bg-white border border-slate-200 shadow-sm px-3 py-1.5 rounded-xl focus-within:border-indigo-400 transition-colors">
-                    <i class="fa-solid fa-magnifying-glass text-slate-400"></i>
-                    <label class="text-xs font-bold text-slate-600 ml-1">조회 기간</label>
-                    <input type="month" id="period-value-month" class="px-2 py-1 border-0 text-sm font-black text-indigo-700 bg-transparent outline-none cursor-pointer" onchange="window.processPeriodData()">
-                    <input type="week" id="period-value-week" class="px-2 py-1 border-0 text-sm font-black text-indigo-700 bg-transparent outline-none cursor-pointer hidden" onchange="window.processPeriodData()">
-                </div>
-            </div>
-        </div>
+window.loadHomeDashboards = function() {
+    try {
+        if(homeReqSnapshotUnsubscribe) homeReqSnapshotUnsubscribe();
+        if(homeProjSnapshotUnsubscribe) homeProjSnapshotUnsubscribe();
+        if(homeMdLogSnapshotUnsubscribe) homeMdLogSnapshotUnsubscribe();
+        
+        homeProjSnapshotUnsubscribe = onSnapshot(collection(db, "projects_status"), (snapshot) => { 
+            window.allDashProjects = []; 
+            snapshot.forEach(docSnap => window.allDashProjects.push({ id: docSnap.id, ...docSnap.data() })); 
+            if(window.processDashboardData) window.processDashboardData(); 
+        });
 
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[3px] border-l-slate-400">
-                <p class="text-[11px] font-bold text-slate-500 mb-1">대기 / 보류</p>
-                <p class="text-2xl font-black text-slate-700" id="pd-period-pending">0</p>
-            </div>
-            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[3px] border-l-blue-400">
-                <p class="text-[11px] font-bold text-slate-500 mb-1">작업 진행중</p>
-                <p class="text-2xl font-black text-blue-600" id="pd-period-progress">0</p>
-            </div>
-            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[3px] border-l-rose-400">
-                <p class="text-[11px] font-bold text-slate-500 mb-1">납기 임박 (D-7 이내)</p>
-                <p class="text-2xl font-black text-rose-600" id="pd-period-urgent">0</p>
-            </div>
-            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[3px] border-l-emerald-400">
-                <p class="text-[11px] font-bold text-slate-500 mb-1">해당 기간 부하율</p>
-                <p class="text-2xl font-black text-emerald-600" id="pd-period-workload">0.0%</p>
-            </div>
-        </div>
+        homeMdLogSnapshotUnsubscribe = onSnapshot(collection(db, "project_md_logs"), (snapshot) => { 
+            window.allDashMdLogs = []; 
+            snapshot.forEach(docSnap => window.allDashMdLogs.push({ id: docSnap.id, ...docSnap.data() })); 
+            if(window.processDashboardData) window.processDashboardData(); 
+        });
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div class="bg-white rounded-3xl p-6 border shadow-sm flex flex-col h-[320px]">
-                <h3 class="text-sm font-extrabold text-slate-700 mb-4 border-b border-slate-100 pb-3" id="chart-title-1">주차별 완료(출하) 추이</h3>
-                <div class="flex-1 relative w-full h-full pb-2"><canvas id="periodChart1"></canvas></div>
-            </div>
-            <div class="bg-white rounded-3xl p-6 border shadow-sm flex flex-col h-[320px]">
-                <h3 class="text-sm font-extrabold text-slate-700 mb-4 border-b border-slate-100 pb-3" id="chart-title-2">계획공수 vs 실제 투입공수</h3>
-                <div class="flex-1 relative w-full h-full pb-2"><canvas id="periodChart2"></canvas></div>
-            </div>
-            <div class="bg-white rounded-3xl p-6 border shadow-sm flex flex-col h-[320px]">
-                <h3 class="text-sm font-extrabold text-slate-700 mb-4 border-b border-slate-100 pb-3">담당자별 진행 프로젝트</h3>
-                <div class="flex-1 relative w-full h-full pb-2"><canvas id="periodChart3"></canvas></div>
-            </div>
-        </div>
+        setTimeout(() => { if(!document.getElementById('period-value-month')?.value) window.changePeriodType(); }, 100);
+    } catch(e) { console.error("대시보드 초기화 실패:", e); }
+};
 
-        <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col mt-4">
-            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                <h3 class="font-extrabold text-slate-800 text-sm">해당 기간 진행/활성 프로젝트 리스트</h3>
-                <span class="bg-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-1 rounded" id="period-table-count">총 0건</span>
-            </div>
-            <div class="overflow-x-auto custom-scrollbar max-h-[400px]">
-                <table class="w-full text-left border-collapse text-[11px] whitespace-nowrap">
-                    <thead class="bg-white text-slate-500 sticky top-0 z-10 shadow-sm border-b">
-                        <tr>
-                            <th class="p-3 font-bold text-center">파트</th>
-                            <th class="p-3 font-bold text-center">PJT 코드</th>
-                            <th class="p-3 font-bold">프로젝트명</th>
-                            <th class="p-3 font-bold text-center text-rose-500">예정출하일</th>
-                            <th class="p-3 font-bold text-center text-emerald-500">진행률</th>
-                            <th class="p-3 font-bold text-center">현재상태</th>
-                            <th class="p-3 font-bold text-center">예정MD</th>
-                            <th class="p-3 font-bold text-center bg-indigo-50/50 text-indigo-700" id="th-period-md">해당월 투입MD</th>
-                            <th class="p-3 font-bold text-center text-purple-600">최종MD</th>
-                            <th class="p-3 font-bold text-center text-amber-500">편차</th>
-                        </tr>
-                    </thead>
-                    <tbody id="period-table-body" class="divide-y divide-slate-100 text-slate-700">
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
+window.processDashboardData = function() {
+    try {
+        // 1. 기준 연도 동적 자동 생성
+        let years = new Set(); const currentYear = new Date().getFullYear(); years.add(currentYear);
+        (window.allDashProjects || []).forEach(p => { if(p.d_shipEst) years.add(parseInt(p.d_shipEst.substring(0,4))); if(p.d_shipEn) years.add(parseInt(p.d_shipEn.substring(0,4))); });
+        (window.allDashMdLogs || []).forEach(l => { if(l.date) years.add(parseInt(l.date.substring(0,4))); });
+        
+        let yearArray = Array.from(years).filter(y => !isNaN(y) && y > 2000).sort((a,b) => a - b);
+        const yearSelect = document.getElementById('dash-year-select');
+        if (yearSelect) {
+            const currentVal = yearSelect.value || currentYear.toString(); yearSelect.innerHTML = '';
+            yearArray.forEach(y => { yearSelect.innerHTML += `<option value="${y}" ${y.toString() === currentVal ? 'selected' : ''}>${y}년</option>`; });
+            if(yearSelect.value !== currentVal) yearSelect.value = currentVal;
+        }
+
+        const year = yearSelect?.value || currentYear.toString(); 
+        let stats = { estMd: 0, curMd: 0, completed: 0, delayed: 0, pending: 0, progress: 0, inspecting: 0, rejected: 0 }; 
+        let annualPlanData = Array(12).fill(0); let annualActData = Array(12).fill(0); let monthlyCompleted = Array(12).fill(0);
+        let totalShipErrorDays = 0; let shipErrorCount = 0;
+
+        (window.allDashProjects || []).forEach(data => {
+            const shipEn = getSafeString(data.d_shipEn), shipEst = getSafeString(data.d_shipEst), status = getSafeString(data.status);
+            let isInYear = (shipEn.startsWith(year) || shipEst.startsWith(year) || ['pending','progress','inspecting'].includes(status));
+            if(!isInYear) return;
+            stats[status] = (stats[status] || 0) + 1;
+            if(shipEst.startsWith(year)) { let mIdx = parseInt(shipEst.split('-')[1]) - 1; if(mIdx >= 0 && mIdx < 12) annualPlanData[mIdx] += parseFloat(data.estMd) || 0; }
+            if(status === 'completed' && (shipEn.startsWith(year) || shipEst.startsWith(year))) {
+                stats.completed++; let targetDate = shipEn || shipEst;
+                if(targetDate.startsWith(year)) { let mIdx = parseInt(targetDate.split('-')[1]) - 1; if(mIdx >= 0 && mIdx < 12) monthlyCompleted[mIdx]++; }
+            }
+            stats.estMd += parseFloat(data.estMd) || 0;
+            if (status !== 'completed' && shipEst) { if ((new Date(shipEst) - new Date()) / (1000 * 60 * 60 * 24) <= 7) stats.delayed++; }
+            if (shipEn && shipEst && status === 'completed') {
+                const enD = new Date(shipEn), estD = new Date(shipEst);
+                if (!isNaN(enD) && !isNaN(estD)) { totalShipErrorDays += (enD - estD) / (1000*60*60*24); shipErrorCount++; }
+            }
+        });
+
+        (window.allDashMdLogs || []).forEach(log => { 
+            const date = getSafeString(log.date); if(date.startsWith(year)) { let md = parseFloat(log.md) || 0; stats.curMd += md; let mIdx = parseInt(date.split('-')[1]) - 1; if(mIdx >= 0 && mIdx < 12) annualActData[mIdx] += md; } 
+        });
+
+        if(document.getElementById('dash-team-count')) document.getElementById('dash-team-count').innerText = `${window.teamMembers?.length||0}명`;
+        document.getElementById('dash-pd-completed').innerText = stats.completed;
+        document.getElementById('dash-pd-delayed').innerText = stats.delayed;
+        document.getElementById('dash-pd-estMd').innerText = stats.estMd.toFixed(1);
+        document.getElementById('dash-pd-curMd').innerText = stats.curMd.toFixed(1);
+        document.getElementById('dash-pd-variance').innerText = stats.estMd > 0 ? ((stats.curMd - stats.estMd) / stats.estMd * 100).toFixed(1) + '%' : '0%';
+        document.getElementById('dash-pd-ship-error').innerText = shipErrorCount > 0 ? Math.round(totalShipErrorDays / shipErrorCount) : 0;
+        document.getElementById('dash-pd-workload').innerText = window.teamMembers?.length > 0 ? (stats.curMd / (window.teamMembers.length * 240) * 100).toFixed(1) + '%' : '0%';
+
+        window.renderCharts(stats, monthlyCompleted, annualPlanData, annualActData);
+        window.processPeriodData();
+    } catch(e) { console.error("연간 데이터 연산 오류:", e); }
+};
+
+window.renderCharts = function(stats, monthlyCompleted, planData, actData) {
+    const createChart = (id, type, data, options) => {
+        const canvas = document.getElementById(id); if(!canvas) return;
+        if(chartInstances[id]) chartInstances[id].destroy();
+        chartInstances[id] = new Chart(canvas.getContext('2d'), { type, data, options });
+    };
+
+    createChart('projPieChart', 'doughnut', {
+        labels: ['대기/보류', '제작중', '검수중', '완료', '불가'],
+        datasets: [{ data: [stats.pending||0, stats.progress||0, stats.inspecting||0, stats.completed||0, stats.rejected||0], backgroundColor: ['#94a3b8', '#3b82f6', '#f59e0b', '#10b981', '#f43f5e'], borderWidth: 0 }]
+    }, { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } });
+
+    const months = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+    createChart('projMonthlyChart', 'bar', { labels: months, datasets: [{ label: '출하 완료', data: monthlyCompleted, backgroundColor: '#10b981', borderRadius: 4 }] }, { maintainAspectRatio: false });
+    createChart('annualPlanVsActualChart', 'line', { labels: months, datasets: [{ label: '계획 MD', data: planData, borderColor: '#cbd5e1', tension: 0.3 }, { label: '실적 MD', data: actData, borderColor: '#6366f1', tension: 0.3 }] }, { maintainAspectRatio: false });
+};
+
+window.changePeriodType = function() {
+    const type = document.getElementById('period-type-select')?.value || 'month';
+    const mInput = document.getElementById('period-value-month'), wInput = document.getElementById('period-value-week');
+    if (type === 'month') { mInput.classList.remove('hidden'); wInput.classList.add('hidden'); if (!mInput.value) { const d = new Date(); mInput.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; } }
+    else { mInput.classList.add('hidden'); wInput.classList.remove('hidden'); if (!wInput.value && window.getWeekString) wInput.value = window.getWeekString(new Date()); }
+    window.processPeriodData();
+};
+
+window.processPeriodData = function() {
+    const type = document.getElementById('period-type-select')?.value || 'month';
+    const val = type === 'month' ? document.getElementById('period-value-month')?.value : document.getElementById('period-value-week')?.value;
+    if (!val || !window.allDashProjects) return;
+
+    let start = '', end = '';
+    if (type === 'month') { const [y, m] = val.split('-'); start = `${val}-01`; end = `${val}-${new Date(y, m, 0).getDate()}`; }
+    else { if(window.getDatesFromWeek) { const dates = window.getDatesFromWeek(val); start = window.getLocalDateStr(dates.start); end = window.getLocalDateStr(dates.end); } }
+
+    let pending = 0, progress = 0, urgent = 0, periodMdTotal = 0, mgrCounts = {}; const list = [];
+    (window.allDashProjects || []).forEach(p => {
+        let relevant = (['pending','progress','inspecting'].includes(p.status) || (p.d_shipEn >= start && p.d_shipEn <= end) || (p.d_shipEst >= start && p.d_shipEst <= end));
+        if (!relevant) return;
+        let pMd = 0; (window.allDashMdLogs || []).forEach(l => { if (l.projectId === p.id && l.date >= start && l.date <= end) { pMd += parseFloat(l.md) || 0; periodMdTotal += parseFloat(l.md) || 0; } });
+        if (p.status === 'pending') pending++; if (['progress','inspecting'].includes(p.status)) progress++;
+        if (p.status !== 'completed' && p.d_shipEst) { if ((new Date(p.d_shipEst) - new Date()) / (1000*60*60*24) <= 7) urgent++; }
+        if (p.manager && ['progress','inspecting'].includes(p.status)) mgrCounts[p.manager] = (mgrCounts[p.manager] || 0) + 1;
+        list.push({ ...p, periodMd: pMd });
+    });
+
+    document.getElementById('pd-period-pending').innerText = pending; document.getElementById('pd-period-progress').innerText = progress; document.getElementById('pd-period-urgent').innerText = urgent;
+    const team = window.teamMembers?.length || 0;
+    document.getElementById('pd-period-workload').innerText = team > 0 ? (periodMdTotal / (team * (type==='month'?20:5)) * 100).toFixed(1) + '%' : '0%';
+
+    const tbody = document.getElementById('period-table-body');
+    if(tbody) {
+        tbody.innerHTML = list.sort((a,b) => b.periodMd - a.periodMd).map(p => {
+            const statusMap = { 'pending':'대기/보류', 'progress':'진행중', 'inspecting':'검수중', 'completed':'완료', 'rejected':'불가' };
+            return `<tr class="hover:bg-slate-50 border-b">
+                <td class="p-2 text-center">${p.part||'-'}</td><td class="p-2 text-center font-bold text-indigo-700">${p.code||'-'}</td>
+                <td class="p-2 font-bold">${p.name||'-'}</td><td class="p-2 text-center text-rose-500">${p.d_shipEst||'-'}</td>
+                <td class="p-2 text-center text-emerald-600 font-bold">${p.progress||0}%</td><td class="p-2 text-center">${statusMap[p.status]||p.status}</td>
+                <td class="p-2 text-center">${p.estMd||0}</td><td class="p-2 text-center font-black text-indigo-600 bg-indigo-50/30">${p.periodMd.toFixed(1)}</td>
+                <td class="p-2 text-center text-purple-600 font-bold">${p.finalMd||0}</td><td class="p-2 text-center">${(parseFloat(p.finalMd||0) - parseFloat(p.estMd||0)).toFixed(1)}</td>
+            </tr>`;
+        }).join('') || '<tr><td colspan="10" class="text-center p-6 text-slate-400 font-bold">내역 없음</td></tr>';
+        document.getElementById('period-table-count').innerText = `총 ${list.length}건`;
+    }
+    renderPeriodCharts(type, val, list, mgrCounts, periodMdTotal);
+};
+
+function renderPeriodCharts(type, val, projects, mgrCounts, periodMdTotal) {
+    const createChart = (id, cType, data, options) => {
+        const canvas = document.getElementById(id); if(!canvas) return;
+        if(chartInstances[id]) chartInstances[id].destroy();
+        chartInstances[id] = new Chart(canvas.getContext('2d'), { type: cType, data, options });
+    };
+
+    let labels = [], data = [];
+    if (type === 'month') { labels = ['1주','2주','3주','4주','5주','6주']; data = [0,0,0,0,0,0]; projects.forEach(p => { if (p.status === 'completed' && p.d_shipEn?.startsWith(val)) { data[Math.min(5, Math.floor((parseInt(p.d_shipEn.split('-')[2])-1)/7))]++; } }); }
+    else { labels = ['월','화','수','목','금']; data = [0,0,0,0,0]; projects.forEach(p => { if (p.status === 'completed' && p.d_shipEn) { const d = new Date(p.d_shipEn).getDay()-1; if(d>=0 && d<5) data[d]++; } }); }
+    
+    createChart('periodChart1', 'line', { labels, datasets: [{ label: '완료 건수', data, borderColor: '#10b981', backgroundColor: '#10b981', tension: 0.1 }] }, { maintainAspectRatio: false });
+    
+    let est = 0; projects.forEach(p => est += parseFloat(p.estMd) || 0);
+    createChart('periodChart2', 'bar', { labels: ['현재 기간'], datasets: [{ label: '계획 MD', data: [est], backgroundColor: '#cbd5e1' }, { label: '실적 MD', data: [periodMdTotal], backgroundColor: '#6366f1' }] }, { maintainAspectRatio: false });
+
+    let mgrL = Object.keys(mgrCounts), mgrD = Object.values(mgrCounts);
+    createChart('periodChart3', 'bar', { labels: mgrL.length?mgrL:['없음'], datasets: [{ label: '진행중 PJT', data: mgrD.length?mgrD:[0], backgroundColor: '#8b5cf6' }] }, { indexAxis: 'y', maintainAspectRatio: false });
+}
