@@ -1,10 +1,8 @@
 /* eslint-disable */
 import { db } from './firebase.js';
-import { collection, doc, setDoc, getDoc, getDocs, addDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { collection, doc, setDoc, getDoc, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 let simTimer = null;
-window.draggedUnitInfo = null;
-window.draggedProcessIndex = null;
 window.currentProcessData = window.currentProcessData || [];
 window.latestP50Md = 0;
 window.masterPresets = {};
@@ -258,7 +256,7 @@ window.renderChartJS = () => {
         const min = res[0], max = res[res.length-1], bins = new Array(30).fill(0), lbls = new Array(30).fill(''), bs = (max-min)/30||1;
         res.forEach(v => { let i=Math.floor((v-min)/bs); if(i>=30)i=29; if(i>=0)bins[i]++; }); 
         for(let i=0;i<30;i++) lbls[i]=(min+i*bs).toFixed(0);
-        window.theChart = new Chart(ctx, { type: 'bar', data: { labels: lbls, datasets: [{ data: bins, backgroundColor: window.latestHistData.hex, borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false } });
+        window.theChart = new window.Chart(ctx, { type: 'bar', data: { labels: lbls, datasets: [{ data: bins, backgroundColor: window.latestHistData.hex, borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false } });
     }
 };
 
@@ -292,9 +290,9 @@ window.renderGanttChart = () => {
 };
 
 window.exportToExcel = async function() {
-    if (typeof ExcelJS === 'undefined') return window.showToast("ExcelJS 라이브러리가 로드되지 않았습니다.", "error");
+    if (typeof window.ExcelJS === 'undefined') return window.showToast("ExcelJS 라이브러리가 로드되지 않았습니다.", "error");
     try {
-        const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('시뮬레이션_보고서', {views: [{showGridLines: false}]});
+        const wb = new window.ExcelJS.Workbook(), ws = wb.addWorksheet('시뮬레이션_보고서', {views: [{showGridLines: false}]});
         ws.columns = [{ width: 30 }, { width: 20 }, { width: 20 }, { width: 20 }, { width: 20 }];
         let r=1; 
         ws.getCell(`A${r}`).value="■ 공정 데이터"; ws.getCell(`A${r}`).font={bold:true}; r++;
@@ -303,7 +301,7 @@ window.exportToExcel = async function() {
             ws.getCell(`A${r}`).value=p.name; ws.getCell(`B${r}`).value=p.pType; ws.getCell(`C${r}`).value=p.q; ws.getCell(`D${r}`).value=p.m; ws.getCell(`E${r}`).value="-"; r++; 
         });
         const b = await wb.xlsx.writeBuffer();
-        saveAs(new Blob([b]), `AXMS_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+        window.saveAs(new Blob([b]), `AXMS_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
         window.showToast("엑셀 저장 성공");
     } catch(e) { window.showToast("엑셀 실패","error"); }
 };
