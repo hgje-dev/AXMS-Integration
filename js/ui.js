@@ -301,7 +301,9 @@ window.loadNotifications = function() {
 window.readNotification = async function(id) { 
     try { 
         await setDoc(doc(db, "notifications", id), { isRead: true }, { merge: true }); 
-    } catch(e) {} 
+    } catch(e) {
+        console.error(e);
+    } 
 };
 
 window.markAllNotificationsRead = async function() { 
@@ -314,11 +316,14 @@ window.markAllNotificationsRead = async function() {
             batch.update(d.ref, { isRead: true }); 
         }); 
         await batch.commit(); 
-    } catch(e) {} 
+    } catch(e) {
+        console.error(e);
+    } 
 };
 
 window.deleteAllNotifications = async function() { 
-    if(!window.currentUser || !confirm("모든 알림을 삭제하시겠습니까?")) return; 
+    if(!window.currentUser) return;
+    if(!confirm("모든 알림을 삭제하시겠습니까?")) return; 
     try { 
         const q = query(collection(db, "notifications"), where("targetUid", "==", window.currentUser.uid)); 
         const snapshot = await getDocs(q); 
@@ -328,7 +333,9 @@ window.deleteAllNotifications = async function() {
         }); 
         await batch.commit(); 
         window.showToast("알림이 모두 삭제되었습니다."); 
-    } catch(e) {} 
+    } catch(e) {
+        console.error(e);
+    } 
 };
 
 window.handleMention = function(textarea) {
@@ -442,9 +449,9 @@ window.openProjCodeMasterModal = function() {
     }
     
     if(window.pjtCodeMasterList.length === 0) {
-        window.loadProjectCodeMaster();
+        if(window.loadProjectCodeMaster) window.loadProjectCodeMaster();
     } else {
-        window.renderProjectCodeMaster();
+        if(window.renderProjectCodeMaster) window.renderProjectCodeMaster();
     }
 };
 
@@ -474,7 +481,7 @@ window.loadProjectCodeMaster = function() {
         
         const modal = document.getElementById('proj-code-master-modal');
         if(modal && !modal.classList.contains('hidden')) {
-            window.renderProjectCodeMaster();
+            if(window.renderProjectCodeMaster) window.renderProjectCodeMaster();
         }
     });
 };
@@ -548,7 +555,7 @@ window.deleteSelectedProjectCodes = async function() {
     const checkedBoxes = document.querySelectorAll('.pjt-checkbox:checked');
     if (checkedBoxes.length === 0) return;
     
-    if (!confirm('선택한 ' + checkedBoxes.length + '개의 프로젝트 코드를 삭제하시겠습니까?\n(현황판 데이터는 유지됩니다)')) {
+    if (!confirm('선택한 ' + checkedBoxes.length + '개의 프로젝트 코드를 삭제하시겠습니까?\\n(현황판 데이터는 유지됩니다)')) {
         return;
     }
     
@@ -716,7 +723,7 @@ window.addProjectCode = async function() {
 };
 
 window.deleteProjectCode = async function(id) {
-    if(!confirm("이 마스터 코드를 삭제하시겠습니까?\n(기존에 등록된 현황 데이터는 삭제되지 않습니다)")) return;
+    if(!confirm("이 마스터 코드를 삭제하시겠습니까?\\n(기존에 등록된 현황 데이터는 삭제되지 않습니다)")) return;
     try {
         await deleteDoc(doc(db, "pjt_code_master", id));
         window.showToast("삭제되었습니다.");
@@ -766,7 +773,7 @@ window.showAutocomplete = function(inputEl, targetId1, targetId2, isNameSearch) 
         matches.forEach(function(m) {
             let safeCompany = m.company || '업체미상';
             dropHtml += '<li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-slate-700 font-bold text-xs border-b border-slate-50 last:border-0 truncate transition-colors" ';
-            dropHtml += 'onmousedown="window.selectAutocomplete(\'' + m.code + '\', \'' + m.name.replace(/'/g, "\\'") + '\', \'' + m.company + '\', \'' + inputEl.id + '\', \'' + targetId1 + '\', \'' + targetId2 + '\')">';
+            dropHtml += 'onmousedown="window.selectAutocomplete(\'' + m.code + '\', \'' + m.name.replace(/'/g, "\\\\'") + '\', \'' + m.company + '\', \'' + inputEl.id + '\', \'' + targetId1 + '\', \'' + targetId2 + '\')">';
             dropHtml += '<span class="text-indigo-600">[' + m.code + ']</span> ' + m.name + ' <span class="text-[10px] text-slate-400">(' + safeCompany + ')</span>';
             dropHtml += '</li>';
         });
@@ -781,14 +788,14 @@ window.selectAutocomplete = function(code, name, company, sourceId, targetId1, t
     const t1 = document.getElementById(targetId1);
     const t2 = document.getElementById(targetId2);
 
-    if(sourceId === 'ps-code') { 
-        if (sourceEl) sourceEl.value = code; 
-        if(t1) t1.value = name; 
-        if(t2) t2.value = company; 
-    } else { 
-        if (sourceEl) sourceEl.value = name; 
-        if(t1) t1.value = code; 
-        if(t2) t2.value = company; 
+    if (sourceId === 'ps-code') {
+        if (sourceEl) sourceEl.value = code;
+        if (t1) t1.value = name;
+        if (t2) t2.value = company;
+    } else {
+        if (sourceEl) sourceEl.value = name;
+        if (t1) t1.value = code;
+        if (t2) t2.value = company;
     }
 
     const drop = document.getElementById('pjt-autocomplete-dropdown');
@@ -797,22 +804,19 @@ window.selectAutocomplete = function(code, name, company, sourceId, targetId1, t
     }
 };
 
-// ==========================================
-// 클릭 시 팝업 닫기 공통 이벤트 핸들러
-// ==========================================
 document.addEventListener('click', function(e) {
-    const n = document.getElementById('notification-dropdown'); 
-    if(n && !n.classList.contains('hidden') && !e.target.closest('.relative.cursor-pointer')) {
+    const n = document.getElementById('notification-dropdown');
+    if (n && !n.classList.contains('hidden') && !e.target.closest('.relative.cursor-pointer')) {
         n.classList.add('hidden');
     }
-    
-    const m = document.getElementById('mention-dropdown'); 
-    if(m && !m.classList.contains('hidden') && !e.target.closest('#mention-dropdown')) {
+
+    const m = document.getElementById('mention-dropdown');
+    if (m && !m.classList.contains('hidden') && !e.target.closest('#mention-dropdown')) {
         m.classList.add('hidden');
     }
-    
+
     const d = document.getElementById('pjt-autocomplete-dropdown');
-    if(d && !d.classList.contains('hidden') && !e.target.closest('#pjt-autocomplete-dropdown') && !e.target.closest('input[oninput*="showAutocomplete"]')) {
+    if (d && !d.classList.contains('hidden') && !e.target.closest('#pjt-autocomplete-dropdown') && !e.target.closest('input[oninput*="showAutocomplete"]')) {
         d.classList.add('hidden');
     }
 });
