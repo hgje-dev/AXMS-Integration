@@ -1,6 +1,6 @@
 /* eslint-disable */
 import { db } from './firebase.js';
-import { collection, onSnapshot } from '[https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js](https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js)';
+import { collection, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 let homeReqSnapshotUnsubscribe = null;
 let homeProjSnapshotUnsubscribe = null;
@@ -377,8 +377,7 @@ window.processPeriodData = function() {
     window.allDashProjects.forEach(function(p) {
         let relevant = false;
         if (p.status === 'pending' || p.status === 'progress' || p.status === 'inspecting') relevant = true;
-        if (p.d_shipEn && p.d_shipEn >= start && p.d_shipEn <= end) relevant = true;
-        if (p.d_shipEst && p.d_shipEst >= start && p.d_shipEst <= end) relevant = true;
+        if (p.status === 'completed' && p.d_shipEn && p.d_shipEn >= start && p.d_shipEn <= end) relevant = true;
         if (!relevant) return;
         
         let pMd = 0; 
