@@ -5,19 +5,24 @@ import { collection, doc, setDoc, addDoc, deleteDoc, query, onSnapshot, where } 
 let currentWeeklyLogUnsubscribe = null;
 let currentScheduleUnsubscribe = null;
 
-// 상태 관리
 window.currentWeeklyLogList = [];
 window.currentScheduleList = [];
 window.draftTasks = []; 
-window.wlInvolvedProjects = []; // 다중 프로젝트 관리 배열
+window.wlInvolvedProjects = []; 
 window.activeWeeklyTab = 'team'; 
 
-// DOM 안전 접근 헬퍼 함수
-const getEl = function(id) { return document.getElementById(id); };
-const setVal = function(id, val) { const el = getEl(id); if(el) el.value = val; };
-const setText = function(id, txt) { const el = getEl(id); if(el) el.innerText = txt; };
+const getEl = function(id) { 
+    return document.getElementById(id); 
+};
+const setVal = function(id, val) { 
+    const el = getEl(id); 
+    if (el) el.value = val; 
+};
+const setText = function(id, txt) { 
+    const el = getEl(id); 
+    if (el) el.innerText = txt; 
+};
 
-// 탭 스위치
 window.switchWeeklyTab = function(tabName) {
     window.activeWeeklyTab = tabName;
     const btnTeam = getEl('tab-team-btn');
@@ -25,26 +30,25 @@ window.switchWeeklyTab = function(tabName) {
     const viewTeam = getEl('weekly-team-view');
     const viewMy = getEl('weekly-my-view');
 
-    if(tabName === 'team') {
-        if(btnTeam) btnTeam.className = "px-6 py-2 text-sm font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-2";
-        if(btnMy) btnMy.className = "px-6 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-2";
-        if(viewTeam) viewTeam.classList.remove('hidden');
-        if(viewMy) viewMy.classList.add('hidden');
+    if (tabName === 'team') {
+        if (btnTeam) btnTeam.className = "px-6 py-2 text-sm font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-2";
+        if (btnMy) btnMy.className = "px-6 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-2";
+        if (viewTeam) viewTeam.classList.remove('hidden');
+        if (viewMy) viewMy.classList.add('hidden');
     } else {
-        if(btnMy) btnMy.className = "px-6 py-2 text-sm font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-2";
-        if(btnTeam) btnTeam.className = "px-6 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-2";
-        if(viewMy) viewMy.classList.remove('hidden');
-        if(viewTeam) viewTeam.classList.add('hidden');
+        if (btnMy) btnMy.className = "px-6 py-2 text-sm font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-2";
+        if (btnTeam) btnTeam.className = "px-6 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-2";
+        if (viewMy) viewMy.classList.remove('hidden');
+        if (viewTeam) viewTeam.classList.add('hidden');
     }
 };
 
-// [커스텀] 날짜 디스플레이 로직
 window.handleWeekChange = function(val) {
-    if(!val) return;
-    let parts = val.split('-W');
-    if(parts.length === 2) {
-        let year = parts[0];
-        let week = parseInt(parts[1], 10);
+    if (!val) return;
+    const parts = val.split('-W');
+    if (parts.length === 2) {
+        const year = parts[0];
+        const week = parseInt(parts[1], 10);
         setText('weekly-display-text', year + ', ' + week + '번째 주');
     }
     window.loadWeeklyLogsData();
@@ -52,97 +56,118 @@ window.handleWeekChange = function(val) {
 
 window.changeWeeklyWeek = function(offset) {
     const weekInput = getEl('weekly-log-filter-week');
-    if(!weekInput || !weekInput.value) {
-        if(window.getWeekString) {
-            weekInput.value = window.getWeekString(new Date());
-        }
+    if (!weekInput) return;
+    
+    if (!weekInput.value && window.getWeekString) {
+        weekInput.value = window.getWeekString(new Date());
     }
-    let parts = weekInput.value.split('-W');
-    if(parts.length === 2) {
-        let year = parts[0];
-        let week = parts[1];
-        let d = new Date(year, 0, (parseInt(week) + offset - 1) * 7 + 1);
-        if(window.getWeekString) {
+    
+    if (!weekInput.value) return;
+
+    const parts = weekInput.value.split('-W');
+    if (parts.length === 2) {
+        const year = parts[0];
+        const week = parts[1];
+        const d = new Date(year, 0, (parseInt(week) + offset - 1) * 7 + 1);
+        if (window.getWeekString) {
             weekInput.value = window.getWeekString(d);
             window.handleWeekChange(weekInput.value);
         }
     }
 };
 
-// ==========================================
-// 전역 팀원 관리 모달 (어디서든 호출 가능하게 덮어쓰기)
-// ==========================================
 window.openTeamModal = function() {
     const m = getEl('team-modal');
-    if(m) { m.classList.remove('hidden'); m.classList.add('flex'); }
+    if (m) { 
+        m.classList.remove('hidden'); 
+        m.classList.add('flex'); 
+    }
     
-    if(typeof window.populateUserDropdowns === 'function') window.populateUserDropdowns();
-    else {
+    if (typeof window.populateUserDropdowns === 'function') {
+        window.populateUserDropdowns();
+    } else {
         const sel = getEl('new-team-name');
-        if(sel && window.allSystemUsers) {
-            sel.innerHTML = '<option value="">선택</option>' + window.allSystemUsers.map(function(u){ return '<option value="' + u.name + '" data-uid="' + u.uid + '">' + u.name + ' (' + (u.team||'소속없음') + ')</option>'; }).join('');
+        if (sel && window.allSystemUsers) {
+            sel.innerHTML = '<option value="">선택</option>' + window.allSystemUsers.map(function(u) { 
+                return '<option value="' + u.name + '" data-uid="' + u.uid + '">' + u.name + ' (' + (u.team || '소속없음') + ')</option>'; 
+            }).join('');
         }
     }
     
-    if(typeof window.renderTeamMembers === 'function') window.renderTeamMembers();
-    else {
+    if (typeof window.renderTeamMembers === 'function') {
+        window.renderTeamMembers();
+    } else {
         const tbody = getEl('team-list-tbody');
         const count = getEl('team-modal-count');
-        let list = window.teamMembers || [];
-        if(count) count.innerText = '총 ' + list.length + '명';
-        if(tbody) {
-            if(list.length === 0) tbody.innerHTML = '<tr><td colspan="3" class="text-center p-6 text-slate-400 font-bold">등록된 팀원이 없습니다.</td></tr>';
-            else tbody.innerHTML = list.map(function(t){ return '<tr class="hover:bg-slate-50"><td class="p-3 text-center font-bold text-indigo-600">' + t.part + '</td><td class="p-3 font-bold text-slate-700">' + t.name + '</td><td class="p-3 text-center"><button onclick="window.deleteTeamMember(\'' + t.id + '\')" class="text-slate-400 hover:text-rose-500 p-1"><i class="fa-solid fa-trash-can"></i></button></td></tr>'; }).join('');
+        const list = window.teamMembers || [];
+        if (count) count.innerText = '총 ' + list.length + '명';
+        if (tbody) {
+            if (list.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center p-6 text-slate-400 font-bold">등록된 팀원이 없습니다.</td></tr>';
+            } else {
+                tbody.innerHTML = list.map(function(t) { 
+                    return '<tr class="hover:bg-slate-50"><td class="p-3 text-center font-bold text-indigo-600">' + t.part + '</td><td class="p-3 font-bold text-slate-700">' + t.name + '</td><td class="p-3 text-center"><button onclick="window.deleteTeamMember(\'' + t.id + '\')" class="text-slate-400 hover:text-rose-500 p-1"><i class="fa-solid fa-trash-can"></i></button></td></tr>'; 
+                }).join('');
+            }
         }
     }
 };
 
 window.closeTeamModal = function() {
     const m = getEl('team-modal');
-    if(m) { m.classList.add('hidden'); m.classList.remove('flex'); }
+    if (m) { 
+        m.classList.add('hidden'); 
+        m.classList.remove('flex'); 
+    }
 };
 
 window.addTeamMember = async function() {
     const sel = getEl('new-team-name');
     const partSel = getEl('new-team-part');
-    if(!sel || !sel.value) { if(window.showToast) window.showToast("사용자를 선택하세요.", "error"); return; }
+    if (!sel || !sel.value) { 
+        if (window.showToast) window.showToast("사용자를 선택하세요.", "error"); 
+        return; 
+    }
     
     const uid = sel.options[sel.selectedIndex].dataset.uid;
     const name = sel.value;
     const part = partSel.value;
+    const members = window.teamMembers || [];
     
-    if((window.teamMembers||[]).find(function(t){ return t.name === name; })) {
-        if(window.showToast) window.showToast("이미 등록된 팀원입니다.", "error"); return;
+    const exists = members.find(function(t) { return t.name === name; });
+    if (exists) {
+        if (window.showToast) window.showToast("이미 등록된 팀원입니다.", "error"); 
+        return;
     }
+    
     try {
         await addDoc(collection(db, "team_members"), { uid: uid, name: name, part: part, createdAt: Date.now() });
-        if(window.showToast) window.showToast("팀원이 추가되었습니다.");
+        if (window.showToast) window.showToast("팀원이 추가되었습니다.");
         window.openTeamModal(); 
-    } catch(e) { if(window.showToast) window.showToast("추가 실패", "error"); }
+    } catch (e) { 
+        if (window.showToast) window.showToast("추가 실패", "error"); 
+    }
 };
 
 window.deleteTeamMember = async function(id) {
-    if(!confirm("이 팀원을 삭제하시겠습니까?")) return;
+    if (!confirm("이 팀원을 삭제하시겠습니까?")) return;
     try {
         await deleteDoc(doc(db, "team_members", id));
-        if(window.showToast) window.showToast("삭제되었습니다.");
+        if (window.showToast) window.showToast("삭제되었습니다.");
         window.openTeamModal(); 
-    } catch(e) { if(window.showToast) window.showToast("삭제 실패", "error"); }
+    } catch (e) { 
+        if (window.showToast) window.showToast("삭제 실패", "error"); 
+    }
 };
 
-
-// ==========================================
-// 데이터 로드 및 렌더링
-// ==========================================
 window.loadWeeklyLogsData = function() { 
     const weekInput = getEl('weekly-log-filter-week');
-    if(!weekInput) return;
+    if (!weekInput || !weekInput.value) return;
     const w = weekInput.value; 
-    if(!w) return; 
 
     window.handleWeekChange(w);
     
-    if(currentWeeklyLogUnsubscribe) currentWeeklyLogUnsubscribe(); 
+    if (currentWeeklyLogUnsubscribe) currentWeeklyLogUnsubscribe(); 
     currentWeeklyLogUnsubscribe = onSnapshot(query(collection(db, "weekly_logs_v2"), where("week", "==", w)), function(s) { 
         window.currentWeeklyLogList = []; 
         let statSub = 0, statComp = 0, statProg = 0, statIssue = 0;
@@ -151,15 +176,15 @@ window.loadWeeklyLogsData = function() {
             const data = Object.assign({ id: d.id }, d.data());
             window.currentWeeklyLogList.push(data);
             
-            if(data.isSubmitted) {
+            if (data.isSubmitted) {
                 statSub++;
                 const issueText = String(data.issues || '').trim();
-                if(issueText !== '') statIssue++;
+                if (issueText !== '') statIssue++;
                 
-                if(data.tasks && Array.isArray(data.tasks)) {
+                if (data.tasks && Array.isArray(data.tasks)) {
                     data.tasks.forEach(function(t) {
-                        if(t.status === '완료') statComp++;
-                        if(t.status === '진행 중') statProg++;
+                        if (t.status === '완료') statComp++;
+                        if (t.status === '진행 중') statProg++;
                     });
                 }
             }
@@ -174,8 +199,8 @@ window.loadWeeklyLogsData = function() {
         window.checkMissingMembers();
     }); 
 
-    if(currentScheduleUnsubscribe) currentScheduleUnsubscribe();
-    if(window.currentUser) {
+    if (currentScheduleUnsubscribe) currentScheduleUnsubscribe();
+    if (window.currentUser) {
         currentScheduleUnsubscribe = onSnapshot(query(collection(db, "weekly_schedules"), where("week", "==", w), where("authorUid", "==", window.currentUser.uid)), function(s) {
             window.currentScheduleList = [];
             s.forEach(function(d) {
@@ -187,29 +212,34 @@ window.loadWeeklyLogsData = function() {
 };
 
 window.checkMissingMembers = function() {
-    if(!window.teamMembers || window.teamMembers.length === 0) return;
+    const members = window.teamMembers || [];
+    if (members.length === 0) return;
     
-    const submittedNames = window.currentWeeklyLogList.filter(function(l) { return l.isSubmitted; }).map(function(l) { return l.authorName; });
+    const submittedNames = window.currentWeeklyLogList.filter(function(l) { 
+        return l.isSubmitted; 
+    }).map(function(l) { 
+        return l.authorName; 
+    });
     
     let missing = [];
-    window.teamMembers.forEach(function(tm) {
-        if(submittedNames.indexOf(tm.name) === -1 && tm.name !== '시스템관리자') {
+    members.forEach(function(tm) {
+        if (submittedNames.indexOf(tm.name) === -1 && tm.name !== '시스템관리자') {
             missing.push(tm);
         }
     });
 
     const card = getEl('missing-members-card');
-    if(!card) return;
+    if (!card) return;
 
     const listEl = getEl('missing-members-list');
     const countEl = getEl('missing-count');
     
-    if(missing.length > 0) {
+    if (missing.length > 0) {
         card.classList.remove('hidden');
-        if(countEl) countEl.innerText = missing.length;
-        if(listEl) {
+        if (countEl) countEl.innerText = missing.length;
+        if (listEl) {
             listEl.innerHTML = missing.map(function(m) {
-                return '<span class="bg-white border border-orange-200 text-orange-700 px-2 py-1 rounded-full text-[10px] font-bold shadow-sm">' + m.name + ' <span class="text-orange-400 font-normal ml-1">' + (m.part||'') + '</span></span>';
+                return '<span class="bg-white border border-orange-200 text-orange-700 px-2 py-1 rounded-full text-[10px] font-bold shadow-sm">' + m.name + ' <span class="text-orange-400 font-normal ml-1">' + (m.part || '') + '</span></span>';
             }).join('');
         }
     } else {
@@ -218,7 +248,7 @@ window.checkMissingMembers = function() {
 };
 
 window.urgeMissingMembers = function() {
-    if(window.showToast) window.showToast("작성 독려 알림이 발송되었습니다.", "success");
+    if (window.showToast) window.showToast("작성 독려 알림이 발송되었습니다.", "success");
 };
 
 window.filterWeeklyLogs = function() {
@@ -227,7 +257,7 @@ window.filterWeeklyLogs = function() {
 
 window.renderWeeklyLogs = function() { 
     const feed = getEl('weekly-log-feed'); 
-    if(!feed) return; 
+    if (!feed) return; 
 
     const searchNameEl = getEl('weekly-search-name');
     const searchContentEl = getEl('weekly-search-content');
@@ -235,58 +265,70 @@ window.renderWeeklyLogs = function() {
     const searchName = searchNameEl ? searchNameEl.value.toLowerCase() : '';
     const searchContent = searchContentEl ? searchContentEl.value.toLowerCase() : '';
 
-    let displayList = window.currentWeeklyLogList.filter(function(l) { return l.isSubmitted; });
+    let displayList = window.currentWeeklyLogList.filter(function(l) { 
+        return l.isSubmitted; 
+    });
 
-    if(searchName) {
-        displayList = displayList.filter(function(l) { return (l.authorName || '').toLowerCase().includes(searchName); });
+    if (searchName) {
+        displayList = displayList.filter(function(l) { 
+            return (l.authorName || '').toLowerCase().includes(searchName); 
+        });
     }
-    if(searchContent) {
+    
+    if (searchContent) {
         displayList = displayList.filter(function(l) {
             let fullText = String(l.issues || '') + ' ';
-            if(l.involvedProjects && Array.isArray(l.involvedProjects)) {
-                l.involvedProjects.forEach(function(p){ fullText += ' ' + String(p.name || ''); });
+            if (l.involvedProjects && Array.isArray(l.involvedProjects)) {
+                l.involvedProjects.forEach(function(p) { fullText += ' ' + String(p.name || ''); });
             } else {
                 fullText += String(l.projectName || '');
             }
 
-            if(l.tasks && Array.isArray(l.tasks)) {
+            if (l.tasks && Array.isArray(l.tasks)) {
                 l.tasks.forEach(function(t) { fullText += ' ' + String(t.content || ''); });
             }
             return fullText.toLowerCase().includes(searchContent);
         });
     }
 
-    displayList.sort(function(a,b) { return (b.updatedAt||0) - (a.updatedAt||0); });
+    displayList.sort(function(a, b) { 
+        return (b.updatedAt || 0) - (a.updatedAt || 0); 
+    });
 
-    if(displayList.length === 0) {
+    if (displayList.length === 0) {
         feed.innerHTML = '<div class="text-center p-10 bg-white rounded-2xl border border-slate-200 text-slate-400 font-bold shadow-sm">제출된 일지가 없거나 검색 결과가 없습니다.</div>';
         return;
     }
 
-    const orderMap = { "월요일":1, "화요일":2, "수요일":3, "목요일":4, "금요일":5, "토요일":6, "일요일":7, "주간 공통":99 };
+    const orderMap = { "월요일": 1, "화요일": 2, "수요일": 3, "목요일": 4, "금요일": 5, "토요일": 6, "일요일": 7, "주간 공통": 99 };
 
     feed.innerHTML = displayList.map(function(log) {
         let tasksByDay = {};
-        if(log.tasks && Array.isArray(log.tasks)) {
+        if (log.tasks && Array.isArray(log.tasks)) {
             log.tasks.forEach(function(t) {
-                let safeDay = t.day || '기타';
-                if(!tasksByDay[safeDay]) tasksByDay[safeDay] = [];
+                const safeDay = t.day || '기타';
+                if (!tasksByDay[safeDay]) tasksByDay[safeDay] = [];
                 tasksByDay[safeDay].push(t);
             });
         }
 
-        let sortedDays = Object.keys(tasksByDay).sort(function(a, b) { return (orderMap[a]||0) - (orderMap[b]||0); });
+        const sortedDays = Object.keys(tasksByDay).sort(function(a, b) { 
+            return (orderMap[a] || 0) - (orderMap[b] || 0); 
+        });
 
-        let tasksHtml = sortedDays.map(function(day) {
+        const tasksHtml = sortedDays.map(function(day) {
             let dayHtml = '<div class="bg-slate-50 px-4 py-1.5 rounded-lg text-xs font-bold text-slate-500 mb-2 mt-4 flex items-center gap-1.5"><i class="fa-regular fa-clock"></i> ' + day + '</div><ul class="space-y-2 ml-2 border-l-2 border-slate-100 pl-4">';
             
             tasksByDay[day].forEach(function(t) {
-                let statusBadge = t.status === '완료' ? '<span class="text-[10px] font-bold border border-emerald-200 text-emerald-600 px-1.5 py-0.5 rounded shadow-sm bg-white">완료</span>' 
-                                : (t.status === '진행 중' ? '<span class="text-[10px] font-bold border border-blue-200 text-blue-600 px-1.5 py-0.5 rounded shadow-sm bg-white">진행 중</span>' 
-                                : '<span class="text-[10px] font-bold border border-slate-200 text-slate-500 px-1.5 py-0.5 rounded shadow-sm bg-white">보류</span>');
+                let statusBadge = '<span class="text-[10px] font-bold border border-slate-200 text-slate-500 px-1.5 py-0.5 rounded shadow-sm bg-white">보류</span>';
+                if (t.status === '완료') {
+                    statusBadge = '<span class="text-[10px] font-bold border border-emerald-200 text-emerald-600 px-1.5 py-0.5 rounded shadow-sm bg-white">완료</span>';
+                } else if (t.status === '진행 중') {
+                    statusBadge = '<span class="text-[10px] font-bold border border-blue-200 text-blue-600 px-1.5 py-0.5 rounded shadow-sm bg-white">진행 중</span>';
+                }
                 
-                let locBadge = '<span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded ml-1"><i class="fa-solid fa-location-dot text-[9px]"></i> ' + (t.loc||'사내') + '</span>';
-                let safeContent = window.formatMentions ? window.formatMentions(String(t.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')) : String(t.content || '');
+                const locBadge = '<span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded ml-1"><i class="fa-solid fa-location-dot text-[9px]"></i> ' + (t.loc || '사내') + '</span>';
+                const safeContent = window.formatMentions ? window.formatMentions(String(t.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')) : String(t.content || '');
                 
                 dayHtml += '<li class="flex justify-between items-start gap-4 hover:bg-slate-50 p-1.5 rounded-lg transition-colors group"><div class="flex items-start gap-2 text-sm text-slate-700 font-medium"><span class="text-slate-300 mt-1 text-[8px]"><i class="fa-solid fa-circle"></i></span><div>' + safeContent + ' ' + locBadge + '</div></div><div class="shrink-0 pt-0.5">' + statusBadge + '</div></li>';
             });
@@ -296,51 +338,50 @@ window.renderWeeklyLogs = function() {
 
         let issuesHtml = '';
         const safeIssuesStr = String(log.issues || '').trim();
-        if(safeIssuesStr !== '') {
-            let formattedIssue = window.formatMentions ? window.formatMentions(safeIssuesStr.replace(/</g, '&lt;').replace(/>/g, '&gt;')) : safeIssuesStr;
+        if (safeIssuesStr !== '') {
+            const formattedIssue = window.formatMentions ? window.formatMentions(safeIssuesStr.replace(/</g, '&lt;').replace(/>/g, '&gt;')) : safeIssuesStr;
             issuesHtml = '<div class="mt-5 bg-[#fffbf0] border border-orange-100 rounded-xl p-4 shadow-sm"><div class="text-[11px] font-bold text-orange-600 mb-2 flex items-center gap-1.5"><i class="fa-regular fa-comment-dots"></i> 요청사항 및 이슈</div><div class="text-sm font-medium text-slate-700 leading-relaxed">' + formattedIssue + '</div></div>';
         }
 
         let bottomMetaHtml = '<div class="mt-4 pt-3 border-t border-slate-100 flex gap-2 flex-wrap text-[11px] font-bold text-slate-500 items-center">';
         
         let pjtTags = '';
-        if(log.involvedProjects && Array.isArray(log.involvedProjects)) {
-            pjtTags = log.involvedProjects.map(function(p){ return '<span class="bg-indigo-50 text-indigo-600 border border-indigo-100 px-2 py-1 rounded-lg shadow-sm"><i class="fa-solid fa-folder-open"></i> ' + (p.name||'') + '</span>'; }).join('');
-        } else if(log.projectName) { 
+        if (log.involvedProjects && Array.isArray(log.involvedProjects)) {
+            pjtTags = log.involvedProjects.map(function(p) { 
+                return '<span class="bg-indigo-50 text-indigo-600 border border-indigo-100 px-2 py-1 rounded-lg shadow-sm"><i class="fa-solid fa-folder-open"></i> ' + (p.name || '') + '</span>'; 
+            }).join('');
+        } else if (log.projectName) { 
             pjtTags = '<span class="bg-indigo-50 text-indigo-600 border border-indigo-100 px-2 py-1 rounded-lg shadow-sm"><i class="fa-solid fa-folder-open"></i> ' + log.projectName + '</span>';
         }
 
         bottomMetaHtml += pjtTags;
-        if(log.totalHours || log.totalMins) bottomMetaHtml += '<span class="ml-auto flex items-center gap-1.5"><i class="fa-regular fa-clock"></i> 투입: ' + (log.totalHours||0) + '시간 ' + (log.totalMins||0) + '분</span>';
+        if (log.totalHours || log.totalMins) bottomMetaHtml += '<span class="ml-auto flex items-center gap-1.5"><i class="fa-regular fa-clock"></i> 투입: ' + (log.totalHours || 0) + '시간 ' + (log.totalMins || 0) + '분</span>';
         bottomMetaHtml += '</div>';
 
         let actionHtml = '';
-        if(window.currentUser && (log.authorUid === window.currentUser.uid || (window.userProfile && window.userProfile.role === 'admin'))) {
+        if (window.currentUser && (log.authorUid === window.currentUser.uid || (window.userProfile && window.userProfile.role === 'admin'))) {
             actionHtml = '<div class="flex gap-2"><button onclick="window.editWeeklyLog(\'' + log.id + '\')" class="text-emerald-500 hover:text-emerald-700 transition-colors bg-emerald-50 w-8 h-8 rounded-full flex items-center justify-center"><i class="fa-solid fa-pen"></i></button><button onclick="window.deleteWeeklyLog(\'' + log.id + '\')" class="text-slate-400 hover:text-rose-500 transition-colors w-8 h-8 rounded-full flex items-center justify-center"><i class="fa-solid fa-trash-can"></i></button></div>';
         }
 
-        let dateStr = log.updatedAt ? window.getLocalDateStr(new Date(log.updatedAt)) : '';
-        let authorName = log.authorName || '알수없음';
-        let initial = window.getChosung ? window.getChosung(authorName).charAt(0) : authorName.charAt(0);
+        const dateStr = log.updatedAt ? window.getLocalDateStr(new Date(log.updatedAt)) : '';
+        const authorName = log.authorName || '알수없음';
+        const initial = window.getChosung ? window.getChosung(authorName).charAt(0) : authorName.charAt(0);
 
-        return '<div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm"><div class="flex justify-between items-start mb-4"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-black text-lg">' + initial + '</div><div><div class="font-black text-slate-800 text-base">' + authorName + ' <span class="text-[10px] font-bold text-slate-400 border border-slate-200 px-1.5 py-0.5 rounded ml-1 bg-slate-50">' + (log.authorTeam||'소속없음') + '</span></div><div class="text-[11px] text-slate-400 font-bold mt-0.5">' + dateStr + ' (' + window.getWeekString(new Date(log.updatedAt || Date.now())) + ')</div></div></div>' + actionHtml + '</div>' + tasksHtml + issuesHtml + bottomMetaHtml + '</div>';
+        return '<div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm"><div class="flex justify-between items-start mb-4"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-black text-lg">' + initial + '</div><div><div class="font-black text-slate-800 text-base">' + authorName + ' <span class="text-[10px] font-bold text-slate-400 border border-slate-200 px-1.5 py-0.5 rounded ml-1 bg-slate-50">' + (log.authorTeam || '소속없음') + '</span></div><div class="text-[11px] text-slate-400 font-bold mt-0.5">' + dateStr + ' (' + window.getWeekString(new Date(log.updatedAt || Date.now())) + ')</div></div></div>' + actionHtml + '</div>' + tasksHtml + issuesHtml + bottomMetaHtml + '</div>';
     }).join('');
 };
 
-// ==========================================
-// 다중 프로젝트 추가/삭제 모듈
-// ==========================================
 window.addWlProject = function() {
     const inputEl = getEl('wl-pjt-input');
     const codeEl = getEl('wl-temp-pjt-code');
-    if(!inputEl) return;
+    if (!inputEl) return;
     
     const name = inputEl.value.trim();
-    if(!name) return;
+    if (!name) return;
 
     window.wlInvolvedProjects.push({ name: name, code: codeEl ? codeEl.value : '' });
     inputEl.value = '';
-    if(codeEl) codeEl.value = '';
+    if (codeEl) codeEl.value = '';
     window.renderWlProjects();
 };
 
@@ -351,20 +392,16 @@ window.removeWlProject = function(index) {
 
 window.renderWlProjects = function() {
     const container = getEl('wl-pjt-tags');
-    if(!container) return;
+    if (!container) return;
     container.innerHTML = window.wlInvolvedProjects.map(function(p, i) {
         return '<span class="bg-slate-100 text-slate-700 border border-slate-200 px-2 py-1 rounded-lg text-xs font-bold shadow-sm flex items-center gap-1"><i class="fa-solid fa-folder-open text-indigo-400"></i> ' + p.name + ' <button onclick="window.removeWlProject(' + i + ')" class="text-slate-400 hover:text-rose-500 ml-1 transition-colors"><i class="fa-solid fa-xmark"></i></button></span>';
     }).join('');
 };
 
-
-// ==========================================
-// 일지 작성 모달 관리
-// ==========================================
 window.openWeeklyLogWriteModal = function(editId) { 
     const weekInput = getEl('weekly-log-filter-week');
     if (!weekInput) {
-        if(window.showToast) window.showToast("오류: HTML 파일이 최신버전이 아닙니다.", "error");
+        if (window.showToast) window.showToast("오류: HTML 파일이 최신버전이 아닙니다.", "error");
         return;
     }
     
@@ -378,15 +415,17 @@ window.openWeeklyLogWriteModal = function(editId) {
     }
 
     const draftIdEl = getEl('weekly-draft-id');
-    if(draftIdEl) draftIdEl.value = existingLog ? existingLog.id : '';
+    if (draftIdEl) draftIdEl.value = existingLog ? existingLog.id : '';
     
-    window.draftTasks = existingLog && existingLog.tasks ? existingLog.tasks.map(function(t, i) { return Object.assign({}, t, { id: t.id || Date.now() + i }); }) : [];
+    window.draftTasks = existingLog && existingLog.tasks ? existingLog.tasks.map(function(t, i) { 
+        return Object.assign({}, t, { id: t.id || Date.now() + i }); 
+    }) : [];
     
-    const issuesEl = getEl('wl-issues'); if(issuesEl) issuesEl.value = existingLog ? (existingLog.issues || '') : '';
-    const timeHEl = getEl('wl-time-h'); if(timeHEl) timeHEl.value = existingLog ? (existingLog.totalHours || '') : '';
-    const timeMEl = getEl('wl-time-m'); if(timeMEl) timeMEl.value = existingLog ? (existingLog.totalMins || '') : '';
+    const issuesEl = getEl('wl-issues'); if (issuesEl) issuesEl.value = existingLog ? (existingLog.issues || '') : '';
+    const timeHEl = getEl('wl-time-h'); if (timeHEl) timeHEl.value = existingLog ? (existingLog.totalHours || '') : '';
+    const timeMEl = getEl('wl-time-m'); if (timeMEl) timeMEl.value = existingLog ? (existingLog.totalMins || '') : '';
 
-    if(existingLog && existingLog.involvedProjects && Array.isArray(existingLog.involvedProjects)) {
+    if (existingLog && existingLog.involvedProjects && Array.isArray(existingLog.involvedProjects)) {
         window.wlInvolvedProjects = existingLog.involvedProjects.slice();
     } else if (existingLog && existingLog.projectName) {
         window.wlInvolvedProjects = [{ name: existingLog.projectName, code: existingLog.projectCode || '' }];
@@ -396,8 +435,8 @@ window.openWeeklyLogWriteModal = function(editId) {
     window.renderWlProjects();
 
     const badge = getEl('write-status-badge');
-    if(badge) {
-        if(existingLog && existingLog.isSubmitted) {
+    if (badge) {
+        if (existingLog && existingLog.isSubmitted) {
             badge.className = "bg-emerald-100 text-emerald-600 text-[10px] px-2 py-0.5 rounded-full font-bold ml-2 shadow-sm";
             badge.innerText = "제출 완료됨";
         } else {
@@ -407,12 +446,12 @@ window.openWeeklyLogWriteModal = function(editId) {
     }
 
     const contentEl = getEl('wl-new-content');
-    if(contentEl) contentEl.value = '';
+    if (contentEl) contentEl.value = '';
     
     window.renderDraftTasks();
 
     const modal = getEl('weekly-log-write-modal');
-    if(modal) {
+    if (modal) {
         modal.classList.remove('hidden'); 
         modal.classList.add('flex'); 
     }
@@ -420,7 +459,7 @@ window.openWeeklyLogWriteModal = function(editId) {
 
 window.closeWeeklyLogWriteModal = function() { 
     const modal = getEl('weekly-log-write-modal');
-    if(modal) {
+    if (modal) {
         modal.classList.add('hidden'); 
         modal.classList.remove('flex'); 
     }
@@ -428,14 +467,14 @@ window.closeWeeklyLogWriteModal = function() {
 
 window.editWeeklyLog = function(id) {
     const log = window.currentWeeklyLogList.find(function(l) { return l.id === id; });
-    if(!log) return;
+    if (!log) return;
     window.openWeeklyLogWriteModal(id);
 };
 
 window.addWeeklyTaskRow = function() {
     const contentEl = getEl('wl-new-content');
-    if(!contentEl) {
-        if(window.showToast) window.showToast("입력창을 찾을 수 없습니다.", "error");
+    if (!contentEl) {
+        if (window.showToast) window.showToast("입력창을 찾을 수 없습니다.", "error");
         return;
     }
 
@@ -448,8 +487,8 @@ window.addWeeklyTaskRow = function() {
     const loc = locEl ? locEl.value : '사내';
     const content = contentEl.value.trim();
 
-    if(!content) {
-        if(window.showToast) window.showToast("업무 내용을 입력하세요.", "warning");
+    if (!content) {
+        if (window.showToast) window.showToast("업무 내용을 입력하세요.", "warning");
         return;
     }
 
@@ -465,19 +504,21 @@ window.removeWeeklyTaskRow = function(taskId) {
 
 window.renderDraftTasks = function() {
     const listEl = document.getElementById('wl-task-list');
-    if(!listEl) return;
+    if (!listEl) return;
 
-    if(window.draftTasks.length === 0) {
+    if (window.draftTasks.length === 0) {
         listEl.innerHTML = '<div class="text-center p-4 text-[11px] font-bold text-slate-400 bg-slate-100 rounded-xl border border-slate-200 border-dashed">추가된 업무가 없습니다.</div>';
         return;
     }
 
-    const orderMap = { "월요일":1, "화요일":2, "수요일":3, "목요일":4, "금요일":5, "토요일":6, "일요일":7, "주간 공통":99 };
-    let sorted = window.draftTasks.slice().sort(function(a,b) { return (orderMap[a.day]||0) - (orderMap[b.day]||0); });
+    const orderMap = { "월요일": 1, "화요일": 2, "수요일": 3, "목요일": 4, "금요일": 5, "토요일": 6, "일요일": 7, "주간 공통": 99 };
+    const sorted = window.draftTasks.slice().sort(function(a, b) { 
+        return (orderMap[a.day] || 0) - (orderMap[b.day] || 0); 
+    });
 
     listEl.innerHTML = sorted.map(function(t) {
         let statusClass = t.status === '완료' ? 'text-emerald-600 bg-emerald-50 border-emerald-200' : (t.status === '진행 중' ? 'text-blue-600 bg-blue-50 border-blue-200' : 'text-slate-500 bg-slate-50 border-slate-200');
-        let safeContent = window.formatMentions ? window.formatMentions(String(t.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')) : String(t.content || '');
+        const safeContent = window.formatMentions ? window.formatMentions(String(t.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')) : String(t.content || '');
 
         return '<div class="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm group"><span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded w-16 text-center shrink-0">' + t.day + '</span><span class="text-[10px] font-bold border px-1.5 py-0.5 rounded shrink-0 w-12 text-center ' + statusClass + '">' + t.status + '</span><div class="text-sm font-medium text-slate-700 flex-1 truncate" title="' + String(t.content).replace(/"/g, '&quot;') + '">' + safeContent + ' <span class="text-[9px] bg-slate-100 text-slate-500 px-1 py-0.5 rounded ml-1">' + t.loc + '</span></div><button onclick="window.removeWeeklyTaskRow(\'' + t.id + '\')" class="text-slate-300 hover:text-rose-500 w-6 h-6 rounded flex items-center justify-center transition-colors"><i class="fa-solid fa-xmark"></i></button></div>';
     }).join('');
@@ -487,16 +528,16 @@ window.saveWeeklyLog = async function(isFinalSubmit) {
     const draftIdEl = getEl('weekly-draft-id');
     const weekEl = getEl('weekly-log-filter-week');
     
-    if(!draftIdEl || !weekEl) {
-        if(window.showToast) window.showToast("오류: HTML 로딩이 완료되지 않았습니다.", "error");
+    if (!draftIdEl || !weekEl) {
+        if (window.showToast) window.showToast("오류: HTML 로딩이 완료되지 않았습니다.", "error");
         return;
     }
 
     const id = draftIdEl.value; 
     const week = weekEl.value; 
     
-    if(window.draftTasks.length === 0 && isFinalSubmit) {
-        if(window.showToast) window.showToast("제출할 업무 내역을 1개 이상 추가해주세요.", "error");
+    if (window.draftTasks.length === 0 && isFinalSubmit) {
+        if (window.showToast) window.showToast("제출할 업무 내역을 1개 이상 추가해주세요.", "error");
         return;
     }
 
@@ -535,7 +576,7 @@ window.saveWeeklyLog = async function(isFinalSubmit) {
     };
 
     try { 
-        if(id) {
+        if (id) {
             await setDoc(doc(db, "weekly_logs_v2", id), payload, { merge: true }); 
         } else {
             payload.createdAt = Date.now();
@@ -546,21 +587,20 @@ window.saveWeeklyLog = async function(isFinalSubmit) {
             await window.processMentions(fullTextToScan, null, "주간업무일지");
         }
 
-        if(window.showToast) window.showToast(isFinalSubmit ? "최종 제출되었습니다." : "임시 저장되었습니다."); 
+        if (window.showToast) window.showToast(isFinalSubmit ? "최종 제출되었습니다." : "임시 저장되었습니다."); 
         window.closeWeeklyLogWriteModal(); 
-    } catch(e) {
-        console.error("Save Log Error:", e);
-        if(window.showToast) window.showToast("저장 실패", "error");
+    } catch (e) {
+        if (window.showToast) window.showToast("저장 실패", "error");
     } 
 };
 
 window.deleteWeeklyLog = async function(id) { 
-    if(confirm("이 주간 업무 일지를 정말 삭제하시겠습니까?")){ 
+    if (confirm("이 주간 업무 일지를 정말 삭제하시겠습니까?")) { 
         try {
             await deleteDoc(doc(db, "weekly_logs_v2", id)); 
-            if(window.showToast) window.showToast("삭제되었습니다."); 
-        } catch(e) { 
-            if(window.showToast) window.showToast("삭제 실패", "error"); 
+            if (window.showToast) window.showToast("삭제되었습니다."); 
+        } catch (e) { 
+            if (window.showToast) window.showToast("삭제 실패", "error"); 
         }
     } 
 };
@@ -571,14 +611,14 @@ window.deleteWeeklyLog = async function(id) {
 window.toggleScheduleComplete = async function(id, isCompleted) {
     try {
         await setDoc(doc(db, "weekly_schedules", id), { isCompleted: isCompleted, updatedAt: Date.now() }, { merge: true });
-    } catch(e) {
-        if(window.showToast) window.showToast("상태 변경 실패", "error");
+    } catch (e) {
+        if (window.showToast) window.showToast("상태 변경 실패", "error");
     }
 };
 
 window.renderKanbanBoard = function() {
     const board = getEl('weekly-kanban-board');
-    if(!board) return;
+    if (!board) return;
 
     const days = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일'];
     const catMap = {
@@ -590,37 +630,37 @@ window.renderKanbanBoard = function() {
     };
 
     board.innerHTML = days.map(function(day) {
-        let events = window.currentScheduleList.filter(function(s) { return s.day === day; });
-        let eventsHtml = events.map(function(s) {
-            let style = catMap[s.category] || catMap["기타"];
-            let safeContent = String(s.content || '');
-            let safeTime = String(s.time || '시간 미지정');
+        const events = window.currentScheduleList.filter(function(s) { return s.day === day; });
+        const eventsHtml = events.map(function(s) {
+            const style = catMap[s.category] || catMap["기타"];
+            const safeContent = String(s.content || '');
+            const safeTime = String(s.time || '시간 미지정');
             
-            let completedCardClass = s.isCompleted ? 'opacity-60 bg-slate-100 border-slate-200 grayscale' : style.bg;
-            let completedTextClass = s.isCompleted ? 'line-through text-slate-400' : style.text;
-            let checkedAttr = s.isCompleted ? 'checked' : '';
+            const completedCardClass = s.isCompleted ? 'opacity-60 bg-slate-100 border-slate-200 grayscale' : style.bg;
+            const completedTextClass = s.isCompleted ? 'line-through text-slate-400' : style.text;
+            const checkedAttr = s.isCompleted ? 'checked' : '';
 
             return '<div class="rounded-xl border p-3 ' + completedCardClass + ' relative group cursor-pointer hover:shadow-md transition-all" onclick="window.editSchedule(\'' + s.id + '\')"><button onclick="event.stopPropagation(); window.deleteSchedule(\'' + s.id + '\')" class="absolute top-2 right-2 text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"><i class="fa-solid fa-xmark"></i></button><div class="flex items-center gap-2 mb-2"><input type="checkbox" ' + checkedAttr + ' onclick="event.stopPropagation();" onchange="window.toggleScheduleComplete(\'' + s.id + '\', this.checked)" class="accent-indigo-600 w-4 h-4 cursor-pointer shrink-0"><div class="flex items-center gap-1.5 text-[10px] font-black ' + style.badge + ' w-fit px-2 py-0.5 rounded"><i class="fa-solid ' + style.icon + '"></i> ' + s.category + '</div></div><div class="text-sm font-bold ' + completedTextClass + ' mb-1">' + safeContent + '</div><div class="text-[10px] text-slate-500 font-bold flex items-center gap-1"><i class="fa-regular fa-clock"></i> ' + safeTime + '</div></div>';
         }).join('');
 
-        let isWeekend = (day === '토요일' || day === '일요일');
-        let headerColor = isWeekend ? 'text-rose-500' : 'text-slate-700';
+        const isWeekend = (day === '토요일' || day === '일요일');
+        const headerColor = isWeekend ? 'text-rose-500' : 'text-slate-700';
 
         return '<div class="bg-slate-50 rounded-2xl border border-slate-100 flex flex-col min-h-[300px]"><div class="text-center py-3 border-b border-slate-200 bg-white rounded-t-2xl"><h4 class="text-sm font-black ' + headerColor + '">' + day + '</h4></div><div class="p-3 flex-1 flex flex-col gap-3">' + eventsHtml + '<button onclick="window.openScheduleModal(\'' + day + '\')" class="w-full border-2 border-dashed border-slate-200 hover:border-indigo-300 hover:bg-white text-slate-400 hover:text-indigo-500 rounded-xl py-3 text-xs font-bold transition-colors flex items-center justify-center gap-2 mt-auto"><i class="fa-solid fa-plus"></i> 일정 추가</button></div></div>';
     }).join('');
 };
 
 window.openScheduleModal = function(day) {
-    if(!day) day = '월요일';
-    const idEl = getEl('sch-id'); if(idEl) idEl.value = '';
-    const dayEl = getEl('sch-day'); if(dayEl) dayEl.value = day;
-    const catEl = getEl('sch-category'); if(catEl) catEl.value = '휴가/반차';
-    const timeEl = getEl('sch-time'); if(timeEl) timeEl.value = '';
-    const contEl = getEl('sch-content'); if(contEl) contEl.value = '';
-    const titleEl = getEl('sch-modal-title'); if(titleEl) titleEl.innerText = '추가';
+    if (!day) day = '월요일';
+    setVal('sch-id', '');
+    setVal('sch-day', day);
+    setVal('sch-category', '휴가/반차');
+    setVal('sch-time', '');
+    setVal('sch-content', '');
+    setText('sch-modal-title', '추가');
     
     const modal = getEl('schedule-modal');
-    if(modal) {
+    if (modal) {
         modal.classList.remove('hidden');
         modal.classList.add('flex');
     }
@@ -628,7 +668,7 @@ window.openScheduleModal = function(day) {
 
 window.closeScheduleModal = function() {
     const modal = getEl('schedule-modal');
-    if(modal) {
+    if (modal) {
         modal.classList.add('hidden');
         modal.classList.remove('flex');
     }
@@ -636,17 +676,17 @@ window.closeScheduleModal = function() {
 
 window.editSchedule = function(id) {
     const s = window.currentScheduleList.find(function(x) { return x.id === id; });
-    if(!s) return;
+    if (!s) return;
     
-    const idEl = getEl('sch-id'); if(idEl) idEl.value = id;
-    const dayEl = getEl('sch-day'); if(dayEl) dayEl.value = s.day;
-    const catEl = getEl('sch-category'); if(catEl) catEl.value = s.category;
-    const timeEl = getEl('sch-time'); if(timeEl) timeEl.value = s.time || '';
-    const contEl = getEl('sch-content'); if(contEl) contEl.value = s.content || '';
-    const titleEl = getEl('sch-modal-title'); if(titleEl) titleEl.innerText = '수정';
+    setVal('sch-id', id);
+    setVal('sch-day', s.day);
+    setVal('sch-category', s.category);
+    setVal('sch-time', s.time || '');
+    setVal('sch-content', s.content || '');
+    setText('sch-modal-title', '수정');
     
     const modal = getEl('schedule-modal');
-    if(modal) {
+    if (modal) {
         modal.classList.remove('hidden');
         modal.classList.add('flex');
     }
@@ -660,7 +700,7 @@ window.saveSchedule = async function() {
     const timeEl = getEl('sch-time');
     const contentEl = getEl('sch-content');
 
-    if(!idEl || !weekEl || !dayEl || !categoryEl || !contentEl) return;
+    if (!idEl || !weekEl || !dayEl || !categoryEl || !contentEl) return;
 
     const id = idEl.value;
     const week = weekEl.value;
@@ -669,36 +709,35 @@ window.saveSchedule = async function() {
     const time = timeEl ? timeEl.value.trim() : '';
     const content = contentEl.value.trim();
 
-    if(!content) {
-        if(window.showToast) window.showToast("일정 내용을 입력하세요.", "error");
+    if (!content) {
+        if (window.showToast) window.showToast("일정 내용을 입력하세요.", "error");
         return;
     }
 
     const payload = { week: week, day: day, category: category, time: time, content: content, authorUid: window.currentUser.uid, updatedAt: Date.now() };
 
     try {
-        if(id) {
+        if (id) {
             await setDoc(doc(db, "weekly_schedules", id), payload, { merge: true });
         } else {
             payload.createdAt = Date.now();
             payload.isCompleted = false;
             await addDoc(collection(db, "weekly_schedules"), payload);
         }
-        if(window.showToast) window.showToast("일정이 저장되었습니다.");
+        if (window.showToast) window.showToast("일정이 저장되었습니다.");
         window.closeScheduleModal();
-    } catch(e) {
-        console.error("Save Schedule Error:", e);
-        if(window.showToast) window.showToast("저장 실패", "error");
+    } catch (e) {
+        if (window.showToast) window.showToast("저장 실패", "error");
     }
 };
 
 window.deleteSchedule = async function(id) {
-    if(confirm("이 일정을 삭제하시겠습니까?")) {
+    if (confirm("이 일정을 삭제하시겠습니까?")) {
         try {
             await deleteDoc(doc(db, "weekly_schedules", id));
-            if(window.showToast) window.showToast("삭제되었습니다.");
-        } catch(e) { 
-            if(window.showToast) window.showToast("삭제 실패", "error"); 
+            if (window.showToast) window.showToast("삭제되었습니다.");
+        } catch (e) { 
+            if (window.showToast) window.showToast("삭제 실패", "error"); 
         }
     }
 };
