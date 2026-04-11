@@ -1,34 +1,50 @@
 <div class="space-y-4">
     <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-4 border-l-slate-300 cursor-pointer hover:ring-2 ring-slate-200 transition-all" onclick="window.filterByStatusOnly('pending')">
-            <div class="flex justify-between items-center"><span class="text-[11px] font-bold text-slate-500"><i class="fa-solid fa-pause text-slate-400"></i> 대기 / 보류</span><span class="text-2xl font-black text-slate-700" id="mini-dash-pending">0</span></div>
+            <div class="flex justify-between items-center">
+                <span class="text-[11px] font-bold text-slate-500"><i class="fa-solid fa-pause text-slate-400"></i> 대기 / 보류</span>
+                <span class="text-2xl font-black text-slate-700" id="mini-dash-pending">0</span>
+            </div>
         </div>
         <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-4 border-l-blue-400 cursor-pointer hover:ring-2 ring-blue-200 transition-all" onclick="window.filterByStatusOnly('progress')">
-            <div class="flex justify-between items-center"><span class="text-[11px] font-bold text-blue-600"><i class="fa-solid fa-person-digging"></i> 진행 중</span><span class="text-2xl font-black text-blue-700" id="mini-dash-progress">0</span></div>
+            <div class="flex justify-between items-center">
+                <span class="text-[11px] font-bold text-blue-600"><i class="fa-solid fa-person-digging"></i> 진행 중</span>
+                <span class="text-2xl font-black text-blue-700" id="mini-dash-progress">0</span>
+            </div>
         </div>
         <div class="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 shadow-sm flex flex-col justify-center border-l-4 border-l-emerald-400 cursor-pointer hover:ring-2 ring-emerald-300 transition-all" onclick="window.filterByStatusOnly('completed')">
-            <div class="flex justify-between items-center"><span class="text-[11px] font-bold text-emerald-600" id="mini-dash-completed-label"><i class="fa-solid fa-truck-fast"></i> 출하 완료</span><span class="text-2xl font-black text-emerald-700" id="mini-dash-completed">0</span></div>
+            <div class="flex justify-between items-center">
+                <span class="text-[11px] font-bold text-emerald-600" id="mini-dash-completed-label"><i class="fa-solid fa-truck-fast"></i> 출하 완료</span>
+                <span class="text-2xl font-black text-emerald-700" id="mini-dash-completed">0</span>
+            </div>
         </div>
         <div class="bg-rose-50 rounded-2xl p-4 border border-rose-100 shadow-sm flex flex-col justify-start border-l-4 border-l-rose-400 col-span-1 overflow-hidden relative">
-            <span class="text-[11px] font-bold text-rose-600 mb-2"><i class="fa-solid fa-clock"></i> 7일 이내 출하 예정 (D-7)</span><div id="mini-dash-upcoming" class="flex flex-wrap gap-1 w-full mt-1"></div>
+            <span class="text-[11px] font-bold text-rose-600 mb-2"><i class="fa-solid fa-clock"></i> 7일 이내 출하 예정 (D-7)</span>
+            <div id="mini-dash-upcoming" class="flex flex-wrap gap-1 w-full mt-1"></div>
         </div>
         <div class="bg-orange-50 rounded-2xl p-4 border border-orange-100 shadow-sm flex flex-col justify-start border-l-4 border-l-orange-400 col-span-1 overflow-hidden relative">
-            <span class="text-[11px] font-bold text-orange-600 mb-2"><i class="fa-solid fa-clock"></i> 14일 이내 출하 예정 (D-14)</span><div id="mini-dash-upcoming-14" class="flex flex-wrap gap-1 w-full mt-1"></div>
+            <span class="text-[11px] font-bold text-orange-600 mb-2"><i class="fa-solid fa-clock"></i> 14일 이내 출하 예정 (D-14)</span>
+            <div id="mini-dash-upcoming-14" class="flex flex-wrap gap-1 w-full mt-1"></div>
         </div>
     </div>
 
     <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[80vh]">
+        
         <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 flex-shrink-0">
             <div class="flex items-center gap-4">
-                <h3 class="font-extrabold text-slate-800 text-lg"><i class="fa-solid fa-table-list text-indigo-500"></i> <span id="pjt-dash-title-label">PJT 현황판</span></h3>
+                <h3 class="font-extrabold text-slate-800 text-lg">
+                    <i class="fa-solid fa-table-list text-indigo-500"></i> <span id="pjt-dash-title-label">PJT 현황판</span>
+                </h3>
                 <div class="flex gap-2 bg-slate-100 p-1 rounded-lg">
                     <button id="btn-part-mfg" onclick="window.switchProjPartTab('제조')" class="px-4 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all">제조 파트</button>
                     <button id="btn-part-opt" onclick="window.switchProjPartTab('광학')" class="px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all">광학 파트</button>
                 </div>
             </div>
+            
             <div class="flex gap-2 items-center">
                 <span class="text-[10px] text-slate-400 font-bold mr-2 hidden md:block" id="pjt-last-update-wrapper">최근 업데이트: <span id="pjt-last-update" class="text-slate-600">-</span></span>
                 <button onclick="window.openTeamModal()" class="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-lg shadow-sm mr-2 hover:bg-indigo-100 transition-colors"><i class="fa-solid fa-users"></i> 팀원 관리</button>
+                
                 <div class="flex gap-2 items-center">
                     <input type="month" id="filter-month-select" onchange="window.filterByMonth(this.value)" class="pl-3 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg outline-none font-bold text-slate-500 cursor-pointer" title="월별 필터">
                     <button onclick="window.resetAllFilters()" class="px-3 py-1.5 text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-white rounded-lg shadow-sm transition-colors whitespace-nowrap"><i class="fa-solid fa-rotate-right"></i> 필터 초기화</button>
@@ -37,12 +53,14 @@
                     </label>
                     <input type="text" id="proj-search" placeholder="검색..." oninput="window.searchProjectBoard(this.value)" class="pl-3 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg outline-none w-32 font-bold focus:border-indigo-500">
                 </div>
+                
                 <button onclick="window.toggleProjDashView('list')" id="btn-pd-list" class="px-3 py-1.5 text-xs font-bold bg-slate-200 rounded-md text-slate-700 transition-colors"><i class="fa-solid fa-list"></i> 리스트</button>
                 <button onclick="window.toggleProjDashView('gantt')" id="btn-pd-gantt" class="px-3 py-1.5 text-xs font-bold bg-white border rounded-md text-slate-500 hover:bg-slate-50 transition-colors"><i class="fa-solid fa-bars-staggered"></i> 간트차트</button>
                 <button onclick="window.toggleProjDashView('calendar')" id="btn-pd-calendar" class="px-3 py-1.5 text-xs font-bold bg-white border rounded-md text-slate-500 hover:bg-slate-50 transition-colors"><i class="fa-regular fa-calendar"></i> 달력뷰</button>
                 <button onclick="window.openProjStatusWriteModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow-md ml-2 transition-colors"><i class="fa-solid fa-plus"></i> 현황 등록</button>
             </div>
         </div>
+        
         <div id="proj-dash-list-container" class="flex-1 overflow-auto custom-scrollbar bg-slate-50/30 p-4">
             <table class="min-w-max w-full text-left border-collapse bg-white border shadow-sm">
                 <thead class="bg-slate-800 text-[10px] text-white font-bold sticky top-0 z-20 shadow-sm">
@@ -66,35 +84,241 @@
                                 <option value="기타" class="text-slate-800">기타</option>
                             </select>
                         </th>
-                        <th class="border border-slate-600 px-2 py-2 text-center text-amber-300 w-16">코멘트</th><th class="border border-slate-600 px-2 py-2 text-center text-rose-300 w-16">이슈</th><th class="border border-slate-600 px-2 py-2 text-center">PJT 코드</th><th class="border border-slate-600 px-2 py-2 text-center">프로젝트명</th><th class="border border-slate-600 px-2 py-2 text-center">업체명</th><th class="border border-slate-600 px-2 py-2 text-center text-emerald-300">진행률</th><th class="border border-slate-600 px-2 py-2 text-center">현재상태</th><th class="border border-slate-600 px-2 py-2 text-center">담당자</th><th class="border border-slate-600 px-2 py-2 text-center text-sky-300">생산일지</th><th class="border border-slate-600 px-2 py-2 text-center text-sky-300">예정MD</th><th class="border border-slate-600 px-2 py-2 text-center text-purple-300">투입MD</th><th class="border border-slate-600 px-2 py-2 text-center text-sky-300">최종MD</th><th class="border border-slate-600 px-2 py-2 text-center text-amber-300">총인원</th><th class="border border-slate-600 px-2 py-2 text-center text-amber-300">외주인원</th><th class="border border-slate-600 px-2 py-2 text-center text-amber-300">외주MD</th><th class="border border-slate-600 px-2 py-2 text-center bg-rose-900/50 text-rose-200">출하예정</th><th class="border border-slate-600 px-2 py-2 text-center bg-indigo-900/50">조립예정</th><th class="border border-slate-600 px-2 py-2 text-center bg-indigo-900/50">완료예정</th><th class="border border-slate-600 px-2 py-2 text-center bg-indigo-900/80">조립(실)</th><th class="border border-slate-600 px-2 py-2 text-center bg-indigo-900/80">완료(실)</th><th class="border border-slate-600 px-2 py-2 text-center bg-teal-900/50">검수(실)</th><th class="border border-slate-600 px-2 py-2 text-center bg-teal-900/50">완료(실)</th><th class="border border-slate-600 px-2 py-2 text-center bg-rose-900/80 text-rose-200">출하(최종)</th><th class="border border-slate-600 px-2 py-2 text-center bg-slate-700">Set시작</th><th class="border border-slate-600 px-2 py-2 text-center bg-slate-700">Set종료</th><th class="border border-slate-600 px-2 py-2 text-center bg-emerald-700 text-emerald-100 min-w-[100px]">링크</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center text-amber-300 w-16">코멘트</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center text-rose-300 w-16">이슈</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center">PJT 코드</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center">프로젝트명</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center">업체명</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center text-emerald-300">진행률</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center">현재상태</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center">담당자</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center text-sky-300">생산일지</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center text-sky-300">예정MD</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center text-purple-300">투입MD</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center text-sky-300">최종MD</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center text-amber-300">총인원</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center text-amber-300">외주인원</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center text-amber-300">외주MD</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center bg-rose-900/50 text-rose-200">출하예정</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center bg-indigo-900/50">조립예정</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center bg-indigo-900/50">완료예정</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center bg-indigo-900/80">조립(실)</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center bg-indigo-900/80">완료(실)</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center bg-teal-900/50">검수(실)</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center bg-teal-900/50">완료(실)</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center bg-rose-900/80 text-rose-200">출하(최종)</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center bg-slate-700">Set시작</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center bg-slate-700">Set종료</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center bg-emerald-700 text-emerald-100 min-w-[100px]">링크</th>
                     </tr>
                 </thead>
                 <tbody id="proj-dash-tbody" class="text-[10px] text-slate-700 divide-y divide-slate-200"></tbody>
             </table>
         </div>
-        <div id="proj-dash-gantt-container" class="hidden flex-1 overflow-auto bg-slate-50 border-t p-4 flex flex-col"><div class="flex justify-end gap-4 mb-2 text-[10px] font-bold text-slate-600 bg-white p-2 rounded-lg shadow-sm border border-slate-200"><div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-indigo-500 shadow-sm"></span>조립</div><div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-teal-500 shadow-sm"></span>검수</div><div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-slate-600 shadow-sm"></span>Setup</div><div class="flex items-center gap-1.5"><span class="w-3 h-3 transform rotate-45 bg-rose-500 border border-white shadow-sm"></span>출하예정/완료</div><div class="flex items-center gap-1.5 ml-2 border-l pl-3"><span class="w-1 h-3 bg-rose-500"></span>오늘 기준선</div></div><div id="proj-dash-gantt-content" class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 relative min-h-[500px]"></div></div>
-        <div id="proj-dash-calendar-container" class="hidden flex-1 overflow-auto bg-slate-50 border-t p-6 flex flex-col"><div id="proj-dash-calendar-content" class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 p-4"></div></div>
+        
+        <div id="proj-dash-gantt-container" class="hidden flex-1 overflow-auto bg-slate-50 border-t p-4 flex flex-col">
+            <div class="flex justify-end gap-4 mb-2 text-[10px] font-bold text-slate-600 bg-white p-2 rounded-lg shadow-sm border border-slate-200">
+                <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-indigo-500 shadow-sm"></span>조립</div>
+                <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-teal-500 shadow-sm"></span>검수</div>
+                <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-slate-600 shadow-sm"></span>Setup</div>
+                <div class="flex items-center gap-1.5"><span class="w-3 h-3 transform rotate-45 bg-rose-500 border border-white shadow-sm"></span>출하예정/완료</div>
+                <div class="flex items-center gap-1.5 ml-2 border-l pl-3"><span class="w-1 h-3 bg-rose-500"></span>오늘 기준선</div>
+            </div>
+            <div id="proj-dash-gantt-content" class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 relative min-h-[500px]"></div>
+        </div>
+        
+        <div id="proj-dash-calendar-container" class="hidden flex-1 overflow-auto bg-slate-50 border-t p-6 flex flex-col">
+            <div id="proj-dash-calendar-content" class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 p-4"></div>
+        </div>
     </div>
 </div>
 
-<div id="proj-status-write-modal" class="fixed inset-0 z-[150] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10"><div class="bg-white rounded-3xl shadow-2xl w-full max-w-5xl transform transition-all flex flex-col h-[700px] md:h-[90vh] overflow-hidden"><div class="px-6 py-4 border-b flex justify-between items-center bg-indigo-50">
-    <h2 class="text-lg font-extrabold text-indigo-800 flex items-center gap-2"><i class="fa-solid fa-list-check"></i> 프로젝트 현황 등록</h2>
-    <div class="flex items-center gap-3">
-        <button id="btn-view-history" onclick="window.openProjHistoryModal()" class="hidden bg-white border border-slate-200 px-3 py-1.5 rounded-full text-xs font-extrabold text-slate-700 shadow-sm hover:bg-slate-50 transition-colors flex items-center gap-1.5"><i class="fa-solid fa-clock-rotate-left text-sky-500 text-sm"></i> 이력</button>
-        <button onclick="window.closeProjStatusWriteModal()" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-xl"></i></button>
-    </div>
-</div><div class="p-6 overflow-y-auto custom-scrollbar flex-1 bg-slate-50/50 min-h-0"><input type="hidden" id="ps-id"><div class="grid grid-cols-1 lg:grid-cols-3 gap-6"><div class="bg-white p-5 rounded-2xl shadow-sm space-y-4"><div class="relative"><label class="block text-[11px] font-bold text-slate-500 mb-1">PJT 코드</label><input type="text" id="ps-code" class="w-full border rounded-lg px-3 py-2 text-sm outline-indigo-500" oninput="window.showAutocomplete(this,'ps-name','ps-company',false)" autocomplete="off"></div><div class="relative"><label class="block text-[11px] font-bold text-slate-500 mb-1">프로젝트명</label><input type="text" id="ps-name" class="w-full border rounded-lg px-3 py-2 text-sm outline-indigo-500" oninput="window.showAutocomplete(this,'ps-code','ps-company',true)" autocomplete="off"></div><div><label class="block text-[11px] font-bold text-slate-500 mb-1">업체명</label><input type="text" id="ps-company" class="w-full border rounded-lg px-3 py-2 text-sm"></div><div class="grid grid-cols-2 gap-2"><div><label class="block text-[11px] font-bold text-slate-500 mb-1">파트</label><select id="ps-part" class="w-full border rounded-lg px-3 py-2 text-sm"><option value="제조">제조</option><option value="광학">광학</option></select></div>
-                    <div>
-                        <label class="block text-[11px] font-bold text-slate-500 mb-1">구분</label>
-                        <select id="ps-category" class="w-full border rounded-lg px-3 py-2 text-sm font-bold text-slate-700 outline-indigo-500 bg-white">
-                            <option value="설비">설비</option><option value="개조">개조</option><option value="이설">이설</option>
-                            <option value="지그">지그</option><option value="지원">지원</option><option value="협업">협업</option>
-                            <option value="모듈">모듈</option><option value="광학">광학</option><option value="레이저&광학">레이저&광학</option>
-                            <option value="레이저&광학(1:1)">레이저&광학(1:1)</option><option value="수리점검">수리점검</option>
-                            <option value="제조기술팀">제조기술팀</option><option value="기타">기타</option>
-                        </select>
+<div id="proj-status-write-modal" class="fixed inset-0 z-[150] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-5xl transform transition-all flex flex-col h-[700px] md:h-[90vh] overflow-hidden">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-indigo-50">
+            <h2 class="text-lg font-extrabold text-indigo-800 flex items-center gap-2">
+                <i class="fa-solid fa-list-check"></i> 프로젝트 현황 등록
+            </h2>
+            <div class="flex items-center gap-3">
+                <button id="btn-view-history" onclick="window.openProjHistoryModal()" class="hidden bg-white border border-slate-200 px-3 py-1.5 rounded-full text-xs font-extrabold text-slate-700 shadow-sm hover:bg-slate-50 transition-colors flex items-center gap-1.5">
+                    <i class="fa-solid fa-clock-rotate-left text-sky-500 text-sm"></i> 이력
+                </button>
+                <button onclick="window.closeProjStatusWriteModal()" class="text-slate-400 hover:text-rose-500">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+        </div>
+        
+        <div class="p-6 overflow-y-auto custom-scrollbar flex-1 bg-slate-50/50 min-h-0">
+            <input type="hidden" id="ps-id">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="bg-white p-5 rounded-2xl shadow-sm space-y-4">
+                    <div class="relative">
+                        <label class="block text-[11px] font-bold text-slate-500 mb-1">PJT 코드</label>
+                        <input type="text" id="ps-code" class="w-full border rounded-lg px-3 py-2 text-sm outline-indigo-500" oninput="window.showAutocomplete(this,'ps-name','ps-company',false)" autocomplete="off">
                     </div>
-                    </div><div class="grid grid-cols-2 gap-2"><div><label class="block text-[11px] font-bold text-slate-500 mb-1">담당자</label><select id="ps-manager" class="w-full border rounded-lg px-3 py-2 text-sm"></select></div><div><label class="block text-[11px] font-bold text-slate-500 mb-1">팀원 추가</label><select id="ps-member-add" class="w-full border rounded-lg px-3 py-2 text-sm" onchange="window.addProjectMember(this.value)"></select></div></div><div id="ps-selected-members" class="flex flex-wrap gap-1"></div><input type="hidden" id="ps-members"><div class="grid grid-cols-2 gap-2"><div><label class="block text-[11px] font-bold text-slate-500 mb-1">현재 상태</label><select id="ps-status" class="w-full border rounded-lg px-3 py-2 text-sm font-bold text-indigo-600"><option value="pending">대기/보류</option><option value="progress">진행중(제작)</option><option value="inspecting">진행중(검수)</option><option value="completed">완료(출하)</option><option value="rejected">보류/불가</option></select></div><div><label class="block text-[11px] font-bold text-slate-500 mb-1">진행률(%)</label><input type="number" id="ps-progress-pct" class="w-full border rounded-lg px-3 py-2 text-sm"></div></div></div><div class="bg-white p-5 rounded-2xl shadow-sm space-y-4"><div class="grid grid-cols-2 gap-2"><div><label class="block text-[11px] font-bold text-sky-600 mb-1">예정 MD</label><input type="number" step="0.1" id="ps-est-md" class="w-full border rounded-lg px-3 py-2 text-sm"></div><div><label class="block text-[11px] font-bold text-purple-600 mb-1">현재 투입 MD</label><input type="number" id="ps-current-md" readonly class="w-full border bg-slate-100 rounded-lg px-3 py-2 text-sm"></div></div><div class="grid grid-cols-2 gap-2"><div><label class="block text-[11px] font-bold text-amber-600 mb-1">외주 MD</label><input type="number" step="0.1" id="ps-out-md" class="w-full border rounded-lg px-3 py-2 text-sm" oninput="window.calcFinalMd()"></div><div><label class="block text-[11px] font-bold text-sky-600 mb-1">최종 MD</label><input type="number" id="ps-final-md" readonly class="w-full border bg-sky-50 rounded-lg px-3 py-2 text-sm font-bold text-sky-700"></div></div><div class="grid grid-cols-2 gap-2"><div><label class="block text-[11px] font-bold text-slate-500 mb-1">총 인원</label><input type="number" id="ps-tot-pers" class="w-full border rounded-lg px-3 py-2 text-sm"></div><div><label class="block text-[11px] font-bold text-slate-500 mb-1">외주 인원</label><input type="number" id="ps-out-pers" class="w-full border rounded-lg px-3 py-2 text-sm"></div></div></div><div class="bg-white p-5 rounded-2xl shadow-sm space-y-4"><div class="grid grid-cols-2 gap-2 bg-indigo-50/50 p-3 rounded-xl border border-indigo-100"><div><label class="block text-[10px] font-bold text-indigo-700 mb-1">조립 예정</label><input type="date" id="ps-d-asm-est" class="w-full border px-2 py-1.5 rounded text-xs cursor-pointer outline-indigo-500"></div><div><label class="block text-[10px] font-bold text-indigo-700 mb-1">조립 완료 예정</label><input type="date" id="ps-d-asm-end-est" class="w-full border px-2 py-1.5 rounded text-xs cursor-pointer outline-indigo-500"></div></div><div class="grid grid-cols-2 gap-2"><div><label class="block text-[10px] font-bold text-slate-500 mb-1">입고 예정</label><input type="date" id="ps-d-rcv-est" class="w-full border px-2 py-1.5 rounded text-xs cursor-pointer"></div><div><label class="block text-[10px] font-bold text-rose-600 mb-1">출하 예정</label><input type="date" id="ps-d-ship-est" class="w-full border border-rose-300 px-2 py-1.5 rounded text-xs font-bold text-rose-700 cursor-pointer"></div></div><div class="grid grid-cols-2 gap-2"><div><label class="block text-[10px] font-bold text-slate-500 mb-1">조립 시작(실)</label><input type="date" id="ps-d-asm-st" class="w-full border px-2 py-1.5 rounded text-xs cursor-pointer"></div><div><label class="block text-[10px] font-bold text-slate-500 mb-1">조립 완료(실)</label><input type="date" id="ps-d-asm-en" class="w-full border px-2 py-1.5 rounded text-xs cursor-pointer"></div></div><div class="grid grid-cols-2 gap-2"><div><label class="block text-[10px] font-bold text-teal-600 mb-1">검수 시작(실)</label><input type="date" id="ps-d-ins-st" class="w-full border px-2 py-1.5 rounded text-xs cursor-pointer"></div><div><label class="block text-[10px] font-bold text-teal-600 mb-1">검수 완료(실)</label><input type="date" id="ps-d-ins-en" class="w-full border px-2 py-1.5 rounded text-xs cursor-pointer"></div></div><div class="grid grid-cols-2 gap-2"><div><label class="block text-[10px] font-bold text-slate-500 mb-1">Setup 시작</label><input type="date" id="ps-d-set-st" class="w-full border px-2 py-1.5 rounded text-xs cursor-pointer"></div><div><label class="block text-[10px] font-bold text-slate-500 mb-1">Setup 종료</label><input type="date" id="ps-d-set-en" class="w-full border px-2 py-1.5 rounded text-xs cursor-pointer"></div></div><div class="bg-rose-50 p-3 rounded-xl border border-rose-100"><label class="block text-[11px] font-black text-rose-600 mb-1">출하 완료 (최종)</label><input type="date" id="ps-d-ship-en" class="w-full border border-rose-300 shadow-inner px-2 py-2 rounded-lg text-sm font-bold cursor-pointer"></div></div></div></div><div class="px-6 py-4 border-t flex justify-end gap-3 bg-white"><button onclick="window.closeProjStatusWriteModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 py-2.5 rounded-xl font-bold transition-colors">취소</button><button id="btn-proj-save" onclick="window.saveProjStatus(this)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-2.5 rounded-xl font-bold shadow-md transition-colors">저장하기</button></div></div></div>
+                    <div class="relative">
+                        <label class="block text-[11px] font-bold text-slate-500 mb-1">프로젝트명</label>
+                        <input type="text" id="ps-name" class="w-full border rounded-lg px-3 py-2 text-sm outline-indigo-500" oninput="window.showAutocomplete(this,'ps-code','ps-company',true)" autocomplete="off">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 mb-1">업체명</label>
+                        <input type="text" id="ps-company" class="w-full border rounded-lg px-3 py-2 text-sm">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-500 mb-1">파트</label>
+                            <select id="ps-part" class="w-full border rounded-lg px-3 py-2 text-sm">
+                                <option value="제조">제조</option>
+                                <option value="광학">광학</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-500 mb-1">구분</label>
+                            <select id="ps-category" class="w-full border rounded-lg px-3 py-2 text-sm font-bold text-slate-700 outline-indigo-500 bg-white">
+                                <option value="설비">설비</option>
+                                <option value="개조">개조</option>
+                                <option value="이설">이설</option>
+                                <option value="지그">지그</option>
+                                <option value="지원">지원</option>
+                                <option value="협업">협업</option>
+                                <option value="모듈">모듈</option>
+                                <option value="광학">광학</option>
+                                <option value="레이저&광학">레이저&광학</option>
+                                <option value="레이저&광학(1:1)">레이저&광학(1:1)</option>
+                                <option value="수리점검">수리점검</option>
+                                <option value="제조기술팀">제조기술팀</option>
+                                <option value="기타">기타</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-500 mb-1">담당자</label>
+                            <select id="ps-manager" class="w-full border rounded-lg px-3 py-2 text-sm"></select>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-500 mb-1">팀원 추가</label>
+                            <select id="ps-member-add" class="w-full border rounded-lg px-3 py-2 text-sm" onchange="window.addProjectMember(this.value)"></select>
+                        </div>
+                    </div>
+                    <div id="ps-selected-members" class="flex flex-wrap gap-1"></div>
+                    <input type="hidden" id="ps-members">
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-500 mb-1">현재 상태</label>
+                            <select id="ps-status" class="w-full border rounded-lg px-3 py-2 text-sm font-bold text-indigo-600">
+                                <option value="pending">대기/보류</option>
+                                <option value="progress">진행중(제작)</option>
+                                <option value="inspecting">진행중(검수)</option>
+                                <option value="completed">완료(출하)</option>
+                                <option value="rejected">보류/불가</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-500 mb-1">진행률(%)</label>
+                            <input type="number" id="ps-progress-pct" class="w-full border rounded-lg px-3 py-2 text-sm">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white p-5 rounded-2xl shadow-sm space-y-4">
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[11px] font-bold text-sky-600 mb-1">예정 MD</label>
+                            <input type="number" step="0.1" id="ps-est-md" class="w-full border rounded-lg px-3 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-purple-600 mb-1">현재 투입 MD</label>
+                            <input type="number" id="ps-current-md" readonly class="w-full border bg-slate-100 rounded-lg px-3 py-2 text-sm">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[11px] font-bold text-amber-600 mb-1">외주 MD</label>
+                            <input type="number" step="0.1" id="ps-out-md" class="w-full border rounded-lg px-3 py-2 text-sm" oninput="window.calcFinalMd()">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-sky-600 mb-1">최종 MD</label>
+                            <input type="number" id="ps-final-md" readonly class="w-full border bg-sky-50 rounded-lg px-3 py-2 text-sm font-bold text-sky-700">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-500 mb-1">총 인원</label>
+                            <input type="number" id="ps-tot-pers" class="w-full border rounded-lg px-3 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-500 mb-1">외주 인원</label>
+                            <input type="number" id="ps-out-pers" class="w-full border rounded-lg px-3 py-2 text-sm">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white p-5 rounded-2xl shadow-sm space-y-4">
+                    <div class="grid grid-cols-2 gap-2 bg-indigo-50/50 p-3 rounded-xl border border-indigo-100">
+                        <div>
+                            <label class="block text-[10px] font-bold text-indigo-700 mb-1">조립 예정</label>
+                            <input type="date" id="ps-d-asm-est" class="w-full border px-2 py-1.5 rounded text-xs cursor-pointer outline-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-indigo-700 mb-1">조립 완료 예정</label>
+                            <input type="date" id="ps-d-asm-end-est" class="w-full border px-2 py-1.5 rounded text-xs cursor-pointer outline-indigo-500">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-1">입고 예정</label>
+                            <input type="date" id="ps-d-rcv-est" class="w-full border px-2 py-1.5 rounded text-xs cursor-pointer">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-rose-600 mb-1">출하 예정</label>
+                            <input type="date" id="ps-d-ship-est" class="w-full border border-rose-300 px-2 py-1.5 rounded text-xs font-bold text-rose-700 cursor-pointer">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-1">조립 시작(실)</label>
+                            <input type="date" id="ps-d-asm-st" class="w-full border px-2 py-1.5 rounded text-xs cursor-pointer">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-1">조립 완료(실)</label>
+                            <input type="date" id="ps-d-asm-en" class="w-full border px-2 py-1.5 rounded text-xs cursor-pointer">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[10px] font-bold text-teal-600 mb-1">검수 시작(실)</label>
+                            <input type="date" id="ps-d-ins-st" class="w-full border px-2 py-1.5 rounded text-xs cursor-pointer">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-teal-600 mb-1">검수 완료(실)</label>
+                            <input type="date" id="ps-d-ins-en" class="w-full border px-2 py-1.5 rounded text-xs cursor-pointer">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-1">Setup 시작</label>
+                            <input type="date" id="ps-d-set-st" class="w-full border px-2 py-1.5 rounded text-xs cursor-pointer">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-1">Setup 종료</label>
+                            <input type="date" id="ps-d-set-en" class="w-full border px-2 py-1.5 rounded text-xs cursor-pointer">
+                        </div>
+                    </div>
+                    <div class="bg-rose-50 p-3 rounded-xl border border-rose-100">
+                        <label class="block text-[11px] font-black text-rose-600 mb-1">출하 완료 (최종)</label>
+                        <input type="date" id="ps-d-ship-en" class="w-full border border-rose-300 shadow-inner px-2 py-2 rounded-lg text-sm font-bold cursor-pointer">
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="px-6 py-4 border-t flex justify-end gap-3 bg-white">
+            <button onclick="window.closeProjStatusWriteModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 py-2.5 rounded-xl font-bold transition-colors">취소</button>
+            <button id="btn-proj-save" onclick="window.saveProjStatus(this)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-2.5 rounded-xl font-bold shadow-md transition-colors">저장하기</button>
+        </div>
+    </div>
+</div>
 
 <div id="md-log-modal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10"><div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col h-[600px] md:h-[85vh] overflow-hidden"><div class="px-6 py-4 border-b flex justify-between items-center bg-purple-50"><h2 class="text-base font-extrabold text-purple-800 flex items-center gap-2"><i class="fa-solid fa-business-time text-purple-500"></i> 일별 투입 공수(MD) 관리 <span id="md-total-badge" class="text-[11px] bg-purple-200 text-purple-800 px-2.5 py-0.5 rounded-full shadow-sm ml-2"></span></h2><button onclick="window.closeMdLogModal()" class="text-purple-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button></div><div class="p-6 bg-slate-50/50 flex-1 flex flex-col gap-4 min-h-0"><input type="hidden" id="md-req-id"><input type="hidden" id="editing-md-id"><div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm"><span id="md-project-title" class="text-sm font-bold text-purple-600"></span></div><div class="flex gap-3 items-end flex-wrap bg-white p-4 rounded-xl border border-slate-200 shadow-sm"><input type="date" id="new-md-date" class="border px-3 py-2 rounded-lg text-sm font-bold text-slate-600 mb-1 h-10"><input type="number" id="new-md-val" step="0.1" placeholder="MD 입력" class="border px-3 py-2 w-28 rounded-lg text-sm font-bold text-center mb-1 h-10"><div class="relative flex-1 min-w-[200px]">
     <textarea id="new-md-desc" autocomplete="off" oninput="window.handleMention(this)" onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); document.getElementById('btn-md-save').click(); }" placeholder="작업 내용 (선택) '@' 멘션 (Shift+Enter 줄바꿈)" class="w-full h-20 border px-3 py-2 rounded-lg text-sm outline-purple-500 resize-none custom-scrollbar"></textarea>
@@ -125,5 +349,3 @@
         </div>
     </div>
 </div>
-
-}
