@@ -1,6 +1,6 @@
 /* eslint-disable */
 import { db } from './firebase.js';
-import { collection, doc, setDoc, addDoc, deleteDoc, query, onSnapshot, where, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { collection, doc, setDoc, addDoc, deleteDoc, query, onSnapshot, where } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 let currentWeeklyLogUnsubscribe = null;
 let currentScheduleUnsubscribe = null;
@@ -53,7 +53,6 @@ window.handleWeekChange = function(val) {
 window.changeWeeklyWeek = function(offset) {
     const weekInput = getEl('weekly-log-filter-week');
     if(!weekInput || !weekInput.value) {
-        // 값이 없으면 오늘 기준 셋팅
         if(window.getWeekString) {
             weekInput.value = window.getWeekString(new Date());
         }
@@ -77,7 +76,6 @@ window.openTeamModal = function() {
     const m = getEl('team-modal');
     if(m) { m.classList.remove('hidden'); m.classList.add('flex'); }
     
-    // UI.js 에 함수가 있다면 실행, 없으면 직접 구현
     if(typeof window.populateUserDropdowns === 'function') window.populateUserDropdowns();
     else {
         const sel = getEl('new-team-name');
@@ -119,7 +117,7 @@ window.addTeamMember = async function() {
     try {
         await addDoc(collection(db, "team_members"), { uid: uid, name: name, part: part, createdAt: Date.now() });
         if(window.showToast) window.showToast("팀원이 추가되었습니다.");
-        window.openTeamModal(); // 리렌더링
+        window.openTeamModal(); 
     } catch(e) { if(window.showToast) window.showToast("추가 실패", "error"); }
 };
 
@@ -128,7 +126,7 @@ window.deleteTeamMember = async function(id) {
     try {
         await deleteDoc(doc(db, "team_members", id));
         if(window.showToast) window.showToast("삭제되었습니다.");
-        window.openTeamModal(); // 리렌더링
+        window.openTeamModal(); 
     } catch(e) { if(window.showToast) window.showToast("삭제 실패", "error"); }
 };
 
@@ -142,10 +140,8 @@ window.loadWeeklyLogsData = function() {
     const w = weekInput.value; 
     if(!w) return; 
 
-    // 날짜 텍스트 업데이트
     window.handleWeekChange(w);
     
-    // 1. 업무 일지 로드
     if(currentWeeklyLogUnsubscribe) currentWeeklyLogUnsubscribe(); 
     currentWeeklyLogUnsubscribe = onSnapshot(query(collection(db, "weekly_logs_v2"), where("week", "==", w)), function(s) { 
         window.currentWeeklyLogList = []; 
@@ -155,7 +151,6 @@ window.loadWeeklyLogsData = function() {
             const data = Object.assign({ id: d.id }, d.data());
             window.currentWeeklyLogList.push(data);
             
-            // 제출 완료된 항목만 대시보드 통계에 반영
             if(data.isSubmitted) {
                 statSub++;
                 const issueText = String(data.issues || '').trim();
@@ -170,7 +165,6 @@ window.loadWeeklyLogsData = function() {
             }
         }); 
 
-        // Dashboard Stats 업데이트 (안전 검사)
         setText('stat-submitted', statSub);
         setText('stat-completed', statComp);
         setText('stat-progress', statProg);
@@ -180,7 +174,6 @@ window.loadWeeklyLogsData = function() {
         window.checkMissingMembers();
     }); 
 
-    // 2. 내 개인 일정 로드
     if(currentScheduleUnsubscribe) currentScheduleUnsubscribe();
     if(window.currentUser) {
         currentScheduleUnsubscribe = onSnapshot(query(collection(db, "weekly_schedules"), where("week", "==", w), where("authorUid", "==", window.currentUser.uid)), function(s) {
@@ -242,7 +235,6 @@ window.renderWeeklyLogs = function() {
     const searchName = searchNameEl ? searchNameEl.value.toLowerCase() : '';
     const searchContent = searchContentEl ? searchContentEl.value.toLowerCase() : '';
 
-    // 제출된 항목만 표시
     let displayList = window.currentWeeklyLogList.filter(function(l) { return l.isSubmitted; });
 
     if(searchName) {
@@ -251,7 +243,6 @@ window.renderWeeklyLogs = function() {
     if(searchContent) {
         displayList = displayList.filter(function(l) {
             let fullText = String(l.issues || '') + ' ';
-            // 다중 프로젝트 검색 지원
             if(l.involvedProjects && Array.isArray(l.involvedProjects)) {
                 l.involvedProjects.forEach(function(p){ fullText += ' ' + String(p.name || ''); });
             } else {
@@ -265,7 +256,6 @@ window.renderWeeklyLogs = function() {
         });
     }
 
-    // 최신순 정렬
     displayList.sort(function(a,b) { return (b.updatedAt||0) - (a.updatedAt||0); });
 
     if(displayList.length === 0) {
@@ -313,11 +303,10 @@ window.renderWeeklyLogs = function() {
 
         let bottomMetaHtml = '<div class="mt-4 pt-3 border-t border-slate-100 flex gap-2 flex-wrap text-[11px] font-bold text-slate-500 items-center">';
         
-        // 다중 프로젝트 태그 렌더링
         let pjtTags = '';
         if(log.involvedProjects && Array.isArray(log.involvedProjects)) {
             pjtTags = log.involvedProjects.map(function(p){ return '<span class="bg-indigo-50 text-indigo-600 border border-indigo-100 px-2 py-1 rounded-lg shadow-sm"><i class="fa-solid fa-folder-open"></i> ' + (p.name||'') + '</span>'; }).join('');
-        } else if(log.projectName) { // 구버전 호환
+        } else if(log.projectName) { 
             pjtTags = '<span class="bg-indigo-50 text-indigo-600 border border-indigo-100 px-2 py-1 rounded-lg shadow-sm"><i class="fa-solid fa-folder-open"></i> ' + log.projectName + '</span>';
         }
 
@@ -397,11 +386,9 @@ window.openWeeklyLogWriteModal = function(editId) {
     const timeHEl = getEl('wl-time-h'); if(timeHEl) timeHEl.value = existingLog ? (existingLog.totalHours || '') : '';
     const timeMEl = getEl('wl-time-m'); if(timeMEl) timeMEl.value = existingLog ? (existingLog.totalMins || '') : '';
 
-    // 다중 프로젝트 초기화
     if(existingLog && existingLog.involvedProjects && Array.isArray(existingLog.involvedProjects)) {
         window.wlInvolvedProjects = existingLog.involvedProjects.slice();
     } else if (existingLog && existingLog.projectName) {
-        // 구버전(단일 텍스트) 대응
         window.wlInvolvedProjects = [{ name: existingLog.projectName, code: existingLog.projectCode || '' }];
     } else {
         window.wlInvolvedProjects = [];
@@ -530,7 +517,6 @@ window.saveWeeklyLog = async function(isFinalSubmit) {
     const hEl = getEl('wl-time-h');
     const mEl = getEl('wl-time-m');
 
-    // 멘션 알림 추출 로직 고도화 (이슈 + 모든 업무내용 합쳐서)
     let fullTextToScan = (issuesEl ? issuesEl.value.trim() : '') + ' ';
     window.draftTasks.forEach(function(t) { fullTextToScan += t.content + ' '; });
 
@@ -556,7 +542,6 @@ window.saveWeeklyLog = async function(isFinalSubmit) {
             await addDoc(collection(db, "weekly_logs_v2"), payload); 
         }
         
-        // 멘션 실행 (최종 제출 시에만)
         if (isFinalSubmit && window.processMentions && fullTextToScan.trim() !== '') {
             await window.processMentions(fullTextToScan, null, "주간업무일지");
         }
@@ -595,7 +580,6 @@ window.renderKanbanBoard = function() {
     const board = getEl('weekly-kanban-board');
     if(!board) return;
 
-    // 주말(토, 일) 추가 (총 7일)
     const days = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일'];
     const catMap = {
         "휴가/반차": { icon: "fa-mug-hot", bg: "bg-emerald-50 border-emerald-200", text: "text-emerald-700", badge: "bg-emerald-100 text-emerald-600" },
@@ -612,7 +596,6 @@ window.renderKanbanBoard = function() {
             let safeContent = String(s.content || '');
             let safeTime = String(s.time || '시간 미지정');
             
-            // 완료 상태에 따른 시각적 스타일링
             let completedCardClass = s.isCompleted ? 'opacity-60 bg-slate-100 border-slate-200 grayscale' : style.bg;
             let completedTextClass = s.isCompleted ? 'line-through text-slate-400' : style.text;
             let checkedAttr = s.isCompleted ? 'checked' : '';
@@ -698,7 +681,7 @@ window.saveSchedule = async function() {
             await setDoc(doc(db, "weekly_schedules", id), payload, { merge: true });
         } else {
             payload.createdAt = Date.now();
-            payload.isCompleted = false; // 기본 완료상태는 false
+            payload.isCompleted = false;
             await addDoc(collection(db, "weekly_schedules"), payload);
         }
         if(window.showToast) window.showToast("일정이 저장되었습니다.");
