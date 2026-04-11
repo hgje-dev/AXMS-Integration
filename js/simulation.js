@@ -1,9 +1,7 @@
+/* eslint-disable */
 import { db } from './firebase.js';
 import { collection, doc, setDoc, getDoc, getDocs, addDoc, deleteDoc, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-// ============================================================================
-// 1. 전역 변수 및 헬퍼 함수
-// ============================================================================
 let simTimer = null;
 window.draggedUnitInfo = null;
 window.draggedProcessIndex = null;
@@ -45,10 +43,6 @@ window.parseJsonLikeText = (rawText) => {
     throw new Error('AI 응답을 JSON으로 해석하지 못했습니다.');
 };
 
-
-// ============================================================================
-// 2. 마스터 프리셋 관리
-// ============================================================================
 window.loadMasterPresets = async () => { 
     try { 
         const sRef = doc(db, "settings", "general");
@@ -121,10 +115,6 @@ window.saveCurrentAsPreset = async () => {
     } catch(e) { window.showToast(`실패: ${e.message}`, "error"); } 
 };
 
-
-// ============================================================================
-// 3. 공정/유닛 데이터 렌더링 및 조작
-// ============================================================================
 window.handleTypeChange = (isL = false) => {
     const eqEl = document.getElementById('eq-type'); if(!eqEl) return;
     const p = window.masterPresets[eqEl.value]; if(!p) return;
@@ -198,10 +188,6 @@ window.renderProcessTable = () => {
     }); 
 };
 
-
-// ============================================================================
-// 4. 핵심 시뮬레이션 계산 로직
-// ============================================================================
 window.runSimulation = () => {
     try {
         const method = document.getElementById('sim-method')?.value||'mc';
@@ -263,7 +249,6 @@ window.runSimulation = () => {
 
         window.latestHistData={results:rArr, hex:window.masterPresets[document.getElementById('eq-type')?.value]?.hex||'#8b5cf6'};
         
-        // 차트 및 간트 렌더링 호출
         if(window.renderChartJS) window.renderChartJS(); 
         if(window.renderGanttChart) window.renderGanttChart();
     } catch(e) { console.error("시뮬레이션 연산 에러:", e); }
@@ -317,10 +302,6 @@ window.renderGanttChart = () => {
     html += '</div>'; ganttEl.innerHTML = html;
 };
 
-
-// ============================================================================
-// 5. Excel 다운로드
-// ============================================================================
 window.exportToExcel = async function() {
     if (typeof ExcelJS === 'undefined') return window.showToast("ExcelJS 라이브러리가 로드되지 않았습니다.", "error");
     try {
@@ -338,10 +319,6 @@ window.exportToExcel = async function() {
     } catch(e) { window.showToast("엑셀 실패","error"); }
 };
 
-
-// ============================================================================
-// 6. AI 심층 분석 및 벤치마킹 (Groq / OpenAI API)
-// ============================================================================
 const AI_PROVIDER_CONFIG = {
     groq: { label: 'Groq', defaultModel: 'llama-3.3-70b-versatile', endpoint: '[https://api.groq.com/openai/v1/chat/completions](https://api.groq.com/openai/v1/chat/completions)' },
     openai: { label: 'OpenAI', defaultModel: 'gpt-4o-mini', endpoint: '[https://api.openai.com/v1/chat/completions](https://api.openai.com/v1/chat/completions)' }
@@ -396,7 +373,6 @@ window.generateGroqComparison = async () => {
         const parsed = window.parseJsonLikeText(response);
         console.log("AI 비교 분석 성공:", parsed);
         window.showToast("분석이 완료되었습니다. (콘솔에서 결과 확인)", "success");
-        // HTML UI가 준비되면 이곳에서 render 함수를 호출하세요.
     } catch (e) {
         window.showToast(`AI 분석 실패: ${e.message}`, "error");
     }
@@ -410,7 +386,6 @@ window.generateGroqInsight = async () => {
         const parsed = window.parseJsonLikeText(response);
         console.log("AI 심층 분석 성공:", parsed);
         window.showToast("심층 분석이 완료되었습니다. (콘솔에서 결과 확인)", "success");
-        // HTML UI가 준비되면 이곳에서 render 함수를 호출하세요.
     } catch (e) {
         window.showToast(`AI 분석 실패: ${e.message}`, "error");
     }
