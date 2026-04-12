@@ -22,13 +22,41 @@
     </div>
 
     <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-2">
-        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-emerald-400"><p class="text-[11px] font-bold text-slate-500 mb-1">완료 (출하)</p><p class="text-2xl font-black text-emerald-600" id="dash-pd-completed">0</p></div>
-        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-sky-400"><p class="text-[11px] font-bold text-slate-500 mb-1">목표대비 출하 오차</p><p class="text-2xl font-black text-sky-600"><span id="dash-pd-ship-error">0</span><span class="text-[10px] text-slate-400 ml-1">일</span></p></div>
-        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-indigo-400"><p class="text-[11px] font-bold text-slate-500 mb-1">총 예정 공수</p><p class="text-2xl font-black text-indigo-600"><span id="dash-pd-estMd">0.0</span><span class="text-[10px] text-slate-400 ml-1">MD</span></p></div>
-        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-purple-400"><p class="text-[11px] font-bold text-slate-500 mb-1">총 투입 공수 (최종)</p><p class="text-2xl font-black text-purple-600"><span id="dash-pd-curMd">0.0</span><span class="text-[10px] text-slate-400 ml-1">MD</span></p></div>
-        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-orange-400"><p class="text-[11px] font-bold text-slate-500 mb-1">총 외주 공수</p><p class="text-2xl font-black text-orange-600"><span id="dash-pd-outMd">0.0</span><span class="text-[10px] text-slate-400 ml-1">MD</span></p></div>
-        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-amber-400"><p class="text-[11px] font-bold text-slate-500 mb-1">계획대비 편차율</p><p class="text-2xl font-black text-amber-600" id="dash-pd-variance">0%</p></div>
-        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-fuchsia-400"><p class="text-[11px] font-bold text-slate-500 mb-1">팀 연간 부하율</p><p class="text-2xl font-black text-fuchsia-600" id="dash-pd-workload">0.0%</p></div>
+        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-emerald-400">
+            <p class="text-[11px] font-bold text-slate-500 mb-0.5">완료 (출하)</p>
+            <p class="text-2xl font-black text-emerald-600 leading-tight" id="dash-pd-completed">0</p>
+            <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">해당 연도 출하 기준</p>
+        </div>
+        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-sky-400">
+            <p class="text-[11px] font-bold text-slate-500 mb-0.5">목표대비 출하 오차</p>
+            <p class="text-2xl font-black text-sky-600 leading-tight"><span id="dash-pd-ship-error">0</span><span class="text-[10px] text-slate-400 ml-1">일</span></p>
+            <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">출하완료 PJT 평균</p>
+        </div>
+        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-indigo-400">
+            <p class="text-[11px] font-bold text-slate-500 mb-0.5">총 예정 공수</p>
+            <p class="text-2xl font-black text-indigo-600 leading-tight"><span id="dash-pd-estMd">0.0</span><span class="text-[10px] text-slate-400 ml-1">MD</span></p>
+            <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">타겟 프로젝트 합산</p>
+        </div>
+        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-purple-400">
+            <p class="text-[11px] font-bold text-slate-500 mb-0.5">총 투입 공수 (최종)</p>
+            <p class="text-2xl font-black text-purple-600 leading-tight"><span id="dash-pd-curMd">0.0</span><span class="text-[10px] text-slate-400 ml-1">MD</span></p>
+            <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">타겟 프로젝트 합산</p>
+        </div>
+        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-orange-400">
+            <p class="text-[11px] font-bold text-slate-500 mb-0.5">총 외주 공수</p>
+            <p class="text-2xl font-black text-orange-600 leading-tight"><span id="dash-pd-outMd">0.0</span><span class="text-[10px] text-slate-400 ml-1">MD</span></p>
+            <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">타겟 프로젝트 합산</p>
+        </div>
+        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-amber-400">
+            <p class="text-[11px] font-bold text-slate-500 mb-0.5">계획대비 편차율</p>
+            <p class="text-2xl font-black text-amber-600 leading-tight" id="dash-pd-variance">0%</p>
+            <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">(최종 - 예정) / 예정</p>
+        </div>
+        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-fuchsia-400">
+            <p class="text-[11px] font-bold text-slate-500 mb-0.5">팀 연간 부하율</p>
+            <p class="text-2xl font-black text-fuchsia-600 leading-tight" id="dash-pd-workload">0.0%</p>
+            <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">최종MD / 연간 가용력</p>
+        </div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -64,13 +92,41 @@
         </div>
 
         <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-emerald-500"><p class="text-[11px] font-bold text-slate-500 mb-1">완료 (출하)</p><p class="text-2xl font-black text-emerald-600" id="pd-period-completed">0</p></div>
-            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-slate-400"><p class="text-[11px] font-bold text-slate-500 mb-1">대기 / 보류</p><p class="text-2xl font-black text-slate-700" id="pd-period-pending">0</p></div>
-            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-blue-400"><p class="text-[11px] font-bold text-slate-500 mb-1">작업 진행중</p><p class="text-2xl font-black text-blue-600" id="pd-period-progress">0</p></div>
-            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-rose-400"><p class="text-[11px] font-bold text-slate-500 mb-1">납기 임박</p><p class="text-2xl font-black text-rose-600" id="pd-period-urgent">0</p></div>
-            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-purple-400"><p class="text-[11px] font-bold text-slate-500 mb-1" id="label-period-md">총 투입 공수 (최종)</p><p class="text-2xl font-black text-purple-600"><span id="pd-period-total-md">0.0</span><span class="text-sm text-slate-400 ml-1">MD</span></p></div>
-            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-orange-400"><p class="text-[11px] font-bold text-slate-500 mb-1">총 외주 공수</p><p class="text-2xl font-black text-orange-600"><span id="pd-period-out-md">0.0</span><span class="text-sm text-slate-400 ml-1">MD</span></p></div>
-            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-fuchsia-400"><p class="text-[11px] font-bold text-slate-500 mb-1">해당 기간 부하율</p><p class="text-2xl font-black text-fuchsia-600" id="pd-period-workload">0.0%</p></div>
+            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-emerald-500">
+                <p class="text-[11px] font-bold text-slate-500 mb-0.5">완료 (출하)</p>
+                <p class="text-2xl font-black text-emerald-600 leading-tight" id="pd-period-completed">0</p>
+                <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">조회 기간 내 출하 기준</p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-slate-400">
+                <p class="text-[11px] font-bold text-slate-500 mb-0.5">대기 / 보류</p>
+                <p class="text-2xl font-black text-slate-700 leading-tight" id="pd-period-pending">0</p>
+                <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">조회 기간 타겟 PJT</p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-blue-400">
+                <p class="text-[11px] font-bold text-slate-500 mb-0.5">작업 진행중</p>
+                <p class="text-2xl font-black text-blue-600 leading-tight" id="pd-period-progress">0</p>
+                <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">조회 기간 타겟 PJT</p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-rose-400">
+                <p class="text-[11px] font-bold text-slate-500 mb-0.5">납기 임박</p>
+                <p class="text-2xl font-black text-rose-600 leading-tight" id="pd-period-urgent">0</p>
+                <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">D-7 이내 (예정일 기준)</p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-purple-400">
+                <p class="text-[11px] font-bold text-slate-500 mb-0.5" id="label-period-md">총 투입 공수 (최종)</p>
+                <p class="text-2xl font-black text-purple-600 leading-tight"><span id="pd-period-total-md">0.0</span><span class="text-sm text-slate-400 ml-1">MD</span></p>
+                <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">조회 기간 타겟 PJT 합산</p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-orange-400">
+                <p class="text-[11px] font-bold text-slate-500 mb-0.5">총 외주 공수</p>
+                <p class="text-2xl font-black text-orange-600 leading-tight"><span id="pd-period-out-md">0.0</span><span class="text-sm text-slate-400 ml-1">MD</span></p>
+                <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">조회 기간 타겟 PJT 합산</p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-fuchsia-400">
+                <p class="text-[11px] font-bold text-slate-500 mb-0.5">해당 기간 부하율</p>
+                <p class="text-2xl font-black text-fuchsia-600 leading-tight" id="pd-period-workload">0.0%</p>
+                <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">최종MD / 기간 내 가용력</p>
+            </div>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
