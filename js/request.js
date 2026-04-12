@@ -5,25 +5,66 @@ import { collection, doc, setDoc, addDoc, deleteDoc, query, onSnapshot, where } 
 let unsubscribeRequests = null;
 
 // ==========================================
-// 🚀 구글 API 연동 (Drive & Gmail)
+// 🚀 구글 API 연동 (Drive & Gmail) - 캐싱 기능 추가
 // ==========================================
 const GOOGLE_CLIENT_ID = '924354535197-joakn7gpfj4d3oirpd1pu3un9j7689q9.apps.googleusercontent.com';
 const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/gmail.send';
-const ADMIN_EMAIL = 'mfg@axbis.ai'; // 기본 수신 관리자 이메일 (필요시 변경)
+const ADMIN_EMAIL = 'admin@axbis.ai'; 
 
 window.googleAccessToken = null;
 
-// 폴더 ID 매핑 테이블 (프롬프트 제공 링크 기준)
 const DRIVE_FOLDERS = {
-    'collab': '1q4pzChZi_FYFGK7cXuRK6GRbIeSzfkRC', // 협업요청서
-    'purchase': '18SE2vn_OjZKWWOnthyrVA4fPoIcQP490', // 구매의뢰서
-    'repair': '1YSIVOQhoq2gWnhSze-mmYgyDs0XkaeGj' // 수리점검
+    'collab': '1q4pzChZi_FYFGK7cXuRK6GRbIeSzfkRC', 
+    'purchase': '18SE2vn_OjZKWWOnthyrVA4fPoIcQP490', 
+    'repair': '1YSIVOQhoq2gWnhSze-mmYgyDs0XkaeGj' 
+};
+
+// 💡 Drag & Drop 파일 선택 처리
+window.handleFileSelect = function(files) {
+    if (files && files.length > 0) {
+        const fileInput = document.getElementById('req-file');
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(files[0]);
+        fileInput.files = dataTransfer.files;
+        
+        document.getElementById('req-file-name-text').innerText = files[0].name;
+        document.getElementById('req-file-name').classList.remove('hidden');
+    }
+};
+
+window.clearSelectedFile = function(e) {
+    if(e) e.stopPropagation();
+    document.getElementById('req-file').value = '';
+    document.getElementById('req-file-name').classList.add('hidden');
 };
 
 window.initGoogleAPI = function() {
     if (typeof google === 'undefined' || typeof gapi === 'undefined') {
         setTimeout(window.initGoogleAPI, 500);
         return;
+    }
+    
+    // 💡 로컬 스토리지에 토큰이 캐싱되어 있는지 확인 (1시간 이내)
+    const storedToken = localStorage.getItem('axmsGoogleToken');
+    const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiry');
+    
+    if (storedToken && storedExpiry && Date.now() < parseInt(storedExpiry)) {
+        window.googleAccessToken = storedToken;
+        gapi.load('client', () => {
+            gapi.client.init({}).then(() => {
+                gapi.client.setToken({ access_token: storedToken });
+                gapi.client.load('drive', 'v3');
+                gapi.client.load('gmail', 'v1');
+            });
+        });
+        document.getElementById('google-auth-section')?.classList.add('hidden');
+        document.getElementById('google-auth-status')?.classList.remove('hidden');
+        document.getElementById('google-auth-status')?.classList.add('flex');
+    } else {
+        // 만료되었거나 없으면 연동 버튼 표시
+        document.getElementById('google-auth-section')?.classList.remove('hidden');
+        document.getElementById('google-auth-status')?.classList.add('hidden');
+        document.getElementById('google-auth-status')?.classList.remove('flex');
     }
     
     window.tokenClient = google.accounts.oauth2.initTokenClient({
@@ -36,19 +77,22 @@ window.initGoogleAPI = function() {
             }
             window.googleAccessToken = response.access_token;
             
-            const authBtn = document.getElementById('btn-google-auth');
-            const authStatus = document.getElementById('google-auth-status');
-            if(authBtn) authBtn.classList.add('hidden');
-            if(authStatus) authStatus.classList.remove('hidden');
-            window.showToast("구글 계정이 성공적으로 연동되었습니다.");
-        }
-    });
+            // 💡 토큰과 만료 시간(1시간 = 3600초)을 로컬 스토리지에 캐싱
+            localStorage.setItem('axmsGoogleToken', response.access_token);
+            localStorage.setItem('axmsGoogleTokenExpiry', Date.now() + 3500 * 1000);
 
-    gapi.load('client', () => {
-        gapi.client.init({}).then(() => {
-            gapi.client.load('drive', 'v3');
-            gapi.client.load('gmail', 'v1');
-        });
+            document.getElementById('google-auth-section')?.classList.add('hidden');
+            document.getElementById('google-auth-status')?.classList.remove('hidden');
+            document.getElementById('google-auth-status')?.classList.add('flex');
+            window.showToast("구글 드라이브 연동이 완료되었습니다.");
+            
+            gapi.load('client', () => {
+                gapi.client.init({}).then(() => {
+                    gapi.client.load('drive', 'v3');
+                    gapi.client.load('gmail', 'v1');
+                });
+            });
+        }
     });
 };
 
@@ -57,10 +101,8 @@ window.authenticateGoogle = function() {
         window.showToast("구글 API를 불러오는 중입니다. 잠시 후 다시 시도해주세요.", "warning");
         return;
     }
-    if (gapi.client.getToken() === null) {
+    if (!window.googleAccessToken) {
         window.tokenClient.requestAccessToken({prompt: 'consent'});
-    } else {
-        window.tokenClient.requestAccessToken({prompt: ''});
     }
 };
 
@@ -129,13 +171,9 @@ window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
     return true;
 };
 
-// ==========================================
-// 폼 UI 제어 및 저장/수정 로직
-// ==========================================
 window.openWriteModal = function(editId = null) { 
     window.editingReqId = editId; 
     
-    // 초기화
     document.getElementById('req-pjt-code').value = ''; 
     document.getElementById('req-pjt-name').value = ''; 
     document.getElementById('req-company').value = ''; 
@@ -144,27 +182,23 @@ window.openWriteModal = function(editId = null) {
     document.getElementById('req-end-date').value = ''; 
     document.getElementById('req-est-md').value = ''; 
     document.getElementById('req-content').value = ''; 
-    document.getElementById('req-file').value = '';
+    window.clearSelectedFile();
     
     document.getElementById('req-file-link-wrap').classList.add('hidden');
     document.getElementById('admin-actions').classList.add('hidden');
     document.getElementById('req-modal-status-badge').classList.add('hidden');
     document.querySelector('input[name="req-category"][value="협업"]').checked = true;
 
-    // 제목 표시
     const titleMap = { 'collab': '새 협업/조립 요청서', 'purchase': '새 모듈 구매 의뢰서', 'repair': '새 수리/점검 요청서' };
     document.getElementById('req-header-title').innerText = titleMap[window.currentAppId] || '요청서 관리';
     document.getElementById('req-modal-title').innerText = titleMap[window.currentAppId] || '새 요청서 작성';
 
-    // 폼 동적 표시 (협업/조립만 상세 필드 보이기)
     if (window.currentAppId === 'collab') {
         document.getElementById('collab-form-fields').classList.remove('hidden');
     } else {
-        // 구매/수리는 별도 폼이 필요하다면 여기에 추가 (현재는 collab 양식을 공용으로 쓴다고 가정)
         document.getElementById('collab-form-fields').classList.remove('hidden');
     }
 
-    // 수정 모드 시 데이터 채우기
     if (editId) {
         const req = window.currentRequestList.find(r => r.id === editId);
         if (req) {
@@ -187,7 +221,6 @@ window.openWriteModal = function(editId = null) {
                 document.getElementById('req-file-link').href = req.fileUrl;
             }
 
-            // 뱃지 상태
             const badge = document.getElementById('req-modal-status-badge');
             badge.classList.remove('hidden');
             if (req.status === 'completed') {
@@ -201,11 +234,10 @@ window.openWriteModal = function(editId = null) {
                 badge.innerText = "접수 대기중";
             }
 
-            // 관리자 메뉴 띄우기
             if (window.userProfile && window.userProfile.role === 'admin') {
                 const adminMenu = document.getElementById('admin-actions');
                 adminMenu.classList.remove('hidden');
-                if(req.status === 'completed') adminMenu.classList.add('hidden'); // 이미 완료면 숨김
+                if(req.status === 'completed') adminMenu.classList.add('hidden'); 
             }
         }
     }
@@ -213,7 +245,7 @@ window.openWriteModal = function(editId = null) {
     document.getElementById('write-modal').classList.remove('hidden'); 
     document.getElementById('write-modal').classList.add('flex'); 
 
-    // 모달 뜰 때 구글 API 자동 체크
+    // 모달 뜰 때마다 구글 인증 초기화 (캐싱 처리 완료)
     window.initGoogleAPI();
 };
 
@@ -246,7 +278,6 @@ window.saveRequest = async function(btn) {
         let fileUrl = null;
         const targetFolderId = DRIVE_FOLDERS[window.currentAppId] || '';
 
-        // 1. 파일이 있으면 드라이브에 먼저 업로드
         if (fileInput.files.length > 0 && targetFolderId) {
             window.showToast("구글 드라이브에 파일을 업로드 중입니다...");
             const fileId = await window.uploadFileToDrive(fileInput.files[0], targetFolderId);
@@ -274,7 +305,6 @@ window.saveRequest = async function(btn) {
             updatedAt: Date.now() 
         }; 
 
-        // 2. 파이어베이스 저장
         if(window.editingReqId) { 
             await setDoc(doc(db,"requests",window.editingReqId), data, {merge:true}); 
         } else { 
@@ -282,7 +312,6 @@ window.saveRequest = async function(btn) {
             await addDoc(collection(db,"requests"), data); 
         } 
 
-        // 3. 관리자에게 이메일 자동 송부
         window.showToast("관리자에게 확인 메일을 발송합니다...");
         await window.sendNotificationEmail('pending', data, ADMIN_EMAIL);
 
@@ -297,7 +326,6 @@ window.saveRequest = async function(btn) {
     }
 };
 
-// 관리자용: 접수 처리
 window.acceptRequest = async function() {
     if (!window.editingReqId) return;
     if (!window.googleAccessToken) return window.showToast("구글 연동을 먼저 해주세요.", "error");
@@ -311,7 +339,6 @@ window.acceptRequest = async function() {
     } catch(e) { window.showToast("처리 실패", "error"); }
 };
 
-// 관리자용: 완료 처리
 window.completeRequest = async function() {
     if (!window.editingReqId) return;
     if (!window.googleAccessToken) return window.showToast("구글 연동을 먼저 해주세요.", "error");
