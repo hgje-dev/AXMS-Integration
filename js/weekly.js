@@ -4,7 +4,7 @@ import { collection, doc, setDoc, addDoc, deleteDoc, query, onSnapshot, where, g
 
 let currentWeeklyLogUnsubscribe = null;
 let currentScheduleUnsubscribe = null;
-let noticeUnsubscribe = null; // 공지사항 실시간 리스너 추가
+let noticeUnsubscribe = null;
 
 window.currentWeeklyLogList = [];
 window.allSchedules = []; 
@@ -197,7 +197,6 @@ window.deleteTeamMember = async function(id) {
     }
 };
 
-// 공지사항 편집 로직
 window.editNotice = async function() {
     const el = document.getElementById('weekly-notice-text');
     const currentText = el ? el.innerText : '';
@@ -220,7 +219,6 @@ window.loadWeeklyLogsData = function() {
 
     if (window.updateWeekLabels) window.updateWeekLabels(w);
 
-    // 공지사항 로드 연동
     if (!noticeUnsubscribe) {
         noticeUnsubscribe = onSnapshot(doc(db, "settings", "weekly_notice"), (docSnap) => {
             const el = document.getElementById('weekly-notice-text');
@@ -234,7 +232,6 @@ window.loadWeeklyLogsData = function() {
         });
     }
     
-    // 엑셀 버튼 권한 처리
     const exportBtn = document.getElementById('btn-export-weekly');
     if (exportBtn && window.userProfile && window.userProfile.role === 'admin') {
         exportBtn.classList.remove('hidden');
@@ -739,7 +736,7 @@ window.deleteWeeklyLog = async function(id) {
     } 
 };
 
-// 관리자용 주간업무일지 엑셀 다운로드 함수 고도화
+// 관리자용 주간업무일지 엑셀 다운로드 함수 고도화 (이모지 제거 및 요약 내용 추가 적용 완료)
 window.exportWeeklyLogsExcel = async function() {
     if (typeof window.ExcelJS === 'undefined') return window.showToast("ExcelJS 모듈을 불러오는 데 실패했습니다.", "error");
 
@@ -855,7 +852,7 @@ window.exportWeeklyLogsExcel = async function() {
         let summaryStartRow = 11;
         ws1.mergeCells(`B${summaryStartRow}:L${summaryStartRow}`);
         let secTitle = ws1.getCell(`B${summaryStartRow}`);
-        secTitle.value = '■ 주간 업무 주요 내용 요약';
+        secTitle.value = '[ 주간 업무 주요 내용 요약 ]';
         secTitle.font = { bold: true, size: 14, color: { argb: 'FF1E293B' } };
 
         let currentRow = summaryStartRow + 2;
@@ -890,9 +887,9 @@ window.exportWeeklyLogsExcel = async function() {
             currentRow++; // 블록 간 여백
         };
 
-        addSummaryBlock('[완료된 주요 업무]', compTasks, 'FF059669', 'FFF0FDF4'); // Emerald
-        addSummaryBlock('[진행 중인 주요 업무]', progTasks, 'FF1D4ED8', 'FFEFF6FF'); // Blue
-        addSummaryBlock('[주요 이슈 및 지연 사항]', issueList, 'FFE11D48', 'FFFFF1F2'); // Rose
+        addSummaryBlock('완료된 주요 업무', compTasks, 'FF059669', 'FFF0FDF4'); // Emerald
+        addSummaryBlock('진행 중인 주요 업무', progTasks, 'FF1D4ED8', 'FFEFF6FF'); // Blue
+        addSummaryBlock('주요 이슈 및 지연 사항', issueList, 'FFE11D48', 'FFFFF1F2'); // Rose
 
 
         // 2. 상세 내역 시트 생성
@@ -1022,7 +1019,7 @@ window.renderKanbanBoard = function() {
     }).join('');
 };
 
-// 💡 10인 이상 환경을 고려한 팀 일정표 슬림형/스크롤 UI
+// 10인 이상 환경을 고려한 팀 일정표 슬림형/스크롤 UI
 window.renderTeamKanbanBoard = function() {
     const board = document.getElementById('weekly-team-kanban-board');
     if (!board) return;
@@ -1111,7 +1108,7 @@ window.editSchedule = function(id) {
     }
 };
 
-// 💡 일정 상세 보기 (팀 일정용 읽기전용)
+// 일정 상세 보기 (팀 일정용 읽기전용)
 window.viewSchedule = function(id) {
     const s = window.allSchedules.find(function(x) { return x.id === id; });
     if (!s) return;
