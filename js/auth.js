@@ -1,6 +1,6 @@
 /* eslint-disable */
 import { auth, db } from './firebase.js';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { doc, getDoc, setDoc, collection, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 let allUsersUnsubscribe=null, teamMembersUnsubscribe=null;
@@ -122,7 +122,6 @@ window.initAuthListeners = () => {
                 document.getElementById('login-modal')?.classList.add('hidden'); 
                 const pt = document.getElementById('portal-container'); if(pt) { pt.classList.remove('hidden'); pt.classList.add('flex'); }
                 
-                // 💡 프로필 렌더링에 직책 추가 적용
                 if(document.getElementById('sidebar-user-name')) document.getElementById('sidebar-user-name').innerText = window.userProfile.name; 
                 if(document.getElementById('sidebar-user-position')) document.getElementById('sidebar-user-position').innerText = window.userProfile.position || '직책 미지정'; 
                 if(document.getElementById('sidebar-team-badge')) document.getElementById('sidebar-team-badge').innerText = window.userProfile.team || window.userProfile.department;
@@ -151,6 +150,72 @@ window.initAuthListeners = () => {
     });
 };
 
+// 💡 내 정보 설정 모달 제어
+window.openSettingsModal = () => {
+    if (!window.userProfile) return;
+    document.getElementById('set-name').value = window.userProfile.name || '';
+    document.getElementById('set-dept').value = window.userProfile.team || window.userProfile.department || 'AXBIS';
+    document.getElementById('set-position').value = window.userProfile.position || '매니저';
+    document.getElementById('set-new-pw').value = '';
+    document.getElementById('set-new-pw-confirm').value = '';
+    
+    document.getElementById('settings-modal').classList.remove('hidden');
+    document.getElementById('settings-modal').classList.add('flex');
+};
+
+window.closeSettingsModal = () => {
+    document.getElementById('settings-modal').classList.add('hidden');
+    document.getElementById('settings-modal').classList.remove('flex');
+};
+
+window.saveUserSettings = async () => {
+    const newName = document.getElementById('set-name').value.trim();
+    const newTeam = document.getElementById('set-dept').value;
+    const newPos = document.getElementById('set-position').value;
+    const newPw = document.getElementById('set-new-pw').value.trim();
+    const newPwConf = document.getElementById('set-new-pw-confirm').value.trim();
+
+    if (!newName) return window.showToast("이름을 입력해주세요.", "error");
+
+    if (newPw) {
+        if (newPw !== newPwConf) return window.showToast("비밀번호가 일치하지 않습니다.", "error");
+        if (newPw.length < 6) return window.showToast("비밀번호는 6자리 이상이어야 합니다.", "error");
+        
+        try {
+            await updatePassword(auth.currentUser, newPw);
+            window.showToast("비밀번호가 성공적으로 변경되었습니다.");
+        } catch (error) {
+            console.error("비밀번호 변경 에러:", error);
+            if (error.code === 'auth/requires-recent-login') {
+                return window.showToast("보안을 위해 다시 로그인한 후 비밀번호를 변경해주세요.", "error");
+            }
+            return window.showToast("비밀번호 변경 실패", "error");
+        }
+    }
+
+    try {
+        await setDoc(doc(db, "users", window.currentUser.uid), {
+            name: newName,
+            team: newTeam,
+            department: newTeam,
+            position: newPos
+        }, { merge: true });
+        
+        window.userProfile.name = newName;
+        window.userProfile.team = newTeam;
+        window.userProfile.position = newPos;
+        
+        if(document.getElementById('sidebar-user-name')) document.getElementById('sidebar-user-name').innerText = newName; 
+        if(document.getElementById('sidebar-user-position')) document.getElementById('sidebar-user-position').innerText = newPos; 
+        if(document.getElementById('sidebar-team-badge')) document.getElementById('sidebar-team-badge').innerText = newTeam;
+
+        window.showToast("내 정보가 저장되었습니다.");
+        window.closeSettingsModal();
+    } catch (e) {
+        window.showToast("정보 저장 실패", "error");
+    }
+};
+
 window.openAdminModal = () => { document.getElementById('admin-modal').classList.remove('hidden'); document.getElementById('admin-modal').classList.add('flex'); window.renderAdminUsers(); };
 window.closeAdminModal = () => { document.getElementById('admin-modal').classList.add('hidden'); document.getElementById('admin-modal').classList.remove('flex'); };
 
@@ -170,7 +235,12 @@ window.renderAdminUsers = () => {
         const isP = u.role === 'pending';
         const trClass = isP ? 'bg-rose-50/40 border-l-4 border-rose-500' : 'hover:bg-slate-50 transition-colors border-b border-slate-100';
         
-        const safePos = u.position ? `<span class="block text-[10px] text-slate-400 font-normal mt-0.5">${u.position}</span>` : '';
+        // 💡 관리자가 직책을 변경할 수 있도록 텍스트 대신 select 드롭다운 사용
+        const posOptions = ['대표','본부장','그룹장','팀장','책임매니저','선임매니저','매니저'].map(pos => `<option value="${pos}" ${u.position === pos ? 'selected' : ''}>${pos}</option>`).join('');
+        const safePos = `<select class="block mt-1 border border-slate-200 rounded px-1 py-0.5 text-[10px] text-indigo-600 bg-indigo-50 font-bold focus:outline-none" onchange="window.updateUserPosition('${u.uid}', this.value)">
+                            ${u.position ? '' : '<option value="" disabled selected>직책 미지정</option>'}
+                            ${posOptions}
+                         </select>`;
 
         html += `<tr class="${trClass}">
             <td class="p-3 text-center font-bold text-slate-700">${u.name}${safePos}</td>
@@ -203,6 +273,11 @@ window.renderAdminUsers = () => {
         </tr>`;
     });
     tb.innerHTML = html;
+};
+
+// 💡 관리자: 유저 직책 수정
+window.updateUserPosition = async (uid, pos) => { 
+    try { await setDoc(doc(db, "users", uid), { position: pos }, { merge: true }); if(window.showToast) window.showToast("직책이 변경되었습니다."); } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } 
 };
 
 window.updateUserRole = async (uid, role) => { 
