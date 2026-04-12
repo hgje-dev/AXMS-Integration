@@ -10,7 +10,10 @@
                         주간 업무 일지 
                         <span id="top-my-submit-status" class="text-[10px] px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 font-bold ml-1 shadow-sm">확인중</span>
                     </h2>
-                    <p class="text-xs text-slate-500 font-bold mt-1">보고 기간: <span id="weekly-period-text" class="text-slate-700"></span> <span class="mx-1 text-slate-300">|</span> 마감: <span id="weekly-deadline-text" class="text-rose-500"></span></p>
+                    <div class="mt-1.5 flex flex-col gap-0.5">
+                        <p class="text-[11px] text-slate-500 font-bold">보고 기간: <span id="weekly-period-text" class="text-slate-700"></span></p>
+                        <p class="text-[11px] text-slate-500 font-bold">보고 마감: <span id="weekly-deadline-text" class="text-rose-500 font-black"></span></p>
+                    </div>
                 </div>
             </div>
 
@@ -182,6 +185,7 @@
                 <div class="space-y-4">
                     <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative">
                         <h4 class="text-[11px] font-bold text-slate-500 mb-2">관여한 프로젝트 (선택)</h4>
+                        
                         <div class="flex gap-2 mb-3">
                             <div class="relative flex-1">
                                 <input type="text" id="wl-pjt-input" placeholder="프로젝트명 검색..." oninput="window.showAutocomplete(this, 'wl-temp-pjt-code', '', true)" onkeydown="if(event.key==='Enter') { event.preventDefault(); window.addWlProject(); }" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-indigo-500 font-bold bg-slate-50">
@@ -189,6 +193,7 @@
                             </div>
                             <button onclick="window.addWlProject()" class="bg-slate-800 hover:bg-slate-700 text-white px-4 rounded-xl text-xs font-bold transition-colors shadow-sm shrink-0">추가</button>
                         </div>
+                        
                         <div id="wl-pjt-tags" class="flex flex-wrap gap-2 empty:hidden mt-2"></div>
                     </div>
                 </div>
