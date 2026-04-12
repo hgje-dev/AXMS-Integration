@@ -8,15 +8,11 @@ let currentLogUnsubscribe = null;
 let currentCommentUnsubscribe = null;
 let currentIssueUnsubscribe = null;
 
-// 💡 연도 필터 변수 추가
-window.currentYearFilter = '';
 window.currentStatusFilter = 'all';
 window.currentCategoryFilter = 'all';
 window.currentMonthFilter = '';
 window.calendarCurrentDate = new Date();
 window.hideCompletedFilter = false; 
-
-// 💡 간트차트 오늘 스크롤 위치 저장 변수
 window.ganttTodayOffset = 0;
 
 const getSafeMillis = function(val) { 
@@ -109,7 +105,6 @@ window.filterByCategory = function(category) {
     window.filterProjectStatus(window.currentStatusFilter); 
 };
 
-// 💡 연도 필터 함수
 window.filterByYear = function(yearStr) {
     window.currentYearFilter = yearStr;
     window.updateMiniDashboard();
@@ -188,7 +183,6 @@ window.getFilteredProjects = function() {
         list = list.filter(item => item.status !== 'completed');
     }
 
-    // 💡 연도 필터 적용
     if(window.currentYearFilter) {
         list = list.filter(item => {
             const sEn = item.d_shipEn || '';
@@ -918,6 +912,10 @@ window.renderProjCalendar = function() {
     } catch(e) {}
 };
 
+// ==========================================================
+// 🚨 과거 데이터(reqId/projectId) 무조건 불러오는 철통 방어 렌더링 🚨
+// ==========================================================
+
 window.openDailyLogModal = function(projectId) { 
     const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
     if(!proj) return; 
@@ -1068,6 +1066,7 @@ window.resetDailyLogForm = function() {
 };
 
 
+// 코멘트 모달 로직
 window.openCommentModal = function(projectId) { 
     const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
     if(!proj) return; 
@@ -1236,6 +1235,7 @@ window.deleteComment = async function(id) {
     } catch(e) { window.showToast("삭제 실패", "error"); } 
 };
 
+// 이슈 모달 로직
 window.openIssueModal = function(projectId) { 
     const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
     if(!proj) return; 
@@ -1346,6 +1346,7 @@ window.closeIssueModal = function() {
     if (currentIssueUnsubscribe) { currentIssueUnsubscribe(); currentIssueUnsubscribe = null; } 
 };
 
+// MD Log 모달 로직
 window.openMdLogModal = function(projectId) { 
     const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
     if(!proj) return; 
@@ -1477,6 +1478,7 @@ window.resetMdLogForm = function() {
     document.getElementById('btn-md-cancel').classList.add('hidden'); 
 };
 
+// 링크 관리 로직
 window.openLinkModal = function(projectId) { 
     const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
     if(!proj) return; 
@@ -1551,3 +1553,96 @@ window.deleteLinkItem = async function(projectId, index) {
         window.renderLinksList(projectId); 
     } catch(e) { window.showToast("삭제 실패", "error"); } 
 };
+
+// 💡 초성 검색 개선
+window.showAutocomplete = function(inputEl, targetId1, targetId2, isNameSearch) {
+    const val = inputEl.value.trim().toLowerCase();
+    let dropdown = document.getElementById('pjt-autocomplete-dropdown');
+    
+    if(!dropdown) {
+        dropdown = document.createElement('ul');
+        dropdown.id = 'pjt-autocomplete-dropdown';
+        dropdown.className = 'absolute z-[9999] bg-white border border-indigo-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-full custom-scrollbar py-1';
+        document.body.appendChild(dropdown);
+    }
+
+    if(val.length < 1) { 
+        dropdown.classList.add('hidden'); 
+        return; 
+    }
+
+    let matches = [];
+    for (let i = 0; i < window.pjtCodeMasterList.length; i++) {
+        let p = window.pjtCodeMasterList[i];
+        if (isNameSearch) {
+            if (p.name.toLowerCase().includes(val) || window.matchString(val, p.name)) {
+                matches.push(p);
+            }
+        } else {
+            if (p.code.toLowerCase().includes(val)) {
+                matches.push(p);
+            }
+        }
+    }
+
+    if(matches.length > 0) {
+        const rect = inputEl.getBoundingClientRect();
+        dropdown.style.left = (rect.left + window.scrollX) + 'px';
+        dropdown.style.top = (rect.bottom + window.scrollY + 5) + 'px';
+        dropdown.style.width = rect.width + 'px';
+        dropdown.classList.remove('hidden');
+
+        let dropHtml = '';
+        matches.forEach(function(m) {
+            let safeCompany = m.company || '업체미상';
+            let safeName = m.name.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+            
+            dropHtml += '<li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-slate-700 font-bold text-xs border-b border-slate-50 last:border-0 truncate transition-colors" ';
+            dropHtml += 'onmousedown="window.selectAutocomplete(\'' + m.code + '\', \'' + safeName + '\', \'' + m.company + '\', \'' + inputEl.id + '\', \'' + targetId1 + '\', \'' + targetId2 + '\')">';
+            dropHtml += '<span class="text-indigo-600">[' + m.code + ']</span> ' + m.name + ' <span class="text-[10px] text-slate-400">(' + safeCompany + ')</span>';
+            dropHtml += '</li>';
+        });
+        dropdown.innerHTML = dropHtml;
+    } else {
+        dropdown.classList.add('hidden');
+    }
+};
+
+window.selectAutocomplete = function(code, name, company, sourceId, targetId1, targetId2) {
+    const sourceEl = document.getElementById(sourceId);
+    const t1 = document.getElementById(targetId1);
+    const t2 = document.getElementById(targetId2);
+
+    // 💡 ID에 'code'가 포함되어 있으면 코드를 입력한 것으로 판단 (req-pjt-code 등 범용 대응)
+    if (sourceId.includes('code')) {
+        if (sourceEl) sourceEl.value = code;
+        if (t1) t1.value = name;
+        if (t2) t2.value = company;
+    } else {
+        if (sourceEl) sourceEl.value = name;
+        if (t1) t1.value = code;
+        if (t2) t2.value = company;
+    }
+
+    const drop = document.getElementById('pjt-autocomplete-dropdown');
+    if (drop) {
+        drop.classList.add('hidden');
+    }
+};
+
+document.addEventListener('click', function(e) {
+    const n = document.getElementById('notification-dropdown');
+    if (n && !n.classList.contains('hidden') && !e.target.closest('.relative.cursor-pointer')) {
+        n.classList.add('hidden');
+    }
+
+    const m = document.getElementById('mention-dropdown');
+    if (m && !m.classList.contains('hidden') && !e.target.closest('#mention-dropdown')) {
+        m.classList.add('hidden');
+    }
+
+    const d = document.getElementById('pjt-autocomplete-dropdown');
+    if (d && !d.classList.contains('hidden') && !e.target.closest('#pjt-autocomplete-dropdown') && !e.target.closest('input[oninput*="showAutocomplete"]')) {
+        d.classList.add('hidden');
+    }
+});
