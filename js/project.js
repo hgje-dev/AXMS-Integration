@@ -20,7 +20,7 @@ window.currentMonthFilter = '';
 window.calendarCurrentDate = new Date();
 window.hideCompletedFilter = false; 
 window.ganttTodayOffset = 0;
-window.ncrData = [];
+window.ncrData = []; // 💡 부적합 데이터 저장용 배열
 
 const getSafeMillis = (val) => { 
     try { 
@@ -67,6 +67,7 @@ window.loadCounts = function() {
             window.renderProjectStatusList();
         });
         
+        // 💡 앱 시작 시 NCR 데이터 로드 실행
         window.loadNcrData();
     } catch(e) { console.warn("카운트 로드 실패:", e); }
 };
@@ -217,10 +218,8 @@ window.renderProjectStatusList = function() {
     const tbody = document.getElementById('proj-dash-tbody'); if(!tbody) return;
     let displayList = window.getFilteredProjects();
     
-    if(displayList.length === 0) { 
-        tbody.innerHTML = '<tr><td colspan="32" class="text-center p-6 text-slate-400 font-bold border-b border-slate-100 bg-white">프로젝트가 없습니다.</td></tr>'; 
-        return; 
-    }
+    // 💡 열 개수가 32개로 늘어났으므로 빈 화면일 때 colspan 32 적용
+    if(displayList.length === 0) { tbody.innerHTML = '<tr><td colspan="32" class="text-center p-6 text-slate-400 font-bold border-b border-slate-100 bg-white">프로젝트가 없습니다.</td></tr>'; return; }
     
     const statusMap = { 
         'pending': '<span class="text-slate-500 bg-slate-100 px-2 py-0.5 rounded shadow-sm border border-slate-200">대기/보류</span>', 
@@ -243,12 +242,14 @@ window.renderProjectStatusList = function() {
         const desCnt = (window.projectDesignCounts && window.projectDesignCounts[item.id]) || 0;
         const schCnt = (window.projectScheduleCounts && window.projectScheduleCounts[item.id]) || 0;
 
+        // 💡 띄어쓰기 및 대소문자 무시한 NCR 미결 항목 계산
         const safeItemCode = String(item.code || '').replace(/\s/g, '').toUpperCase();
         const pjtNcrData = (window.ncrData || []).filter(n => String(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeItemCode);
         const unresolvedNcrCnt = pjtNcrData.filter(n => !(n.status.includes('완료') || n.status.includes('종결') || n.status.includes('완료됨'))).length;
 
         let trHtml = `<tr class="group hover:bg-indigo-50/50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.editProjStatus('${item.id}')">`;
         
+        // 스크롤 고정 영역 (왼쪽)
         trHtml += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 0px; min-width: 40px; max-width: 40px;" onclick="event.stopPropagation()"><button onclick="window.deleteProjStatus('${item.id}')" class="text-slate-300 hover:text-rose-500 p-1.5 rounded"><i class="fa-solid fa-trash-can"></i></button></td>`;
         trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 40px; min-width: 80px; max-width: 80px;">${getSafeString(item.category)}</td>`;
         trHtml += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 120px; min-width: 50px; max-width: 50px;" onclick="event.stopPropagation()"><button onclick="window.openCommentModal('${item.id}', '${safeNameJs}')" class="text-amber-400 relative"><i class="fa-regular fa-comment-dots text-lg"></i>${cCnt ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-amber-200">${cCnt}</span>` : ''}</button></td>`;
@@ -259,12 +260,14 @@ window.renderProjectStatusList = function() {
         trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center font-black text-emerald-600 bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 660px; min-width: 60px; max-width: 60px;">${parseFloat(item.progress) || 0}%</td>`;
         trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20 shadow-[3px_0_5px_-1px_rgba(0,0,0,0.1)] border-r-slate-300" style="left: 720px; min-width: 80px; max-width: 80px;">${statusMap[item.status] || ''}</td>`;
         
+        // 스크롤 영역 (일반 td)
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center font-bold text-slate-600">${getSafeString(item.manager)}</td>`;
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openPurchaseModal('${item.id}', '${safeNameJs}')" class="text-amber-500 relative"><i class="fa-solid fa-cart-shopping text-lg"></i>${purCnt ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-amber-200">${purCnt}</span>` : ''}</button></td>`;
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openDesignModal('${item.id}', '${safeNameJs}')" class="text-teal-400 relative"><i class="fa-solid fa-pen-ruler text-lg"></i>${desCnt ? `<span class="absolute -top-1 -right-2 bg-teal-100 text-teal-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-teal-200">${desCnt}</span>` : ''}</button></td>`;
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openPjtScheduleModal('${item.id}', '${safeNameJs}')" class="text-fuchsia-400 relative"><i class="fa-regular fa-calendar-check text-lg"></i>${schCnt ? `<span class="absolute -top-1 -right-2 bg-fuchsia-100 text-fuchsia-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-fuchsia-200">${schCnt}</span>` : ''}</button></td>`;
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openDailyLogModal('${item.id}', '${safeNameJs}', ${parseFloat(item.progress)||0})" class="text-sky-400 relative"><i class="fa-solid fa-book text-lg"></i>${lCnt ? `<span class="absolute -top-1 -right-2 bg-sky-100 text-sky-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-sky-200">${lCnt}</span>` : ''}</button></td>`;
         
+        // 💡 부적합 렌더링
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()">
             <button onclick="window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-rose-500 relative transition-transform hover:scale-110">
                 <i class="fa-solid fa-file-circle-exclamation text-lg"></i>
@@ -999,7 +1002,7 @@ window.renderDailyLogs = function(logs) {
             
             let btnHtml = '';
             if (log.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin') {
-                btnHtml = '<button onclick="window.editDailyLog(\'' + log.id + '\')" class="text-slate-400 hover:text-sky-50 transition-colors" title="수정"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteDailyLog(\'' + log.id + '\')" class="text-slate-400 hover:text-rose-500 transition-colors" title="삭제"><i class="fa-solid fa-trash-can"></i></button>';
+                btnHtml = '<button onclick="window.editDailyLog(\'' + log.id + '\')" class="text-slate-400 hover:text-sky-500 transition-colors" title="수정"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteDailyLog(\'' + log.id + '\')" class="text-slate-400 hover:text-rose-500 transition-colors" title="삭제"><i class="fa-solid fa-trash-can"></i></button>';
             }
             
             listHtml += '<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1 hover:shadow-md transition-shadow"><div class="flex justify-between items-center"><div class="flex items-center gap-3"><span class="font-bold text-sky-600 text-xs flex items-center gap-1"><i class="fa-regular fa-calendar text-sky-400"></i> ' + log.date + '</span><span class="font-black text-slate-700 text-sm">' + log.authorName + '</span></div><div class="flex gap-2">' + btnHtml + '</div></div><div class="text-slate-700 font-medium text-[13px] pl-1 mt-2 break-words leading-relaxed">' + safeContent + '</div>' + imgHtml + '</div>'; 
@@ -1668,43 +1671,46 @@ document.addEventListener('click', function(e) {
 });
 
 // ==========================================
-// 💡 부적합(NCR) 구글 시트 연동 (토큰 없는 완벽 우회 방식 - CSV 파싱)
+// 💡 부적합(NCR) 구글 시트 연동 (토큰 인증 + gviz API 하이브리드)
 // ==========================================
 window.loadNcrData = async function() {
     try {
+        // 💡 앱에 로그인된 구글 토큰을 가져옵니다.
+        const token = window.googleAccessToken || localStorage.getItem('axmsGoogleToken');
+
         const sheetId = '1ZYwSKvT4QXjFxgftunwdRHWzX4KXoelhZSVjauAJg8s';
-        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=0`;
+        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=RawData`;
 
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("시트 읽기 실패");
+        // 💡 회사 보안 시트일 경우를 대비해 토큰을 헤더에 실어서 보냅니다.
+        const fetchOptions = token ? { headers: { 'Authorization': 'Bearer ' + token } } : {};
+        const res = await fetch(url, fetchOptions);
 
-        const csvText = await res.text();
-        
-        const parseCSV = (str) => {
-            const arr = []; let quote = false; let row = 0, col = 0;
-            for (let c = 0; c < str.length; c++) {
-                let cc = str[c], nc = str[c+1];
-                arr[row] = arr[row] || [];
-                arr[row][col] = arr[row][col] || '';
-
-                if (cc === '"' && quote && nc === '"') { arr[row][col] += cc; ++c; continue; }
-                if (cc === '"') { quote = !quote; continue; }
-                if (cc === ',' && !quote) { ++col; continue; }
-                if (cc === '\r' && nc === '\n' && !quote) { ++row; col = 0; ++c; continue; }
-                if (cc === '\n' && !quote) { ++row; col = 0; continue; }
-                if (cc === '\r' && !quote) { ++row; col = 0; continue; }
-                arr[row][col] += cc;
+        if (!res.ok) {
+            // 토큰이 만료되었거나 접근 권한이 없는 경우
+            if (res.status === 401 || res.status === 403) {
+                throw new Error("AUTH_ERROR");
             }
-            return arr;
-        };
+            throw new Error("HTTP " + res.status);
+        }
 
-        const rows = parseCSV(csvText);
-        if (!rows || rows.length < 2) return;
-
-        const headers = rows[0];
+        // 응답 텍스트에서 JSON 데이터 부분만 추출
+        const text = await res.text();
+        const start = text.indexOf('{');
+        const end = text.lastIndexOf('}');
+        if (start === -1 || end === -1) throw new Error("데이터 파싱 실패");
         
+        const jsonString = text.substring(start, end + 1);
+        const data = JSON.parse(jsonString);
+
+        if (!data || !data.table || !data.table.cols || !data.table.rows) return;
+
+        // 헤더(열 이름) 추출
+        const cols = data.table.cols.map(c => c ? c.label : '');
+        const rows = data.table.rows;
+
+        // 띄어쓰기, 대소문자를 무시하고 정확히 열 위치를 찾는 함수
         const getIdx = (keywords) => {
-            return headers.findIndex(h => {
+            return cols.findIndex(h => {
                 if (!h) return false;
                 const normalized = String(h).toLowerCase().replace(/[\s\(\)\[\]_]/g, '');
                 return keywords.some(k => normalized.includes(k.toLowerCase().replace(/[\s\(\)\[\]_]/g, '')));
@@ -1720,18 +1726,24 @@ window.loadNcrData = async function() {
         const cDesc = getIdx(['내용', '부적합내용', 'content', 'desc']);
         const cStat = getIdx(['진행', '현황', '상태', 'status']);
 
-        window.ncrData = rows.slice(1).map(row => {
-            return {
-                pjtCode: cPjt !== -1 && row[cPjt] ? row[cPjt].trim() : '',
-                ncrNo: cNcr !== -1 && row[cNcr] ? row[cNcr].trim() : '',
-                date: cDate !== -1 && row[cDate] ? row[cDate].trim() : '',
-                drawingNo: cDraw !== -1 && row[cDraw] ? row[cDraw].trim() : '',
-                partName: cPart !== -1 && row[cPart] ? row[cPart].trim() : '',
-                type: cType !== -1 && row[cType] ? row[cType].trim() : '',
-                content: cDesc !== -1 && row[cDesc] ? row[cDesc].trim() : '',
-                status: cStat !== -1 && row[cStat] ? row[cStat].trim() : ''
+        window.ncrData = rows.map(row => {
+            // 셀 값을 안전하게 가져오는 헬퍼
+            const getCellVal = (idx) => {
+                if (idx === -1 || !row.c[idx]) return '';
+                return row.c[idx].f ? String(row.c[idx].f) : (row.c[idx].v !== null ? String(row.c[idx].v) : '');
             };
-        }).filter(n => n.pjtCode);
+
+            return {
+                pjtCode: getCellVal(cPjt).trim(),
+                ncrNo: getCellVal(cNcr),
+                date: getCellVal(cDate),
+                drawingNo: getCellVal(cDraw),
+                partName: getCellVal(cPart),
+                type: getCellVal(cType),
+                content: getCellVal(cDesc),
+                status: getCellVal(cStat)
+            };
+        }).filter(n => n.pjtCode); 
 
         window.renderProjectStatusList();
 
@@ -1741,11 +1753,13 @@ window.loadNcrData = async function() {
             if (pjtCode) window.renderNcrList(pjtCode);
         }
 
-        if(window.showToast) window.showToast("부적합(NCR) 데이터 동기화 완료!", "success");
-
     } catch(e) {
         console.error("NCR 로드 에러:", e);
-        if(window.showToast) window.showToast("시트 접근 오류: 시트가 '뷰어'로 공개되어 있는지 확인하세요.", "error");
+        if (e.message === "AUTH_ERROR") {
+            if(window.showToast) window.showToast("구글 권한이 만료되었습니다. [요청서] 탭에서 구글 계정을 다시 연동해주세요.", "warning");
+        } else {
+            if(window.showToast) window.showToast("시트 접근 오류: 회사 보안 정책으로 막혔거나 시트 이름이 다릅니다.", "error");
+        }
     }
 };
 
@@ -1767,6 +1781,7 @@ window.renderNcrList = function(pjtCode) {
     const tbody = document.getElementById('ncr-list-tbody');
     if (!tbody) return;
     
+    // 시트의 코드와 현황판의 코드 비교 시, 띄어쓰기 및 대소문자를 무시하도록 강화
     const safeTargetCode = String(pjtCode).replace(/\s/g, '').toUpperCase();
     const list = (window.ncrData || []).filter(n => String(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeTargetCode);
     
