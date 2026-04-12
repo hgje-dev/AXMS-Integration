@@ -2,19 +2,16 @@
 const routes = {
     'dashboard-home': { url: './views/dashboard.html', init: () => { if(window.loadHomeDashboards) window.loadHomeDashboards(); } },
     
-    // 🌟 제조, 광학 메뉴 1개로 통합됨!
     'project-status': { 
         url: './views/project.html', 
         init: () => { 
-            // 탭 기본값 세팅 (처음 누를 땐 제조파트)
             if (!window.currentProjPartTab) window.currentProjPartTab = '제조'; 
             
-            // UI 버튼 디자인 맞추기
             const btnMfg = document.getElementById('btn-part-mfg');
             const btnOpt = document.getElementById('btn-part-opt');
             if(btnMfg && btnOpt) {
-                btnMfg.className = window.currentProjPartTab === '제조' ? "px-4 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all" : "px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all";
-                btnOpt.className = window.currentProjPartTab === '광학' ? "px-4 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all" : "px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all";
+                btnMfg.className = window.currentProjPartTab === '제조' ? "px-3 py-1 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
+                btnOpt.className = window.currentProjPartTab === '광학' ? "px-3 py-1 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
             }
             if(window.loadProjectStatusData) window.loadProjectStatusData(); 
         } 
@@ -25,7 +22,7 @@ const routes = {
     'simulation': { url: './views/simulation.html', init: () => { if(window.handleTypeChange) window.handleTypeChange(); if(window.setupAutoSaveTriggers) window.setupAutoSaveTriggers(); } },
     'collab': { url: './views/request.html', init: () => { window.currentAppId = 'collab'; if(window.loadRequestsData) window.loadRequestsData('collab'); } },
     'purchase': { url: './views/request.html', init: () => { window.currentAppId = 'purchase'; if(window.loadRequestsData) window.loadRequestsData('purchase'); } },
-    'assembly': { url: './views/request.html', init: () => { window.currentAppId = 'assembly'; if(window.loadRequestsData) window.loadRequestsData('assembly'); } },
+    // 💡 assembly 삭제
     'repair': { url: './views/request.html', init: () => { window.currentAppId = 'repair'; if(window.loadRequestsData) window.loadRequestsData('repair'); } }
 };
 
@@ -34,7 +31,7 @@ window.openApp = async function(viewId, title) {
     let routeKey = viewId.replace('view-', '');
     
     let permissionKey = routeKey;
-    if (permissionKey.startsWith('project-status')) permissionKey = 'project-status'; // 권한명 통일
+    if (permissionKey.startsWith('project-status')) permissionKey = 'project-status'; 
     if (permissionKey !== 'dashboard-home' && permissionKey !== 'dashboard-proj' && permissionKey !== 'simulation' && permissionKey !== 'workhours' && window.userProfile && window.userProfile.permissions && !window.userProfile.permissions[permissionKey]) {
         if(window.showToast) window.showToast("접근 권한이 없습니다.", "error"); return;
     }
