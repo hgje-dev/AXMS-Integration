@@ -8,11 +8,16 @@ let currentLogUnsubscribe = null;
 let currentCommentUnsubscribe = null;
 let currentIssueUnsubscribe = null;
 
+// 💡 연도 필터 변수 추가
+window.currentYearFilter = '';
 window.currentStatusFilter = 'all';
 window.currentCategoryFilter = 'all';
 window.currentMonthFilter = '';
 window.calendarCurrentDate = new Date();
 window.hideCompletedFilter = false; 
+
+// 💡 간트차트 오늘 스크롤 위치 저장 변수
+window.ganttTodayOffset = 0;
 
 const getSafeMillis = function(val) { 
     try { 
@@ -104,6 +109,13 @@ window.filterByCategory = function(category) {
     window.filterProjectStatus(window.currentStatusFilter); 
 };
 
+// 💡 연도 필터 함수
+window.filterByYear = function(yearStr) {
+    window.currentYearFilter = yearStr;
+    window.updateMiniDashboard();
+    window.filterProjectStatus(window.currentStatusFilter);
+};
+
 window.filterByMonth = function(monthStr) { 
     window.currentMonthFilter = monthStr; 
     window.updateMiniDashboard(); 
@@ -112,17 +124,21 @@ window.filterByMonth = function(monthStr) {
 
 window.filterByStatusOnly = function(status) {
     window.currentCategoryFilter = 'all'; 
+    window.currentYearFilter = '';
     window.currentMonthFilter = ''; 
     window.hideCompletedFilter = false;
     
-    const cSelect=document.getElementById('filter-category-select'); 
-    if(cSelect) cSelect.value='all';
+    const cSelect = document.getElementById('filter-category-select'); 
+    if(cSelect) cSelect.value = 'all';
     
-    const mSelect=document.getElementById('filter-month-select'); 
-    if(mSelect) mSelect.value='';
+    const ySelect = document.getElementById('filter-year-select');
+    if(ySelect) ySelect.value = '';
     
-    const hCb=document.getElementById('hide-completed-cb'); 
-    if(hCb) hCb.checked=false;
+    const mSelect = document.getElementById('filter-month-select'); 
+    if(mSelect) mSelect.value = '';
+    
+    const hCb = document.getElementById('hide-completed-cb'); 
+    if(hCb) hCb.checked = false;
     
     window.filterProjectStatus(status);
 };
@@ -130,17 +146,21 @@ window.filterByStatusOnly = function(status) {
 window.resetAllFilters = function() {
     window.currentStatusFilter = 'all'; 
     window.currentCategoryFilter = 'all'; 
+    window.currentYearFilter = '';
     window.currentMonthFilter = ''; 
     window.hideCompletedFilter = false;
     
-    const cSelect=document.getElementById('filter-category-select'); 
-    if(cSelect) cSelect.value='all';
+    const cSelect = document.getElementById('filter-category-select'); 
+    if(cSelect) cSelect.value = 'all';
     
-    const mSelect=document.getElementById('filter-month-select'); 
-    if(mSelect) mSelect.value='';
+    const ySelect = document.getElementById('filter-year-select');
+    if(ySelect) ySelect.value = '';
+
+    const mSelect = document.getElementById('filter-month-select'); 
+    if(mSelect) mSelect.value = '';
     
-    const hCb=document.getElementById('hide-completed-cb'); 
-    if(hCb) hCb.checked=false;
+    const hCb = document.getElementById('hide-completed-cb'); 
+    if(hCb) hCb.checked = false;
     
     window.filterProjectStatus('all');
 };
@@ -166,6 +186,16 @@ window.getFilteredProjects = function() {
     
     if(window.hideCompletedFilter) {
         list = list.filter(item => item.status !== 'completed');
+    }
+
+    // 💡 연도 필터 적용
+    if(window.currentYearFilter) {
+        list = list.filter(item => {
+            const sEn = item.d_shipEn || '';
+            const aEst = item.d_asmEst || '';
+            const aEn = item.d_asmEn || '';
+            return sEn.startsWith(window.currentYearFilter) || aEst.startsWith(window.currentYearFilter) || aEn.startsWith(window.currentYearFilter);
+        });
     }
     
     if(window.currentMonthFilter) { 
@@ -686,6 +716,18 @@ window.toggleProjDashView = function(view) {
     }
 };
 
+// 💡 오늘 날짜로 자동 스크롤 함수
+window.scrollToGanttToday = function() {
+    const scrollContainer = document.getElementById('proj-dash-gantt-content');
+    if(scrollContainer && window.ganttTodayOffset >= 0) {
+        // 화면 정중앙에 빨간 선이 오도록 계산
+        scrollContainer.scrollTo({
+            left: window.ganttTodayOffset + 300 - (scrollContainer.clientWidth / 2),
+            behavior: 'smooth'
+        });
+    }
+};
+
 window.renderProjGantt = function() {
     const container = document.getElementById('proj-dash-gantt-content');
     try {
@@ -733,12 +775,16 @@ window.renderProjGantt = function() {
             let dStr = window.getLocalDateStr(d);
             if(dStr === todayStr) todayOffset = i * dayWidth; 
         }
+        
+        // 💡 오프셋 값을 글로벌 변수로 저장하여 버튼 스크롤 시 사용
+        window.ganttTodayOffset = todayOffset;
 
         if(todayOffset >= 0) {
             html += '<div class="absolute top-0 w-[2px] bg-rose-500 z-[100] pointer-events-none shadow-sm" style="left: ' + (300 + todayOffset + (dayWidth/2)) + 'px; height:100%; bottom:0;"><div class="absolute top-10 -translate-x-1/2 bg-rose-500 text-white text-[10px] px-2 py-0.5 rounded-full shadow-md font-bold whitespace-nowrap border border-white">오늘</div></div>';
         }
 
-        html += '<div class="flex border-b border-slate-200 sticky top-0 bg-white z-30 shadow-sm"><div class="w-[300px] flex-shrink-0 p-3 font-bold text-xs text-slate-700 bg-slate-50 border-r border-slate-200 flex items-center sticky left-0 z-30"><div class="w-[100px] text-indigo-600">PJT 코드</div><div class="w-[200px]">프로젝트명</div></div>';
+        // 💡 z-index 50으로 높여 스크롤 시 안 깔리도록 수정
+        html += '<div class="flex border-b border-slate-200 sticky top-0 bg-white z-50 shadow-sm"><div class="w-[300px] flex-shrink-0 p-3 font-bold text-xs text-slate-700 bg-slate-50 border-r border-slate-200 flex items-center sticky left-0 z-50"><div class="w-[100px] text-indigo-600">PJT 코드</div><div class="w-[200px]">프로젝트명</div></div>';
         
         for(let i=0; i<totalDays; i++) {
             let d = new Date(minDate); d.setDate(d.getDate() + i);
@@ -757,7 +803,12 @@ window.renderProjGantt = function() {
             const safeNameHtml = String(p.name||'').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); 
             const safeCodeStr = p.code || '-';
             
-            html += '<div class="flex border-b border-slate-100 hover:bg-slate-50 relative group cursor-pointer" onclick="window.editProjStatus(\'' + p.id + '\')"><div class="w-[300px] flex-shrink-0 p-2 text-[11px] font-bold text-slate-700 border-r border-slate-200 bg-white z-10 sticky left-0 flex items-center group-hover:bg-slate-50 transition-colors" title="' + safeNameHtml + '"><div class="w-[100px] text-indigo-600 truncate font-black pr-1">' + safeCodeStr + '</div><div class="w-[200px] truncate">' + safeNameHtml + '</div></div><div class="flex relative" style="width: ' + (totalDays * dayWidth) + 'px">';
+            html += '<div class="flex border-b border-slate-100 relative group cursor-pointer hover:bg-slate-50 transition-colors" onclick="window.editProjStatus(\'' + p.id + '\')">';
+            
+            // 💡 좌측 고정영역의 z-index를 40으로 높이고, 배경색을 단단히 채워 차트 막대와 안 겹치게 처리
+            html += '<div class="w-[300px] flex-shrink-0 p-2 text-[11px] font-bold text-slate-700 border-r border-slate-200 bg-white group-hover:bg-slate-50 z-40 sticky left-0 flex items-center transition-colors" title="' + safeNameHtml + '"><div class="w-[100px] text-indigo-600 truncate font-black pr-1">' + safeCodeStr + '</div><div class="w-[200px] truncate">' + safeNameHtml + '</div></div>';
+            
+            html += '<div class="flex relative" style="width: ' + (totalDays * dayWidth) + 'px">';
             
             for(let i=0; i<totalDays; i++) { 
                 let d = new Date(minDate); d.setDate(d.getDate() + i); 
@@ -800,8 +851,10 @@ window.renderProjGantt = function() {
         container.innerHTML = html;
         
         setTimeout(function() { 
-            const scrollContainer = document.getElementById('proj-dash-gantt-container'); 
-            if(scrollContainer && todayOffset > 0) scrollContainer.scrollLeft = todayOffset - 200; 
+            const scrollContainer = document.getElementById('proj-dash-gantt-content'); 
+            if(scrollContainer && todayOffset >= 0) {
+                scrollContainer.scrollLeft = todayOffset + 300 - (scrollContainer.clientWidth / 2);
+            }
         }, 100);
     } catch(e) { 
         console.error("간트차트 오류:", e); 
@@ -1508,3 +1561,5 @@ window.deleteLinkItem = async function(projectId, index) {
         window.renderLinksList(projectId); 
     } catch(e) { window.showToast("삭제 실패", "error"); } 
 };
+
+}
