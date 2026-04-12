@@ -53,11 +53,12 @@
             </div>
             
             <div id="signup-view" class="space-y-4 hidden">
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase">이름</label>
+                    <input type="text" id="signup-name" class="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 font-bold">
+                </div>
+                
                 <div class="flex gap-3">
-                    <div class="flex-1">
-                        <label class="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase">이름</label>
-                        <input type="text" id="signup-name" class="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 font-bold">
-                    </div>
                     <div class="flex-1">
                         <label class="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase">소속 팀</label>
                         <select id="signup-dept" class="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 font-bold">
@@ -82,7 +83,20 @@
                             <option value="기술연구소">기술연구소</option>
                         </select>
                     </div>
+                    <div class="flex-1">
+                        <label class="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase">직책</label>
+                        <select id="signup-position" class="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 font-bold">
+                            <option value="대표">대표</option>
+                            <option value="본부장">본부장</option>
+                            <option value="그룹장">그룹장</option>
+                            <option value="팀장">팀장</option>
+                            <option value="책임매니저">책임매니저</option>
+                            <option value="선임매니저">선임매니저</option>
+                            <option value="매니저" selected>매니저</option>
+                        </select>
+                    </div>
                 </div>
+                
                 <div>
                     <label class="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase">이메일 계정</label>
                     <input type="email" id="signup-id" class="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 font-bold">
@@ -115,7 +129,7 @@
                 <table class="w-full text-left border-collapse bg-white shadow-sm rounded-xl overflow-hidden">
                     <thead class="bg-slate-800 text-[11px] text-white">
                         <tr>
-                            <th class="p-3 text-center">이름</th>
+                            <th class="p-3 text-center">이름 (직책)</th>
                             <th class="p-3 text-center">소속 팀</th>
                             <th class="p-3 text-center">이메일</th>
                             <th class="p-3 text-center w-28">등급(Role)</th>
@@ -265,7 +279,7 @@
             <div class="border-t border-slate-100 my-3"></div>
             
             <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-3 mb-2">Request Forms</div>
-            <button onclick="window.openApp('collab', '협업/조립 요청서')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 hover:text-blue-600 transition-colors text-left group">
+            <button onclick="window.openApp('collab', '협업 요청서')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 hover:text-blue-600 transition-colors text-left group">
                 <div class="w-6 text-center text-slate-400 group-hover:text-blue-500"><i class="fa-regular fa-handshake"></i></div> 협업/조립 요청서
             </button>
             <button onclick="window.openApp('purchase', '모듈 구매 의뢰서')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 hover:text-emerald-600 transition-colors text-left group">
@@ -349,7 +363,7 @@
 
     <ul id="mention-dropdown" class="hidden absolute z-[9999] bg-white border border-slate-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-48 custom-scrollbar"></ul>
 
-    <script type="module" src="./js/app.js?ver=1006"></script>
+    <script type="module" src="./js/app.js?ver=1007"></script>
     <script>
         window.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
