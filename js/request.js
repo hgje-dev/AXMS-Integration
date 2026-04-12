@@ -8,6 +8,7 @@ let unsubscribeEmails = null;
 
 window.currentReqEmails = []; 
 
+// 💡 안전한 날짜 파싱 유틸 (리스트 렌더링 & 코멘트 에러 방지용 핵심 함수)
 window.reqGetSafeMillis = function(val) {
     try { 
         if (!val) return 0; 
@@ -18,6 +19,7 @@ window.reqGetSafeMillis = function(val) {
     } catch(e) { return 0; }
 };
 
+// 💡 검색 및 필터링 상태 변수
 window.currentReqStatusFilter = 'all';
 window.currentReqYearFilter = '';
 window.currentReqMonthFilter = '';
@@ -56,6 +58,9 @@ window.resetReqFilters = function() {
     window.renderRequestList();
 };
 
+// ==========================================
+// 🚀 구글 API 연동 (Drive & Gmail)
+// ==========================================
 const GOOGLE_CLIENT_ID = '924354535197-joakn7gpfj4d3oirpd1pu3un9j7689q9.apps.googleusercontent.com';
 const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/gmail.send';
 
@@ -229,6 +234,9 @@ window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
     return true;
 };
 
+// ==========================================
+// 💡 수신 담당자 설정 관리 (초성 검색)
+// ==========================================
 window.openEmailSettingsModal = function() {
     document.getElementById('new-req-email-user').value = '';
     document.getElementById('req-user-autocomplete').classList.add('hidden');
@@ -306,9 +314,8 @@ window.removeReqEmail = async function(idx) {
     } catch(e) { window.showToast("삭제 실패", "error"); }
 };
 
-
 // ==========================================
-// 💡 폼 UI 제어 (동적 사양서 로드 로직 추가)
+// 💡 폼 UI 제어 (협업 vs 구매의뢰 폼 분기 및 스펙 처리)
 // ==========================================
 window.openWriteModal = function(editId = null) { 
     window.editingReqId = editId; 
@@ -324,19 +331,17 @@ window.openWriteModal = function(editId = null) {
     if(document.getElementById('req-est-md')) document.getElementById('req-est-md').value = ''; 
     if(document.getElementById('req-content')) document.getElementById('req-content').value = ''; 
 
-    // 구매의뢰(Spec) 용 초기화
+    // 구매의뢰용(Spec) 초기화
     if(document.getElementById('req-pur-title')) document.getElementById('req-pur-title').value = '';
     if(document.getElementById('req-pur-pjt-code')) document.getElementById('req-pur-pjt-code').value = '';
     if(document.getElementById('req-pur-pjt-name')) document.getElementById('req-pur-pjt-name').value = '';
     if(document.getElementById('req-pur-ship-date')) document.getElementById('req-pur-ship-date').value = '';
     if(document.getElementById('pur-spec-etc-memo')) document.getElementById('pur-spec-etc-memo').value = '';
     
-    // 구매 Select/Text 초기화
     ['app','qty','unit','las-wave','las-power','las-maker','las-type','las-ch','las-len','las-core','las-cool','opt-type','opt-mnt','opt-col','opt-split','opt-lens','opt-scan','opt-cam','opt-lit','acc-pc','acc-ctrl','acc-air','acc-rtc'].forEach(k => {
         if(document.getElementById(`pur-spec-${k}`)) document.getElementById(`pur-spec-${k}`).value = (k==='qty') ? '1' : '';
         if(document.getElementById(`pur-spec-${k}-etc`)) document.getElementById(`pur-spec-${k}-etc`).value = '';
     });
-    // 구매 다중 체크박스 초기화
     document.querySelectorAll('input[name="pur_spec_opt_opts"]').forEach(cb => cb.checked = false);
     if(document.getElementById('pur-spec-opt-opts-etc')) document.getElementById('pur-spec-opt-opts-etc').value = '';
 
@@ -383,7 +388,7 @@ window.openWriteModal = function(editId = null) {
                 if(rEl) rEl.checked = true;
             }
 
-            // 💡 구매 셋 (Spec 복원 로직)
+            // 구매 셋 (Spec 데이터 복원)
             if(document.getElementById('req-pur-title')) document.getElementById('req-pur-title').value = req.reqTitle || req.title || '';
             if(document.getElementById('req-pur-pjt-code')) document.getElementById('req-pur-pjt-code').value = req.pjtCode || '';
             if(document.getElementById('req-pur-pjt-name')) document.getElementById('req-pur-pjt-name').value = req.pjtName || '';
@@ -392,7 +397,6 @@ window.openWriteModal = function(editId = null) {
             if (req.spec) {
                 const s = req.spec;
                 ['app','qty','unit','lasWave','lasPower','lasMaker','lasType','lasCh','lasLen','lasCore','lasCool','optType','optMnt','optCol','optSplit','optLens','optScan','optCam','optLit','accPc','accCtrl','accAir','accRtc'].forEach(k => {
-                    // HTML id는 '-' 로 구분되므로 변환
                     const htmlKey = k.replace(/([A-Z])/g, "-$1").toLowerCase();
                     if(document.getElementById(`pur-spec-${htmlKey}`)) document.getElementById(`pur-spec-${htmlKey}`).value = s[k] || '';
                     if(document.getElementById(`pur-spec-${htmlKey}-etc`)) document.getElementById(`pur-spec-${htmlKey}-etc`).value = s[`${k}Etc`] || '';
@@ -473,6 +477,9 @@ window.closeWriteModal = function() {
     }
 };
 
+// ==========================================
+// 💡 모달 프롬프트 연결 로직 (Save, Accept, Complete)
+// ==========================================
 window.promptSaveRequest = function() {
     let reqTitle, pjtName, reqValid = false;
 
@@ -559,13 +566,12 @@ window.executeSaveRequest = async function() {
         data.pjtCode = document.getElementById('req-pur-pjt-code')?.value.trim() || '';
         data.shipDate = document.getElementById('req-pur-ship-date')?.value || '';
         
-        // 💡 구매의뢰서 상세 스펙(Spec) 데이터 추출
+        // 구매 의뢰서 Spec 저장
         data.spec = {
             app: document.getElementById('pur-spec-app')?.value || '',
             appEtc: document.getElementById('pur-spec-app-etc')?.value || '',
             qty: document.getElementById('pur-spec-qty')?.value || '1',
             unit: document.getElementById('pur-spec-unit')?.value || 'EA',
-            
             lasWave: document.getElementById('pur-spec-las-wave')?.value || '',
             lasWaveEtc: document.getElementById('pur-spec-las-wave-etc')?.value || '',
             lasPower: document.getElementById('pur-spec-las-power')?.value || '',
@@ -582,7 +588,6 @@ window.executeSaveRequest = async function() {
             lasCoreEtc: document.getElementById('pur-spec-las-core-etc')?.value || '',
             lasCool: document.getElementById('pur-spec-las-cool')?.value || '',
             lasCoolEtc: document.getElementById('pur-spec-las-cool-etc')?.value || '',
-
             optType: document.getElementById('pur-spec-opt-type')?.value || '',
             optTypeEtc: document.getElementById('pur-spec-opt-type-etc')?.value || '',
             optMnt: document.getElementById('pur-spec-opt-mnt')?.value || '',
@@ -599,10 +604,8 @@ window.executeSaveRequest = async function() {
             optCamEtc: document.getElementById('pur-spec-opt-cam-etc')?.value || '',
             optLit: document.getElementById('pur-spec-opt-lit')?.value || '',
             optLitEtc: document.getElementById('pur-spec-opt-lit-etc')?.value || '',
-            
             optOpts: Array.from(document.querySelectorAll('input[name="pur_spec_opt_opts"]:checked')).map(cb => cb.value),
             optOptsEtc: document.getElementById('pur-spec-opt-opts-etc')?.value || '',
-
             accPc: document.getElementById('pur-spec-acc-pc')?.value || '',
             accPcEtc: document.getElementById('pur-spec-acc-pc-etc')?.value || '',
             accCtrl: document.getElementById('pur-spec-acc-ctrl')?.value || '',
@@ -611,10 +614,8 @@ window.executeSaveRequest = async function() {
             accAirEtc: document.getElementById('pur-spec-acc-air-etc')?.value || '',
             accRtc: document.getElementById('pur-spec-acc-rtc')?.value || '',
             accRtcEtc: document.getElementById('pur-spec-acc-rtc-etc')?.value || '',
-
             etcMemo: document.getElementById('pur-spec-etc-memo')?.value || ''
         };
-        // 메일 본문용 텍스트 간략화
         data.content = `[시스템 등록 사양서 확인 요망]\n요청일: ${data.shipDate}\n기타메모: ${data.spec.etcMemo}`;
     }
 
@@ -653,7 +654,7 @@ window.executeSaveRequest = async function() {
     } finally { 
         if(btn) {
             btn.disabled = false; 
-            btn.innerHTML = '<i class="fa-regular fa-paper-plane"></i> 저장 및 메일 발송'; 
+            btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> 저장 및 메일 발송'; 
         }
     }
 };
@@ -797,6 +798,9 @@ window.revertRequest = async function() {
     } catch(e) { window.showToast("처리 실패", "error"); }
 };
 
+// ==========================================
+// 💡 데이터 로드 및 테이블 렌더링 (동적 컬럼 적용)
+// ==========================================
 window.loadRequestsData = function(appId) { 
     if(unsubscribeRequests) unsubscribeRequests(); 
     unsubscribeRequests = onSnapshot(query(collection(db, "requests"), where("type", "==", appId)), (s) => { 
@@ -979,6 +983,9 @@ window.deleteRequest = async function(id) {
     } 
 };
 
+// ==========================================
+// 💡 코멘트 모달 로직 
+// ==========================================
 window.openCommentModal = function(reqId, title) { 
     const cmtInput = document.getElementById('cmt-req-id');
     if(cmtInput) cmtInput.value = reqId; 
