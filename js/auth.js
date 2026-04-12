@@ -81,7 +81,13 @@ window.initAuthListeners = () => {
                         await signOut(auth); return; 
                     } 
                 } 
-                else { window.userProfile = { email: u.email, name: u.email.split('@')[0], team: '미지정', role: 'user', permissions: {} }; }
+                else { 
+                    // 💡 보안 패치: DB에 유저 정보가 없으면 (관리자가 삭제한 경우) 강제 로그아웃
+                    const e = document.getElementById('login-error'); 
+                    if(e) { e.innerHTML="관리자에 의해 영구 삭제되거나 등록되지 않은 계정입니다."; e.classList.remove('hidden'); } 
+                    await signOut(auth); 
+                    return; 
+                }
                 
                 if (!window.userProfile.permissions) window.userProfile.permissions = {}; 
                 const dP = { collab:true, purchase:true, assembly:true, repair:true, 'project-status':true, 'weekly-log':true }; 
@@ -120,17 +126,82 @@ window.initAuthListeners = () => {
 
 window.openAdminModal = () => { document.getElementById('admin-modal').classList.remove('hidden'); document.getElementById('admin-modal').classList.add('flex'); window.renderAdminUsers(); };
 window.closeAdminModal = () => { document.getElementById('admin-modal').classList.add('hidden'); document.getElementById('admin-modal').classList.remove('flex'); };
+
 window.renderAdminUsers = () => {
     const tb = document.getElementById('admin-users-tbody'); if (!tb) return;
     if (window.allSystemUsers.length === 0) { tb.innerHTML = '<tr><td colspan="6" class="text-center p-6 text-slate-500 font-bold">등록된 사용자가 없습니다.</td></tr>'; return; }
-    let sortedUsers = [...window.allSystemUsers].sort((a, b) => { if (a.role === 'pending' && b.role !== 'pending') return -1; if (a.role !== 'pending' && b.role === 'pending') return 1; return 0; });
+    
+    let sortedUsers = [...window.allSystemUsers].sort((a, b) => { 
+        if (a.role === 'pending' && b.role !== 'pending') return -1; 
+        if (a.role !== 'pending' && b.role === 'pending') return 1; 
+        return 0; 
+    });
+    
     let html = '';
     sortedUsers.forEach(u => {
-        const p = u.permissions || {}; const isP = u.role === 'pending';
-        html += `<tr class="hover:bg-slate-50 transition-colors ${isP ? 'bg-amber-50/50' : ''}"><td class="p-3 text-center font-bold text-slate-700">${u.name}</td><td class="p-3 text-center text-slate-600">${u.team || u.department || ''}</td><td class="p-3 text-center text-slate-500">${u.email}</td><td class="p-3 text-center"><select class="border border-slate-300 rounded px-2 py-1.5 text-xs font-bold ${isP ? 'text-amber-600' : 'text-slate-600'}" onchange="window.updateUserRole('${u.uid}', this.value)"><option value="pending" ${u.role === 'pending' ? 'selected' : ''}>승인 대기</option><option value="user" ${u.role === 'user' ? 'selected' : ''}>일반 사용자</option><option value="master" ${u.role === 'master' ? 'selected' : ''}>마스터</option><option value="admin" ${u.role === 'admin' ? 'selected' : ''}>시스템 관리자</option></select></td><td class="p-3"><div class="flex flex-wrap gap-3 justify-center"><label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p.collab ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','collab',this.checked)">협업</label><label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p.purchase ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','purchase',this.checked)">구매</label><label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p.assembly ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','assembly',this.checked)">조립</label><label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p.repair ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','repair',this.checked)">수리/점검</label><label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p['project-status'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','project-status',this.checked)">PJT현황판</label><label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p['weekly-log'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','weekly-log',this.checked)">주간업무</label></div></td><td class="p-3 text-center"><div class="flex items-center justify-center gap-1">${isP ? `<button onclick="window.updateUserRole('${u.uid}', 'user')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-2 py-1 rounded text-[10px] font-bold shadow-sm transition-colors whitespace-nowrap">승인하기</button>` : ''}<button onclick="window.deleteUser('${u.uid}')" class="bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white px-2 py-1 rounded transition-colors"><i class="fa-solid fa-trash-can text-sm"></i></button></div></td></tr>`;
+        const p = u.permissions || {}; 
+        const isP = u.role === 'pending';
+        // 💡 승인 대기중인 유저는 빨간색 테두리와 배경으로 확실하게 눈에 띄게 처리!
+        const trClass = isP ? 'bg-rose-50/40 border-l-4 border-rose-500' : 'hover:bg-slate-50 transition-colors border-b border-slate-100';
+
+        html += `<tr class="${trClass}">
+            <td class="p-3 text-center font-bold text-slate-700">${u.name}</td>
+            <td class="p-3 text-center text-slate-600">${u.team || u.department || ''}</td>
+            <td class="p-3 text-center text-slate-500">${u.email}</td>
+            <td class="p-3 text-center">
+                <select class="border border-slate-300 rounded px-2 py-1.5 text-xs font-bold ${isP ? 'text-rose-600 bg-white' : 'text-slate-600'}" onchange="window.updateUserRole('${u.uid}', this.value)">
+                    <option value="pending" ${u.role === 'pending' ? 'selected' : ''}>승인 대기</option>
+                    <option value="user" ${u.role === 'user' ? 'selected' : ''}>일반 사용자</option>
+                    <option value="master" ${u.role === 'master' ? 'selected' : ''}>마스터</option>
+                    <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>시스템 관리자</option>
+                </select>
+            </td>
+            <td class="p-3">
+                <div class="flex flex-wrap gap-3 justify-center">
+                    <label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p.collab ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','collab',this.checked)">협업</label>
+                    <label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p.purchase ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','purchase',this.checked)">구매</label>
+                    <label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p.assembly ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','assembly',this.checked)">조립</label>
+                    <label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p.repair ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','repair',this.checked)">수리/점검</label>
+                    <label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p['project-status'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','project-status',this.checked)">PJT현황판</label>
+                    <label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p['weekly-log'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','weekly-log',this.checked)">주간업무</label>
+                </div>
+            </td>
+            <td class="p-3 text-center">
+                <div class="flex items-center justify-center gap-2">
+                    ${isP ? `<button onclick="window.approveUser('${u.uid}')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-sm transition-colors whitespace-nowrap">✅ 가입 승인</button>` : ''}
+                    <button onclick="window.deleteUser('${u.uid}')" class="bg-white border border-rose-200 text-rose-500 hover:bg-rose-500 hover:text-white px-2.5 py-1.5 rounded-lg transition-colors shadow-sm" title="계정 삭제"><i class="fa-solid fa-trash-can"></i></button>
+                </div>
+            </td>
+        </tr>`;
     });
     tb.innerHTML = html;
 };
-window.updateUserRole = async (uid, role) => { try { await setDoc(doc(db, "users", uid), { role: role }, { merge: true }); if(window.showToast) window.showToast("등급이 변경되었습니다."); } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } };
-window.updateUserPerm = async (uid, key, val) => { try { const uR = doc(db, "users", uid); const uD = await getDoc(uR); if (uD.exists()) { let p = uD.data().permissions || {}; p[key] = val; await setDoc(uR, { permissions: p }, { merge: true }); if(window.showToast) window.showToast("권한이 업데이트되었습니다."); } } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } };
-window.deleteUser = async (uid) => { if (!confirm("이 사용자를 정말 삭제하시겠습니까?")) return; try { await deleteDoc(doc(db, "users", uid)); if(window.showToast) window.showToast("삭제되었습니다."); } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } };
+
+window.updateUserRole = async (uid, role) => { 
+    try { await setDoc(doc(db, "users", uid), { role: role }, { merge: true }); if(window.showToast) window.showToast("등급이 변경되었습니다."); } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } 
+};
+
+window.updateUserPerm = async (uid, key, val) => { 
+    try { const uR = doc(db, "users", uid); const uD = await getDoc(uR); if (uD.exists()) { let p = uD.data().permissions || {}; p[key] = val; await setDoc(uR, { permissions: p }, { merge: true }); if(window.showToast) window.showToast("권한이 업데이트되었습니다."); } } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } 
+};
+
+// 💡 승인 버튼 전용 함수 추가
+window.approveUser = async (uid) => {
+    try {
+        await setDoc(doc(db, "users", uid), { role: 'user' }, { merge: true });
+        if(window.showToast) window.showToast("계정이 정상적으로 승인되었습니다.", "success");
+    } catch(e) {
+        if(window.showToast) window.showToast("승인 처리 실패", "error");
+    }
+};
+
+// 💡 계정 완전 삭제 (접근 차단) 로직 추가
+window.deleteUser = async (uid) => { 
+    if (!confirm("이 사용자를 정말 삭제하시겠습니까?\n\n삭제 시 해당 사용자는 시스템에 다시 로그인할 수 없으며 즉시 차단됩니다.")) return; 
+    try { 
+        await deleteDoc(doc(db, "users", uid)); 
+        if(window.showToast) window.showToast("계정이 영구적으로 삭제되었습니다."); 
+    } catch (e) { 
+        if(window.showToast) window.showToast("오류 발생", "error"); 
+    } 
+};
