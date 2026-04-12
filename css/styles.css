@@ -3,9 +3,9 @@
 
 body { 
     font-family: 'Pretendard', sans-serif; 
-    background-color: #f8fafc; /* 라이트모드 고정 배경색 */
-    color: #1e293b; /* 라이트모드 고정 텍스트색 */
+    background-color: #f8fafc; 
     overflow-x: hidden; 
+    transition: background-color 0.3s, color 0.3s; 
 }
 
 /* 💡 커스텀 스크롤바 */
@@ -13,6 +13,7 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
 
 /* 💡 인풋 및 폼 요소 공통 스타일 */
 input:focus, select:focus, textarea:focus { 
@@ -20,7 +21,10 @@ input:focus, select:focus, textarea:focus {
     border-color: #6366f1; 
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15); 
 }
-input:disabled, select:disabled, textarea:disabled { 
+input[type="number"], input[type="text"], input[type="date"], select { 
+    transition: all 0.2s ease-in-out; 
+}
+input:disabled, select:disabled { 
     background-color: #f1f5f9; 
     cursor: not-allowed; 
     color: #94a3b8; 
@@ -43,7 +47,7 @@ input:disabled, select:disabled, textarea:disabled {
 }
 .row-enter { animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 
-/* 💡 카드 호버 및 잠금(비활성화) 효과 */
+/* 💡 호버 및 상호작용 효과 */
 .card-hover { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
 .card-hover:hover:not(.locked-card) { 
     transform: translateY(-5px); 
@@ -51,5 +55,147 @@ input:disabled, select:disabled, textarea:disabled {
 }
 .locked-card { cursor: not-allowed; opacity: 0.6; filter: grayscale(80%); }
 
-/* 💡 사이드바 트랜지션 */
-.sidebar-transition { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+.gantt-bar { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 99px; }
+.gantt-bar:hover { 
+    filter: brightness(1.15); 
+    transform: scaleY(1.15); 
+    z-index: 10; 
+    cursor: pointer; 
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); 
+}
+
+.glass-dark { 
+    background: linear-gradient(145deg, #1e293b 0%, #0f172a 100%); 
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.1); 
+}
+
+.btn-hover-effect { transition: all 0.2s ease; }
+.btn-hover-effect:hover:not(:disabled) { 
+    transform: translateY(-1px); 
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
+}
+
+/* 💡 모달 블러 및 기타 UI 클래스 */
+#login-modal, #project-list-modal, #dashboard-modal, #admin-users-modal, #history-modal, #save-option-modal, #unsaved-changes-modal { 
+    backdrop-filter: blur(10px); 
+}
+
+.pur-input { 
+    width: 100%; 
+    padding: 0.5rem 0.75rem; 
+    border: 1px solid #e2e8f0; 
+    border-radius: 0.5rem; 
+    background-color: #f8fafc; 
+    font-size: 0.875rem; 
+    font-weight: 600; 
+    color: #334155; 
+    transition: all 0.2s; 
+}
+.pur-label { 
+    display: block; 
+    font-size: 0.65rem; 
+    font-weight: 700; 
+    color: #64748b; 
+    margin-bottom: 0.25rem; 
+    text-transform: uppercase; 
+}
+.sidebar-transition { transition: transform 0.3s ease-in-out; }
+
+
+/* ========================================================
+   💡 AI Premium UI 클래스 (라이트 모드에 맞게 톤앤매너 수정)
+======================================================== */
+.ai-premium-grid { 
+    background: radial-gradient(circle at top right, rgba(99,102,241,0.08), transparent 34%), 
+                radial-gradient(circle at bottom left, rgba(56,189,248,0.05), transparent 28%), 
+                linear-gradient(180deg, #ffffff, #f8fafc); 
+    position: relative; 
+    overflow: hidden; 
+}
+.ai-premium-grid::before { 
+    content: ""; 
+    position: absolute; 
+    inset: 0; 
+    background-image: linear-gradient(rgba(148,163,184,0.1) 1px, transparent 1px), 
+                      linear-gradient(90deg, rgba(148,163,184,0.1) 1px, transparent 1px); 
+    background-size: 24px 24px; 
+    mask-image: linear-gradient(to bottom, rgba(255,255,255,1), transparent 85%); 
+    pointer-events: none; 
+}
+.ai-insight-pill { 
+    display: inline-flex; 
+    align-items: center; 
+    gap: 0.45rem; 
+    padding: 0.48rem 0.8rem; 
+    border-radius: 999px; 
+    border: 1px solid rgba(99,102,241,0.2); 
+    background: rgba(99,102,241,0.05); 
+    backdrop-filter: blur(8px); 
+    font-size: 11px; 
+    font-weight: 800; 
+    letter-spacing: 0.06em; 
+    text-transform: uppercase; 
+    color: #4f46e5;
+}
+.ai-metric-card { 
+    position: relative; 
+    border-radius: 1rem; 
+    border: 1px solid #e2e8f0; 
+    background: #ffffff; 
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); 
+    overflow: hidden; 
+}
+.ai-metric-card::before { 
+    content: ""; 
+    position: absolute; 
+    left: 0; 
+    top: 0; 
+    width: 4px; 
+    height: 100%; 
+    background: linear-gradient(180deg, #818cf8, #38bdf8); 
+}
+.ai-detail-card { 
+    border-radius: 1.15rem; 
+    border: 1px solid #e2e8f0; 
+    background: #ffffff; 
+    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05); 
+}
+.ai-action-item { 
+    display: flex; 
+    align-items: flex-start; 
+    gap: 0.75rem; 
+    padding: 0.7rem 0.85rem; 
+    border-radius: 0.9rem; 
+    background: #f8fafc; 
+    border: 1px solid #e2e8f0; 
+}
+.ai-action-index { 
+    width: 1.55rem; 
+    height: 1.55rem; 
+    flex-shrink: 0; 
+    display: inline-flex; 
+    align-items: center; 
+    justify-content: center; 
+    border-radius: 999px; 
+    background: linear-gradient(135deg, #6366f1, #38bdf8); 
+    color: white; 
+    font-size: 10px; 
+    font-weight: 900; 
+    box-shadow: 0 4px 6px rgba(59,130,246,0.2); 
+}
+.ai-skeleton { 
+    position: relative; 
+    overflow: hidden; 
+    background: #e2e8f0; 
+}
+.ai-skeleton::after { 
+    content: ""; 
+    position: absolute; 
+    inset: 0; 
+    transform: translateX(-100%); 
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent); 
+    animation: aiShimmer 1.8s infinite; 
+}
+@keyframes aiShimmer { 
+    100% { transform: translateX(100%); } 
+}
