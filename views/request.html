@@ -27,7 +27,7 @@
                 </div>
                 <div class="flex flex-col gap-1">
                     <div class="flex items-center gap-3">
-                        <h2 class="text-xl font-black text-slate-800 flex items-center gap-2" id="req-header-title">협업/조립 요청서</h2>
+                        <h2 class="text-xl font-black text-slate-800 flex items-center gap-2" id="req-header-title">요청서 관리</h2>
                         <button onclick="window.openEmailSettingsModal()" class="text-[10px] font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 border border-slate-200 px-2 py-1 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm">
                             <i class="fa-solid fa-envelope-circle-check"></i> 수신 담당자 설정
                         </button>
@@ -61,7 +61,7 @@
             <table class="w-full text-left border-collapse bg-white border border-slate-200 shadow-sm rounded-xl overflow-hidden whitespace-nowrap">
                 <thead class="bg-slate-800 text-white text-[11px] uppercase tracking-wider">
                     <tr id="req-thead-tr">
-                        </tr>
+                    </tr>
                 </thead>
                 <tbody id="request-tbody" class="divide-y divide-slate-100 text-xs"></tbody>
             </table>
@@ -282,7 +282,7 @@
             </div>
 
             <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                <label class="text-[11px] font-bold text-slate-500 mb-3 flex items-center gap-1.5"><i class="fa-brands fa-google-drive text-emerald-500"></i> 첨부 파일 <span class="text-slate-400 font-normal">(필요 시 양식 파일 등 첨부)</span></label>
+                <label class="text-[11px] font-bold text-slate-500 mb-3 flex items-center gap-1.5"><i class="fa-brands fa-google-drive text-emerald-500"></i> 첨부 파일 <span class="text-slate-400 font-normal">(필요 시 양식 파일 첨부)</span></label>
                 
                 <div id="req-dropzone" class="border-2 border-dashed border-slate-300 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 hover:border-indigo-400 transition-colors relative" 
                      onclick="document.getElementById('req-file').click()" 
@@ -306,10 +306,6 @@
                 <div id="req-file-link-wrap" class="mt-3 text-xs font-bold hidden bg-sky-50 py-2 px-3 rounded-lg border border-sky-100 flex items-center justify-between">
                     <a id="req-file-link" href="#" target="_blank" class="text-sky-600 hover:text-sky-800 underline break-all flex items-center gap-2"><i class="fa-solid fa-arrow-up-right-from-square"></i> 작성 시 첨부한 파일 보기</a>
                 </div>
-
-                <div id="req-result-link-wrap" class="mt-2 text-xs font-bold hidden bg-emerald-50 py-2 px-3 rounded-lg border border-emerald-100 flex items-center justify-between">
-                    <a id="req-result-link" href="#" target="_blank" class="text-emerald-700 hover:text-emerald-900 underline break-all flex items-center gap-2"><i class="fa-solid fa-file-circle-check"></i> <span id="req-result-label">완료 결과물 / 검수 리스트 확인하기</span></a>
-                </div>
             </div>
 
         </div>
@@ -322,8 +318,9 @@
             </div>
             
             <div class="flex gap-2 ml-auto">
-                <button onclick="window.closeWriteModal()" class="bg-white border border-slate-300 hover:bg-slate-50 text-slate-600 px-6 py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm">닫기</button>
-                <button id="btn-req-save" onclick="window.promptSaveRequest()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-2.5 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2"><i class="fa-regular fa-paper-plane"></i> 저장 및 메일 발송</button>
+                <button onclick="window.closeWriteModal()" class="bg-white border border-slate-300 hover:bg-slate-50 text-slate-600 px-5 py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm">취소</button>
+                <button onclick="window.saveDraftRequest()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm"><i class="fa-solid fa-floppy-disk"></i> 임시 저장</button>
+                <button id="btn-req-save" onclick="window.promptSaveRequest()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2"><i class="fa-regular fa-paper-plane"></i> 저장 및 메일 발송</button>
             </div>
         </div>
     </div>
@@ -385,7 +382,7 @@
             </div>
             <div>
                 <label class="block text-[11px] font-bold text-slate-500 mb-1.5">접수 완료 알림 메일 수신자 (요청자)</label>
-                <input type="text" id="req-accept-email" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold outline-blue-500 bg-slate-100 text-slate-500" readonly>
+                <input type="text" id="req-accept-email" placeholder="예: admin@axbis.ai, test@axbis.ai" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold outline-blue-500 bg-white text-slate-700">
             </div>
         </div>
         <div class="px-6 py-4 border-t bg-white flex justify-end gap-2">
@@ -402,16 +399,11 @@
             <button onclick="document.getElementById('req-complete-modal').classList.add('hidden'); document.getElementById('req-complete-modal').classList.remove('flex');" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-lg"></i></button>
         </div>
         <div class="p-6 bg-slate-50/50 space-y-4">
-            <p class="text-sm font-bold text-slate-600 leading-relaxed">이 요청을 '작업 완료' 처리하고 요청자에게 알림 메일을 발송하시겠습니까?</p>
+            <p class="text-sm font-bold text-slate-600 leading-relaxed">이 요청을 '작업 완료' 처리하고 아래 수신자에게 알림 메일을 발송하시겠습니까?</p>
             
-            <div id="req-complete-file-section" class="bg-white p-4 border border-emerald-200 rounded-xl hidden">
-                <label class="block text-[11px] font-bold text-emerald-700 mb-2">레이저 검수 리스트 첨부 <span class="text-rose-500">*필수</span></label>
-                <input type="file" id="req-complete-file" class="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:font-bold file:bg-emerald-100 file:text-emerald-700 hover:file:bg-emerald-200 cursor-pointer transition-all">
-            </div>
-
             <div>
-                <label class="block text-[11px] font-bold text-slate-500 mb-1.5">완료 알림 메일 수신자 (요청자)</label>
-                <input type="text" id="req-complete-email" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold outline-emerald-500 bg-slate-100 text-slate-500" readonly>
+                <label class="block text-[11px] font-bold text-slate-500 mb-1.5">완료 알림 메일 수신자 (기본 요청자)</label>
+                <input type="text" id="req-complete-email" placeholder="예: user@axbis.ai" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold outline-emerald-500 bg-white text-slate-700">
             </div>
         </div>
         <div class="px-6 py-4 border-t bg-white flex justify-end gap-2">
