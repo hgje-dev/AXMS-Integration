@@ -35,7 +35,7 @@
                     <button onclick="window.changeWeeklyWeek(-1)" class="px-3 py-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-all z-10"><i class="fa-solid fa-chevron-left"></i></button>
                     
                     <div class="relative flex items-center justify-center px-4 cursor-pointer z-0 group min-w-[140px]">
-                        <span id="weekly-display-text" class="text-sm font-black text-slate-700 pointer-events-none group-hover:text-indigo-600 transition-colors">로딩중...</span>
+                        <span id="weekly-display-text" class="text-sm font-black text-slate-700 pointer-events-none group-hover:text-indigo-600 transition-colors">데이터 로드중...</span>
                         <i class="fa-regular fa-calendar ml-2 text-slate-400 pointer-events-none group-hover:text-indigo-500 transition-colors"></i>
                         <input type="week" id="weekly-log-filter-week" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.handleWeekChange(this.value)">
                     </div>
@@ -110,7 +110,7 @@
     <div id="weekly-team-sch-view" class="hidden space-y-6">
         <div class="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
             <h3 class="text-base font-black text-slate-800"><i class="fa-solid fa-users-viewfinder text-indigo-500 mr-2"></i> 이번 주 팀 전체 일정</h3>
-            <span class="text-xs text-slate-500 font-bold">휴가 및 공통 미팅 현황</span>
+            <span class="text-xs text-slate-500 font-bold">휴가 및 기타 공통 일정 현황</span>
         </div>
         <div class="grid grid-cols-2 md:grid-cols-7 gap-4" id="weekly-team-kanban-board"></div>
     </div>
@@ -175,20 +175,17 @@
                     <h4 class="text-[11px] font-bold text-orange-600 mb-2 flex items-center gap-1"><i class="fa-regular fa-comment-dots"></i> 요청사항 및 이슈 (선택)</h4>
                     <textarea id="wl-issues" oninput="window.handleMention(this)" placeholder="팀원들에게 공유할 이슈나 타 부서에 요청할 사항을 상세히 적어주세요." class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-orange-500 h-[104px] resize-none custom-scrollbar"></textarea>
                 </div>
-                <div class="space-y-4">
-                    <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative">
-                        <h4 class="text-[11px] font-bold text-slate-500 mb-2">관여한 프로젝트 (선택)</h4>
-                        
-                        <div class="flex gap-2 mb-3">
-                            <div class="relative flex-1">
-                                <input type="text" id="wl-pjt-input" placeholder="프로젝트명 검색..." oninput="window.showAutocomplete(this, 'wl-temp-pjt-code', '', true)" onkeydown="if(event.key==='Enter') { event.preventDefault(); window.addWlProject(); }" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-indigo-500 font-bold bg-slate-50">
-                                <input type="hidden" id="wl-temp-pjt-code">
-                            </div>
-                            <button onclick="window.addWlProject()" class="bg-slate-800 hover:bg-slate-700 text-white px-4 rounded-xl text-xs font-bold transition-colors shadow-sm shrink-0">추가</button>
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative">
+                    <h4 class="text-[11px] font-bold text-slate-500 mb-3 flex items-center gap-1.5"><i class="fa-solid fa-folder-open text-indigo-400"></i> 관여한 프로젝트 (선택)</h4>
+                    
+                    <div class="flex gap-2 mb-3">
+                        <div class="relative flex-1">
+                            <input type="text" id="wl-pjt-input" placeholder="프로젝트명 검색..." oninput="window.showAutocomplete(this, 'wl-temp-pjt-code', '', true)" onkeydown="if(event.key==='Enter') { event.preventDefault(); window.addWlProject(); }" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-indigo-500 font-bold bg-slate-50">
+                            <input type="hidden" id="wl-temp-pjt-code">
                         </div>
-                        
-                        <div id="wl-pjt-tags" class="flex flex-wrap gap-2 empty:hidden"></div>
+                        <button onclick="window.addWlProject()" class="bg-slate-800 hover:bg-slate-700 text-white px-4 rounded-xl text-xs font-bold transition-colors shadow-sm shrink-0">추가</button>
                     </div>
+                    <div id="wl-pjt-tags" class="flex flex-wrap gap-2 empty:hidden mt-2"></div>
                 </div>
             </div>
         </div>
@@ -211,40 +208,72 @@
         </div>
         <div class="p-6 space-y-4 bg-slate-50/50">
             <input type="hidden" id="sch-id">
-            <div>
-                <label class="block text-[11px] font-bold text-slate-500 mb-1">요일</label>
-                <select id="sch-day" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 bg-white outline-indigo-500">
-                    <option value="월요일">월요일</option>
-                    <option value="화요일">화요일</option>
-                    <option value="수요일">수요일</option>
-                    <option value="목요일">목요일</option>
-                    <option value="금요일">금요일</option>
-                    <option value="토요일">토요일</option>
-                    <option value="일요일">일요일</option>
-                </select>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 mb-1">요일</label>
+                    <select id="sch-day" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 bg-white outline-indigo-500">
+                        <option value="월요일">월요일</option>
+                        <option value="화요일">화요일</option>
+                        <option value="수요일">수요일</option>
+                        <option value="목요일">목요일</option>
+                        <option value="금요일">금요일</option>
+                        <option value="토요일">토요일</option>
+                        <option value="일요일">일요일</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 mb-1">시간 (선택)</label>
+                    <input type="text" id="sch-time" placeholder="예: 종일, 14:00" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-indigo-500 bg-white">
+                </div>
             </div>
             <div>
                 <label class="block text-[11px] font-bold text-slate-500 mb-1">분류</label>
                 <select id="sch-category" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 bg-white outline-indigo-500">
-                    <option value="휴가/반차">☕ 휴가/반차</option>
-                    <option value="회의/미팅">🗣 회의/미팅</option>
-                    <option value="집중업무">🎧 집중업무 (방해금지)</option>
-                    <option value="외근/출장">🚗 외근/출장</option>
+                    <option value="휴가/연차">☕ 휴가/연차</option>
+                    <option value="휴가/오전">☕ 휴가/오전</option>
+                    <option value="휴가/오후">☕ 휴가/오후</option>
+                    <option value="회의">🗣 회의</option>
+                    <option value="출장(국내)">🚗 출장(국내)</option>
+                    <option value="출장(국외)">✈️ 출장(국외)</option>
+                    <option value="사내(작업)">💻 사내(작업)</option>
+                    <option value="사내(공통)">🏢 사내(공통)</option>
                     <option value="기타">📌 기타</option>
                 </select>
             </div>
             <div>
-                <label class="block text-[11px] font-bold text-slate-500 mb-1">시간 (선택)</label>
-                <input type="text" id="sch-time" placeholder="예: 종일, 14:00 - 16:00" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm outline-indigo-500 bg-white">
+                <label class="block text-[11px] font-bold text-slate-500 mb-1">일정 제목 (필수)</label>
+                <input type="text" id="sch-title" placeholder="일정의 핵심 제목 (예: 오후 반차)" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold outline-indigo-500 bg-white">
             </div>
             <div>
-                <label class="block text-[11px] font-bold text-slate-500 mb-1">일정 내용</label>
-                <input type="text" id="sch-content" placeholder="오후 반차, 주간 디자인 챕터 싱크 등" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm font-bold outline-indigo-500 bg-white">
+                <label class="block text-[11px] font-bold text-slate-500 mb-1">상세 내용 (선택)</label>
+                <textarea id="sch-content" oninput="window.handleMention(this)" placeholder="회의 안건, 상세 목적 등 (@멘션 가능, 줄바꿈 Shift+Enter)" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-indigo-500 bg-white h-20 resize-none custom-scrollbar"></textarea>
+            </div>
+            <div class="flex items-center gap-2 mt-4 pt-4 border-t border-slate-200">
+                <input type="checkbox" id="sch-is-shared" checked class="accent-indigo-600 w-4 h-4 cursor-pointer rounded border-slate-300">
+                <label for="sch-is-shared" class="text-xs font-bold text-slate-600 cursor-pointer select-none">팀 일정표에 이 일정을 공유합니다.</label>
             </div>
         </div>
         <div class="px-5 py-4 border-t bg-white flex justify-end gap-2">
             <button onclick="window.closeScheduleModal()" class="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-colors">취소</button>
             <button onclick="window.saveSchedule()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors">저장 완료</button>
+        </div>
+    </div>
+</div>
+
+<div id="schedule-view-modal" class="fixed inset-0 z-[250] hidden items-center justify-center bg-slate-900/50 backdrop-blur-sm py-10">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden transform transition-all">
+        <div class="px-5 py-4 border-b flex justify-between items-center bg-white">
+            <h2 class="text-base font-black text-slate-800 flex items-center gap-2"><i class="fa-regular fa-calendar-check text-indigo-500"></i> 일정 상세 정보</h2>
+            <button onclick="window.closeScheduleViewModal()" class="text-slate-400 hover:text-rose-500 p-1"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="p-6 space-y-4 bg-slate-50/50">
+            <div class="flex items-center gap-2 mb-2">
+                <span id="sv-author" class="text-[10px] font-black text-white bg-indigo-500 px-2 py-0.5 rounded shadow-sm">작성자</span>
+                <span id="sv-category" class="text-[10px] font-black px-2 py-0.5 rounded shadow-sm">분류</span>
+            </div>
+            <h3 id="sv-title" class="text-lg font-black text-slate-800">제목</h3>
+            <div class="text-[11px] text-slate-500 font-bold flex items-center gap-1.5 border-b pb-3"><i class="fa-regular fa-clock"></i> <span id="sv-time">시간</span></div>
+            <div id="sv-content" class="text-sm font-medium text-slate-700 whitespace-pre-wrap leading-relaxed min-h-[60px] custom-scrollbar max-h-40 overflow-y-auto">내용</div>
         </div>
     </div>
 </div>
