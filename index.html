@@ -14,6 +14,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://apis.google.com/js/api.js"></script>
     
     <link rel="stylesheet" href="./css/styles.css">
 </head>
@@ -262,14 +265,11 @@
             <div class="border-t border-slate-100 my-3"></div>
             
             <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-3 mb-2">Request Forms</div>
-            <button onclick="window.openApp('collab', '협업 요청서')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 hover:text-blue-600 transition-colors text-left group">
-                <div class="w-6 text-center text-slate-400 group-hover:text-blue-500"><i class="fa-regular fa-handshake"></i></div> 협업 요청서
+            <button onclick="window.openApp('collab', '협업/조립 요청서')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 hover:text-blue-600 transition-colors text-left group">
+                <div class="w-6 text-center text-slate-400 group-hover:text-blue-500"><i class="fa-regular fa-handshake"></i></div> 협업/조립 요청서
             </button>
             <button onclick="window.openApp('purchase', '모듈 구매 의뢰서')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 hover:text-emerald-600 transition-colors text-left group">
                 <div class="w-6 text-center text-slate-400 group-hover:text-emerald-500"><i class="fa-solid fa-cart-flatbed"></i></div> 모듈 구매 의뢰서
-            </button>
-            <button onclick="window.openApp('assembly', '조립 요청서')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 hover:text-amber-600 transition-colors text-left group">
-                <div class="w-6 text-center text-slate-400 group-hover:text-amber-500"><i class="fa-solid fa-screwdriver-wrench"></i></div> 조립 요청서
             </button>
             <button onclick="window.openApp('repair', '수리점검요청서')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 hover:text-rose-600 transition-colors text-left group">
                 <div class="w-6 text-center text-slate-400 group-hover:text-rose-500"><i class="fa-solid fa-stethoscope"></i></div> 수리/점검 요청서
@@ -349,7 +349,7 @@
 
     <ul id="mention-dropdown" class="hidden absolute z-[9999] bg-white border border-slate-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-48 custom-scrollbar"></ul>
 
-    <script type="module" src="./js/app.js?ver=1005"></script>
+    <script type="module" src="./js/app.js?ver=1006"></script>
     <script>
         window.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
