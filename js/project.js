@@ -1671,17 +1671,27 @@ document.addEventListener('click', function(e) {
 });
 
 // ==========================================
-// 💡 부적합(NCR) 구글 시트 연동 (토큰 없이 뷰어 권한으로 가져오기)
+// 💡 부적합(NCR) 구글 시트 연동 (토큰 인증 + gviz API 하이브리드)
 // ==========================================
 window.loadNcrData = async function() {
     try {
+        // 💡 앱에 로그인된 구글 토큰을 가져옵니다.
+        const token = window.googleAccessToken || localStorage.getItem('axmsGoogleToken');
+
         const sheetId = '1ZYwSKvT4QXjFxgftunwdRHWzX4KXoelhZSVjauAJg8s';
-        
-        // 💡 핵심: OAuth 토큰 없이 '뷰어' 권한으로 데이터를 가져오는 구글 기본 엔드포인트
         const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=RawData`;
 
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("시트에 접근할 수 없습니다.");
+        // 💡 회사 보안 시트일 경우를 대비해 토큰을 헤더에 실어서 보냅니다.
+        const fetchOptions = token ? { headers: { 'Authorization': 'Bearer ' + token } } : {};
+        const res = await fetch(url, fetchOptions);
+
+        if (!res.ok) {
+            // 토큰이 만료되었거나 접근 권한이 없는 경우
+            if (res.status === 401 || res.status === 403) {
+                throw new Error("AUTH_ERROR");
+            }
+            throw new Error("HTTP " + res.status);
+        }
 
         // 응답 텍스트에서 JSON 데이터 부분만 추출
         const text = await res.text();
@@ -1733,7 +1743,7 @@ window.loadNcrData = async function() {
                 content: getCellVal(cDesc),
                 status: getCellVal(cStat)
             };
-        }).filter(n => n.pjtCode); // PJT 코드가 비어있지 않은 행만 필터링
+        }).filter(n => n.pjtCode); 
 
         window.renderProjectStatusList();
 
@@ -1745,7 +1755,11 @@ window.loadNcrData = async function() {
 
     } catch(e) {
         console.error("NCR 로드 에러:", e);
-        if(window.showToast) window.showToast("시트 접근 오류: 일반 액세스가 '링크가 있는 모든 사용자'로 설정되었는지 확인하세요.", "error");
+        if (e.message === "AUTH_ERROR") {
+            if(window.showToast) window.showToast("구글 권한이 만료되었습니다. [요청서] 탭에서 구글 계정을 다시 연동해주세요.", "warning");
+        } else {
+            if(window.showToast) window.showToast("시트 접근 오류: 회사 보안 정책으로 막혔거나 시트 이름이 다릅니다.", "error");
+        }
     }
 };
 
