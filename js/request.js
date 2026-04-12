@@ -8,7 +8,6 @@ let unsubscribeEmails = null;
 
 window.currentReqEmails = []; 
 
-// 💡 안전한 날짜 파싱 유틸 (코멘트 에러 방지용)
 window.reqGetSafeMillis = function(val) {
     try { 
         if (!val) return 0; 
@@ -19,7 +18,6 @@ window.reqGetSafeMillis = function(val) {
     } catch(e) { return 0; }
 };
 
-// 💡 검색 및 필터링 상태 변수
 window.currentReqStatusFilter = 'all';
 window.currentReqYearFilter = '';
 window.currentReqMonthFilter = '';
@@ -174,29 +172,29 @@ window.uploadFileToDrive = async function(file, folderId) {
     return data.id; 
 };
 
+// 💡 템플릿 메일 발송 로직 (완료 파일 첨부 링크 포함)
 window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
     if (!window.googleAccessToken) throw new Error("구글 인증이 필요합니다.");
     if (!recipientEmail) return false;
 
     const logoUrl = "https://raw.githubusercontent.com/hgje-dev/AXMS-Integration/main/assets/%EC%97%91%EC%8A%A4%EB%B9%84%EC%8A%A4CI%20%EC%8A%AC%EB%A1%9C%EA%B1%B4_%ED%8F%AC%EC%A7%80%ED%8B%B0%EB%B8%8C.png";
     const safeTitle = reqData.reqTitle || reqData.title || '제목 없음';
+    const appTitle = reqData.type === 'collab' ? '협업/조립 요청' : (reqData.type === 'purchase' ? '모듈 구매 의뢰' : '수리/점검 요청');
 
-    let subject = `[AXBIS] ${reqData.type === 'collab' ? '협업/조립 요청' : reqData.type} - ${safeTitle}`;
+    let subject = `[AXBIS] ${appTitle} - ${safeTitle}`;
     let bodyHtml = `
         <div style="font-family: sans-serif; padding: 20px; background: #f8fafc; border-radius: 10px;">
             <img src="${logoUrl}" alt="AXBIS" style="height: 28px; margin-bottom: 15px;">
             <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
                 <h3 style="margin-top:0; color:#1e293b;">${safeTitle}</h3>
-                <p><strong>구분:</strong> ${reqData.category || '-'}</p>
+                ${reqData.category ? `<p><strong>구분:</strong> ${reqData.category}</p>` : ''}
                 <p><strong>프로젝트명:</strong> ${reqData.pjtName || '-'}</p>
                 <p><strong>요청자:</strong> ${reqData.authorName} (${reqData.authorTeam})</p>
                 ${reqData.manager ? `<p><strong>담당자:</strong> <span style="color:#4f46e5; font-weight:bold;">${reqData.manager}</span></p>` : ''}
                 <p><strong>발송자(시스템 계정):</strong> ${window.userProfile.name} (${window.userProfile.email})</p>
-                <p><strong>요청 내용:</strong><br>${String(reqData.content || '').replace(/\n/g, '<br>')}</p>
-                ${reqData.fileUrl ? `<p style="margin-top:20px;"><strong>첨부파일:</strong> <a href="${reqData.fileUrl}" style="color:#4f46e5; font-weight:bold;">문서 확인하기</a></p>` : ''}
+                <p><strong>요청 내용:</strong><br>${String(reqData.content || '없음').replace(/\n/g, '<br>')}</p>
+                ${reqData.fileUrl ? `<p style="margin-top:20px;"><strong>첨부파일(원문):</strong> <a href="${reqData.fileUrl}" style="color:#4f46e5; font-weight:bold;">문서 확인하기</a></p>` : ''}
             </div>
-            <p style="font-size: 11px; color: #94a3b8; margin-top: 20px;">본 메일은 AXBIS 클라우드 포털에서 자동 발송되었습니다.</p>
-        </div>
     `;
 
     if(type === 'progress') {
@@ -205,7 +203,16 @@ window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
     } else if (type === 'completed') {
         subject = `[AXBIS 작업완료] 요청하신 작업이 완료되었습니다 - ${safeTitle}`;
         bodyHtml = `<h2 style="color: #10b981; font-size:18px;">요청하신 작업이 성공적으로 완료되었습니다.</h2>${bodyHtml}`;
+        // 💡 작업 완료 시, 관리자가 올린 검수 리스트 등이 있으면 추가 첨부
+        if (reqData.resultFileUrl) {
+            bodyHtml += `
+            <div style="background: #ecfdf5; border-left: 4px solid #10b981; padding: 15px; margin-top: 15px; border-radius: 4px;">
+                <p style="margin:0; font-size: 14px;"><strong>✅ 완료 결과물 (검수 리스트 등):</strong> <a href="${reqData.resultFileUrl}" style="color:#059669; font-weight:bold;">결과 확인하기</a></p>
+            </div>`;
+        }
     }
+
+    bodyHtml += `<p style="font-size: 11px; color: #94a3b8; margin-top: 20px;">본 메일은 AXBIS 클라우드 포털에서 자동 발송되었습니다.</p></div>`;
 
     const emailRaw = `To: ${recipientEmail}\r\n` +
                      `Subject: =?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=\r\n` +
@@ -227,9 +234,6 @@ window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
     return true;
 };
 
-// ==========================================
-// 💡 수신 담당자 설정 관리 (초성 검색)
-// ==========================================
 window.openEmailSettingsModal = function() {
     document.getElementById('new-req-email-user').value = '';
     document.getElementById('req-user-autocomplete').classList.add('hidden');
@@ -309,11 +313,12 @@ window.removeReqEmail = async function(idx) {
 
 
 // ==========================================
-// 폼 UI 제어 및 저장/수정 로직
+// 💡 폼 UI 제어 (협업 vs 구매의뢰 분기)
 // ==========================================
 window.openWriteModal = function(editId = null) { 
     window.editingReqId = editId; 
     
+    // 콜랩용 초기화
     document.getElementById('req-pjt-code').value = ''; 
     document.getElementById('req-pjt-name').value = ''; 
     document.getElementById('req-title').value = ''; 
@@ -323,23 +328,43 @@ window.openWriteModal = function(editId = null) {
     document.getElementById('req-end-date').value = ''; 
     document.getElementById('req-est-md').value = ''; 
     document.getElementById('req-content').value = ''; 
+
+    // 구매의뢰용 초기화
+    if(document.getElementById('req-pur-title')) document.getElementById('req-pur-title').value = '';
+    if(document.getElementById('req-pur-pjt-code')) document.getElementById('req-pur-pjt-code').value = '';
+    if(document.getElementById('req-pur-pjt-name')) document.getElementById('req-pur-pjt-name').value = '';
+    if(document.getElementById('req-pur-ship-date')) document.getElementById('req-pur-ship-date').value = '';
+    if(document.getElementById('req-pur-content')) document.getElementById('req-pur-content').value = '';
+
     window.clearSelectedFile();
     
     document.getElementById('req-file-link-wrap').classList.add('hidden');
+    document.getElementById('req-result-link-wrap').classList.add('hidden');
     document.getElementById('admin-actions').classList.add('hidden');
     document.getElementById('req-modal-status-badge').classList.add('hidden');
     document.querySelector('input[name="req-category"][value="협업"]').checked = true;
 
     const titleMap = { 'collab': '새 협업/조립 요청서', 'purchase': '새 모듈 구매 의뢰서', 'repair': '새 수리/점검 요청서' };
     
-    // 모달창 타이틀 "새 " 떼기
+    document.getElementById('req-header-title').innerText = titleMap[window.currentAppId] || '요청서 관리';
     document.getElementById('req-modal-title').innerText = (titleMap[window.currentAppId] || '요청서').replace('새 ', '') + ' 작성';
 
-    document.getElementById('collab-form-fields').classList.remove('hidden');
+    // 💡 AppId 에 따라 폼 숨기기/보이기
+    if (window.currentAppId === 'collab') {
+        document.getElementById('collab-form-fields').classList.remove('hidden');
+        document.getElementById('purchase-form-fields').classList.add('hidden');
+    } else if (window.currentAppId === 'purchase') {
+        document.getElementById('collab-form-fields').classList.add('hidden');
+        document.getElementById('purchase-form-fields').classList.remove('hidden');
+    } else {
+        document.getElementById('collab-form-fields').classList.remove('hidden');
+        document.getElementById('purchase-form-fields').classList.add('hidden');
+    }
 
     if (editId) {
         const req = window.currentRequestList.find(r => r.id === editId);
         if (req) {
+            // 콜랩 셋
             document.getElementById('req-pjt-code').value = req.pjtCode || ''; 
             document.getElementById('req-pjt-name').value = req.pjtName || ''; 
             document.getElementById('req-title').value = req.reqTitle || req.title || ''; 
@@ -349,15 +374,25 @@ window.openWriteModal = function(editId = null) {
             document.getElementById('req-end-date').value = req.endDate || ''; 
             document.getElementById('req-est-md').value = req.estMd || ''; 
             document.getElementById('req-content').value = req.content || ''; 
-            
             if(req.category) {
                 const rEl = document.querySelector(`input[name="req-category"][value="${req.category}"]`);
                 if(rEl) rEl.checked = true;
             }
 
+            // 구매 셋
+            if(document.getElementById('req-pur-title')) document.getElementById('req-pur-title').value = req.reqTitle || req.title || '';
+            if(document.getElementById('req-pur-pjt-code')) document.getElementById('req-pur-pjt-code').value = req.pjtCode || '';
+            if(document.getElementById('req-pur-pjt-name')) document.getElementById('req-pur-pjt-name').value = req.pjtName || '';
+            if(document.getElementById('req-pur-ship-date')) document.getElementById('req-pur-ship-date').value = req.shipDate || '';
+            if(document.getElementById('req-pur-content')) document.getElementById('req-pur-content').value = req.content || '';
+
             if(req.fileUrl) {
                 document.getElementById('req-file-link-wrap').classList.remove('hidden');
                 document.getElementById('req-file-link').href = req.fileUrl;
+            }
+            if(req.resultFileUrl) {
+                document.getElementById('req-result-link-wrap').classList.remove('hidden');
+                document.getElementById('req-result-link').href = req.resultFileUrl;
             }
 
             const badge = document.getElementById('req-modal-status-badge');
@@ -414,13 +449,25 @@ window.closeWriteModal = function() {
 // ==========================================
 
 window.promptSaveRequest = function() {
-    const reqTitle = document.getElementById('req-title').value.trim();
-    const pjtName = document.getElementById('req-pjt-name').value.trim();
-    const startDate = document.getElementById('req-start-date').value;
-    const endDate = document.getElementById('req-end-date').value;
-    const content = document.getElementById('req-content').value.trim();
+    let reqTitle, pjtName, reqValid = false;
 
-    if(!reqTitle || !pjtName || !startDate || !endDate || !content) {
+    if (window.currentAppId === 'collab') {
+        reqTitle = document.getElementById('req-title').value.trim();
+        pjtName = document.getElementById('req-pjt-name').value.trim();
+        const startDate = document.getElementById('req-start-date').value;
+        const endDate = document.getElementById('req-end-date').value;
+        const content = document.getElementById('req-content').value.trim();
+        if(reqTitle && pjtName && startDate && endDate && content) reqValid = true;
+    } else if (window.currentAppId === 'purchase') {
+        reqTitle = document.getElementById('req-pur-title').value.trim();
+        pjtName = document.getElementById('req-pur-pjt-name').value.trim();
+        const shipDate = document.getElementById('req-pur-ship-date').value;
+        if(reqTitle && pjtName && shipDate) reqValid = true;
+    } else {
+        reqValid = true; // repair 통과 (임시)
+    }
+
+    if(!reqValid) {
         return window.showToast("별표(*)가 있는 필수 항목을 모두 입력해주세요.", "error");
     }
 
@@ -446,15 +493,40 @@ window.executeSaveRequest = async function() {
     btn.disabled = true; 
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 전송 중...';
 
-    const reqTitle = document.getElementById('req-title').value.trim();
-    const pjtName = document.getElementById('req-pjt-name').value.trim();
-    const startDate = document.getElementById('req-start-date').value;
-    const endDate = document.getElementById('req-end-date').value;
-    const content = document.getElementById('req-content').value.trim();
+    let data = {
+        type: window.currentAppId, 
+        status: window.editingReqId ? window.currentRequestList.find(r=>r.id===window.editingReqId).status : 'pending', 
+        authorUid: window.currentUser.uid, 
+        authorName: window.userProfile.name, 
+        authorEmail: window.userProfile.email,
+        authorTeam: window.userProfile.team || window.userProfile.department || '미소속', 
+        updatedAt: Date.now() 
+    };
+
+    if (window.currentAppId === 'collab') {
+        data.reqTitle = document.getElementById('req-title').value.trim();
+        data.title = data.reqTitle;
+        data.pjtName = document.getElementById('req-pjt-name').value.trim();
+        data.pjtCode = document.getElementById('req-pjt-code').value.trim();
+        data.company = document.getElementById('req-company').value.trim();
+        data.location = document.getElementById('req-location').value.trim();
+        data.startDate = document.getElementById('req-start-date').value;
+        data.endDate = document.getElementById('req-end-date').value;
+        data.estMd = parseFloat(document.getElementById('req-est-md').value) || 0;
+        data.category = document.querySelector('input[name="req-category"]:checked')?.value || '';
+        data.content = document.getElementById('req-content').value.trim();
+    } else if (window.currentAppId === 'purchase') {
+        data.reqTitle = document.getElementById('req-pur-title').value.trim();
+        data.title = data.reqTitle;
+        data.pjtName = document.getElementById('req-pur-pjt-name').value.trim();
+        data.pjtCode = document.getElementById('req-pur-pjt-code').value.trim();
+        data.shipDate = document.getElementById('req-pur-ship-date').value;
+        data.content = document.getElementById('req-pur-content').value.trim();
+    }
+
     const fileInput = document.getElementById('req-file');
-    const category = document.querySelector('input[name="req-category"]:checked')?.value || '';
-    
     const recipientEmails = window.currentReqEmails.join(',');
+    data.recipientEmail = recipientEmails;
 
     try { 
         let fileUrl = null;
@@ -465,29 +537,7 @@ window.executeSaveRequest = async function() {
             const fileId = await window.uploadFileToDrive(fileInput.files[0], targetFolderId);
             fileUrl = `https://drive.google.com/file/d/${fileId}/view`;
         }
-
-        const data = { 
-            type: window.currentAppId, 
-            status: window.editingReqId ? window.currentRequestList.find(r=>r.id===window.editingReqId).status : 'pending', 
-            title: pjtName, 
-            reqTitle: reqTitle, 
-            pjtName: pjtName,
-            pjtCode: document.getElementById('req-pjt-code').value.trim(),
-            company: document.getElementById('req-company').value.trim(),
-            location: document.getElementById('req-location').value.trim(),
-            startDate: startDate,
-            endDate: endDate,
-            estMd: parseFloat(document.getElementById('req-est-md').value) || 0,
-            category: category,
-            content: content,
-            recipientEmail: recipientEmails, 
-            fileUrl: fileUrl || (window.editingReqId ? window.currentRequestList.find(r=>r.id===window.editingReqId)?.fileUrl : null),
-            authorUid: window.currentUser.uid, 
-            authorName: window.userProfile.name, 
-            authorEmail: window.userProfile.email,
-            authorTeam: window.userProfile.team || window.userProfile.department || '미소속', 
-            updatedAt: Date.now() 
-        }; 
+        data.fileUrl = fileUrl || (window.editingReqId ? window.currentRequestList.find(r=>r.id===window.editingReqId)?.fileUrl : null);
 
         if(window.editingReqId) { 
             await setDoc(doc(db,"requests",window.editingReqId), data, {merge:true}); 
@@ -563,6 +613,18 @@ window.promptCompleteRequest = function() {
     if (!window.googleAccessToken) return window.showToast("구글 연동을 먼저 해주세요.", "error");
 
     const req = window.currentRequestList.find(r => r.id === window.editingReqId);
+    
+    // 💡 구매의뢰서인 경우, 파일 첨부 영역 보이기
+    const fileSection = document.getElementById('req-complete-file-section');
+    if (fileSection) {
+        if (window.currentAppId === 'purchase') {
+            fileSection.classList.remove('hidden');
+            document.getElementById('req-complete-file').value = '';
+        } else {
+            fileSection.classList.add('hidden');
+        }
+    }
+
     const emailEl = document.getElementById('req-complete-email');
     if(emailEl) emailEl.value = req.authorEmail || '';
 
@@ -571,27 +633,50 @@ window.promptCompleteRequest = function() {
 };
 
 window.executeCompleteRequest = async function() {
-    document.getElementById('req-complete-modal').classList.add('hidden');
-    document.getElementById('req-complete-modal').classList.remove('flex');
-
     const req = window.currentRequestList.find(r => r.id === window.editingReqId);
     const sendEmail = document.getElementById('req-complete-email').value.trim();
+    const fileInput = document.getElementById('req-complete-file');
+
+    // 💡 구매의뢰서는 검수리스트 무조건 첨부해야 완료 가능하도록 막기
+    if (window.currentAppId === 'purchase' && (!fileInput || fileInput.files.length === 0)) {
+        return window.showToast("모듈 구매 의뢰서는 작업 완료 시 [레이저 검수 리스트] 파일 첨부가 필수입니다.", "error");
+    }
+
+    document.getElementById('req-complete-modal').classList.add('hidden');
+    document.getElementById('req-complete-modal').classList.remove('flex');
+    const btn = document.getElementById('btn-req-complete-exec');
+    if(btn) { btn.disabled = true; btn.innerHTML = '처리중...'; }
 
     try {
-        await setDoc(doc(db, "requests", window.editingReqId), { 
+        let resultFileUrl = null;
+        if (fileInput && fileInput.files.length > 0) {
+            window.showToast("완료 결과물(검수 리스트)을 드라이브에 업로드 중입니다...");
+            const fileId = await window.uploadFileToDrive(fileInput.files[0], DRIVE_FOLDERS[window.currentAppId]);
+            resultFileUrl = `https://drive.google.com/file/d/${fileId}/view`;
+        }
+
+        const payload = { 
             status: 'completed', 
             completedAt: Date.now(),
             updatedAt: Date.now() 
-        }, { merge: true });
+        };
+        if (resultFileUrl) payload.resultFileUrl = resultFileUrl;
+
+        await setDoc(doc(db, "requests", window.editingReqId), payload, { merge: true });
         
+        const updatedReq = Object.assign({}, req, payload);
         if(sendEmail) {
-            await window.sendNotificationEmail('completed', req, sendEmail);
+            await window.sendNotificationEmail('completed', updatedReq, sendEmail);
             window.showToast("작업 완료 메일이 발송되었습니다.");
         } else {
             window.showToast("작업이 완료 처리되었습니다.");
         }
         window.closeWriteModal();
-    } catch(e) { window.showToast("처리 실패", "error"); }
+    } catch(e) { 
+        window.showToast("처리 실패", "error"); 
+    } finally {
+        if(btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-flag-checkered mr-1"></i> 완료 처리 및 발송'; }
+    }
 };
 
 window.revertRequest = async function() {
@@ -606,7 +691,7 @@ window.revertRequest = async function() {
 };
 
 // ==========================================
-// 💡 데이터 로드 및 렌더링 (필터 적용 및 안전 로직)
+// 💡 데이터 로드 및 테이블 렌더링 (동적 컬럼 적용)
 // ==========================================
 window.loadRequestsData = function(appId) { 
     if(unsubscribeRequests) unsubscribeRequests(); 
@@ -650,7 +735,40 @@ window.loadRequestsData = function(appId) {
 };
 
 window.renderRequestList = function() { 
-    const tb = document.getElementById('request-tbody'); if(!tb) return; 
+    const tb = document.getElementById('request-tbody'); 
+    const th = document.getElementById('req-thead-tr');
+    if(!tb || !th) return; 
+
+    // 💡 AppId 에 따라 테이블 헤더를 동적으로 그림
+    if (window.currentAppId === 'purchase') {
+        th.innerHTML = `
+            <th class="p-4 font-bold text-center w-20">현재 상태</th>
+            <th class="p-4 font-bold text-center text-amber-300 w-16">코멘트</th>
+            <th class="p-4 font-bold min-w-[200px] max-w-[250px]">프로젝트명</th>
+            <th class="p-4 font-bold text-center">PJT 코드</th>
+            <th class="p-4 font-bold min-w-[200px] max-w-[250px] text-indigo-300">의뢰서 제목</th>
+            <th class="p-4 font-bold text-center text-rose-400">출하요청일</th>
+            <th class="p-4 font-bold text-center">담당자</th>
+            <th class="p-4 font-bold text-center text-slate-400">등록일</th>
+            <th class="p-4 font-bold text-center text-blue-400">진행시작일</th>
+            <th class="p-4 font-bold text-center text-emerald-400">완료일</th>
+            <th class="p-4 font-bold text-center w-16">기능</th>
+        `;
+    } else {
+        th.innerHTML = `
+            <th class="p-4 font-bold text-center w-20">현재 상태</th>
+            <th class="p-4 font-bold text-center text-amber-300 w-16">코멘트</th>
+            <th class="p-4 font-bold text-center w-20">구분</th>
+            <th class="p-4 font-bold min-w-[200px] max-w-[250px]">프로젝트명</th>
+            <th class="p-4 font-bold text-center">PJT 코드</th>
+            <th class="p-4 font-bold min-w-[200px] max-w-[250px] text-indigo-300">요청서 제목</th>
+            <th class="p-4 font-bold text-center">담당자</th>
+            <th class="p-4 font-bold text-center text-slate-400">등록일</th>
+            <th class="p-4 font-bold text-center text-blue-400">진행시작일</th>
+            <th class="p-4 font-bold text-center text-emerald-400">완료일</th>
+            <th class="p-4 font-bold text-center w-16">기능</th>
+        `;
+    }
     
     let displayList = window.currentRequestList.filter(item => {
         let match = true;
@@ -703,23 +821,43 @@ window.renderRequestList = function() {
             if (cCount > 0) commentHtml += `<span class="absolute top-0 right-0 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-amber-200">${cCount}</span>`;
             commentHtml += `</button>`;
 
-            return `
-            <tr class="hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.openWriteModal('${r.id}')">
-                <td class="p-3 text-center">${badge}</td>
-                <td class="p-3 text-center">${commentHtml}</td>
-                <td class="p-3 text-center font-bold text-slate-500">${safeCat}</td>
-                <td class="p-3 font-bold text-slate-700 truncate max-w-[200px]">${safeTitle}</td>
-                <td class="p-3 text-center font-bold text-indigo-700">${r.pjtCode||'-'}</td>
-                <td class="p-3 font-black text-indigo-800 truncate max-w-[250px]">${safeReqTitle}</td>
-                <td class="p-3 text-center font-bold text-slate-600">${r.authorName} <span class="text-[9px] bg-slate-100 text-slate-400 px-1 py-0.5 rounded block mt-0.5 w-max mx-auto">${r.authorTeam||''}</span></td>
-                <td class="p-3 text-center font-bold text-indigo-600">${safeManager}</td>
-                <td class="p-3 text-center text-slate-500 font-medium">${dCreate}</td>
-                <td class="p-3 text-center text-blue-500 font-bold">${dAccept}</td>
-                <td class="p-3 text-center text-emerald-500 font-bold">${dComp}</td>
-                <td class="p-3 text-center" onclick="event.stopPropagation()">
-                    <button onclick="window.deleteRequest('${r.id}')" class="text-slate-300 hover:text-rose-500 transition-colors p-2"><i class="fa-solid fa-trash-can"></i></button>
-                </td>
-            </tr>`;
+            // 💡 AppId 에 따라 Body도 동적으로 그림
+            if (window.currentAppId === 'purchase') {
+                const safeShipDate = r.shipDate || '-';
+                return `
+                <tr class="hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.openWriteModal('${r.id}')">
+                    <td class="p-3 text-center">${badge}</td>
+                    <td class="p-3 text-center">${commentHtml}</td>
+                    <td class="p-3 font-bold text-slate-700 truncate max-w-[200px]">${safeTitle}</td>
+                    <td class="p-3 text-center font-bold text-indigo-700">${r.pjtCode||'-'}</td>
+                    <td class="p-3 font-black text-indigo-800 truncate max-w-[250px]">${safeReqTitle}</td>
+                    <td class="p-3 text-center font-bold text-rose-500">${safeShipDate}</td>
+                    <td class="p-3 text-center font-bold text-slate-600">${r.authorName} <span class="text-[9px] bg-slate-100 text-slate-400 px-1 py-0.5 rounded block mt-0.5 w-max mx-auto">${r.authorTeam||''}</span></td>
+                    <td class="p-3 text-center text-slate-500 font-medium">${dCreate}</td>
+                    <td class="p-3 text-center text-blue-500 font-bold">${dAccept}</td>
+                    <td class="p-3 text-center text-emerald-500 font-bold">${dComp}</td>
+                    <td class="p-3 text-center" onclick="event.stopPropagation()">
+                        <button onclick="window.deleteRequest('${r.id}')" class="text-slate-300 hover:text-rose-500 transition-colors p-2"><i class="fa-solid fa-trash-can"></i></button>
+                    </td>
+                </tr>`;
+            } else {
+                return `
+                <tr class="hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.openWriteModal('${r.id}')">
+                    <td class="p-3 text-center">${badge}</td>
+                    <td class="p-3 text-center">${commentHtml}</td>
+                    <td class="p-3 text-center font-bold text-slate-500">${safeCat}</td>
+                    <td class="p-3 font-bold text-slate-700 truncate max-w-[200px]">${safeTitle}</td>
+                    <td class="p-3 text-center font-bold text-indigo-700">${r.pjtCode||'-'}</td>
+                    <td class="p-3 font-black text-indigo-800 truncate max-w-[250px]">${safeReqTitle}</td>
+                    <td class="p-3 text-center font-bold text-slate-600">${r.authorName} <span class="text-[9px] bg-slate-100 text-slate-400 px-1 py-0.5 rounded block mt-0.5 w-max mx-auto">${r.authorTeam||''}</span></td>
+                    <td class="p-3 text-center text-slate-500 font-medium">${dCreate}</td>
+                    <td class="p-3 text-center text-blue-500 font-bold">${dAccept}</td>
+                    <td class="p-3 text-center text-emerald-500 font-bold">${dComp}</td>
+                    <td class="p-3 text-center" onclick="event.stopPropagation()">
+                        <button onclick="window.deleteRequest('${r.id}')" class="text-slate-300 hover:text-rose-500 transition-colors p-2"><i class="fa-solid fa-trash-can"></i></button>
+                    </td>
+                </tr>`;
+            }
         } catch(e) {
             console.error("List Render Error:", e);
             return '';
