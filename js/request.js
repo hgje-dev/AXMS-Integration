@@ -4,9 +4,59 @@ import { collection, doc, setDoc, addDoc, deleteDoc, query, onSnapshot, where, g
 
 let unsubscribeRequests = null;
 let currentCommentUnsubscribe = null;
-let unsubscribeEmails = null; // 💡 수신자 이메일 목록 구독
+let unsubscribeEmails = null; 
 
-window.currentReqEmails = []; // 💡 현재 앱(협업/구매/수리)의 수신자 이메일 목록 캐싱
+window.currentReqEmails = []; 
+
+// 💡 안전한 날짜 파싱 유틸 (코멘트 에러 방지용)
+window.reqGetSafeMillis = function(val) {
+    try { 
+        if (!val) return 0; 
+        if (typeof val.toMillis === 'function') return val.toMillis(); 
+        if (typeof val === 'number') return val; 
+        if (typeof val === 'string') return new Date(val).getTime() || 0; 
+        return 0; 
+    } catch(e) { return 0; }
+};
+
+// 💡 검색 및 필터링 상태 변수
+window.currentReqStatusFilter = 'all';
+window.currentReqYearFilter = '';
+window.currentReqMonthFilter = '';
+window.currentReqSearch = '';
+
+window.setReqStatusFilter = function(status) {
+    window.currentReqStatusFilter = status;
+    window.renderRequestList();
+};
+
+window.filterReqByYear = function(year) {
+    window.currentReqYearFilter = year;
+    window.renderRequestList();
+};
+
+window.filterReqByMonth = function(month) {
+    window.currentReqMonthFilter = month;
+    window.renderRequestList();
+};
+
+window.filterReqBySearch = function(keyword) {
+    window.currentReqSearch = keyword.toLowerCase();
+    window.renderRequestList();
+};
+
+window.resetReqFilters = function() {
+    window.currentReqStatusFilter = 'all';
+    window.currentReqYearFilter = '';
+    window.currentReqMonthFilter = '';
+    window.currentReqSearch = '';
+    
+    if(document.getElementById('filter-req-year')) document.getElementById('filter-req-year').value = '';
+    if(document.getElementById('filter-req-month')) document.getElementById('filter-req-month').value = '';
+    if(document.getElementById('filter-req-search')) document.getElementById('filter-req-search').value = '';
+    
+    window.renderRequestList();
+};
 
 // ==========================================
 // 🚀 구글 API 연동 (Drive & Gmail)
@@ -124,24 +174,25 @@ window.uploadFileToDrive = async function(file, folderId) {
     return data.id; 
 };
 
-// 💡 템플릿 메일 발송 로직 (발송자 명시 포함)
 window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
     if (!window.googleAccessToken) throw new Error("구글 인증이 필요합니다.");
     if (!recipientEmail) return false;
 
     const logoUrl = "https://raw.githubusercontent.com/hgje-dev/AXMS-Integration/main/assets/%EC%97%91%EC%8A%A4%EB%B9%84%EC%8A%A4CI%20%EC%8A%AC%EB%A1%9C%EA%B1%B4_%ED%8F%AC%EC%A7%80%ED%8B%B0%EB%B8%8C.png";
+    const safeTitle = reqData.reqTitle || reqData.title || '제목 없음';
 
-    let subject = `[AXBIS] ${reqData.type === 'collab' ? '협업/조립 요청' : reqData.type} - ${reqData.title}`;
+    let subject = `[AXBIS] ${reqData.type === 'collab' ? '협업/조립 요청' : reqData.type} - ${safeTitle}`;
     let bodyHtml = `
         <div style="font-family: sans-serif; padding: 20px; background: #f8fafc; border-radius: 10px;">
             <img src="${logoUrl}" alt="AXBIS" style="height: 28px; margin-bottom: 15px;">
             <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                <h3 style="margin-top:0; color:#1e293b;">${safeTitle}</h3>
                 <p><strong>구분:</strong> ${reqData.category || '-'}</p>
                 <p><strong>프로젝트명:</strong> ${reqData.pjtName || '-'}</p>
                 <p><strong>요청자:</strong> ${reqData.authorName} (${reqData.authorTeam})</p>
                 ${reqData.manager ? `<p><strong>담당자:</strong> <span style="color:#4f46e5; font-weight:bold;">${reqData.manager}</span></p>` : ''}
                 <p><strong>발송자(시스템 계정):</strong> ${window.userProfile.name} (${window.userProfile.email})</p>
-                <p><strong>내용:</strong><br>${String(reqData.content || '').replace(/\n/g, '<br>')}</p>
+                <p><strong>요청 내용:</strong><br>${String(reqData.content || '').replace(/\n/g, '<br>')}</p>
                 ${reqData.fileUrl ? `<p style="margin-top:20px;"><strong>첨부파일:</strong> <a href="${reqData.fileUrl}" style="color:#4f46e5; font-weight:bold;">문서 확인하기</a></p>` : ''}
             </div>
             <p style="font-size: 11px; color: #94a3b8; margin-top: 20px;">본 메일은 AXBIS 클라우드 포털에서 자동 발송되었습니다.</p>
@@ -149,10 +200,10 @@ window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
     `;
 
     if(type === 'progress') {
-        subject = `[AXBIS 접수완료] 요청하신 내역이 접수되었습니다 - ${reqData.title}`;
+        subject = `[AXBIS 접수완료] 요청하신 내역이 접수되었습니다 - ${safeTitle}`;
         bodyHtml = `<h2 style="color: #4f46e5; font-size:18px;">요청하신 내역이 정상적으로 접수되어 진행 중입니다.</h2>${bodyHtml}`;
     } else if (type === 'completed') {
-        subject = `[AXBIS 작업완료] 요청하신 작업이 완료되었습니다 - ${reqData.title}`;
+        subject = `[AXBIS 작업완료] 요청하신 작업이 완료되었습니다 - ${safeTitle}`;
         bodyHtml = `<h2 style="color: #10b981; font-size:18px;">요청하신 작업이 성공적으로 완료되었습니다.</h2>${bodyHtml}`;
     }
 
@@ -177,10 +228,11 @@ window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
 };
 
 // ==========================================
-// 💡 수신 담당자 설정 관리 로직
+// 💡 수신 담당자 설정 관리 (초성 검색)
 // ==========================================
 window.openEmailSettingsModal = function() {
-    document.getElementById('new-req-email').value = '';
+    document.getElementById('new-req-email-user').value = '';
+    document.getElementById('req-user-autocomplete').classList.add('hidden');
     window.renderReqEmailList();
     document.getElementById('req-email-setting-modal').classList.remove('hidden');
     document.getElementById('req-email-setting-modal').classList.add('flex');
@@ -206,32 +258,55 @@ window.renderReqEmailList = function() {
     `).join('');
 };
 
-window.addReqEmail = async function() {
-    const input = document.getElementById('new-req-email');
-    const email = input.value.trim();
-    if(!email) return window.showToast("이메일을 입력하세요.", "warning");
+// 이름 초성 검색 자동완성
+window.showReqUserAutocomplete = function(inputEl) {
+    const val = inputEl.value.trim().toLowerCase();
+    const dropdown = document.getElementById('req-user-autocomplete');
     
-    if(!/^\S+@\S+\.\S+$/.test(email)) return window.showToast("유효한 이메일 형식이 아닙니다.", "warning");
-    if(window.currentReqEmails.includes(email)) return window.showToast("이미 등록된 이메일입니다.", "warning");
+    if(val.length < 1) { 
+        dropdown.classList.add('hidden'); 
+        return; 
+    }
+
+    const matches = (window.allSystemUsers || []).filter(u => window.matchString(val, u.name));
+
+    if(matches.length > 0) {
+        dropdown.classList.remove('hidden');
+        dropdown.innerHTML = matches.map(m => `
+            <li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-slate-700 font-bold text-xs border-b border-slate-50 last:border-0 truncate transition-colors flex justify-between items-center" 
+                onmousedown="window.addReqEmailSelected('${m.email}')">
+                <span>${m.name}</span>
+                <span class="text-[10px] text-slate-400">${m.email}</span>
+            </li>
+        `).join('');
+    } else {
+        dropdown.classList.add('hidden');
+    }
+};
+
+window.addReqEmailSelected = async function(email) {
+    document.getElementById('new-req-email-user').value = '';
+    document.getElementById('req-user-autocomplete').classList.add('hidden');
+    
+    if(!email) return;
+    if(window.currentReqEmails.includes(email)) return window.showToast("이미 등록된 담당자입니다.", "warning");
 
     const newEmails = [...window.currentReqEmails, email];
     try {
         await setDoc(doc(db, "settings", "req_emails_" + window.currentAppId), { emails: newEmails }, { merge: true });
-        input.value = '';
-        window.showToast("이메일이 추가되었습니다.");
+        window.showToast("수신 담당자가 추가되었습니다.");
     } catch(e) { window.showToast("추가 실패", "error"); }
 };
 
 window.removeReqEmail = async function(idx) {
-    if(!confirm("이 이메일을 수신자 목록에서 삭제하시겠습니까?")) return;
+    if(!confirm("이 담당자를 수신자 목록에서 제외하시겠습니까?")) return;
     const newEmails = [...window.currentReqEmails];
     newEmails.splice(idx, 1);
     try {
         await setDoc(doc(db, "settings", "req_emails_" + window.currentAppId), { emails: newEmails }, { merge: true });
-        window.showToast("삭제되었습니다.");
+        window.showToast("제외되었습니다.");
     } catch(e) { window.showToast("삭제 실패", "error"); }
 };
-
 
 // ==========================================
 // 폼 UI 제어 및 저장/수정 로직
@@ -241,6 +316,7 @@ window.openWriteModal = function(editId = null) {
     
     document.getElementById('req-pjt-code').value = ''; 
     document.getElementById('req-pjt-name').value = ''; 
+    document.getElementById('req-title').value = ''; // 💡 요청서 제목 리셋
     document.getElementById('req-company').value = ''; 
     document.getElementById('req-location').value = ''; 
     document.getElementById('req-start-date').value = ''; 
@@ -265,6 +341,7 @@ window.openWriteModal = function(editId = null) {
         if (req) {
             document.getElementById('req-pjt-code').value = req.pjtCode || ''; 
             document.getElementById('req-pjt-name').value = req.pjtName || ''; 
+            document.getElementById('req-title').value = req.reqTitle || req.title || ''; // 💡 요청서 제목 셋
             document.getElementById('req-company').value = req.company || ''; 
             document.getElementById('req-location').value = req.location || ''; 
             document.getElementById('req-start-date').value = req.startDate || ''; 
@@ -336,12 +413,13 @@ window.closeWriteModal = function() {
 // ==========================================
 
 window.promptSaveRequest = function() {
+    const reqTitle = document.getElementById('req-title').value.trim();
     const pjtName = document.getElementById('req-pjt-name').value.trim();
     const startDate = document.getElementById('req-start-date').value;
     const endDate = document.getElementById('req-end-date').value;
     const content = document.getElementById('req-content').value.trim();
 
-    if(!pjtName || !startDate || !endDate || !content) {
+    if(!reqTitle || !pjtName || !startDate || !endDate || !content) {
         return window.showToast("별표(*)가 있는 필수 항목을 모두 입력해주세요.", "error");
     }
 
@@ -353,7 +431,6 @@ window.promptSaveRequest = function() {
         return window.showToast("상단 [수신 담당자 설정]에서 메일을 받을 사람을 먼저 지정해주세요.", "warning");
     }
     
-    // 수신자 디스플레이 채우기
     document.getElementById('req-send-email-display').innerText = window.currentReqEmails.join(', ');
     
     document.getElementById('req-send-modal').classList.remove('hidden');
@@ -368,6 +445,7 @@ window.executeSaveRequest = async function() {
     btn.disabled = true; 
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 전송 중...';
 
+    const reqTitle = document.getElementById('req-title').value.trim();
     const pjtName = document.getElementById('req-pjt-name').value.trim();
     const startDate = document.getElementById('req-start-date').value;
     const endDate = document.getElementById('req-end-date').value;
@@ -375,7 +453,6 @@ window.executeSaveRequest = async function() {
     const fileInput = document.getElementById('req-file');
     const category = document.querySelector('input[name="req-category"]:checked')?.value || '';
     
-    // 💡 수신자 다중 지정 연동
     const recipientEmails = window.currentReqEmails.join(',');
 
     try { 
@@ -391,7 +468,8 @@ window.executeSaveRequest = async function() {
         const data = { 
             type: window.currentAppId, 
             status: window.editingReqId ? window.currentRequestList.find(r=>r.id===window.editingReqId).status : 'pending', 
-            title: pjtName, 
+            title: pjtName, // 기존 호환성용
+            reqTitle: reqTitle, // 💡 새 요청서 제목
             pjtName: pjtName,
             pjtCode: document.getElementById('req-pjt-code').value.trim(),
             company: document.getElementById('req-company').value.trim(),
@@ -401,7 +479,7 @@ window.executeSaveRequest = async function() {
             estMd: parseFloat(document.getElementById('req-est-md').value) || 0,
             category: category,
             content: content,
-            recipientEmail: recipientEmails, // 저장 정보 업데이트
+            recipientEmail: recipientEmails, 
             fileUrl: fileUrl || (window.editingReqId ? window.currentRequestList.find(r=>r.id===window.editingReqId)?.fileUrl : null),
             authorUid: window.currentUser.uid, 
             authorName: window.userProfile.name, 
@@ -527,13 +605,14 @@ window.revertRequest = async function() {
 };
 
 // ==========================================
-// 데이터 로드 및 렌더링 (미니 대시보드 포함)
+// 💡 데이터 로드 및 렌더링 (필터 적용)
 // ==========================================
 window.loadRequestsData = function(appId) { 
     if(unsubscribeRequests) unsubscribeRequests(); 
     unsubscribeRequests = onSnapshot(query(collection(db, "requests"), where("type", "==", appId)), (s) => { 
         window.currentRequestList=[]; 
         let tTotal=0, tPend=0, tProg=0, tComp=0;
+        const currentYearStr = new Date().getFullYear().toString();
 
         s.forEach(d => {
             const data = {id: d.id, ...d.data()};
@@ -541,7 +620,13 @@ window.loadRequestsData = function(appId) {
             tTotal++;
             if(data.status === 'pending') tPend++;
             else if(data.status === 'progress') tProg++;
-            else if(data.status === 'completed') tComp++;
+            else if(data.status === 'completed') {
+                // 당해 연도 완료건만 카운트
+                const compDateStr = data.completedAt ? window.getLocalDateStr(new Date(data.completedAt)) : '';
+                if(compDateStr.startsWith(currentYearStr)) {
+                    tComp++;
+                }
+            }
         }); 
         
         window.currentRequestList.sort((a,b)=>{ return (b.createdAt || 0) - (a.createdAt || 0); }); 
@@ -554,7 +639,6 @@ window.loadRequestsData = function(appId) {
         if(window.renderRequestList) window.renderRequestList(); 
     }); 
     
-    // 💡 수신자 이메일 목록 실시간 동기화
     if(unsubscribeEmails) unsubscribeEmails();
     unsubscribeEmails = onSnapshot(doc(db, "settings", "req_emails_" + appId), (docSnap) => {
         if(docSnap.exists() && docSnap.data().emails) {
@@ -568,26 +652,49 @@ window.loadRequestsData = function(appId) {
 window.renderRequestList = function() { 
     const tb = document.getElementById('request-tbody'); if(!tb) return; 
     
-    if(window.currentRequestList.length===0) { 
-        tb.innerHTML='<tr><td colspan="10" class="text-center p-8 text-slate-400 font-bold border-b border-slate-100">등록된 요청서가 없습니다.</td></tr>'; 
+    // 💡 필터 적용 로직
+    let displayList = window.currentRequestList.filter(item => {
+        let match = true;
+        if (window.currentReqStatusFilter !== 'all') {
+            if (item.status !== window.currentReqStatusFilter) match = false;
+        }
+        if (window.currentReqYearFilter) {
+            const cDate = item.createdAt ? window.getLocalDateStr(new Date(item.createdAt)) : '';
+            if (!cDate.startsWith(window.currentReqYearFilter)) match = false;
+        }
+        if (window.currentReqMonthFilter) {
+            const cDate = item.createdAt ? window.getLocalDateStr(new Date(item.createdAt)) : '';
+            if (!cDate.startsWith(window.currentReqMonthFilter)) match = false;
+        }
+        if (window.currentReqSearch) {
+            const s = window.currentReqSearch;
+            const fullStr = `${item.pjtName||''} ${item.pjtCode||''} ${item.reqTitle||item.title||''}`.toLowerCase();
+            if (!fullStr.includes(s) && !window.matchString(s, fullStr)) match = false;
+        }
+        return match;
+    });
+
+    if(displayList.length === 0) { 
+        tb.innerHTML='<tr><td colspan="11" class="text-center p-8 text-slate-400 font-bold border-b border-slate-100">조건에 맞는 요청서가 없습니다.</td></tr>'; 
         return; 
     } 
 
     const statusMap = {
-        'pending': '<span class="bg-slate-100 text-slate-600 px-2 py-1 rounded-md font-bold shadow-sm">대기중</span>',
-        'progress': '<span class="bg-blue-100 text-blue-600 px-2 py-1 rounded-md font-bold shadow-sm">진행중</span>',
-        'completed': '<span class="bg-emerald-100 text-emerald-600 px-2 py-1 rounded-md font-bold shadow-sm">완료됨</span>'
+        'pending': '<span class="bg-slate-100 text-slate-600 px-2 py-1 rounded-md font-bold shadow-sm border border-slate-200">대기중</span>',
+        'progress': '<span class="bg-blue-100 text-blue-600 px-2 py-1 rounded-md font-bold shadow-sm border border-blue-200">진행중</span>',
+        'completed': '<span class="bg-emerald-100 text-emerald-600 px-2 py-1 rounded-md font-bold shadow-sm border border-emerald-200">완료됨</span>'
     };
 
-    tb.innerHTML = window.currentRequestList.map(r=> {
-        const safeTitle = String(r.title||'').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const safeTitleJs = safeTitle.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    tb.innerHTML = displayList.map(r=> {
+        const safeTitle = String(r.pjtName||r.title||'').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const safeReqTitle = String(r.reqTitle||r.title||'').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         
+        const safeTitleJs = safeReqTitle.replace(/'/g, "\\'").replace(/"/g, '&quot;');
         const safeCat = r.category || '-';
         const badge = statusMap[r.status] || statusMap['pending'];
         const safeManager = r.manager ? r.manager : '<span class="text-slate-300">-</span>';
 
-        // 날짜 포맷
+        // 💡 날짜 컬럼 세분화
         const dCreate = r.createdAt ? window.getLocalDateStr(new Date(r.createdAt)) : '-';
         const dAccept = r.acceptedAt ? window.getLocalDateStr(new Date(r.acceptedAt)) : '-';
         const dComp = r.completedAt ? window.getLocalDateStr(new Date(r.completedAt)) : '-';
@@ -595,17 +702,19 @@ window.renderRequestList = function() {
         // 코멘트 뱃지 
         const cCount = (window.projectCommentCounts && window.projectCommentCounts[r.id]) || 0; 
         let commentHtml = `<button onclick="event.stopPropagation(); window.openCommentModal('${r.id}', '${safeTitleJs}')" class="text-amber-400 hover:text-amber-500 relative transition-colors p-2"><i class="fa-regular fa-comment-dots text-lg"></i>`;
-        if (cCount > 0) commentHtml += `<span class="absolute top-0 right-0 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm">${cCount}</span>`;
+        if (cCount > 0) commentHtml += `<span class="absolute top-0 right-0 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-amber-200">${cCount}</span>`;
         commentHtml += `</button>`;
 
+        // 💡 11개 컬럼 렌더링
         return `
         <tr class="hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.openWriteModal('${r.id}')">
             <td class="p-3 text-center">${badge}</td>
             <td class="p-3 text-center">${commentHtml}</td>
             <td class="p-3 text-center font-bold text-slate-500">${safeCat}</td>
-            <td class="p-3 font-bold text-indigo-700 truncate max-w-[250px]">${safeTitle}</td>
-            <td class="p-3 text-center text-slate-600 font-medium">${r.authorName} <span class="text-[9px] bg-slate-100 text-slate-400 px-1 py-0.5 rounded block mt-0.5 w-max mx-auto">${r.authorTeam||''}</span></td>
-            <td class="p-3 text-center font-bold text-indigo-600">${safeManager}</td>
+            <td class="p-3 font-bold text-slate-700 truncate max-w-[200px]">${safeTitle}</td>
+            <td class="p-3 text-center font-bold text-indigo-700">${r.pjtCode||'-'}</td>
+            <td class="p-3 font-black text-indigo-800 truncate max-w-[250px]">${safeReqTitle}</td>
+            <td class="p-3 text-center font-bold text-slate-600">${r.authorName} <span class="text-[9px] bg-slate-100 text-slate-400 px-1 py-0.5 rounded block mt-0.5 w-max mx-auto">${r.authorTeam||''}</span></td>
             <td class="p-3 text-center text-slate-500 font-medium">${dCreate}</td>
             <td class="p-3 text-center text-blue-500 font-bold">${dAccept}</td>
             <td class="p-3 text-center text-emerald-500 font-bold">${dComp}</td>
@@ -628,7 +737,7 @@ window.deleteRequest = async function(id) {
 };
 
 // ==========================================
-// 코멘트 모달 로직
+// 💡 코멘트 모달 로직 (에러 방지 처리 포함)
 // ==========================================
 window.openCommentModal = function(reqId, title) { 
     document.getElementById('cmt-req-id').value = reqId; 
@@ -650,8 +759,8 @@ window.loadComments = function(reqId) {
                     window.currentComments.push(d); 
                 }
             }); 
-            const topLevel = window.currentComments.filter(function(c) { return !c.parentId || c.parentId === 'null' || c.parentId === ''; }).sort(function(a,b) { return getSafeMillis(a.createdAt) - getSafeMillis(b.createdAt); }); 
-            const replies = window.currentComments.filter(function(c) { return c.parentId && c.parentId !== 'null' && c.parentId !== ''; }).sort(function(a,b) { return getSafeMillis(a.createdAt) - getSafeMillis(b.createdAt); }); 
+            const topLevel = window.currentComments.filter(function(c) { return !c.parentId || c.parentId === 'null' || c.parentId === ''; }).sort(function(a,b) { return window.reqGetSafeMillis(a.createdAt) - window.reqGetSafeMillis(b.createdAt); }); 
+            const replies = window.currentComments.filter(function(c) { return c.parentId && c.parentId !== 'null' && c.parentId !== ''; }).sort(function(a,b) { return window.reqGetSafeMillis(a.createdAt) - window.reqGetSafeMillis(b.createdAt); }); 
             
             topLevel.forEach(function(c) { 
                 c.replies = replies.filter(function(r) { return r.parentId === c.id; }); 
@@ -665,36 +774,45 @@ window.renderComments = function(topLevelComments) {
     const list = document.getElementById('comment-list'); 
     if(!list) return;
     if (topLevelComments.length === 0) { list.innerHTML = '<div class="text-center p-10 text-slate-400 font-bold">등록된 코멘트가 없습니다.</div>'; return; } 
+    
     try {
         let listHtml = '';
         topLevelComments.forEach(function(c) { 
-            let safeContent = String(c.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
-            if(window.formatMentions) safeContent = window.formatMentions(safeContent);
-            const cImgHtml = c.imageUrl ? '<div class="mt-3 rounded-lg overflow-hidden border border-slate-200 w-fit max-w-[300px]"><img src="' + c.imageUrl + '" class="w-full h-auto cursor-pointer" onclick="window.open(\'' + c.imageUrl + '\')"></div>' : ''; 
-            let repliesHtml = ''; 
-            if(c.replies && c.replies.length > 0) { 
-                repliesHtml += '<div class="pl-4 border-l-[3px] border-indigo-100/60 space-y-2 mt-4 pt-2 ml-2">'; 
-                c.replies.forEach(function(r) { 
-                    let safeReplyContent = String(r.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>'); 
-                    if(window.formatMentions) safeReplyContent = window.formatMentions(safeReplyContent); 
-                    const rImgHtml = r.imageUrl ? '<div class="mt-2 rounded-lg overflow-hidden border border-slate-200 w-fit max-w-[200px]"><img src="' + r.imageUrl + '" class="w-full h-auto cursor-pointer" onclick="window.open(\'' + r.imageUrl + '\')"></div>' : ''; 
-                    
-                    let replyBtnHtml = '';
-                    if (r.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin') {
-                        replyBtnHtml = '<button onclick="window.editComment(\'' + r.id + '\')" class="text-slate-400 hover:text-amber-500 px-1"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteComment(\'' + r.id + '\')" class="text-slate-400 hover:text-rose-500 px-1"><i class="fa-solid fa-trash-can"></i></button>';
-                    }
-                    
-                    repliesHtml += '<div class="bg-slate-50 p-4 rounded-xl border border-slate-100"><div class="flex justify-between items-start mb-2"><div class="flex items-center gap-2"><i class="fa-solid fa-reply text-[10px] text-slate-400 rotate-180 scale-y-[-1]"></i><span class="font-black text-slate-700 text-sm">' + r.authorName + '</span><span class="text-xs font-medium text-slate-400">' + window.getDateTimeStr(new Date(getSafeMillis(r.createdAt))) + '</span></div><div class="flex gap-2">' + replyBtnHtml + '</div></div><div class="text-slate-700 text-[13px] font-medium pl-6 break-words">' + safeReplyContent + '</div>' + rImgHtml + '</div>'; 
-                }); 
-                repliesHtml += '</div>'; 
-            } 
-            
-            let mainBtnHtml = '';
-            if (c.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin') {
-                mainBtnHtml = '<button onclick="window.editComment(\'' + c.id + '\')" class="text-slate-400 hover:text-amber-500 px-1"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteComment(\'' + c.id + '\')" class="text-slate-400 hover:text-rose-500 px-1"><i class="fa-solid fa-trash-can"></i></button>';
-            }
-            
-            listHtml += '<div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm"><div class="flex justify-between items-start mb-3"><div class="flex items-center gap-2"><span class="font-black text-slate-800 text-[15px]">' + c.authorName + '</span><span class="text-xs font-medium text-slate-400">' + window.getDateTimeStr(new Date(getSafeMillis(c.createdAt))) + '</span></div><div class="flex gap-2"><button onclick="window.setReplyTo(\'' + c.id + '\', \'' + c.authorName + '\')" class="text-[11px] bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 px-3 py-1 rounded-lg font-bold transition-colors shadow-sm">답글달기</button>' + mainBtnHtml + '</div></div><div class="text-slate-800 text-[14px] font-medium pl-1 mb-2 break-words leading-relaxed">' + safeContent + '</div>' + cImgHtml + repliesHtml + '</div>'; 
+            try {
+                let safeContent = String(c.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+                if(window.formatMentions) safeContent = window.formatMentions(safeContent);
+                const cImgHtml = c.imageUrl ? '<div class="mt-3 rounded-lg overflow-hidden border border-slate-200 w-fit max-w-[300px]"><img src="' + c.imageUrl + '" class="w-full h-auto cursor-pointer" onclick="window.open(\'' + c.imageUrl + '\')"></div>' : ''; 
+                let repliesHtml = ''; 
+                
+                if(c.replies && c.replies.length > 0) { 
+                    repliesHtml += '<div class="pl-4 border-l-[3px] border-indigo-100/60 space-y-2 mt-4 pt-2 ml-2">'; 
+                    c.replies.forEach(function(r) { 
+                        let safeReplyContent = String(r.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>'); 
+                        if(window.formatMentions) safeReplyContent = window.formatMentions(safeReplyContent); 
+                        const rImgHtml = r.imageUrl ? '<div class="mt-2 rounded-lg overflow-hidden border border-slate-200 w-fit max-w-[200px]"><img src="' + r.imageUrl + '" class="w-full h-auto cursor-pointer" onclick="window.open(\'' + r.imageUrl + '\')"></div>' : ''; 
+                        
+                        let replyBtnHtml = '';
+                        if (r.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin') {
+                            replyBtnHtml = '<button onclick="window.editComment(\'' + r.id + '\')" class="text-slate-400 hover:text-amber-500 px-1"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteComment(\'' + r.id + '\')" class="text-slate-400 hover:text-rose-500 px-1"><i class="fa-solid fa-trash-can"></i></button>';
+                        }
+                        
+                        // 💡 시간 에러 방지 처리 적용
+                        let rDateStr = r.createdAt ? (window.getDateTimeStr ? window.getDateTimeStr(new Date(window.reqGetSafeMillis(r.createdAt))) : new Date(window.reqGetSafeMillis(r.createdAt)).toLocaleString()) : '';
+
+                        repliesHtml += '<div class="bg-slate-50 p-4 rounded-xl border border-slate-100"><div class="flex justify-between items-start mb-2"><div class="flex items-center gap-2"><i class="fa-solid fa-reply text-[10px] text-slate-400 rotate-180 scale-y-[-1]"></i><span class="font-black text-slate-700 text-sm">' + r.authorName + '</span><span class="text-xs font-medium text-slate-400">' + rDateStr + '</span></div><div class="flex gap-2">' + replyBtnHtml + '</div></div><div class="text-slate-700 text-[13px] font-medium pl-6 break-words">' + safeReplyContent + '</div>' + rImgHtml + '</div>'; 
+                    }); 
+                    repliesHtml += '</div>'; 
+                } 
+                
+                let mainBtnHtml = '';
+                if (c.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin') {
+                    mainBtnHtml = '<button onclick="window.editComment(\'' + c.id + '\')" class="text-slate-400 hover:text-amber-500 px-1"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteComment(\'' + c.id + '\')" class="text-slate-400 hover:text-rose-500 px-1"><i class="fa-solid fa-trash-can"></i></button>';
+                }
+                
+                let cDateStr = c.createdAt ? (window.getDateTimeStr ? window.getDateTimeStr(new Date(window.reqGetSafeMillis(c.createdAt))) : new Date(window.reqGetSafeMillis(c.createdAt)).toLocaleString()) : '';
+
+                listHtml += '<div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm"><div class="flex justify-between items-start mb-3"><div class="flex items-center gap-2"><span class="font-black text-slate-800 text-[15px]">' + c.authorName + '</span><span class="text-xs font-medium text-slate-400">' + cDateStr + '</span></div><div class="flex gap-2"><button onclick="window.setReplyTo(\'' + c.id + '\', \'' + c.authorName + '\')" class="text-[11px] bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 px-3 py-1 rounded-lg font-bold transition-colors shadow-sm">답글달기</button>' + mainBtnHtml + '</div></div><div class="text-slate-800 text-[14px] font-medium pl-1 mb-2 break-words leading-relaxed">' + safeContent + '</div>' + cImgHtml + repliesHtml + '</div>'; 
+            } catch(e2) { console.error(e2); }
         });
         list.innerHTML = listHtml;
     } catch(e) { list.innerHTML = '<div class="text-center p-8 text-rose-500 font-bold">렌더링 오류 발생</div>'; }
