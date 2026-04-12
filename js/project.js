@@ -91,8 +91,8 @@ window.switchProjPartTab = function(part) {
     let btnMfg = document.getElementById('btn-part-mfg');
     let btnOpt = document.getElementById('btn-part-opt');
     
-    if (btnMfg) btnMfg.className = part === '제조' ? "px-4 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all" : "px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all";
-    if (btnOpt) btnOpt.className = part === '광학' ? "px-4 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all" : "px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all";
+    if (btnMfg) btnMfg.className = part === '제조' ? "px-3 py-1 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
+    if (btnOpt) btnOpt.className = part === '광학' ? "px-3 py-1 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
     
     window.loadProjectStatusData();
 };
@@ -697,13 +697,14 @@ window.toggleProjDashView = function(view) {
     document.getElementById('proj-dash-gantt-container').classList.add('hidden'); 
     document.getElementById('proj-dash-calendar-container').classList.add('hidden');
     
+    // 💡 뷰 토글 버튼의 스타일을 새로운 축소형 디자인으로 맞춤
     ['list', 'gantt', 'calendar'].forEach(function(b) {
         const btn = document.getElementById('btn-pd-' + b); 
-        if(btn) btn.className = "px-3 py-1.5 text-xs font-bold bg-white border border-slate-200 hover:bg-slate-100 rounded-md text-slate-500 transition-all";
+        if(btn) btn.className = "px-2 py-1 text-[11px] font-bold text-slate-500 hover:text-slate-700 rounded-md transition-colors whitespace-nowrap";
     });
     
     const activeBtn = document.getElementById('btn-pd-' + view); 
-    if(activeBtn) activeBtn.className = "px-3 py-1.5 text-xs font-bold bg-slate-200 shadow-inner rounded-md text-slate-700 transition-all";
+    if(activeBtn) activeBtn.className = "px-2 py-1 text-[11px] font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-colors whitespace-nowrap";
     
     if(view === 'list') {
         document.getElementById('proj-dash-list-container').classList.remove('hidden');
@@ -720,7 +721,6 @@ window.toggleProjDashView = function(view) {
 window.scrollToGanttToday = function() {
     const scrollContainer = document.getElementById('proj-dash-gantt-content');
     if(scrollContainer && window.ganttTodayOffset >= 0) {
-        // 화면 정중앙에 빨간 선이 오도록 계산
         scrollContainer.scrollTo({
             left: window.ganttTodayOffset + 300 - (scrollContainer.clientWidth / 2),
             behavior: 'smooth'
@@ -776,14 +776,13 @@ window.renderProjGantt = function() {
             if(dStr === todayStr) todayOffset = i * dayWidth; 
         }
         
-        // 💡 오프셋 값을 글로벌 변수로 저장하여 버튼 스크롤 시 사용
         window.ganttTodayOffset = todayOffset;
 
         if(todayOffset >= 0) {
             html += '<div class="absolute top-0 w-[2px] bg-rose-500 z-[100] pointer-events-none shadow-sm" style="left: ' + (300 + todayOffset + (dayWidth/2)) + 'px; height:100%; bottom:0;"><div class="absolute top-10 -translate-x-1/2 bg-rose-500 text-white text-[10px] px-2 py-0.5 rounded-full shadow-md font-bold whitespace-nowrap border border-white">오늘</div></div>';
         }
 
-        // 💡 z-index 50으로 높여 스크롤 시 안 깔리도록 수정
+        // 💡 z-index 50으로 높임
         html += '<div class="flex border-b border-slate-200 sticky top-0 bg-white z-50 shadow-sm"><div class="w-[300px] flex-shrink-0 p-3 font-bold text-xs text-slate-700 bg-slate-50 border-r border-slate-200 flex items-center sticky left-0 z-50"><div class="w-[100px] text-indigo-600">PJT 코드</div><div class="w-[200px]">프로젝트명</div></div>';
         
         for(let i=0; i<totalDays; i++) {
@@ -805,7 +804,7 @@ window.renderProjGantt = function() {
             
             html += '<div class="flex border-b border-slate-100 relative group cursor-pointer hover:bg-slate-50 transition-colors" onclick="window.editProjStatus(\'' + p.id + '\')">';
             
-            // 💡 좌측 고정영역의 z-index를 40으로 높이고, 배경색을 단단히 채워 차트 막대와 안 겹치게 처리
+            // 💡 좌측 텍스트 영역을 z-index 40으로 높이고 배경색 꽉 채움
             html += '<div class="w-[300px] flex-shrink-0 p-2 text-[11px] font-bold text-slate-700 border-r border-slate-200 bg-white group-hover:bg-slate-50 z-40 sticky left-0 flex items-center transition-colors" title="' + safeNameHtml + '"><div class="w-[100px] text-indigo-600 truncate font-black pr-1">' + safeCodeStr + '</div><div class="w-[200px] truncate">' + safeNameHtml + '</div></div>';
             
             html += '<div class="flex relative" style="width: ' + (totalDays * dayWidth) + 'px">';
@@ -918,10 +917,6 @@ window.renderProjCalendar = function() {
         container.innerHTML = html;
     } catch(e) {}
 };
-
-// ==========================================================
-// 🚨 과거 데이터(reqId/projectId) 무조건 불러오는 철통 방어 렌더링 🚨
-// ==========================================================
 
 window.openDailyLogModal = function(projectId) { 
     const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
@@ -1073,7 +1068,6 @@ window.resetDailyLogForm = function() {
 };
 
 
-// 코멘트 모달 로직
 window.openCommentModal = function(projectId) { 
     const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
     if(!proj) return; 
@@ -1242,8 +1236,6 @@ window.deleteComment = async function(id) {
     } catch(e) { window.showToast("삭제 실패", "error"); } 
 };
 
-
-// 이슈 모달 로직
 window.openIssueModal = function(projectId) { 
     const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
     if(!proj) return; 
@@ -1354,7 +1346,6 @@ window.closeIssueModal = function() {
     if (currentIssueUnsubscribe) { currentIssueUnsubscribe(); currentIssueUnsubscribe = null; } 
 };
 
-// MD Log 모달 로직
 window.openMdLogModal = function(projectId) { 
     const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
     if(!proj) return; 
@@ -1486,7 +1477,6 @@ window.resetMdLogForm = function() {
     document.getElementById('btn-md-cancel').classList.add('hidden'); 
 };
 
-// 링크 관리 로직
 window.openLinkModal = function(projectId) { 
     const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
     if(!proj) return; 
