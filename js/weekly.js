@@ -6,6 +6,7 @@ let currentWeeklyLogUnsubscribe = null;
 let currentScheduleUnsubscribe = null;
 
 window.currentWeeklyLogList = [];
+window.allSchedules = []; // 팀 전체 일정용 추가
 window.currentScheduleList = [];
 window.draftTasks = []; 
 window.wlInvolvedProjects = []; 
@@ -15,31 +16,81 @@ window.switchWeeklyTab = function(tabName) {
     window.activeWeeklyTab = tabName;
     const btnTeam = document.getElementById('tab-team-btn');
     const btnMy = document.getElementById('tab-my-btn');
+    const btnTeamSch = document.getElementById('tab-team-sch-btn');
+    
     const viewTeam = document.getElementById('weekly-team-view');
     const viewMy = document.getElementById('weekly-my-view');
+    const viewTeamSch = document.getElementById('weekly-team-sch-view');
+
+    const activeClass = "px-5 py-2 text-sm font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-2 whitespace-nowrap";
+    const inactiveClass = "px-5 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-2 whitespace-nowrap";
+
+    if (btnTeam) btnTeam.className = inactiveClass;
+    if (btnMy) btnMy.className = inactiveClass;
+    if (btnTeamSch) btnTeamSch.className = inactiveClass;
+
+    if (viewTeam) viewTeam.classList.add('hidden');
+    if (viewMy) viewMy.classList.add('hidden');
+    if (viewTeamSch) viewTeamSch.classList.add('hidden');
 
     if (tabName === 'team') {
-        if (btnTeam) btnTeam.className = "px-6 py-2 text-sm font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-2";
-        if (btnMy) btnMy.className = "px-6 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-2";
+        if (btnTeam) btnTeam.className = activeClass;
         if (viewTeam) viewTeam.classList.remove('hidden');
-        if (viewMy) viewMy.classList.add('hidden');
-    } else {
-        if (btnMy) btnMy.className = "px-6 py-2 text-sm font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-2";
-        if (btnTeam) btnTeam.className = "px-6 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-2";
+    } else if (tabName === 'my') {
+        if (btnMy) btnMy.className = activeClass;
         if (viewMy) viewMy.classList.remove('hidden');
-        if (viewTeam) viewTeam.classList.add('hidden');
+    } else if (tabName === 'team-sch') {
+        if (btnTeamSch) btnTeamSch.className = activeClass;
+        if (viewTeamSch) viewTeamSch.classList.remove('hidden');
     }
+};
+
+// 💡 YYYY-Wxx 주차 정보를 한국식 N월 M주차 및 보고 마감일로 변환하는 함수
+window.updateWeekLabels = function(weekStr) {
+    if(!weekStr || !window.getDatesFromWeek) return;
+    const dates = window.getDatesFromWeek(weekStr); // start: 해당 주 월요일
+    
+    // 1. 몇 월 몇 주차인지 계산 (목요일 기준)
+    const thu = new Date(dates.start);
+    thu.setDate(thu.getDate() + 3);
+    const m = thu.getMonth() + 1;
+    const y = thu.getFullYear();
+    
+    const firstDay = new Date(y, m - 1, 1);
+    let offset = firstDay.getDay() - 1; // 월=0 ~ 일=6
+    if(offset === -1) offset = 6;
+    
+    const dateNum = thu.getDate();
+    const weekNum = Math.ceil((dateNum + offset) / 7);
+    
+    const displayEl = document.getElementById('weekly-display-text');
+    if (displayEl) displayEl.innerText = `${y}년 ${m}월 ${weekNum}주`;
+
+    // 2. 보고 기간 및 마감일 세팅
+    const wed = new Date(dates.start);
+    wed.setDate(wed.getDate() + 2); // 금주 수요일
+    
+    const prevWed = new Date(wed);
+    prevWed.setDate(prevWed.getDate() - 7); // 전주 수요일
+    
+    let deadline = new Date(wed);
+    // 수요일이 공휴일이면 전날로 당김
+    if(window.isWorkDay) {
+        while(!window.isWorkDay(deadline)) {
+            deadline.setDate(deadline.getDate() - 1);
+        }
+    }
+    
+    const periodEl = document.getElementById('weekly-period-text');
+    const dLineEl = document.getElementById('weekly-deadline-text');
+    
+    if(periodEl) periodEl.innerText = `${window.getLocalDateStr(prevWed).substring(5)} ~ ${window.getLocalDateStr(wed).substring(5)}`;
+    if(dLineEl) dLineEl.innerText = window.getLocalDateStr(deadline);
 };
 
 window.handleWeekChange = function(val) {
     if (!val) return;
-    const parts = val.split('-W');
-    if (parts.length === 2) {
-        const year = parts[0];
-        const week = parseInt(parts[1], 10);
-        const displayEl = document.getElementById('weekly-display-text');
-        if (displayEl) displayEl.innerText = year + ', ' + week + '번째 주';
-    }
+    window.updateWeekLabels(val);
     window.loadWeeklyLogsData();
 };
 
@@ -153,13 +204,6 @@ window.loadWeeklyLogsData = function() {
     const weekInput = document.getElementById('weekly-log-filter-week');
     if (!weekInput || !weekInput.value) return;
     const w = weekInput.value; 
-
-    // 무한 루프 방지를 위해 텍스트만 업데이트
-    const parts = w.split('-W');
-    if (parts.length === 2) {
-        const displayEl = document.getElementById('weekly-display-text');
-        if (displayEl) displayEl.innerText = parts[0] + ', ' + parseInt(parts[1], 10) + '번째 주';
-    }
     
     if (currentWeeklyLogUnsubscribe) currentWeeklyLogUnsubscribe(); 
     currentWeeklyLogUnsubscribe = onSnapshot(query(collection(db, "weekly_logs_v2"), where("week", "==", w)), function(s) { 
@@ -189,18 +233,35 @@ window.loadWeeklyLogsData = function() {
         const progEl = document.getElementById('stat-progress'); if (progEl) progEl.innerText = statProg;
         const issEl = document.getElementById('stat-issue'); if (issEl) issEl.innerText = statIssue;
 
+        // 💡 상단에 내 제출 상태 표시 연동
+        const topStatusEl = document.getElementById('top-my-submit-status');
+        if (topStatusEl && window.currentUser) {
+            const myLog = window.currentWeeklyLogList.find(l => l.authorUid === window.currentUser.uid);
+            if (myLog && myLog.isSubmitted) {
+                topStatusEl.className = 'text-[10px] px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-600 font-bold ml-1 shadow-sm';
+                topStatusEl.innerText = '제출 완료됨';
+            } else {
+                topStatusEl.className = 'text-[10px] px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 font-bold ml-1 shadow-sm';
+                topStatusEl.innerText = '미제출';
+            }
+        }
+
         window.renderWeeklyLogs(); 
         window.checkMissingMembers();
     }); 
 
+    // 팀 전체 일정 로드 💡
     if (currentScheduleUnsubscribe) currentScheduleUnsubscribe();
     if (window.currentUser) {
-        currentScheduleUnsubscribe = onSnapshot(query(collection(db, "weekly_schedules"), where("week", "==", w), where("authorUid", "==", window.currentUser.uid)), function(s) {
-            window.currentScheduleList = [];
+        currentScheduleUnsubscribe = onSnapshot(query(collection(db, "weekly_schedules"), where("week", "==", w)), function(s) {
+            window.allSchedules = [];
             s.forEach(function(d) {
-                window.currentScheduleList.push(Object.assign({ id: d.id }, d.data()));
+                window.allSchedules.push(Object.assign({ id: d.id }, d.data()));
             });
+            window.currentScheduleList = window.allSchedules.filter(sch => sch.authorUid === window.currentUser.uid);
+            
             window.renderKanbanBoard();
+            window.renderTeamKanbanBoard();
         });
     }
 };
@@ -323,8 +384,10 @@ window.renderWeeklyLogs = function() {
                 
                 const locBadge = '<span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded ml-1"><i class="fa-solid fa-location-dot text-[9px]"></i> ' + (t.loc || '사내') + '</span>';
                 const safeContent = window.formatMentions ? window.formatMentions(String(t.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')) : String(t.content || '');
+                // 💡 작성된 시간 표시
+                const timeBadge = t.createdAtTime ? '<span class="text-[9px] text-slate-400 font-mono ml-2 font-medium tracking-tighter">' + t.createdAtTime + '</span>' : '';
                 
-                dayHtml += '<li class="flex justify-between items-start gap-4 hover:bg-slate-50 p-1.5 rounded-lg transition-colors group"><div class="flex items-start gap-2 text-sm text-slate-700 font-medium"><span class="text-slate-300 mt-1 text-[8px]"><i class="fa-solid fa-circle"></i></span><div>' + safeContent + ' ' + locBadge + '</div></div><div class="shrink-0 pt-0.5">' + statusBadge + '</div></li>';
+                dayHtml += '<li class="flex justify-between items-start gap-4 hover:bg-slate-50 p-1.5 rounded-lg transition-colors group"><div class="flex items-start gap-2 text-sm text-slate-700 font-medium"><span class="text-slate-300 mt-1 text-[8px]"><i class="fa-solid fa-circle"></i></span><div>' + safeContent + ' ' + locBadge + timeBadge + '</div></div><div class="shrink-0 pt-0.5">' + statusBadge + '</div></li>';
             });
             dayHtml += '</ul>';
             return dayHtml;
@@ -349,7 +412,6 @@ window.renderWeeklyLogs = function() {
         }
 
         bottomMetaHtml += pjtTags;
-        if (log.totalHours || log.totalMins) bottomMetaHtml += '<span class="ml-auto flex items-center gap-1.5"><i class="fa-regular fa-clock"></i> 투입: ' + (log.totalHours || 0) + '시간 ' + (log.totalMins || 0) + '분</span>';
         bottomMetaHtml += '</div>';
 
         let actionHtml = '';
@@ -416,8 +478,6 @@ window.openWeeklyLogWriteModal = function(editId) {
     }) : [];
     
     const issuesEl = document.getElementById('wl-issues'); if (issuesEl) issuesEl.value = existingLog ? (existingLog.issues || '') : '';
-    const timeHEl = document.getElementById('wl-time-h'); if (timeHEl) timeHEl.value = existingLog ? (existingLog.totalHours || '') : '';
-    const timeMEl = document.getElementById('wl-time-m'); if (timeMEl) timeMEl.value = existingLog ? (existingLog.totalMins || '') : '';
 
     if (existingLog && existingLog.involvedProjects && Array.isArray(existingLog.involvedProjects)) {
         window.wlInvolvedProjects = existingLog.involvedProjects.slice();
@@ -485,8 +545,11 @@ window.addWeeklyTaskRow = function() {
         if (window.showToast) window.showToast("업무 내용을 입력하세요.", "warning");
         return;
     }
+    
+    // 💡 작성 시간 기록 추가
+    const nowStr = window.getDateTimeStr ? window.getDateTimeStr(new Date()) : new Date().toLocaleString();
 
-    window.draftTasks.push({ day: day, status: status, loc: loc, content: content, id: Date.now() });
+    window.draftTasks.push({ day: day, status: status, loc: loc, content: content, id: Date.now(), createdAtTime: nowStr });
     contentEl.value = '';
     window.renderDraftTasks();
 };
@@ -513,8 +576,11 @@ window.renderDraftTasks = function() {
     listEl.innerHTML = sorted.map(function(t) {
         let statusClass = t.status === '완료' ? 'text-emerald-600 bg-emerald-50 border-emerald-200' : (t.status === '진행 중' ? 'text-blue-600 bg-blue-50 border-blue-200' : 'text-slate-500 bg-slate-50 border-slate-200');
         const safeContent = window.formatMentions ? window.formatMentions(String(t.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')) : String(t.content || '');
+        
+        // 💡 작성된 시간 렌더링
+        const timeBadge = t.createdAtTime ? '<span class="text-[9px] text-slate-400 ml-2 font-mono tracking-tighter">' + t.createdAtTime.split(' ')[1] + '</span>' : '';
 
-        return '<div class="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm group"><span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded w-16 text-center shrink-0">' + t.day + '</span><span class="text-[10px] font-bold border px-1.5 py-0.5 rounded shrink-0 w-12 text-center ' + statusClass + '">' + t.status + '</span><div class="text-sm font-medium text-slate-700 flex-1 truncate" title="' + String(t.content).replace(/"/g, '&quot;') + '">' + safeContent + ' <span class="text-[9px] bg-slate-100 text-slate-500 px-1 py-0.5 rounded ml-1">' + t.loc + '</span></div><button onclick="window.removeWeeklyTaskRow(\'' + t.id + '\')" class="text-slate-300 hover:text-rose-500 w-6 h-6 rounded flex items-center justify-center transition-colors"><i class="fa-solid fa-xmark"></i></button></div>';
+        return '<div class="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm group"><span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded w-16 text-center shrink-0">' + t.day + '</span><span class="text-[10px] font-bold border px-1.5 py-0.5 rounded shrink-0 w-12 text-center ' + statusClass + '">' + t.status + '</span><div class="text-sm font-medium text-slate-700 flex-1 truncate" title="' + String(t.content).replace(/"/g, '&quot;') + '">' + safeContent + ' <span class="text-[9px] bg-slate-100 text-slate-500 px-1 py-0.5 rounded ml-1">' + t.loc + '</span>' + timeBadge + '</div><button onclick="window.removeWeeklyTaskRow(\'' + t.id + '\')" class="text-slate-300 hover:text-rose-500 w-6 h-6 rounded flex items-center justify-center transition-colors"><i class="fa-solid fa-xmark"></i></button></div>';
     }).join('');
 };
 
@@ -549,8 +615,6 @@ window.saveWeeklyLog = async function(isFinalSubmit) {
     }
 
     const issuesEl = document.getElementById('wl-issues');
-    const hEl = document.getElementById('wl-time-h');
-    const mEl = document.getElementById('wl-time-m');
 
     let fullTextToScan = (issuesEl ? issuesEl.value.trim() : '') + ' ';
     window.draftTasks.forEach(function(t) { fullTextToScan += t.content + ' '; });
@@ -563,8 +627,6 @@ window.saveWeeklyLog = async function(isFinalSubmit) {
         tasks: window.draftTasks,
         issues: issuesEl ? issuesEl.value.trim() : '',
         involvedProjects: window.wlInvolvedProjects, 
-        totalHours: hEl ? (parseInt(hEl.value) || 0) : 0,
-        totalMins: mEl ? (parseInt(mEl.value) || 0) : 0,
         isSubmitted: isFinalSubmit,
         updatedAt: Date.now()
     };
@@ -600,7 +662,7 @@ window.deleteWeeklyLog = async function(id) {
 };
 
 // ==========================================
-// 개인 일정 (Kanban) 모달 및 렌더링 관리
+// 개인 및 팀 일정 (Kanban) 모달 렌더링 관리
 // ==========================================
 window.toggleScheduleComplete = async function(id, isCompleted) {
     try {
@@ -643,6 +705,45 @@ window.renderKanbanBoard = function() {
         return '<div class="bg-slate-50 rounded-2xl border border-slate-100 flex flex-col min-h-[300px]"><div class="text-center py-3 border-b border-slate-200 bg-white rounded-t-2xl"><h4 class="text-sm font-black ' + headerColor + '">' + day + '</h4></div><div class="p-3 flex-1 flex flex-col gap-3">' + eventsHtml + '<button onclick="window.openScheduleModal(\'' + day + '\')" class="w-full border-2 border-dashed border-slate-200 hover:border-indigo-300 hover:bg-white text-slate-400 hover:text-indigo-500 rounded-xl py-3 text-xs font-bold transition-colors flex items-center justify-center gap-2 mt-auto"><i class="fa-solid fa-plus"></i> 일정 추가</button></div></div>';
     }).join('');
 };
+
+// 💡 팀 일정표 보드 렌더링 함수
+window.renderTeamKanbanBoard = function() {
+    const board = document.getElementById('weekly-team-kanban-board');
+    if (!board) return;
+
+    const days = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일'];
+    const catMap = {
+        "휴가/반차": { icon: "fa-mug-hot", bg: "bg-emerald-50 border-emerald-200", text: "text-emerald-700", badge: "bg-emerald-100 text-emerald-600" },
+        "회의/미팅": { icon: "fa-users", bg: "bg-purple-50 border-purple-200", text: "text-purple-700", badge: "bg-purple-100 text-purple-600" },
+        "집중업무": { icon: "fa-headphones", bg: "bg-blue-50 border-blue-200", text: "text-blue-700", badge: "bg-blue-100 text-blue-600" },
+        "외근/출장": { icon: "fa-car", bg: "bg-orange-50 border-orange-200", text: "text-orange-700", badge: "bg-orange-100 text-orange-600" },
+        "기타": { icon: "fa-thumbtack", bg: "bg-slate-50 border-slate-200", text: "text-slate-700", badge: "bg-slate-200 text-slate-600" }
+    };
+
+    board.innerHTML = days.map(function(day) {
+        // 모든 유저의 일정을 가져옴
+        const events = window.allSchedules.filter(function(s) { return s.day === day; });
+        const eventsHtml = events.map(function(s) {
+            const style = catMap[s.category] || catMap["기타"];
+            const safeContent = String(s.content || '');
+            const authorName = String(s.authorName || '팀원');
+            const safeTime = String(s.time || '시간 미지정');
+            
+            const completedCardClass = s.isCompleted ? 'opacity-60 bg-slate-100 border-slate-200 grayscale' : style.bg;
+            const completedTextClass = s.isCompleted ? 'line-through text-slate-400' : style.text;
+
+            return '<div class="rounded-xl border p-3 ' + completedCardClass + ' relative transition-all"><div class="flex items-center gap-1.5 mb-2.5"><span class="text-[10px] font-black text-white bg-indigo-500 w-fit px-1.5 py-0.5 rounded shadow-sm">' + authorName + '</span><div class="flex items-center gap-1 text-[9px] font-black ' + style.badge + ' w-fit px-1.5 py-0.5 rounded"><i class="fa-solid ' + style.icon + '"></i> ' + s.category + '</div></div><div class="text-xs font-bold ' + completedTextClass + ' mb-1.5">' + safeContent + '</div><div class="text-[9px] text-slate-500 font-bold flex items-center gap-1"><i class="fa-regular fa-clock"></i> ' + safeTime + '</div></div>';
+        }).join('');
+
+        const isWeekend = (day === '토요일' || day === '일요일');
+        const headerColor = isWeekend ? 'text-rose-500' : 'text-slate-700';
+
+        let emptyText = events.length === 0 ? '<div class="text-center p-4 text-[11px] font-bold text-slate-400">일정 없음</div>' : '';
+
+        return '<div class="bg-slate-50 rounded-2xl border border-slate-100 flex flex-col min-h-[300px]"><div class="text-center py-3 border-b border-slate-200 bg-white rounded-t-2xl"><h4 class="text-sm font-black ' + headerColor + '">' + day + '</h4></div><div class="p-3 flex-1 flex flex-col gap-2">' + emptyText + eventsHtml + '</div></div>';
+    }).join('');
+};
+
 
 window.openScheduleModal = function(day) {
     if (!day) day = '월요일';
@@ -708,7 +809,16 @@ window.saveSchedule = async function() {
         return;
     }
 
-    const payload = { week: week, day: day, category: category, time: time, content: content, authorUid: window.currentUser.uid, updatedAt: Date.now() };
+    const payload = { 
+        week: week, 
+        day: day, 
+        category: category, 
+        time: time, 
+        content: content, 
+        authorUid: window.currentUser.uid, 
+        authorName: window.userProfile.name, // 팀 일정표에서 이름 표시용
+        updatedAt: Date.now() 
+    };
 
     try {
         if (id) {
