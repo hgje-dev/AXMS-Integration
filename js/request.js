@@ -1,11 +1,12 @@
 /* eslint-disable */
 import { db } from './firebase.js';
-import { collection, doc, setDoc, addDoc, deleteDoc, query, onSnapshot, where } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { collection, doc, setDoc, addDoc, deleteDoc, query, onSnapshot, where, getDocs, writeBatch } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 let unsubscribeRequests = null;
+let currentCommentUnsubscribe = null;
 
 // ==========================================
-// 🚀 구글 API 연동 (Drive & Gmail) - 캐싱 기능 추가
+// 🚀 구글 API 연동 (Drive & Gmail)
 // ==========================================
 const GOOGLE_CLIENT_ID = '924354535197-joakn7gpfj4d3oirpd1pu3un9j7689q9.apps.googleusercontent.com';
 const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/gmail.send';
@@ -121,11 +122,11 @@ window.uploadFileToDrive = async function(file, folderId) {
     return data.id; 
 };
 
-// 💡 지정된 이메일로 템플릿 발송 (로고 반영)
+// 💡 지정된 이메일로 템플릿 발송
 window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
     if (!window.googleAccessToken) throw new Error("구글 인증이 필요합니다.");
-    
-    // 💡 저장소에 올라간 깃허브 Raw 이미지 경로를 활용하여 메일 내 로고 표시
+    if (!recipientEmail) return false;
+
     const logoUrl = "https://raw.githubusercontent.com/hgje-dev/AXMS-Integration/main/assets/%EC%97%91%EC%8A%A4%EB%B9%84%EC%8A%A4CI%20%EC%8A%AC%EB%A1%9C%EA%B1%B4_%ED%8F%AC%EC%A7%80%ED%8B%B0%EB%B8%8C.png";
 
     let subject = `[AXBIS] ${reqData.type === 'collab' ? '협업/조립 요청' : reqData.type} - ${reqData.title}`;
@@ -136,6 +137,7 @@ window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
                 <p><strong>구분:</strong> ${reqData.category || '-'}</p>
                 <p><strong>프로젝트명:</strong> ${reqData.pjtName || '-'}</p>
                 <p><strong>요청자:</strong> ${reqData.authorName} (${reqData.authorTeam})</p>
+                ${reqData.manager ? `<p><strong>담당자:</strong> <span style="color:#4f46e5; font-weight:bold;">${reqData.manager}</span></p>` : ''}
                 <p><strong>내용:</strong><br>${String(reqData.content || '').replace(/\n/g, '<br>')}</p>
                 ${reqData.fileUrl ? `<p style="margin-top:20px;"><strong>첨부파일:</strong> <a href="${reqData.fileUrl}" style="color:#4f46e5; font-weight:bold;">문서 확인하기</a></p>` : ''}
             </div>
@@ -185,7 +187,6 @@ window.openWriteModal = function(editId = null) {
     document.getElementById('req-end-date').value = ''; 
     document.getElementById('req-est-md').value = ''; 
     document.getElementById('req-content').value = ''; 
-    document.getElementById('req-recipient-email').value = ADMIN_EMAIL; // 기본값 리셋
     window.clearSelectedFile();
     
     document.getElementById('req-file-link-wrap').classList.add('hidden');
@@ -197,11 +198,7 @@ window.openWriteModal = function(editId = null) {
     document.getElementById('req-header-title').innerText = titleMap[window.currentAppId] || '요청서 관리';
     document.getElementById('req-modal-title').innerText = titleMap[window.currentAppId] || '새 요청서 작성';
 
-    if (window.currentAppId === 'collab') {
-        document.getElementById('collab-form-fields').classList.remove('hidden');
-    } else {
-        document.getElementById('collab-form-fields').classList.remove('hidden');
-    }
+    document.getElementById('collab-form-fields').classList.remove('hidden');
 
     if (editId) {
         const req = window.currentRequestList.find(r => r.id === editId);
@@ -214,7 +211,6 @@ window.openWriteModal = function(editId = null) {
             document.getElementById('req-end-date').value = req.endDate || ''; 
             document.getElementById('req-est-md').value = req.estMd || ''; 
             document.getElementById('req-content').value = req.content || ''; 
-            if(req.recipientEmail) document.getElementById('req-recipient-email').value = req.recipientEmail;
             
             if(req.category) {
                 const rEl = document.querySelector(`input[name="req-category"][value="${req.category}"]`);
@@ -239,7 +235,6 @@ window.openWriteModal = function(editId = null) {
                 badge.innerText = "접수 대기중";
             }
 
-            // 💡 관리자 버튼 상태 제어 (되돌리기 기능 포함)
             if (window.userProfile && window.userProfile.role === 'admin') {
                 const adminMenu = document.getElementById('admin-actions');
                 const btnAccept = document.getElementById('btn-admin-accept');
@@ -275,15 +270,17 @@ window.closeWriteModal = function() {
     document.getElementById('write-modal').classList.remove('flex'); 
 };
 
-window.saveRequest = async function(btn) {
+
+// ==========================================
+// 💡 모달 프롬프트 연결 로직 (Save, Accept, Complete)
+// ==========================================
+
+// 1. 사용자: 저장 및 메일 발송 클릭 시
+window.promptSaveRequest = function() {
     const pjtName = document.getElementById('req-pjt-name').value.trim();
     const startDate = document.getElementById('req-start-date').value;
     const endDate = document.getElementById('req-end-date').value;
     const content = document.getElementById('req-content').value.trim();
-    const fileInput = document.getElementById('req-file');
-    const recipientEmail = document.getElementById('req-recipient-email').value.trim();
-    
-    const category = document.querySelector('input[name="req-category"]:checked')?.value || '';
 
     if(!pjtName || !startDate || !endDate || !content) {
         return window.showToast("별표(*)가 있는 필수 항목을 모두 입력해주세요.", "error");
@@ -293,11 +290,27 @@ window.saveRequest = async function(btn) {
         return window.showToast("파일 업로드 및 메일 발송을 위해 [구글 계정 연동]을 먼저 진행해주세요.", "warning");
     }
 
-    // 💡 작성 확인 다이얼로그
-    if(!confirm(`입력하신 내용을 바탕으로 요청서를 저장하고\n[${recipientEmail || '관리자'}] 에게 메일을 발송하시겠습니까?`)) return;
+    // 전용 모달 오픈
+    document.getElementById('req-send-modal').classList.remove('hidden');
+    document.getElementById('req-send-modal').classList.add('flex');
+};
 
+// 모달창에서 발송 클릭 시 실제 실행
+window.executeSaveRequest = async function() {
+    document.getElementById('req-send-modal').classList.add('hidden');
+    document.getElementById('req-send-modal').classList.remove('flex');
+    
+    const btn = document.getElementById('btn-req-save');
     btn.disabled = true; 
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 전송 중...';
+
+    const pjtName = document.getElementById('req-pjt-name').value.trim();
+    const startDate = document.getElementById('req-start-date').value;
+    const endDate = document.getElementById('req-end-date').value;
+    const content = document.getElementById('req-content').value.trim();
+    const fileInput = document.getElementById('req-file');
+    const category = document.querySelector('input[name="req-category"]:checked')?.value || '';
+    const recipientEmail = document.getElementById('req-send-email').value.trim();
 
     try { 
         let fileUrl = null;
@@ -311,7 +324,7 @@ window.saveRequest = async function(btn) {
 
         const data = { 
             type: window.currentAppId, 
-            status: 'pending', 
+            status: window.editingReqId ? window.currentRequestList.find(r=>r.id===window.editingReqId).status : 'pending', 
             title: pjtName, 
             pjtName: pjtName,
             pjtCode: document.getElementById('req-pjt-code').value.trim(),
@@ -322,7 +335,7 @@ window.saveRequest = async function(btn) {
             estMd: parseFloat(document.getElementById('req-est-md').value) || 0,
             category: category,
             content: content,
-            recipientEmail: recipientEmail || ADMIN_EMAIL, // 지정된 수신자 저장
+            recipientEmail: recipientEmail, 
             fileUrl: fileUrl || (window.editingReqId ? window.currentRequestList.find(r=>r.id===window.editingReqId)?.fileUrl : null),
             authorUid: window.currentUser.uid, 
             authorName: window.userProfile.name, 
@@ -338,10 +351,12 @@ window.saveRequest = async function(btn) {
             await addDoc(collection(db,"requests"), data); 
         } 
 
-        window.showToast("지정된 수신자에게 확인 메일을 발송합니다...");
-        await window.sendNotificationEmail('pending', data, data.recipientEmail);
+        if(recipientEmail) {
+            window.showToast("지정된 수신자에게 메일을 발송합니다...");
+            await window.sendNotificationEmail('pending', data, recipientEmail);
+        }
 
-        window.showToast("성공적으로 등록 및 메일 발송이 완료되었습니다."); 
+        window.showToast("성공적으로 저장 및 메일 발송이 완료되었습니다."); 
         window.closeWriteModal(); 
     } catch(e) { 
         console.error(e);
@@ -352,56 +367,128 @@ window.saveRequest = async function(btn) {
     }
 };
 
-window.acceptRequest = async function() {
+// 2. 관리자: 접수 처리 모달 오픈
+window.promptAcceptRequest = function() {
     if (!window.editingReqId) return;
     if (!window.googleAccessToken) return window.showToast("구글 연동을 먼저 해주세요.", "error");
 
-    // 💡 접수 확인 다이얼로그
-    if(!confirm("이 요청을 공식적으로 '접수(진행 중)' 처리하고 요청자에게 알림 메일을 보내시겠습니까?")) return;
+    const req = window.currentRequestList.find(r => r.id === window.editingReqId);
+    
+    // 담당자 드롭다운 채우기 (전체 사용자)
+    const managerSel = document.getElementById('req-accept-manager');
+    if(managerSel) {
+        managerSel.innerHTML = '<option value="">선택 안함</option>' + (window.allSystemUsers || []).map(u => `<option value="${u.name}">${u.name} (${u.team||'소속없음'})</option>`).join('');
+    }
+
+    const emailEl = document.getElementById('req-accept-email');
+    if(emailEl) emailEl.value = req.authorEmail || '';
+
+    document.getElementById('req-accept-modal').classList.remove('hidden');
+    document.getElementById('req-accept-modal').classList.add('flex');
+};
+
+window.executeAcceptRequest = async function() {
+    document.getElementById('req-accept-modal').classList.add('hidden');
+    document.getElementById('req-accept-modal').classList.remove('flex');
 
     const req = window.currentRequestList.find(r => r.id === window.editingReqId);
+    const managerName = document.getElementById('req-accept-manager').value;
+    const sendEmail = document.getElementById('req-accept-email').value.trim();
+
     try {
-        await setDoc(doc(db, "requests", window.editingReqId), { status: 'progress', updatedAt: Date.now() }, { merge: true });
-        await window.sendNotificationEmail('progress', req, req.authorEmail);
-        window.showToast("접수 완료 및 진행 알림 메일이 발송되었습니다.");
+        const payload = { 
+            status: 'progress', 
+            manager: managerName, 
+            acceptedAt: Date.now(),
+            updatedAt: Date.now() 
+        };
+        await setDoc(doc(db, "requests", window.editingReqId), payload, { merge: true });
+        
+        const updatedReq = Object.assign({}, req, payload); // 이메일용
+        if (sendEmail) {
+            await window.sendNotificationEmail('progress', updatedReq, sendEmail);
+            window.showToast("접수 완료 메일이 발송되었습니다.");
+        } else {
+            window.showToast("접수 처리가 완료되었습니다.");
+        }
         window.closeWriteModal();
     } catch(e) { window.showToast("처리 실패", "error"); }
 };
 
-window.completeRequest = async function() {
+// 3. 관리자: 완료 처리 모달 오픈
+window.promptCompleteRequest = function() {
     if (!window.editingReqId) return;
     if (!window.googleAccessToken) return window.showToast("구글 연동을 먼저 해주세요.", "error");
 
-    // 💡 완료 확인 다이얼로그
-    if(!confirm("이 요청을 '작업 완료' 처리하고 요청자에게 알림 메일을 보내시겠습니까?")) return;
+    const req = window.currentRequestList.find(r => r.id === window.editingReqId);
+    const emailEl = document.getElementById('req-complete-email');
+    if(emailEl) emailEl.value = req.authorEmail || '';
+
+    document.getElementById('req-complete-modal').classList.remove('hidden');
+    document.getElementById('req-complete-modal').classList.add('flex');
+};
+
+window.executeCompleteRequest = async function() {
+    document.getElementById('req-complete-modal').classList.add('hidden');
+    document.getElementById('req-complete-modal').classList.remove('flex');
 
     const req = window.currentRequestList.find(r => r.id === window.editingReqId);
+    const sendEmail = document.getElementById('req-complete-email').value.trim();
+
     try {
-        await setDoc(doc(db, "requests", window.editingReqId), { status: 'completed', updatedAt: Date.now() }, { merge: true });
-        await window.sendNotificationEmail('completed', req, req.authorEmail);
-        window.showToast("작업 완료 처리 및 알림 메일이 발송되었습니다.");
+        await setDoc(doc(db, "requests", window.editingReqId), { 
+            status: 'completed', 
+            completedAt: Date.now(),
+            updatedAt: Date.now() 
+        }, { merge: true });
+        
+        if(sendEmail) {
+            await window.sendNotificationEmail('completed', req, sendEmail);
+            window.showToast("작업 완료 메일이 발송되었습니다.");
+        } else {
+            window.showToast("작업이 완료 처리되었습니다.");
+        }
         window.closeWriteModal();
     } catch(e) { window.showToast("처리 실패", "error"); }
 };
 
-// 💡 관리자용: 완료된 상태를 진행중으로 되돌리기
+// 4. 관리자: 진행중으로 되돌리기
 window.revertRequest = async function() {
     if (!window.editingReqId) return;
-    
     if(!confirm("이 요청을 다시 '진행 중' 상태로 되돌리시겠습니까?")) return;
 
     try {
-        await setDoc(doc(db, "requests", window.editingReqId), { status: 'progress', updatedAt: Date.now() }, { merge: true });
+        await setDoc(doc(db, "requests", window.editingReqId), { status: 'progress', completedAt: null, updatedAt: Date.now() }, { merge: true });
         window.showToast("진행 중 상태로 성공적으로 되돌렸습니다.");
         window.closeWriteModal();
     } catch(e) { window.showToast("처리 실패", "error"); }
 };
 
+// ==========================================
+// 데이터 로드 및 렌더링 (미니 대시보드 포함)
+// ==========================================
 window.loadRequestsData = function(appId) { 
     if(unsubscribeRequests) unsubscribeRequests(); 
     unsubscribeRequests = onSnapshot(query(collection(db, "requests"), where("type", "==", appId)), (s) => { 
-        window.currentRequestList=[]; s.forEach(d=>window.currentRequestList.push({id:d.id,...d.data()})); 
+        window.currentRequestList=[]; 
+        let tTotal=0, tPend=0, tProg=0, tComp=0;
+
+        s.forEach(d => {
+            const data = {id: d.id, ...d.data()};
+            window.currentRequestList.push(data);
+            tTotal++;
+            if(data.status === 'pending') tPend++;
+            else if(data.status === 'progress') tProg++;
+            else if(data.status === 'completed') tComp++;
+        }); 
+        
         window.currentRequestList.sort((a,b)=>{ return (b.createdAt || 0) - (a.createdAt || 0); }); 
+        
+        if(document.getElementById('req-dash-total')) document.getElementById('req-dash-total').innerText = tTotal;
+        if(document.getElementById('req-dash-pending')) document.getElementById('req-dash-pending').innerText = tPend;
+        if(document.getElementById('req-dash-progress')) document.getElementById('req-dash-progress').innerText = tProg;
+        if(document.getElementById('req-dash-completed')) document.getElementById('req-dash-completed').innerText = tComp;
+
         if(window.renderRequestList) window.renderRequestList(); 
     }); 
 };
@@ -410,30 +497,46 @@ window.renderRequestList = function() {
     const tb = document.getElementById('request-tbody'); if(!tb) return; 
     
     if(window.currentRequestList.length===0) { 
-        tb.innerHTML='<tr><td colspan="7" class="text-center p-8 text-slate-400 font-bold border-b border-slate-100">등록된 요청서가 없습니다.</td></tr>'; 
+        tb.innerHTML='<tr><td colspan="10" class="text-center p-8 text-slate-400 font-bold border-b border-slate-100">등록된 요청서가 없습니다.</td></tr>'; 
         return; 
     } 
 
     const statusMap = {
         'pending': '<span class="bg-slate-100 text-slate-600 px-2 py-1 rounded-md font-bold shadow-sm">대기중</span>',
         'progress': '<span class="bg-blue-100 text-blue-600 px-2 py-1 rounded-md font-bold shadow-sm">진행중</span>',
-        'completed': '<span class="bg-emerald-100 text-emerald-600 px-2 py-1 rounded-md font-bold shadow-sm">완료</span>'
+        'completed': '<span class="bg-emerald-100 text-emerald-600 px-2 py-1 rounded-md font-bold shadow-sm">완료됨</span>'
     };
 
     tb.innerHTML = window.currentRequestList.map(r=> {
         const safeTitle = String(r.title||'').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const safeTitleJs = safeTitle.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        
         const safeCat = r.category || '-';
-        const dateStr = r.createdAt ? window.getLocalDateStr(new Date(r.createdAt)) : '-';
         const badge = statusMap[r.status] || statusMap['pending'];
+        const safeManager = r.manager ? r.manager : '<span class="text-slate-300">-</span>';
+
+        // 날짜 포맷
+        const dCreate = r.createdAt ? window.getLocalDateStr(new Date(r.createdAt)) : '-';
+        const dAccept = r.acceptedAt ? window.getLocalDateStr(new Date(r.acceptedAt)) : '-';
+        const dComp = r.completedAt ? window.getLocalDateStr(new Date(r.completedAt)) : '-';
+
+        // 코멘트 뱃지 
+        const cCount = (window.projectCommentCounts && window.projectCommentCounts[r.id]) || 0; 
+        let commentHtml = `<button onclick="event.stopPropagation(); window.openCommentModal('${r.id}', '${safeTitleJs}')" class="text-amber-400 hover:text-amber-500 relative transition-colors p-2"><i class="fa-regular fa-comment-dots text-lg"></i>`;
+        if (cCount > 0) commentHtml += `<span class="absolute top-0 right-0 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm">${cCount}</span>`;
+        commentHtml += `</button>`;
 
         return `
         <tr class="hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.openWriteModal('${r.id}')">
             <td class="p-3 text-center">${badge}</td>
+            <td class="p-3 text-center">${commentHtml}</td>
             <td class="p-3 text-center font-bold text-slate-500">${safeCat}</td>
-            <td class="p-3 font-bold text-indigo-700 truncate max-w-[200px]">${safeTitle}</td>
-            <td class="p-3 text-center text-slate-600 font-medium">${r.authorName} <span class="text-[9px] bg-slate-100 text-slate-400 px-1 py-0.5 rounded">${r.authorTeam||''}</span></td>
-            <td class="p-3 text-center font-bold text-purple-600">${r.estMd ? r.estMd.toFixed(1) : '-'}</td>
-            <td class="p-3 text-center text-slate-400 font-bold">${dateStr}</td>
+            <td class="p-3 font-bold text-indigo-700 truncate max-w-[250px]">${safeTitle}</td>
+            <td class="p-3 text-center text-slate-600 font-medium">${r.authorName} <span class="text-[9px] bg-slate-100 text-slate-400 px-1 py-0.5 rounded block mt-0.5 w-max mx-auto">${r.authorTeam||''}</span></td>
+            <td class="p-3 text-center font-bold text-indigo-600">${safeManager}</td>
+            <td class="p-3 text-center text-slate-500 font-medium">${dCreate}</td>
+            <td class="p-3 text-center text-blue-500 font-bold">${dAccept}</td>
+            <td class="p-3 text-center text-emerald-500 font-bold">${dComp}</td>
             <td class="p-3 text-center" onclick="event.stopPropagation()">
                 <button onclick="window.deleteRequest('${r.id}')" class="text-slate-300 hover:text-rose-500 transition-colors p-2"><i class="fa-solid fa-trash-can"></i></button>
             </td>
@@ -450,4 +553,173 @@ window.deleteRequest = async function(id) {
             window.showToast("삭제 실패", "error");
         }
     } 
+};
+
+// ==========================================
+// 코멘트 모달 로직 (PJT 현황판 복붙 활용)
+// ==========================================
+window.openCommentModal = function(reqId, title) { 
+    document.getElementById('cmt-req-id').value = reqId; 
+    window.cancelCommentAction(); 
+    document.getElementById('comment-modal').classList.remove('hidden'); 
+    document.getElementById('comment-modal').classList.add('flex'); 
+    window.loadComments(reqId); 
+};
+
+window.loadComments = function(reqId) { 
+    if (currentCommentUnsubscribe) currentCommentUnsubscribe(); 
+    currentCommentUnsubscribe = onSnapshot(collection(db, "project_comments"), function(snapshot) { 
+        try {
+            window.currentComments = []; 
+            snapshot.forEach(function(docSnap) { 
+                const d = docSnap.data(); 
+                if(d.projectId === reqId || d.reqId === reqId) {
+                    d.id = docSnap.id;
+                    window.currentComments.push(d); 
+                }
+            }); 
+            const topLevel = window.currentComments.filter(function(c) { return !c.parentId || c.parentId === 'null' || c.parentId === ''; }).sort(function(a,b) { return getSafeMillis(a.createdAt) - getSafeMillis(b.createdAt); }); 
+            const replies = window.currentComments.filter(function(c) { return c.parentId && c.parentId !== 'null' && c.parentId !== ''; }).sort(function(a,b) { return getSafeMillis(a.createdAt) - getSafeMillis(b.createdAt); }); 
+            
+            topLevel.forEach(function(c) { 
+                c.replies = replies.filter(function(r) { return r.parentId === c.id; }); 
+            }); 
+            window.renderComments(topLevel); 
+        } catch(e) { console.error(e); }
+    }); 
+};
+
+window.renderComments = function(topLevelComments) { 
+    const list = document.getElementById('comment-list'); 
+    if(!list) return;
+    if (topLevelComments.length === 0) { list.innerHTML = '<div class="text-center p-10 text-slate-400 font-bold">등록된 코멘트가 없습니다.</div>'; return; } 
+    try {
+        let listHtml = '';
+        topLevelComments.forEach(function(c) { 
+            let safeContent = String(c.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+            if(window.formatMentions) safeContent = window.formatMentions(safeContent);
+            const cImgHtml = c.imageUrl ? '<div class="mt-3 rounded-lg overflow-hidden border border-slate-200 w-fit max-w-[300px]"><img src="' + c.imageUrl + '" class="w-full h-auto cursor-pointer" onclick="window.open(\'' + c.imageUrl + '\')"></div>' : ''; 
+            let repliesHtml = ''; 
+            if(c.replies && c.replies.length > 0) { 
+                repliesHtml += '<div class="pl-4 border-l-[3px] border-indigo-100/60 space-y-2 mt-4 pt-2 ml-2">'; 
+                c.replies.forEach(function(r) { 
+                    let safeReplyContent = String(r.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>'); 
+                    if(window.formatMentions) safeReplyContent = window.formatMentions(safeReplyContent); 
+                    const rImgHtml = r.imageUrl ? '<div class="mt-2 rounded-lg overflow-hidden border border-slate-200 w-fit max-w-[200px]"><img src="' + r.imageUrl + '" class="w-full h-auto cursor-pointer" onclick="window.open(\'' + r.imageUrl + '\')"></div>' : ''; 
+                    
+                    let replyBtnHtml = '';
+                    if (r.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin') {
+                        replyBtnHtml = '<button onclick="window.editComment(\'' + r.id + '\')" class="text-slate-400 hover:text-amber-500 px-1"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteComment(\'' + r.id + '\')" class="text-slate-400 hover:text-rose-500 px-1"><i class="fa-solid fa-trash-can"></i></button>';
+                    }
+                    
+                    repliesHtml += '<div class="bg-slate-50 p-4 rounded-xl border border-slate-100"><div class="flex justify-between items-start mb-2"><div class="flex items-center gap-2"><i class="fa-solid fa-reply text-[10px] text-slate-400 rotate-180 scale-y-[-1]"></i><span class="font-black text-slate-700 text-sm">' + r.authorName + '</span><span class="text-xs font-medium text-slate-400">' + window.getDateTimeStr(new Date(getSafeMillis(r.createdAt))) + '</span></div><div class="flex gap-2">' + replyBtnHtml + '</div></div><div class="text-slate-700 text-[13px] font-medium pl-6 break-words">' + safeReplyContent + '</div>' + rImgHtml + '</div>'; 
+                }); 
+                repliesHtml += '</div>'; 
+            } 
+            
+            let mainBtnHtml = '';
+            if (c.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin') {
+                mainBtnHtml = '<button onclick="window.editComment(\'' + c.id + '\')" class="text-slate-400 hover:text-amber-500 px-1"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteComment(\'' + c.id + '\')" class="text-slate-400 hover:text-rose-500 px-1"><i class="fa-solid fa-trash-can"></i></button>';
+            }
+            
+            listHtml += '<div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm"><div class="flex justify-between items-start mb-3"><div class="flex items-center gap-2"><span class="font-black text-slate-800 text-[15px]">' + c.authorName + '</span><span class="text-xs font-medium text-slate-400">' + window.getDateTimeStr(new Date(getSafeMillis(c.createdAt))) + '</span></div><div class="flex gap-2"><button onclick="window.setReplyTo(\'' + c.id + '\', \'' + c.authorName + '\')" class="text-[11px] bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 px-3 py-1 rounded-lg font-bold transition-colors shadow-sm">답글달기</button>' + mainBtnHtml + '</div></div><div class="text-slate-800 text-[14px] font-medium pl-1 mb-2 break-words leading-relaxed">' + safeContent + '</div>' + cImgHtml + repliesHtml + '</div>'; 
+        });
+        list.innerHTML = listHtml;
+    } catch(e) { list.innerHTML = '<div class="text-center p-8 text-rose-500 font-bold">렌더링 오류 발생</div>'; }
+};
+
+window.saveCommentItem = async function() { 
+    const reqId = document.getElementById('cmt-req-id').value; 
+    const content = document.getElementById('new-cmt-text').value.trim(); 
+    const parentId = document.getElementById('reply-to-id').value || null; 
+    const editId = document.getElementById('editing-cmt-id').value; 
+    const fileInput = document.getElementById('new-cmt-image'); 
+    
+    if(!content && fileInput.files.length === 0) return window.showToast("코멘트 내용이나 사진을 첨부하세요.", "error"); 
+    
+    document.getElementById('btn-cmt-save').innerHTML = '저장중..'; 
+    document.getElementById('btn-cmt-save').disabled = true; 
+    
+    const saveData = async function(base64Img) { 
+        try { 
+            const payload = { content: content, updatedAt: Date.now() }; 
+            if(base64Img) payload.imageUrl = base64Img; 
+            
+            if (editId) { 
+                await setDoc(doc(db, "project_comments", editId), payload, { merge: true }); 
+                window.showToast("코멘트가 수정되었습니다."); 
+            } else { 
+                payload.reqId = reqId; 
+                payload.parentId = parentId; 
+                payload.authorUid = window.currentUser.uid; 
+                payload.authorName = window.userProfile.name; 
+                payload.createdAt = Date.now(); 
+                await addDoc(collection(db, "project_comments"), payload); 
+                window.showToast("코멘트가 등록되었습니다."); 
+            } 
+            if(window.processMentions) await window.processMentions(content, reqId, "코멘트");
+            window.cancelCommentAction(); 
+        } catch(e) { 
+            window.showToast("저장 중 오류 발생", "error"); 
+        } finally { 
+            document.getElementById('btn-cmt-save').innerHTML = '작성'; 
+            document.getElementById('btn-cmt-save').disabled = false; 
+        } 
+    }; 
+    if(fileInput.files.length > 0) { 
+        window.resizeAndConvertToBase64(fileInput.files[0], function(base64) { saveData(base64); }); 
+    } else { 
+        saveData(null); 
+    } 
+};
+
+window.editComment = function(id) { 
+    const comment = window.currentComments.find(function(c) { return c.id === id; }); 
+    if(!comment) return; 
+    window.cancelCommentAction(); 
+    document.getElementById('editing-cmt-id').value = id; 
+    document.getElementById('new-cmt-text').value = comment.content || ''; 
+    document.getElementById('btn-cmt-save').innerText = '수정'; 
+    document.getElementById('reply-indicator-name').innerHTML = '<i class="fa-solid fa-pen mr-1"></i> 코멘트 내용 수정 중'; 
+    document.getElementById('reply-indicator').classList.remove('hidden'); 
+    document.getElementById('new-cmt-text').focus(); 
+};
+
+window.setReplyTo = function(commentId, authorName) { 
+    window.cancelCommentAction(); 
+    document.getElementById('reply-to-id').value = commentId; 
+    document.getElementById('reply-indicator-name').innerHTML = '<i class="fa-solid fa-reply rotate-180 scale-y-[-1] mr-1"></i> <b class="text-indigo-800">' + authorName + '</b> 님에게 답글 작성 중'; 
+    document.getElementById('reply-indicator').classList.remove('hidden'); 
+    document.getElementById('new-cmt-text').focus(); 
+};
+
+window.cancelCommentAction = function() { 
+    document.getElementById('reply-to-id').value = ''; 
+    document.getElementById('editing-cmt-id').value = ''; 
+    document.getElementById('new-cmt-text').value = ''; 
+    document.getElementById('new-cmt-image').value = ''; 
+    document.getElementById('btn-cmt-save').innerText = '작성'; 
+    document.getElementById('reply-indicator').classList.add('hidden'); 
+};
+
+window.closeCommentModal = function() { 
+    document.getElementById('comment-modal').classList.add('hidden'); 
+    document.getElementById('comment-modal').classList.remove('flex'); 
+    if (currentCommentUnsubscribe) { currentCommentUnsubscribe(); currentCommentUnsubscribe = null; } 
+};
+
+window.deleteComment = async function(id) { 
+    if(!confirm("이 코멘트를 삭제하시겠습니까?")) return; 
+    try { 
+        await deleteDoc(doc(db, "project_comments", id)); 
+        const q = query(collection(db, "project_comments"), where("parentId", "==", id)); 
+        const snapshot = await getDocs(q); 
+        if(!snapshot.empty) { 
+            const batch = writeBatch(db); 
+            snapshot.forEach(function(d) { batch.delete(d.ref); }); 
+            await batch.commit(); 
+        } 
+        window.showToast("삭제되었습니다."); 
+        window.cancelCommentAction(); 
+    } catch(e) { window.showToast("삭제 실패", "error"); } 
 };
