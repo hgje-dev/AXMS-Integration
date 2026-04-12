@@ -1,6 +1,6 @@
 /* eslint-disable */
 import { db } from './firebase.js';
-import { collection, doc, setDoc, addDoc, deleteDoc, query, onSnapshot, where } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { collection, doc, setDoc, addDoc, deleteDoc, query, onSnapshot, where, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 let currentWeeklyLogUnsubscribe = null;
 let currentScheduleUnsubscribe = null;
@@ -48,16 +48,15 @@ window.switchWeeklyTab = function(tabName) {
 // 💡 YYYY-Wxx 주차 정보를 한국식 N월 M주차 및 보고 마감일로 변환하는 함수
 window.updateWeekLabels = function(weekStr) {
     if(!weekStr || !window.getDatesFromWeek) return;
-    const dates = window.getDatesFromWeek(weekStr); // start: 해당 주 월요일
+    const dates = window.getDatesFromWeek(weekStr); 
     
-    // 1. 몇 월 몇 주차인지 계산 (목요일 기준)
     const thu = new Date(dates.start);
     thu.setDate(thu.getDate() + 3);
     const m = thu.getMonth() + 1;
     const y = thu.getFullYear();
     
     const firstDay = new Date(y, m - 1, 1);
-    let offset = firstDay.getDay() - 1; // 월=0 ~ 일=6
+    let offset = firstDay.getDay() - 1; 
     if(offset === -1) offset = 6;
     
     const dateNum = thu.getDate();
@@ -66,15 +65,13 @@ window.updateWeekLabels = function(weekStr) {
     const displayEl = document.getElementById('weekly-display-text');
     if (displayEl) displayEl.innerText = `${y}년 ${m}월 ${weekNum}주`;
 
-    // 2. 보고 기간 및 마감일 세팅
     const wed = new Date(dates.start);
-    wed.setDate(wed.getDate() + 2); // 금주 수요일
+    wed.setDate(wed.getDate() + 2); 
     
     const prevWed = new Date(wed);
-    prevWed.setDate(prevWed.getDate() - 7); // 전주 수요일
+    prevWed.setDate(prevWed.getDate() - 7); 
     
     let deadline = new Date(wed);
-    // 수요일이 공휴일이면 전날로 당김
     if(window.isWorkDay) {
         while(!window.isWorkDay(deadline)) {
             deadline.setDate(deadline.getDate() - 1);
@@ -204,6 +201,9 @@ window.loadWeeklyLogsData = function() {
     const weekInput = document.getElementById('weekly-log-filter-week');
     if (!weekInput || !weekInput.value) return;
     const w = weekInput.value; 
+
+    // 💡 초기 화면 진입 시에도 '로딩중...' 대신 올바른 N주차 라벨이 찍히도록 보장
+    if (window.updateWeekLabels) window.updateWeekLabels(w);
     
     if (currentWeeklyLogUnsubscribe) currentWeeklyLogUnsubscribe(); 
     currentWeeklyLogUnsubscribe = onSnapshot(query(collection(db, "weekly_logs_v2"), where("week", "==", w)), function(s) { 
@@ -233,7 +233,6 @@ window.loadWeeklyLogsData = function() {
         const progEl = document.getElementById('stat-progress'); if (progEl) progEl.innerText = statProg;
         const issEl = document.getElementById('stat-issue'); if (issEl) issEl.innerText = statIssue;
 
-        // 💡 상단에 내 제출 상태 표시 연동
         const topStatusEl = document.getElementById('top-my-submit-status');
         if (topStatusEl && window.currentUser) {
             const myLog = window.currentWeeklyLogList.find(l => l.authorUid === window.currentUser.uid);
@@ -250,7 +249,6 @@ window.loadWeeklyLogsData = function() {
         window.checkMissingMembers();
     }); 
 
-    // 팀 전체 일정 로드 💡
     if (currentScheduleUnsubscribe) currentScheduleUnsubscribe();
     if (window.currentUser) {
         currentScheduleUnsubscribe = onSnapshot(query(collection(db, "weekly_schedules"), where("week", "==", w)), function(s) {
@@ -384,9 +382,9 @@ window.renderWeeklyLogs = function() {
                 
                 const locBadge = '<span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded ml-1"><i class="fa-solid fa-location-dot text-[9px]"></i> ' + (t.loc || '사내') + '</span>';
                 const safeContent = window.formatMentions ? window.formatMentions(String(t.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')) : String(t.content || '');
-                // 💡 작성된 시간 표시
-                const timeBadge = t.createdAtTime ? '<span class="text-[9px] text-slate-400 font-mono ml-2 font-medium tracking-tighter">' + t.createdAtTime + '</span>' : '';
                 
+                const timeBadge = t.createdAtTime ? '<span class="text-[9px] text-slate-400 ml-2 font-mono tracking-tighter">' + t.createdAtTime.split(' ')[1] + '</span>' : '';
+
                 dayHtml += '<li class="flex justify-between items-start gap-4 hover:bg-slate-50 p-1.5 rounded-lg transition-colors group"><div class="flex items-start gap-2 text-sm text-slate-700 font-medium"><span class="text-slate-300 mt-1 text-[8px]"><i class="fa-solid fa-circle"></i></span><div>' + safeContent + ' ' + locBadge + timeBadge + '</div></div><div class="shrink-0 pt-0.5">' + statusBadge + '</div></li>';
             });
             dayHtml += '</ul>';
@@ -454,7 +452,7 @@ window.renderWlProjects = function() {
     }).join('');
 };
 
-window.openWeeklyLogWriteModal = function(editId) { 
+window.openWeeklyLogWriteModal = async function(editId) { 
     const weekInput = document.getElementById('weekly-log-filter-week');
     if (!weekInput) {
         if (window.showToast) window.showToast("오류: HTML 파일이 최신버전이 아닙니다.", "error");
@@ -473,19 +471,61 @@ window.openWeeklyLogWriteModal = function(editId) {
     const draftIdEl = document.getElementById('weekly-draft-id');
     if (draftIdEl) draftIdEl.value = existingLog ? existingLog.id : '';
     
-    window.draftTasks = existingLog && existingLog.tasks ? existingLog.tasks.map(function(t, i) { 
-        return Object.assign({}, t, { id: t.id || Date.now() + i }); 
-    }) : [];
-    
-    const issuesEl = document.getElementById('wl-issues'); if (issuesEl) issuesEl.value = existingLog ? (existingLog.issues || '') : '';
+    window.draftTasks = [];
+    window.wlInvolvedProjects = [];
+    const issuesEl = document.getElementById('wl-issues'); 
+    if (issuesEl) issuesEl.value = '';
 
-    if (existingLog && existingLog.involvedProjects && Array.isArray(existingLog.involvedProjects)) {
-        window.wlInvolvedProjects = existingLog.involvedProjects.slice();
-    } else if (existingLog && existingLog.projectName) {
-        window.wlInvolvedProjects = [{ name: existingLog.projectName, code: existingLog.projectCode || '' }];
-    } else {
-        window.wlInvolvedProjects = [];
+    if (existingLog) {
+        if (existingLog.tasks) {
+            window.draftTasks = existingLog.tasks.map(function(t, i) { 
+                return Object.assign({}, t, { id: t.id || Date.now() + i }); 
+            });
+        }
+        if (issuesEl) issuesEl.value = existingLog.issues || '';
+        
+        if (existingLog.involvedProjects && Array.isArray(existingLog.involvedProjects)) {
+            window.wlInvolvedProjects = existingLog.involvedProjects.slice();
+        } else if (existingLog.projectName) {
+            window.wlInvolvedProjects = [{ name: existingLog.projectName, code: existingLog.projectCode || '' }];
+        }
+    } else if (window.currentUser) {
+        // 💡 자동 이월 로직: 이번 주 일지가 없으면, 전주 일지를 뒤져서 '진행 중' 업무 가져오기
+        try {
+            const d = window.getDatesFromWeek(w).start;
+            d.setDate(d.getDate() - 7);
+            const prevW = window.getWeekString(d);
+            
+            const q = query(collection(db, "weekly_logs_v2"), where("week", "==", prevW), where("authorUid", "==", window.currentUser.uid));
+            const snap = await getDocs(q);
+            
+            if (!snap.empty) {
+                const prevLog = snap.docs[0].data();
+                
+                let carryOverCount = 0;
+                if (prevLog.tasks && Array.isArray(prevLog.tasks)) {
+                    prevLog.tasks.forEach(function(t, i) {
+                        if (t.status === '진행 중') {
+                            window.draftTasks.push(Object.assign({}, t, { 
+                                id: Date.now() + i, 
+                                isCarryOver: true,
+                                createdAtTime: window.getDateTimeStr ? window.getDateTimeStr(new Date()) : new Date().toLocaleString()
+                            }));
+                            carryOverCount++;
+                        }
+                    });
+                }
+                
+                if (carryOverCount > 0) {
+                    if (prevLog.involvedProjects && Array.isArray(prevLog.involvedProjects)) {
+                        window.wlInvolvedProjects = prevLog.involvedProjects.slice();
+                    }
+                    if (window.showToast) window.showToast("지난주 '진행 중' 업무 " + carryOverCount + "건이 자동 이월되었습니다.", "success");
+                }
+            }
+        } catch(e) { console.error("이월 데이터 로드 실패", e); }
     }
+
     window.renderWlProjects();
 
     const badge = document.getElementById('write-status-badge');
@@ -546,7 +586,6 @@ window.addWeeklyTaskRow = function() {
         return;
     }
     
-    // 💡 작성 시간 기록 추가
     const nowStr = window.getDateTimeStr ? window.getDateTimeStr(new Date()) : new Date().toLocaleString();
 
     window.draftTasks.push({ day: day, status: status, loc: loc, content: content, id: Date.now(), createdAtTime: nowStr });
@@ -577,8 +616,12 @@ window.renderDraftTasks = function() {
         let statusClass = t.status === '완료' ? 'text-emerald-600 bg-emerald-50 border-emerald-200' : (t.status === '진행 중' ? 'text-blue-600 bg-blue-50 border-blue-200' : 'text-slate-500 bg-slate-50 border-slate-200');
         const safeContent = window.formatMentions ? window.formatMentions(String(t.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')) : String(t.content || '');
         
-        // 💡 작성된 시간 렌더링
-        const timeBadge = t.createdAtTime ? '<span class="text-[9px] text-slate-400 ml-2 font-mono tracking-tighter">' + t.createdAtTime.split(' ')[1] + '</span>' : '';
+        let timeBadge = '';
+        if (t.isCarryOver) {
+            timeBadge = '<span class="text-[9px] bg-amber-100 text-amber-600 ml-2 font-bold px-1.5 py-0.5 rounded shadow-sm tracking-tighter">자동 이월됨</span>';
+        } else if (t.createdAtTime) {
+            timeBadge = '<span class="text-[9px] text-slate-400 ml-2 font-mono tracking-tighter">' + t.createdAtTime.split(' ')[1] + '</span>';
+        }
 
         return '<div class="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm group"><span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded w-16 text-center shrink-0">' + t.day + '</span><span class="text-[10px] font-bold border px-1.5 py-0.5 rounded shrink-0 w-12 text-center ' + statusClass + '">' + t.status + '</span><div class="text-sm font-medium text-slate-700 flex-1 truncate" title="' + String(t.content).replace(/"/g, '&quot;') + '">' + safeContent + ' <span class="text-[9px] bg-slate-100 text-slate-500 px-1 py-0.5 rounded ml-1">' + t.loc + '</span>' + timeBadge + '</div><button onclick="window.removeWeeklyTaskRow(\'' + t.id + '\')" class="text-slate-300 hover:text-rose-500 w-6 h-6 rounded flex items-center justify-center transition-colors"><i class="fa-solid fa-xmark"></i></button></div>';
     }).join('');
@@ -662,7 +705,7 @@ window.deleteWeeklyLog = async function(id) {
 };
 
 // ==========================================
-// 개인 및 팀 일정 (Kanban) 모달 렌더링 관리
+// 개인 일정 (Kanban) 모달 및 렌더링 관리
 // ==========================================
 window.toggleScheduleComplete = async function(id, isCompleted) {
     try {
@@ -678,10 +721,14 @@ window.renderKanbanBoard = function() {
 
     const days = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일'];
     const catMap = {
-        "휴가/반차": { icon: "fa-mug-hot", bg: "bg-emerald-50 border-emerald-200", text: "text-emerald-700", badge: "bg-emerald-100 text-emerald-600" },
-        "회의/미팅": { icon: "fa-users", bg: "bg-purple-50 border-purple-200", text: "text-purple-700", badge: "bg-purple-100 text-purple-600" },
-        "집중업무": { icon: "fa-headphones", bg: "bg-blue-50 border-blue-200", text: "text-blue-700", badge: "bg-blue-100 text-blue-600" },
-        "외근/출장": { icon: "fa-car", bg: "bg-orange-50 border-orange-200", text: "text-orange-700", badge: "bg-orange-100 text-orange-600" },
+        "휴가/연차": { icon: "fa-mug-hot", bg: "bg-emerald-50 border-emerald-200", text: "text-emerald-700", badge: "bg-emerald-100 text-emerald-600" },
+        "휴가/오전": { icon: "fa-sun", bg: "bg-emerald-50 border-emerald-200", text: "text-emerald-700", badge: "bg-emerald-100 text-emerald-600" },
+        "휴가/오후": { icon: "fa-moon", bg: "bg-emerald-50 border-emerald-200", text: "text-emerald-700", badge: "bg-emerald-100 text-emerald-600" },
+        "회의": { icon: "fa-users", bg: "bg-purple-50 border-purple-200", text: "text-purple-700", badge: "bg-purple-100 text-purple-600" },
+        "사내(작업)": { icon: "fa-headphones", bg: "bg-blue-50 border-blue-200", text: "text-blue-700", badge: "bg-blue-100 text-blue-600" },
+        "사내(공통)": { icon: "fa-building", bg: "bg-blue-50 border-blue-200", text: "text-blue-700", badge: "bg-blue-100 text-blue-600" },
+        "출장(국내)": { icon: "fa-car", bg: "bg-orange-50 border-orange-200", text: "text-orange-700", badge: "bg-orange-100 text-orange-600" },
+        "출장(국외)": { icon: "fa-plane", bg: "bg-orange-50 border-orange-200", text: "text-orange-700", badge: "bg-orange-100 text-orange-600" },
         "기타": { icon: "fa-thumbtack", bg: "bg-slate-50 border-slate-200", text: "text-slate-700", badge: "bg-slate-200 text-slate-600" }
     };
 
@@ -689,14 +736,15 @@ window.renderKanbanBoard = function() {
         const events = window.currentScheduleList.filter(function(s) { return s.day === day; });
         const eventsHtml = events.map(function(s) {
             const style = catMap[s.category] || catMap["기타"];
-            const safeContent = String(s.content || '');
+            // 💡 제목 중심 렌더링
+            const safeTitle = String(s.title || s.content || '제목 없음').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const safeTime = String(s.time || '시간 미지정');
             
             const completedCardClass = s.isCompleted ? 'opacity-60 bg-slate-100 border-slate-200 grayscale' : style.bg;
             const completedTextClass = s.isCompleted ? 'line-through text-slate-400' : style.text;
             const checkedAttr = s.isCompleted ? 'checked' : '';
 
-            return '<div class="rounded-xl border p-3 ' + completedCardClass + ' relative group cursor-pointer hover:shadow-md transition-all" onclick="window.editSchedule(\'' + s.id + '\')"><button onclick="event.stopPropagation(); window.deleteSchedule(\'' + s.id + '\')" class="absolute top-2 right-2 text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"><i class="fa-solid fa-xmark"></i></button><div class="flex items-center gap-2 mb-2"><input type="checkbox" ' + checkedAttr + ' onclick="event.stopPropagation();" onchange="window.toggleScheduleComplete(\'' + s.id + '\', this.checked)" class="accent-indigo-600 w-4 h-4 cursor-pointer shrink-0"><div class="flex items-center gap-1.5 text-[10px] font-black ' + style.badge + ' w-fit px-2 py-0.5 rounded"><i class="fa-solid ' + style.icon + '"></i> ' + s.category + '</div></div><div class="text-sm font-bold ' + completedTextClass + ' mb-1">' + safeContent + '</div><div class="text-[10px] text-slate-500 font-bold flex items-center gap-1"><i class="fa-regular fa-clock"></i> ' + safeTime + '</div></div>';
+            return '<div class="rounded-xl border p-3 ' + completedCardClass + ' relative group cursor-pointer hover:shadow-md transition-all" onclick="window.editSchedule(\'' + s.id + '\')"><button onclick="event.stopPropagation(); window.deleteSchedule(\'' + s.id + '\')" class="absolute top-2 right-2 text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"><i class="fa-solid fa-xmark"></i></button><div class="flex items-center gap-2 mb-2"><input type="checkbox" ' + checkedAttr + ' onclick="event.stopPropagation();" onchange="window.toggleScheduleComplete(\'' + s.id + '\', this.checked)" class="accent-indigo-600 w-4 h-4 cursor-pointer shrink-0"><div class="flex items-center gap-1.5 text-[10px] font-black ' + style.badge + ' w-fit px-2 py-0.5 rounded"><i class="fa-solid ' + style.icon + '"></i> ' + s.category + '</div></div><div class="text-sm font-bold ' + completedTextClass + ' mb-1 truncate">' + safeTitle + '</div><div class="text-[10px] text-slate-500 font-bold flex items-center gap-1"><i class="fa-regular fa-clock"></i> ' + safeTime + '</div></div>';
         }).join('');
 
         const isWeekend = (day === '토요일' || day === '일요일');
@@ -706,33 +754,37 @@ window.renderKanbanBoard = function() {
     }).join('');
 };
 
-// 💡 팀 일정표 보드 렌더링 함수
 window.renderTeamKanbanBoard = function() {
     const board = document.getElementById('weekly-team-kanban-board');
     if (!board) return;
 
     const days = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일'];
     const catMap = {
-        "휴가/반차": { icon: "fa-mug-hot", bg: "bg-emerald-50 border-emerald-200", text: "text-emerald-700", badge: "bg-emerald-100 text-emerald-600" },
-        "회의/미팅": { icon: "fa-users", bg: "bg-purple-50 border-purple-200", text: "text-purple-700", badge: "bg-purple-100 text-purple-600" },
-        "집중업무": { icon: "fa-headphones", bg: "bg-blue-50 border-blue-200", text: "text-blue-700", badge: "bg-blue-100 text-blue-600" },
-        "외근/출장": { icon: "fa-car", bg: "bg-orange-50 border-orange-200", text: "text-orange-700", badge: "bg-orange-100 text-orange-600" },
+        "휴가/연차": { icon: "fa-mug-hot", bg: "bg-emerald-50 border-emerald-200", text: "text-emerald-700", badge: "bg-emerald-100 text-emerald-600" },
+        "휴가/오전": { icon: "fa-sun", bg: "bg-emerald-50 border-emerald-200", text: "text-emerald-700", badge: "bg-emerald-100 text-emerald-600" },
+        "휴가/오후": { icon: "fa-moon", bg: "bg-emerald-50 border-emerald-200", text: "text-emerald-700", badge: "bg-emerald-100 text-emerald-600" },
+        "회의": { icon: "fa-users", bg: "bg-purple-50 border-purple-200", text: "text-purple-700", badge: "bg-purple-100 text-purple-600" },
+        "사내(작업)": { icon: "fa-headphones", bg: "bg-blue-50 border-blue-200", text: "text-blue-700", badge: "bg-blue-100 text-blue-600" },
+        "사내(공통)": { icon: "fa-building", bg: "bg-blue-50 border-blue-200", text: "text-blue-700", badge: "bg-blue-100 text-blue-600" },
+        "출장(국내)": { icon: "fa-car", bg: "bg-orange-50 border-orange-200", text: "text-orange-700", badge: "bg-orange-100 text-orange-600" },
+        "출장(국외)": { icon: "fa-plane", bg: "bg-orange-50 border-orange-200", text: "text-orange-700", badge: "bg-orange-100 text-orange-600" },
         "기타": { icon: "fa-thumbtack", bg: "bg-slate-50 border-slate-200", text: "text-slate-700", badge: "bg-slate-200 text-slate-600" }
     };
 
     board.innerHTML = days.map(function(day) {
-        // 모든 유저의 일정을 가져옴
-        const events = window.allSchedules.filter(function(s) { return s.day === day; });
+        // 💡 공유된 일정만 필터링 (isShared 값이 없으면 기본 공유로 간주)
+        const events = window.allSchedules.filter(function(s) { return s.day === day && s.isShared !== false; });
         const eventsHtml = events.map(function(s) {
             const style = catMap[s.category] || catMap["기타"];
-            const safeContent = String(s.content || '');
+            const safeTitle = String(s.title || s.content || '제목 없음').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const authorName = String(s.authorName || '팀원');
             const safeTime = String(s.time || '시간 미지정');
             
             const completedCardClass = s.isCompleted ? 'opacity-60 bg-slate-100 border-slate-200 grayscale' : style.bg;
             const completedTextClass = s.isCompleted ? 'line-through text-slate-400' : style.text;
 
-            return '<div class="rounded-xl border p-3 ' + completedCardClass + ' relative transition-all"><div class="flex items-center gap-1.5 mb-2.5"><span class="text-[10px] font-black text-white bg-indigo-500 w-fit px-1.5 py-0.5 rounded shadow-sm">' + authorName + '</span><div class="flex items-center gap-1 text-[9px] font-black ' + style.badge + ' w-fit px-1.5 py-0.5 rounded"><i class="fa-solid ' + style.icon + '"></i> ' + s.category + '</div></div><div class="text-xs font-bold ' + completedTextClass + ' mb-1.5">' + safeContent + '</div><div class="text-[9px] text-slate-500 font-bold flex items-center gap-1"><i class="fa-regular fa-clock"></i> ' + safeTime + '</div></div>';
+            // 💡 클릭 시 viewSchedule 오픈
+            return '<div class="cursor-pointer hover:-translate-y-0.5 hover:shadow-md rounded-xl border p-3 ' + completedCardClass + ' relative transition-all" onclick="window.viewSchedule(\'' + s.id + '\')"><div class="flex items-center gap-1.5 mb-2.5"><span class="text-[10px] font-black text-white bg-indigo-500 w-fit px-1.5 py-0.5 rounded shadow-sm">' + authorName + '</span><div class="flex items-center gap-1 text-[9px] font-black ' + style.badge + ' w-fit px-1.5 py-0.5 rounded"><i class="fa-solid ' + style.icon + '"></i> ' + s.category + '</div></div><div class="text-xs font-bold ' + completedTextClass + ' mb-1.5 truncate">' + safeTitle + '</div><div class="text-[9px] text-slate-500 font-bold flex items-center gap-1"><i class="fa-regular fa-clock"></i> ' + safeTime + '</div></div>';
         }).join('');
 
         const isWeekend = (day === '토요일' || day === '일요일');
@@ -749,9 +801,11 @@ window.openScheduleModal = function(day) {
     if (!day) day = '월요일';
     const idEl = document.getElementById('sch-id'); if (idEl) idEl.value = '';
     const dayEl = document.getElementById('sch-day'); if (dayEl) dayEl.value = day;
-    const catEl = document.getElementById('sch-category'); if (catEl) catEl.value = '휴가/반차';
+    const catEl = document.getElementById('sch-category'); if (catEl) catEl.value = '휴가/연차';
     const timeEl = document.getElementById('sch-time'); if (timeEl) timeEl.value = '';
+    const titleElInput = document.getElementById('sch-title'); if (titleElInput) titleElInput.value = '';
     const contEl = document.getElementById('sch-content'); if (contEl) contEl.value = '';
+    const sharedEl = document.getElementById('sch-is-shared'); if (sharedEl) sharedEl.checked = true;
     const titleEl = document.getElementById('sch-modal-title'); if (titleEl) titleEl.innerText = '추가';
     
     const modal = document.getElementById('schedule-modal');
@@ -777,7 +831,12 @@ window.editSchedule = function(id) {
     const dayEl = document.getElementById('sch-day'); if (dayEl) dayEl.value = s.day;
     const catEl = document.getElementById('sch-category'); if (catEl) catEl.value = s.category;
     const timeEl = document.getElementById('sch-time'); if (timeEl) timeEl.value = s.time || '';
+    
+    const titleElInput = document.getElementById('sch-title'); 
+    if (titleElInput) titleElInput.value = s.title || (s.content ? s.content.substring(0,20) : '');
+    
     const contEl = document.getElementById('sch-content'); if (contEl) contEl.value = s.content || '';
+    const sharedEl = document.getElementById('sch-is-shared'); if (sharedEl) sharedEl.checked = s.isShared !== false;
     const titleEl = document.getElementById('sch-modal-title'); if (titleEl) titleEl.innerText = '수정';
     
     const modal = document.getElementById('schedule-modal');
@@ -787,25 +846,89 @@ window.editSchedule = function(id) {
     }
 };
 
+// 💡 일정 상세보기 모달 (팀 일정용)
+window.viewSchedule = function(id) {
+    const s = window.allSchedules.find(function(x) { return x.id === id; });
+    if (!s) return;
+    
+    const catMap = {
+        "휴가/연차": { icon: "fa-mug-hot", badge: "bg-emerald-100 text-emerald-600" },
+        "휴가/오전": { icon: "fa-sun", badge: "bg-emerald-100 text-emerald-600" },
+        "휴가/오후": { icon: "fa-moon", badge: "bg-emerald-100 text-emerald-600" },
+        "회의": { icon: "fa-users", badge: "bg-purple-100 text-purple-600" },
+        "사내(작업)": { icon: "fa-headphones", badge: "bg-blue-100 text-blue-600" },
+        "사내(공통)": { icon: "fa-building", badge: "bg-blue-100 text-blue-600" },
+        "출장(국내)": { icon: "fa-car", badge: "bg-orange-100 text-orange-600" },
+        "출장(국외)": { icon: "fa-plane", badge: "bg-orange-100 text-orange-600" },
+        "기타": { icon: "fa-thumbtack", badge: "bg-slate-200 text-slate-600" }
+    };
+    
+    const style = catMap[s.category] || catMap["기타"];
+    
+    document.getElementById('sv-author').innerText = s.authorName || '팀원';
+    const catBadge = document.getElementById('sv-category');
+    if(catBadge) {
+        catBadge.className = 'text-[10px] font-black px-2 py-0.5 rounded shadow-sm ' + style.badge;
+        catBadge.innerHTML = '<i class="fa-solid ' + style.icon + '"></i> ' + s.category;
+    }
+    
+    const titleEl = document.getElementById('sv-title');
+    if(titleEl) titleEl.innerText = s.title || s.content || '제목 없음';
+    
+    const timeEl = document.getElementById('sv-time');
+    if(timeEl) timeEl.innerText = s.time || '시간 미지정';
+    
+    let c = s.content || '';
+    if (!s.title && s.content) {
+        c = '상세 내용 없음';
+    }
+    
+    if (c && c !== '상세 내용 없음') {
+        c = String(c).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+        if(window.formatMentions) c = window.formatMentions(c);
+    }
+    
+    const contentEl = document.getElementById('sv-content');
+    if(contentEl) contentEl.innerHTML = c || '<span class="text-slate-400">상세 내용 없음</span>';
+    
+    const modal = document.getElementById('schedule-view-modal');
+    if(modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+};
+
+window.closeScheduleViewModal = function() {
+    const modal = document.getElementById('schedule-view-modal');
+    if(modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+};
+
 window.saveSchedule = async function() {
     const idEl = document.getElementById('sch-id');
     const weekEl = document.getElementById('weekly-log-filter-week');
     const dayEl = document.getElementById('sch-day');
     const categoryEl = document.getElementById('sch-category');
     const timeEl = document.getElementById('sch-time');
+    const titleEl = document.getElementById('sch-title');
     const contentEl = document.getElementById('sch-content');
+    const sharedEl = document.getElementById('sch-is-shared');
 
-    if (!idEl || !weekEl || !dayEl || !categoryEl || !contentEl) return;
+    if (!idEl || !weekEl || !dayEl || !categoryEl || !titleEl) return;
 
     const id = idEl.value;
     const week = weekEl.value;
     const day = dayEl.value;
     const category = categoryEl.value;
     const time = timeEl ? timeEl.value.trim() : '';
-    const content = contentEl.value.trim();
+    const title = titleEl.value.trim();
+    const content = contentEl ? contentEl.value.trim() : '';
+    const isShared = sharedEl ? sharedEl.checked : true;
 
-    if (!content) {
-        if (window.showToast) window.showToast("일정 내용을 입력하세요.", "error");
+    if (!title) {
+        if (window.showToast) window.showToast("일정 제목을 필수로 입력하세요.", "error");
         return;
     }
 
@@ -814,9 +937,11 @@ window.saveSchedule = async function() {
         day: day, 
         category: category, 
         time: time, 
+        title: title,
         content: content, 
+        isShared: isShared,
         authorUid: window.currentUser.uid, 
-        authorName: window.userProfile.name, // 팀 일정표에서 이름 표시용
+        authorName: window.userProfile.name,
         updatedAt: Date.now() 
     };
 
