@@ -13,7 +13,7 @@ let currentPurchaseUnsubscribe = null;
 let currentDesignUnsubscribe = null;
 let currentPjtScheduleUnsubscribe = null;
 
-const TARGET_DRIVE_FOLDER = "1ae5JiICk9ZQEaPVNhR6H4TlPs_Np03kQ"; // 지정된 구글 드라이브 폴더
+const TARGET_DRIVE_FOLDER = "1ae5JiICk9ZQEaPVNhR6H4TlPs_Np03kQ"; // 요청하신 구글 드라이브 공통 폴더
 
 window.currentStatusFilter = 'all';
 window.currentCategoryFilter = 'all';
@@ -176,13 +176,15 @@ window.renderProjectStatusList = function() {
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center">${statusMap[item.status] || ''}</td>`;
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center font-bold text-slate-600">${getSafeString(item.manager)}</td>`;
         
+        // 🔥 구매, 설계, 일정 버튼 영역
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openPurchaseModal('${item.id}', '${safeNameJs}')" class="text-amber-500 relative"><i class="fa-solid fa-cart-shopping text-lg"></i>${purCnt ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full">${purCnt}</span>` : ''}</button></td>`;
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openDesignModal('${item.id}', '${safeNameJs}')" class="text-teal-400 relative"><i class="fa-solid fa-pen-ruler text-lg"></i>${desCnt ? `<span class="absolute -top-1 -right-2 bg-teal-100 text-teal-600 text-[9px] font-bold px-1 rounded-full">${desCnt}</span>` : ''}</button></td>`;
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openPjtScheduleModal('${item.id}', '${safeNameJs}')" class="text-fuchsia-400 relative"><i class="fa-regular fa-calendar-check text-lg"></i>${schCnt ? `<span class="absolute -top-1 -right-2 bg-fuchsia-100 text-fuchsia-600 text-[9px] font-bold px-1 rounded-full">${schCnt}</span>` : ''}</button></td>`;
-        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openDailyLogModal('${item.id}')" class="text-sky-400 relative"><i class="fa-solid fa-book text-lg"></i>${lCnt ? `<span class="absolute -top-1 -right-2 bg-sky-100 text-sky-600 text-[9px] font-bold px-1 rounded-full">${lCnt}</span>` : ''}</button></td>`;
+
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openDailyLogModal('${item.id}', '${safeNameJs}', ${parseFloat(item.progress)||0})" class="text-sky-400 relative"><i class="fa-solid fa-book text-lg"></i>${lCnt ? `<span class="absolute -top-1 -right-2 bg-sky-100 text-sky-600 text-[9px] font-bold px-1 rounded-full">${lCnt}</span>` : ''}</button></td>`;
         
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center text-sky-600">${item.estMd||0}</td>`;
-        trHtml += `<td class="border border-slate-200 px-1 py-1 text-center font-bold" onclick="event.stopPropagation()"><button onclick="window.openMdLogModal('${item.id}')" class="text-purple-600 underline">${cMd}</button></td>`;
+        trHtml += `<td class="border border-slate-200 px-1 py-1 text-center font-bold" onclick="event.stopPropagation()"><button onclick="window.openMdLogModal('${item.id}', '${safeNameJs}', ${cMd})" class="text-purple-600 underline">${cMd}</button></td>`;
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center font-bold">${fMd.toFixed(1)}</td>`;
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center text-amber-600">${item.totPers||''}</td>`;
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center text-amber-600">${item.outPers||''}</td>`;
@@ -219,7 +221,7 @@ async function handleDriveUpload(fileInput, toastMsg) {
     throw new Error("업로드 함수를 찾을 수 없습니다.");
 }
 
-// 🛒 구매 관리 로직
+// 🛒 구매 관리 모달 로직
 window.openPurchaseModal = function(projectId, title) { 
     document.getElementById('pur-req-id').value = projectId; document.getElementById('pur-project-title').innerText = title; 
     window.resetPurchaseForm(); document.getElementById('purchase-modal').classList.replace('hidden', 'flex'); 
@@ -245,7 +247,7 @@ window.savePurchaseItem = async function() {
 };
 window.deletePurchase = async function(id) { if(confirm("삭제하시겠습니까?")) await deleteDoc(doc(db, "project_purchases", id)); };
 
-// 📐 설계 관리 로직
+// 📐 설계 관리 모달 로직
 window.openDesignModal = function(projectId, title) { 
     document.getElementById('des-req-id').value = projectId; document.getElementById('des-project-title').innerText = title; 
     window.resetDesignForm(); document.getElementById('design-modal').classList.replace('hidden', 'flex'); 
@@ -271,7 +273,7 @@ window.saveDesignItem = async function() {
 };
 window.deleteDesign = async function(id) { if(confirm("삭제하시겠습니까?")) await deleteDoc(doc(db, "project_designs", id)); };
 
-// 📅 일정(PJT일정표) 관리 로직
+// 📅 일정(PJT일정표) 관리 모달 로직
 window.openPjtScheduleModal = function(projectId, title) { 
     document.getElementById('sch-req-id').value = projectId; document.getElementById('sch-project-title').innerText = title; 
     window.resetPjtScheduleForm(); document.getElementById('pjt-schedule-modal').classList.replace('hidden', 'flex'); 
@@ -1160,7 +1162,6 @@ window.deleteComment = async function(id) {
     } catch(e) { window.showToast("삭제 실패", "error"); } 
 };
 
-// 이슈 모달 로직
 window.openIssueModal = function(projectId) { 
     const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
     if(!proj) return; 
@@ -1269,7 +1270,6 @@ window.closeIssueModal = function() {
     if (currentIssueUnsubscribe) { currentIssueUnsubscribe(); currentIssueUnsubscribe = null; } 
 };
 
-// MD Log 모달 로직
 window.openMdLogModal = function(projectId) { 
     const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
     if(!proj) return; 
@@ -1401,7 +1401,6 @@ window.resetMdLogForm = function() {
     document.getElementById('btn-md-cancel').classList.add('hidden'); 
 };
 
-// 링크 관리 로직
 window.openLinkModal = function(projectId) { 
     const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
     if(!proj) return; 
@@ -1556,12 +1555,10 @@ document.addEventListener('click', function(e) {
     if (n && !n.classList.contains('hidden') && !e.target.closest('.relative.cursor-pointer')) {
         n.classList.add('hidden');
     }
-
     const m = document.getElementById('mention-dropdown');
     if (m && !m.classList.contains('hidden') && !e.target.closest('#mention-dropdown')) {
         m.classList.add('hidden');
     }
-
     const d = document.getElementById('pjt-autocomplete-dropdown');
     if (d && !d.classList.contains('hidden') && !e.target.closest('#pjt-autocomplete-dropdown') && !e.target.closest('input[oninput*="showAutocomplete"]')) {
         d.classList.add('hidden');
