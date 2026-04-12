@@ -7,7 +7,6 @@ let allUsersUnsubscribe=null, teamMembersUnsubscribe=null;
 window.isSigningUp = false; 
 
 window.checkLogin = async () => { 
-    // 💡 철저하게 로그인 창의 데이터만 가져옵니다.
     const e = document.getElementById('login-id')?.value.trim(); 
     const p = document.getElementById('login-pw')?.value.trim(); 
     const err = document.getElementById('login-error'); 
@@ -38,10 +37,9 @@ window.checkLogin = async () => {
 };
 
 window.signUp = async () => { 
-    // 💡 철저하게 회원가입 창의 데이터만 가져옵니다.
     const n = document.getElementById('signup-name')?.value.trim(); 
     const t = document.getElementById('signup-dept')?.value; 
-    const pos = document.getElementById('signup-position')?.value || '매니저'; // 💡 직책 정보 추출
+    const pos = document.getElementById('signup-position')?.value || '매니저'; 
     const e = document.getElementById('signup-id')?.value.trim(); 
     const p = document.getElementById('signup-pw')?.value.trim(); 
     const err = document.getElementById('signup-error'); 
@@ -65,7 +63,7 @@ window.signUp = async () => {
     try { 
         const uC = await createUserWithEmailAndPassword(auth, e, p); 
         await setDoc(doc(db, "users", uC.user.uid), { 
-            email:e, name:n, team:t, department:t, position:pos, role:'pending', // 💡 직책(position) DB 저장
+            email:e, name:n, team:t, department:t, position:pos, role:'pending', 
             permissions:{ collab:true, purchase:true, assembly:true, repair:true, 'project-status':true, 'weekly-log':true } 
         }); 
         
@@ -124,8 +122,10 @@ window.initAuthListeners = () => {
                 document.getElementById('login-modal')?.classList.add('hidden'); 
                 const pt = document.getElementById('portal-container'); if(pt) { pt.classList.remove('hidden'); pt.classList.add('flex'); }
                 
-                if(document.getElementById('sidebar-user-name')) document.getElementById('sidebar-user-name').innerText=window.userProfile.name; 
-                if(document.getElementById('sidebar-team-badge')) document.getElementById('sidebar-team-badge').innerText=window.userProfile.team||window.userProfile.department;
+                // 💡 프로필 렌더링에 직책 추가 적용
+                if(document.getElementById('sidebar-user-name')) document.getElementById('sidebar-user-name').innerText = window.userProfile.name; 
+                if(document.getElementById('sidebar-user-position')) document.getElementById('sidebar-user-position').innerText = window.userProfile.position || '직책 미지정'; 
+                if(document.getElementById('sidebar-team-badge')) document.getElementById('sidebar-team-badge').innerText = window.userProfile.team || window.userProfile.department;
                 
                 const rB=document.getElementById('nav-role-badge'), bA=document.getElementById('btn-admin');
                 if (window.userProfile.role==='admin') { if(rB){ rB.className='bg-purple-500 text-white px-2 py-0.5 rounded text-[10px] hidden sm:block'; rB.innerText='👑 관리자';} if(bA){ bA.classList.remove('hidden'); bA.classList.add('flex'); } } 
@@ -170,7 +170,6 @@ window.renderAdminUsers = () => {
         const isP = u.role === 'pending';
         const trClass = isP ? 'bg-rose-50/40 border-l-4 border-rose-500' : 'hover:bg-slate-50 transition-colors border-b border-slate-100';
         
-        // 💡 직책 정보 렌더링 추가
         const safePos = u.position ? `<span class="block text-[10px] text-slate-400 font-normal mt-0.5">${u.position}</span>` : '';
 
         html += `<tr class="${trClass}">
