@@ -851,7 +851,7 @@ window.exportWeeklyLogsExcel = async function() {
         createKPICard(6, 'F', 9, 'H', '완료된 업무', `${completedCount} 건`, '금주 완료 처리됨', 'FFF0FDF4', 'FF10B981', 'FF059669'); 
         createKPICard(6, 'J', 9, 'L', '이슈 및 지연', `${issueCount} 건`, '이슈가 등록된 일지 수', 'FFFFF1F2', 'FFF43F5E', 'FFE11D48'); 
 
-        // 💡 주간 내용 요약 블록 추가
+        // 주간 내용 요약 블록 추가
         let summaryStartRow = 11;
         ws1.mergeCells(`B${summaryStartRow}:L${summaryStartRow}`);
         let secTitle = ws1.getCell(`B${summaryStartRow}`);
