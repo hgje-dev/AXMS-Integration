@@ -114,18 +114,29 @@ window.processDashboardData = function() {
                 const status = getSafeString(data.status);
                 
                 let isInYear = false;
-                if (shipEn.startsWith(year) || shipEst.startsWith(year) || status === 'pending' || status === 'progress' || status === 'inspecting') {
-                    isInYear = true;
+                
+                // ✨ 수정 포인트 1: 완료된 건은 오직 '실제 출하일(shipEn)' 기준으로만 연도 필터링
+                if (status === 'completed') {
+                    if (shipEn.startsWith(year)) {
+                        isInYear = true;
+                    }
+                } else {
+                    // 미완료 건들은 예정일 기준이거나 진행중이면 포함시킴
+                    if (shipEst.startsWith(year) || status === 'pending' || status === 'progress' || status === 'inspecting') {
+                        isInYear = true;
+                    }
                 }
 
                 if (!isInYear) return;
                 
+                // 상태별 카운트 (여기서 completed가 정상적으로 1 올라감)
                 if (stats[status] !== undefined) {
                     stats[status] = stats[status] + 1;
                 } else {
                     stats[status] = 1;
                 }
                 
+                // 연간 계획 MD 누적 (예정일 기준)
                 if (shipEst.startsWith(year)) { 
                     let mIdx = parseInt(shipEst.split('-')[1]) - 1; 
                     if (mIdx >= 0 && mIdx < 12) {
@@ -133,14 +144,11 @@ window.processDashboardData = function() {
                     }
                 }
                 
-                if (status === 'completed' && (shipEn.startsWith(year) || shipEst.startsWith(year))) {
-                    stats.completed++; 
-                    let targetDate = shipEn || shipEst;
-                    if (targetDate.startsWith(year)) { 
-                        let mIdx = parseInt(targetDate.split('-')[1]) - 1; 
-                        if (mIdx >= 0 && mIdx < 12) {
-                            monthlyCompleted[mIdx]++; 
-                        }
+                // ✨ 수정 포인트 2: 월별 출하 추이 데이터 세팅 (중복 카운트 제거)
+                if (status === 'completed' && shipEn.startsWith(year)) {
+                    let mIdx = parseInt(shipEn.split('-')[1]) - 1; 
+                    if (mIdx >= 0 && mIdx < 12) {
+                        monthlyCompleted[mIdx]++; 
                     }
                 }
                 
@@ -375,9 +383,15 @@ window.processPeriodData = function() {
     
     window.allDashProjects.forEach(function(p) {
         let relevant = false;
-        if (p.status === 'pending' || p.status === 'progress' || p.status === 'inspecting') relevant = true;
-        if (p.d_shipEn && p.d_shipEn >= start && p.d_shipEn <= end) relevant = true;
-        if (p.d_shipEst && p.d_shipEst >= start && p.d_shipEst <= end) relevant = true;
+        
+        // ✨ 수정 포인트 3: 기간별 상세 분석에서도 완료건은 실제 출하일 기준으로만 판단
+        if (p.status === 'completed') {
+            if (p.d_shipEn && p.d_shipEn >= start && p.d_shipEn <= end) relevant = true;
+        } else {
+            if (p.status === 'pending' || p.status === 'progress' || p.status === 'inspecting') relevant = true;
+            if (p.d_shipEst && p.d_shipEst >= start && p.d_shipEst <= end) relevant = true;
+        }
+        
         if (!relevant) return;
         
         let pMd = 0; 
