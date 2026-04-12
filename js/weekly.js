@@ -739,37 +739,127 @@ window.deleteWeeklyLog = async function(id) {
     } 
 };
 
-// 💡 관리자용 주간업무일지 엑셀 다운로드 함수
+// 관리자용 주간업무일지 엑셀 다운로드 함수 고도화
 window.exportWeeklyLogsExcel = async function() {
     if (typeof window.ExcelJS === 'undefined') return window.showToast("ExcelJS 모듈을 불러오는 데 실패했습니다.", "error");
 
     try {
-        window.showToast("주간 업무 일지 엑셀을 생성 중입니다...", "success");
+        window.showToast("주간 업무 일지 종합 엑셀을 생성 중입니다...", "success");
         const wb = new window.ExcelJS.Workbook();
-        const ws = wb.addWorksheet('주간업무일지');
+        
+        const weekInput = document.getElementById('weekly-log-filter-week');
+        let wStr = weekInput ? weekInput.value : '';
+        
+        // 통계 계산
+        let submittedCount = 0;
+        let completedCount = 0;
+        let progressCount = 0;
+        let issueCount = 0;
+        
+        let submittedLogs = window.currentWeeklyLogList.filter(l => l.isSubmitted);
+        submittedCount = submittedLogs.length;
+        
+        submittedLogs.forEach(log => {
+            if (String(log.issues || '').trim() !== '') issueCount++;
+            if (log.tasks && Array.isArray(log.tasks)) {
+                log.tasks.forEach(t => {
+                    if (t.status === '완료') completedCount++;
+                    if (t.status === '진행 중') progressCount++;
+                });
+            }
+        });
 
-        ws.columns = [
+        let totalTeamCount = window.teamMembers ? window.teamMembers.length : 0;
+
+        // 1. 요약 시트 생성
+        const ws1 = wb.addWorksheet('주간_업무_요약', { views: [{ showGridLines: false }] });
+        ws1.columns = [
+            { width: 2 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 2 },
+            { width: 15 }, { width: 15 }, { width: 15 }, { width: 2 },
+            { width: 15 }, { width: 15 }, { width: 15 }
+        ];
+
+        ws1.mergeCells('B2:L3');
+        const titleCell = ws1.getCell('B2');
+        titleCell.value = `AXBIS 주간 업무 종합 보고서 (${wStr})`;
+        titleCell.font = { name: '맑은 고딕', size: 20, bold: true, color: { argb: 'FF1E293B' } };
+        titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
+
+        ws1.mergeCells('B4:D4');
+        ws1.getCell('B4').value = `출력일시: ${new Date().toLocaleString()}`;
+        ws1.getCell('B4').font = { size: 10, color: { argb: 'FF64748B' } };
+
+        ws1.mergeCells('F4:H4');
+        let exporterName = window.userProfile ? window.userProfile.name : '시스템';
+        let exporterTeam = window.userProfile ? window.userProfile.team : '';
+        ws1.getCell('F4').value = `출력자: ${exporterName} (${exporterTeam})`;
+        ws1.getCell('F4').font = { size: 10, color: { argb: 'FF64748B' } };
+
+        const createKPICard = (startRow, startCol, endRow, endCol, title, value, subtext, bgColor, titleColor, valColor) => {
+            ws1.mergeCells(`${startCol}${startRow}:${endCol}${startRow}`);
+            ws1.mergeCells(`${startCol}${startRow+1}:${endCol}${endRow-1}`);
+            ws1.mergeCells(`${startCol}${endRow}:${endCol}${endRow}`);
+
+            for(let r=startRow; r<=endRow; r++) {
+                for(let c=ws1.getColumn(startCol).number; c<=ws1.getColumn(endCol).number; c++) {
+                    let cell = ws1.getCell(r, c);
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+                    cell.border = {
+                        top: {style: r===startRow?'medium':'none', color: {argb: titleColor}},
+                        bottom: {style: r===endRow?'medium':'none', color: {argb: titleColor}},
+                        left: {style: c===ws1.getColumn(startCol).number?'medium':'none', color: {argb: titleColor}},
+                        right: {style: c===ws1.getColumn(endCol).number?'medium':'none', color: {argb: titleColor}}
+                    };
+                }
+            }
+
+            let tCell = ws1.getCell(`${startCol}${startRow}`);
+            tCell.value = title;
+            tCell.font = { bold: true, size: 11, color: { argb: titleColor } };
+            tCell.alignment = { vertical: 'middle', horizontal: 'center', indent: 1 };
+
+            let vCell = ws1.getCell(`${startCol}${startRow+1}`);
+            vCell.value = value;
+            vCell.font = { bold: true, size: 24, color: { argb: valColor } };
+            vCell.alignment = { vertical: 'middle', horizontal: 'center' };
+
+            let sCell = ws1.getCell(`${startCol}${endRow}`);
+            sCell.value = subtext;
+            sCell.font = { size: 9, color: { argb: 'FF64748B' } };
+            sCell.alignment = { vertical: 'middle', horizontal: 'center' };
+        };
+
+        // KPI 정보 세팅 (이모지 제거됨)
+        createKPICard(6, 'B', 9, 'D', '제출된 일지', `${submittedCount} 명`, `전체 팀원: ${totalTeamCount}명`, 'FFF1F5F9', 'FF475569', 'FF334155'); 
+        createKPICard(6, 'F', 9, 'H', '완료된 업무', `${completedCount} 건`, '금주 완료 처리됨', 'FFF0FDF4', 'FF10B981', 'FF059669'); 
+        createKPICard(6, 'J', 9, 'L', '이슈 및 지연', `${issueCount} 건`, '이슈가 등록된 일지 수', 'FFFFF1F2', 'FFF43F5E', 'FFE11D48'); 
+
+        // 2. 상세 내역 시트 생성
+        const ws2 = wb.addWorksheet('주간_상세_내역', { views: [{ showGridLines: false }] });
+
+        ws2.columns = [
             { header: '소속 팀', key: 'team', width: 15 },
             { header: '작성자', key: 'name', width: 12 },
             { header: '작성일시', key: 'updated', width: 20 },
             { header: '일자', key: 'day', width: 12 },
-            { header: '상태', key: 'status', width: 10 },
+            { header: '상태', key: 'status', width: 12 },
             { header: '장소', key: 'loc', width: 12 },
             { header: '업무 내용', key: 'content', width: 60 },
-            { header: '관여 프로젝트', key: 'pjts', width: 30 },
-            { header: '이슈 및 요청사항', key: 'issues', width: 40 }
+            { header: '관여 프로젝트', key: 'pjts', width: 35 },
+            { header: '이슈 및 요청사항', key: 'issues', width: 45 }
         ];
 
-        ws.getRow(1).eachCell(function(cell) {
-            cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } };
-            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        let hr = ws2.getRow(1);
+        hr.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        hr.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } };
+        hr.height = 25;
+        hr.eachCell(function(cell) {
             cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
         });
 
         const orderMap = { "월요일": 1, "화요일": 2, "수요일": 3, "목요일": 4, "금요일": 5, "토요일": 6, "일요일": 7, "주간 공통": 99 };
 
-        let submittedLogs = window.currentWeeklyLogList.filter(l => l.isSubmitted);
         submittedLogs.sort((a,b) => (a.authorTeam||'').localeCompare(b.authorTeam||'') || (a.authorName||'').localeCompare(b.authorName||''));
 
         submittedLogs.forEach(log => {
@@ -785,24 +875,31 @@ window.exportWeeklyLogsExcel = async function() {
             if(log.tasks && log.tasks.length > 0) {
                 let sortedTasks = log.tasks.slice().sort((a,b) => (orderMap[a.day]||0) - (orderMap[b.day]||0));
                 sortedTasks.forEach((t, i) => {
-                    let row = ws.addRow({
+                    let row = ws2.addRow({
                         team: team, name: name, updated: updated,
                         day: t.day || '-', status: t.status || '-', loc: t.loc || '-', content: t.content || '-',
                         pjts: i === 0 ? pjtStr : '', 
                         issues: i === 0 ? issues : ''
                     });
-                    row.eachCell({ includeEmpty: true }, function(cell) {
-                        cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+                    row.eachCell({ includeEmpty: true }, function(cell, colNumber) {
+                        cell.border = { top: {style:'thin', color:{argb:'FFE2E8F0'}}, left: {style:'thin', color:{argb:'FFE2E8F0'}}, bottom: {style:'thin', color:{argb:'FFE2E8F0'}}, right: {style:'thin', color:{argb:'FFE2E8F0'}} };
                         cell.alignment = { vertical: 'top', wrapText: true };
-                        if (cell.col <= 6) cell.alignment.horizontal = 'center';
+                        if (colNumber <= 6) cell.alignment.horizontal = 'center';
+                        
+                        // 상태 열 색상 강조
+                        if (colNumber === 5) {
+                            if (t.status === '완료') cell.font = { color: { argb: 'FF059669' }, bold: true };
+                            else if (t.status === '진행 중') cell.font = { color: { argb: 'FF2563EB' }, bold: true };
+                            else cell.font = { color: { argb: 'FF64748B' }, bold: true };
+                        }
                     });
                 });
             } else {
-                let row = ws.addRow({
+                let row = ws2.addRow({
                     team: team, name: name, updated: updated, day: '-', status: '-', loc: '-', content: '내역 없음', pjts: pjtStr, issues: issues
                 });
                 row.eachCell({ includeEmpty: true }, function(cell) {
-                    cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+                    cell.border = { top: {style:'thin', color:{argb:'FFE2E8F0'}}, left: {style:'thin', color:{argb:'FFE2E8F0'}}, bottom: {style:'thin', color:{argb:'FFE2E8F0'}}, right: {style:'thin', color:{argb:'FFE2E8F0'}} };
                     cell.alignment = { vertical: 'top', wrapText: true, horizontal: 'center' };
                 });
             }
@@ -810,9 +907,7 @@ window.exportWeeklyLogsExcel = async function() {
 
         const buffer = await wb.xlsx.writeBuffer();
         let todayStr = new Date().toISOString().split('T')[0];
-        const weekInput = document.getElementById('weekly-log-filter-week');
-        let wStr = weekInput ? weekInput.value : '';
-        window.saveAs(new Blob([buffer]), `주간업무일지_${wStr}_${todayStr}.xlsx`);
+        window.saveAs(new Blob([buffer]), `주간업무종합보고서_${wStr}_${todayStr}.xlsx`);
 
     } catch(e) {
         console.error(e);
