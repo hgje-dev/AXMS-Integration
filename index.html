@@ -16,51 +16,247 @@
     
     <link rel="stylesheet" href="./css/styles.css">
 </head>
-<body class="text-slate-800 min-h-screen antialiased flex flex-col bg-slate-50">
+<body class="text-slate-800 min-h-screen antialiased flex flex-col bg-slate-50 transition-colors duration-200">
 
     <div id="toast-container" class="fixed top-6 left-1/2 transform -translate-x-1/2 flex flex-col gap-2 pointer-events-none z-[9999]"></div>
 
-    <div id="sidebar-backdrop" class="fixed inset-0 bg-slate-900/50 z-[100] hidden transition-opacity" onclick="window.toggleSidebar(false)"></div>
-    <aside id="sidebar" class="fixed top-0 left-0 h-full w-72 bg-white shadow-2xl z-[110] transform -translate-x-full sidebar-transition flex flex-col">
-        <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-            <img src="./assets/엑스비스CI 슬로건_포지티브.png" alt="AXBIS" class="h-6 object-contain">
-            <button onclick="window.toggleSidebar(false)" class="text-slate-400 hover:text-rose-500 p-1">
-                <i class="fa-solid fa-xmark text-xl"></i>
-            </button>
-        </div>
-        <div class="p-4 bg-indigo-50 border-b border-indigo-100 flex flex-col gap-1">
-            <div class="font-black text-indigo-700 text-sm truncate" id="sidebar-user-name">User Name</div>
-            <div class="text-[11px] font-bold text-slate-600 truncate" id="sidebar-user-position">직책</div>
-        </div>
-        <nav class="flex-1 overflow-y-auto p-4 space-y-1 custom-scrollbar">
-            <button onclick="window.openApp('dashboard-home', '통합 대시보드')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 hover:text-indigo-600">
-                <i class="fa-solid fa-chart-pie w-6"></i> 통합 대시보드
-            </button>
-            <div class="border-t my-3"></div>
-            <button onclick="window.openApp('project-status', 'PJT 현황판')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100">
-                <i class="fa-solid fa-table-list w-6"></i> PJT 현황판
-            </button>
-            <button onclick="window.openApp('collab', '협업 요청서')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100">
-                <i class="fa-regular fa-handshake w-6"></i> 협업 요청서
-            </button>
-            <button onclick="window.openApp('purchase', '모듈 구매 의뢰서')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100">
-                <i class="fa-solid fa-cart-flatbed w-6"></i> 모듈 구매 의뢰서
-            </button>
-        </nav>
-        <div class="p-4 border-t bg-slate-50 flex flex-col gap-2">
-            <button onclick="window.openSettingsModal()" class="w-full py-2 bg-white border rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100">내 정보 및 설정</button>
-            <button onclick="window.logout()" class="w-full py-2 border rounded-xl text-xs font-bold text-rose-500 hover:bg-rose-50">로그아웃</button>
-        </div>
-    </aside>
-
-    <div id="portal-container" class="hidden flex-1 flex flex-col">
-        <header class="bg-white shadow-sm sticky top-0 z-40 border-b border-slate-200 h-16 flex items-center justify-between px-6">
-            <div class="flex items-center gap-4">
-                <button onclick="window.toggleSidebar(true)" class="text-slate-500 hover:text-indigo-600 text-xl"><i class="fa-solid fa-bars"></i></button>
-                <h1 id="nav-title" class="text-lg font-black text-slate-800">AXBIS제조 통합 포털</h1>
+    <div id="login-modal" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm transition-opacity duration-300">
+        <div class="bg-white rounded-3xl shadow-2xl p-10 w-full max-w-md border border-slate-200 relative" id="login-box">
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-3xl border border-indigo-100 shadow-inner">
+                    <i class="fa-solid fa-layer-group"></i>
+                </div>
+                <h2 class="text-3xl font-black text-slate-800 tracking-tight" id="auth-title">AXBIS</h2>
+                <h2 class="text-xl font-bold text-slate-700 tracking-tight mt-2">제조 통합 포털</h2>
             </div>
-        </header>
-        <main id="app-content" class="flex-1 max-w-[1600px] mx-auto w-full px-6 py-8"></main>
+            
+            <div id="login-view" class="space-y-4">
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase">이메일 계정</label>
+                    <input type="email" id="login-id" class="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 font-bold" placeholder="name@company.com">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase">비밀번호</label>
+                    <input type="password" id="login-pw" class="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 font-bold" placeholder="6자리 이상" onkeypress="if(event.key==='Enter') window.checkLogin()">
+                </div>
+                <div id="login-error" class="text-rose-500 text-[11px] font-bold hidden text-center mt-2 bg-rose-50 p-3 rounded-xl border border-rose-100"></div>
+                
+                <div class="pt-4 space-y-3">
+                    <button onclick="window.checkLogin()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-3.5 rounded-xl shadow-md transition-all">접속하기</button>
+                    <button onclick="window.toggleAuthMode('signup')" class="w-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-50 font-bold py-3.5 rounded-xl transition-all text-sm">신규 계정 생성</button>
+                </div>
+            </div>
+            
+            <div id="signup-view" class="space-y-4 hidden">
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase">이름</label>
+                    <input type="text" id="signup-name" class="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 font-bold">
+                </div>
+                
+                <div class="flex gap-3">
+                    <div class="flex-1">
+                        <label class="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase">소속 팀</label>
+                        <select id="signup-dept" class="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 font-bold">
+                            <option value="AXBIS">AXBIS</option>
+                            <option value="레이저사업본부">레이저사업본부</option>
+                            <option value="제조기술팀">제조기술팀</option>
+                            <option value="장비기술팀">장비기술팀</option>
+                            <option value="모듈기술팀">모듈기술팀</option>
+                            <option value="제어팀">제어팀</option>
+                            <option value="pm팀">pm팀</option>
+                            <option value="영업팀">영업팀</option>
+                            <option value="전략기획팀">전략기획팀</option>
+                            <option value="전략구매팀">전략구매팀</option>
+                            <option value="품질경영팀">품질경영팀</option>
+                            <option value="설계팀">설계팀</option>
+                            <option value="선행설계팀">선행설계팀</option>
+                            <option value="공정개발팀">공정개발팀</option>
+                            <option value="SW팀">SW팀</option>
+                            <option value="선행기술팀">선행기술팀</option>
+                            <option value="피플팀">피플팀</option>
+                            <option value="북미법인">북미법인</option>
+                            <option value="기술연구소">기술연구소</option>
+                        </select>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase">직책</label>
+                        <select id="signup-position" class="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 font-bold">
+                            <option value="대표">대표</option>
+                            <option value="본부장">본부장</option>
+                            <option value="그룹장">그룹장</option>
+                            <option value="팀장">팀장</option>
+                            <option value="책임매니저">책임매니저</option>
+                            <option value="선임매니저">선임매니저</option>
+                            <option value="매니저" selected>매니저</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase">이메일 계정</label>
+                    <input type="email" id="signup-id" class="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 font-bold">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase">비밀번호</label>
+                    <input type="password" id="signup-pw" class="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 font-bold">
+                </div>
+                <div id="signup-error" class="text-rose-500 text-[11px] font-bold hidden text-center mt-2 bg-rose-50 p-3 rounded-xl border border-rose-100"></div>
+                
+                <div class="pt-4 space-y-3">
+                    <button onclick="window.signUp()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3.5 rounded-xl shadow-md transition-all">가입 완료</button>
+                    <button onclick="window.toggleAuthMode('login')" class="w-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-50 font-bold py-3.5 rounded-xl transition-all text-sm">뒤로 가기</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="settings-modal" class="fixed inset-0 z-[200] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 transition-opacity">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden">
+            <div class="px-6 py-4 border-b flex justify-between items-center bg-slate-50">
+                <h2 class="text-lg font-extrabold text-slate-800"><i class="fa-solid fa-user-gear text-indigo-500"></i> 내 정보 및 설정</h2>
+                <button onclick="window.closeSettingsModal()" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-6 bg-white space-y-5">
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 mb-1.5">이름</label>
+                    <input type="text" id="set-name" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 font-bold outline-indigo-500">
+                </div>
+                <div class="flex gap-3">
+                    <div class="flex-1">
+                        <label class="block text-[11px] font-bold text-slate-500 mb-1.5">소속 팀</label>
+                        <select id="set-dept" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 font-bold outline-indigo-500">
+                            <option value="AXBIS">AXBIS</option>
+                            <option value="제조기술팀">제조기술팀</option>
+                            <option value="장비기술팀">장비기술팀</option>
+                            <option value="설계팀">설계팀</option>
+                            <option value="SW팀">SW팀</option>
+                        </select>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-[11px] font-bold text-slate-500 mb-1.5">직책</label>
+                        <select id="set-position" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 font-bold outline-indigo-500">
+                            <option value="대표">대표</option>
+                            <option value="팀장">팀장</option>
+                            <option value="매니저">매니저</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="border-t border-slate-100 my-2 pt-4">
+                    <label class="block text-[11px] font-bold text-rose-500 mb-1.5"><i class="fa-solid fa-lock"></i> 새 비밀번호 설정 (변경 시에만 입력)</label>
+                    <input type="password" id="set-new-pw" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 font-bold outline-indigo-500 mb-2" placeholder="변경할 비밀번호 (6자리 이상)">
+                    <input type="password" id="set-new-pw-confirm" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 font-bold outline-indigo-500" placeholder="비밀번호 확인">
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t bg-slate-50 flex justify-end gap-2">
+                <button onclick="window.closeSettingsModal()" class="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-100 transition-colors">취소</button>
+                <button onclick="window.saveUserSettings()" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors">변경 저장</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="admin-modal" class="fixed inset-0 z-[200] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-6xl flex flex-col max-h-[90vh] overflow-hidden">
+            <div class="px-6 py-4 border-b flex justify-between items-center bg-purple-50">
+                <h2 class="text-lg font-extrabold text-purple-800"><i class="fa-solid fa-users-gear text-purple-500"></i> 시스템 관리자</h2>
+                <button onclick="window.closeAdminModal()" class="text-purple-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1 bg-slate-50/50">
+                <table class="w-full text-left border-collapse bg-white shadow-sm rounded-xl overflow-hidden">
+                    <thead class="bg-slate-800 text-[11px] text-white">
+                        <tr>
+                            <th class="p-3 text-center w-32">이름 (직책)</th>
+                            <th class="p-3 text-center">소속 팀</th>
+                            <th class="p-3 text-center">이메일</th>
+                            <th class="p-3 text-center w-28">등급(Role)</th>
+                            <th class="p-3 text-center">권한</th>
+                            <th class="p-3 text-center w-24">관리</th>
+                        </tr>
+                    </thead>
+                    <tbody id="admin-users-tbody" class="divide-y divide-slate-200 text-xs"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="team-modal" class="fixed inset-0 z-[200] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[80vh] overflow-hidden">
+            <div class="px-6 py-4 border-b flex justify-between items-center bg-indigo-50">
+                <div class="flex items-center gap-3">
+                    <h2 class="text-lg font-extrabold text-indigo-800"><i class="fa-solid fa-people-group"></i> 팀원 풀 관리</h2>
+                    <span id="team-modal-count" class="text-[10px] bg-indigo-200 text-indigo-800 px-2 py-0.5 rounded-full font-bold">총 0명</span>
+                </div>
+                <button onclick="window.closeTeamModal()" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-6 flex-1 bg-slate-50 flex flex-col gap-4 min-h-0">
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex gap-2 items-end">
+                    <div class="flex-1">
+                        <label class="block text-[10px] font-bold text-slate-500 mb-1">시스템 사용자 목록</label>
+                        <select id="new-team-name" class="w-full border rounded p-2 text-sm"><option value="">선택</option></select>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-[10px] font-bold text-slate-500 mb-1">소속 파트</label>
+                        <select id="new-team-part" class="w-full border rounded p-2 text-sm">
+                            <option value="제조">제조</option>
+                            <option value="광학">광학</option>
+                        </select>
+                    </div>
+                    <button onclick="window.addTeamMember()" class="bg-indigo-600 text-white px-4 py-2 rounded text-sm font-bold">추가</button>
+                </div>
+                <div class="bg-white rounded-xl border border-slate-200 shadow-sm flex-1 overflow-hidden flex flex-col">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-slate-800 text-[11px] text-white sticky top-0">
+                            <tr><th class="p-3 text-center w-24">소속 파트</th><th class="p-3">이름</th><th class="p-3 text-center w-20">관리</th></tr>
+                        </thead>
+                        <tbody id="team-list-tbody" class="divide-y text-xs"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="proj-code-master-modal" class="fixed inset-0 z-[150] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[85vh] overflow-hidden">
+            <div class="px-6 py-4 border-b flex justify-between items-center bg-slate-50">
+                <div class="flex items-center gap-3">
+                    <h2 class="text-lg font-extrabold text-slate-800"><i class="fa-solid fa-tags text-indigo-500"></i> PJT 코드 마스터 관리</h2>
+                    <button onclick="window.toggleBulkPjtInput()" class="bg-white border border-indigo-200 text-indigo-600 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm hover:bg-indigo-50">일괄 등록</button>
+                    <button onclick="window.deleteSelectedProjectCodes()" class="bg-white border border-rose-200 text-rose-600 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm hover:bg-rose-50 hidden" id="btn-delete-selected-pjts">선택 삭제</button>
+                </div>
+                <button onclick="window.closeProjCodeMasterModal()" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-4 bg-slate-50/50 min-h-0">
+                <div id="pjt-bulk-input-area" class="hidden flex-col gap-2 bg-indigo-50/50 p-4 rounded-xl shadow-sm border border-indigo-100 relative">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-[11px] font-bold text-indigo-700"><i class="fa-solid fa-paste mr-1"></i> 엑셀 데이터 붙여넣기 (PJT코드, 프로젝트명, 업체명 탭 구분)</span>
+                        <button onclick="window.toggleBulkPjtInput()" class="text-slate-400 hover:text-slate-600 text-xs"><i class="fa-solid fa-xmark"></i> 닫기</button>
+                    </div>
+                    <textarea id="bulk-pjt-data" class="w-full h-32 border border-indigo-200 rounded-lg p-3 text-xs outline-indigo-500 custom-scrollbar" placeholder="PJT-001&#9;프로젝트 A&#9;업체 A"></textarea>
+                    <div class="flex justify-end">
+                        <button onclick="window.processBulkPjtInput()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-bold text-sm shadow-sm">일괄 등록 실행</button>
+                    </div>
+                </div>
+                <div class="flex gap-2 bg-white p-4 rounded-xl shadow-sm border border-slate-200 relative">
+                    <input type="text" id="new-pjt-code" placeholder="PJT 코드" class="border p-2 rounded-lg text-sm w-32 outline-indigo-500">
+                    <input type="text" id="new-pjt-name" placeholder="프로젝트명" class="border p-2 rounded-lg text-sm flex-1 outline-indigo-500">
+                    <input type="text" id="new-pjt-company" placeholder="업체명" class="border p-2 rounded-lg text-sm w-32 outline-indigo-500">
+                    <button onclick="window.addProjectCode()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-bold">등록</button>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <table class="w-full border-collapse text-sm text-left">
+                        <thead class="bg-slate-800 text-white text-xs">
+                            <tr>
+                                <th class="p-3 w-10 text-center"><input type="checkbox" id="pjt-master-checkbox" onchange="window.toggleAllPjtCheckboxes(this.checked)" class="accent-indigo-500 w-4 h-4 rounded cursor-pointer"></th>
+                                <th class="p-3 w-32">PJT 코드</th>
+                                <th class="p-3">프로젝트명</th>
+                                <th class="p-3 w-32">업체명</th>
+                                <th class="p-3 w-20 text-center">관리</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pjt-code-tbody" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div id="project-detail-modal" class="fixed inset-0 z-[500] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
@@ -76,21 +272,27 @@
                         <h3 class="font-bold text-blue-700 flex items-center gap-2"><i class="fa-solid fa-cart-shopping"></i> 구매 관리</h3>
                         <textarea id="pjt-buy-text" class="w-full h-24 p-3 text-xs border rounded-xl focus:ring-2 ring-blue-400 outline-none" placeholder="구매 내역 요약..."></textarea>
                         <div class="space-y-1">
-                            <label class="text-[10px] font-bold text-slate-500">구매품 일정표</label>
+                            <label class="text-[10px] font-bold text-slate-500">구매품 일정표 첨부</label>
                             <input type="file" id="pjt-buy-file" class="block w-full text-[10px] text-slate-500">
                             <div id="pjt-buy-file-link" class="text-[10px] mt-1 font-bold text-blue-600 hidden"></div>
                         </div>
                     </div>
                     <div class="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100 space-y-3">
                         <h3 class="font-bold text-emerald-700 flex items-center gap-2"><i class="fa-solid fa-pen-ruler"></i> 설계 관리</h3>
-                        <input type="file" id="pjt-design-file" class="block w-full text-[10px] text-slate-500">
-                        <div id="pjt-design-file-link" class="text-[10px] mt-1 font-bold text-emerald-600 hidden"></div>
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-bold text-slate-500">설계 도면 첨부</label>
+                            <input type="file" id="pjt-design-file" class="block w-full text-[10px] text-slate-500">
+                            <div id="pjt-design-file-link" class="text-[10px] mt-1 font-bold text-emerald-600 hidden"></div>
+                        </div>
                     </div>
                     <div class="p-4 bg-amber-50/50 rounded-2xl border border-amber-100 space-y-3">
                         <h3 class="font-bold text-amber-700 flex items-center gap-2"><i class="fa-solid fa-calendar-check"></i> 프로젝트 일정</h3>
                         <textarea id="pjt-sch-text" class="w-full h-24 p-3 text-xs border rounded-xl focus:ring-2 ring-amber-400 outline-none" placeholder="주요 마일스톤..."></textarea>
-                        <input type="file" id="pjt-sch-file" class="block w-full text-[10px] text-slate-500">
-                        <div id="pjt-sch-file-link" class="text-[10px] mt-1 font-bold text-amber-600 hidden"></div>
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-bold text-slate-500">전체 일정표 첨부</label>
+                            <input type="file" id="pjt-sch-file" class="block w-full text-[10px] text-slate-500">
+                            <div id="pjt-sch-file-link" class="text-[10px] mt-1 font-bold text-amber-600 hidden"></div>
+                        </div>
                     </div>
                 </div>
                 <div class="border-t pt-4">
@@ -99,11 +301,140 @@
                 </div>
             </div>
             <div class="px-6 py-4 border-t bg-slate-50 flex justify-end gap-2">
-                <button onclick="window.closeProjectDetailModal()" class="px-5 py-2.5 bg-white border rounded-xl text-sm font-bold">취소</button>
-                <button onclick="window.saveProjectDetail()" class="px-8 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-md">변경 저장</button>
+                <button onclick="window.closeProjectDetailModal()" class="px-5 py-2.5 bg-white border rounded-xl text-sm font-bold hover:bg-slate-100">취소</button>
+                <button onclick="window.saveProjectDetail()" class="px-8 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md">변경 저장</button>
             </div>
         </div>
     </div>
+
+
+    <div id="sidebar-backdrop" class="fixed inset-0 bg-slate-900/50 z-[100] hidden transition-opacity" onclick="window.toggleSidebar(false)"></div>
+    <aside id="sidebar" class="fixed top-0 left-0 h-full w-72 bg-white shadow-2xl z-[110] transform -translate-x-full sidebar-transition flex flex-col">
+        <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+            <img src="./assets/엑스비스CI 슬로건_포지티브.png" alt="AXBIS" class="h-6 object-contain">
+            <button onclick="window.toggleSidebar(false)" class="text-slate-400 hover:text-rose-500 p-1">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
+        </div>
+        
+        <div class="p-4 bg-indigo-50 border-b border-indigo-100 flex flex-col gap-1">
+            <span class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Signed in as</span>
+            <div class="font-black text-indigo-700 text-sm truncate" id="sidebar-user-name">User Name</div>
+            <div class="text-[11px] font-bold text-slate-600 truncate" id="sidebar-user-position">직책</div>
+            <div class="text-xs text-slate-500 font-medium" id="sidebar-team-badge">Team</div>
+        </div>
+        
+        <nav class="flex-1 overflow-y-auto p-4 space-y-1 custom-scrollbar">
+            
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-3 mt-2 mb-2">Dashboards</div>
+            <button onclick="window.openApp('dashboard-home', '통합 대시보드')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 hover:text-indigo-600 transition-colors text-left group">
+                <div class="w-6 text-center text-slate-400 group-hover:text-indigo-500"><i class="fa-solid fa-chart-pie"></i></div> 통합 대시보드
+            </button>
+            
+            <div class="border-t border-slate-100 my-3"></div>
+            
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-3 mb-2">현황판 (팀)</div>
+            <button onclick="window.openApp('project-status', 'PJT 현황판')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 hover:text-indigo-600 transition-colors text-left group">
+                <div class="w-6 text-center text-slate-400 group-hover:text-indigo-500"><i class="fa-solid fa-table-list"></i></div> PJT 현황판
+            </button>
+            <button onclick="window.openApp('workhours', '개인별 투입공수 현황')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 hover:text-indigo-600 transition-colors text-left group">
+                <div class="w-6 text-center text-slate-400 group-hover:text-indigo-500"><i class="fa-solid fa-user-clock"></i></div> 개인별 투입공수 현황
+            </button>
+            <button onclick="window.openApp('weekly-log', '주간 업무 일지')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 hover:text-indigo-600 transition-colors text-left group">
+                <div class="w-6 text-center text-slate-400 group-hover:text-indigo-500"><i class="fa-solid fa-calendar-week"></i></div> 주간 업무 일지
+            </button>
+
+            <div class="border-t border-slate-100 my-3"></div>
+            
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-3 mb-2">Request Forms</div>
+            <button onclick="window.openApp('collab', '협업/조립 요청서')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 hover:text-blue-600 transition-colors text-left group">
+                <div class="w-6 text-center text-slate-400 group-hover:text-blue-500"><i class="fa-regular fa-handshake"></i></div> 협업/조립 요청서
+            </button>
+            <button onclick="window.openApp('purchase', '모듈 구매 의뢰서')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 hover:text-emerald-600 transition-colors text-left group">
+                <div class="w-6 text-center text-slate-400 group-hover:text-emerald-500"><i class="fa-solid fa-cart-flatbed"></i></div> 모듈 구매 의뢰서
+            </button>
+            <button onclick="window.openApp('repair', '수리점검요청서')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 hover:text-rose-600 transition-colors text-left group">
+                <div class="w-6 text-center text-slate-400 group-hover:text-rose-500"><i class="fa-solid fa-stethoscope"></i></div> 수리/점검 요청서
+            </button>
+
+            <div class="border-t border-slate-100 my-3"></div>
+            
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-3 mb-2">Master Data</div>
+            <button onclick="window.openProjCodeMasterModal()" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 hover:text-indigo-600 transition-colors text-left group">
+                <div class="w-6 text-center text-slate-400 group-hover:text-indigo-500"><i class="fa-solid fa-tags"></i></div> PJT 코드 마스터 관리
+            </button>
+            
+            <div class="border-t border-slate-100 my-3"></div>
+            
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-3 mb-2">Tools</div>
+            <button onclick="window.openApp('simulation', '공수 시뮬레이션 Pro')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md transition-colors text-left group">
+                <div class="w-6 text-center text-indigo-200"><i class="fa-solid fa-bolt"></i></div> 공수 시뮬레이션 Pro
+            </button>
+            
+        </nav>
+        
+        <div class="p-4 border-t border-slate-100 flex flex-col gap-2 bg-slate-50">
+            <button onclick="window.openSettingsModal()" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors border border-slate-200 mb-1">
+                <i class="fa-solid fa-gear"></i> 내 정보 및 설정
+            </button>
+            <button id="btn-admin" onclick="window.openAdminModal()" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-purple-600 bg-purple-50 hover:bg-purple-100 transition-colors border border-purple-200 hidden">
+                <i class="fa-solid fa-users-gear"></i> 시스템 관리자
+            </button>
+            <button onclick="window.logout()" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-500 hover:bg-rose-50 hover:text-rose-500 transition-colors border border-slate-200 hover:border-rose-200">
+                <i class="fa-solid fa-right-from-bracket"></i> 로그아웃
+            </button>
+        </div>
+    </aside>
+
+    <div id="portal-container" class="hidden flex-1 flex flex-col min-h-screen">
+        <header class="bg-white/90 backdrop-blur-md shadow-sm sticky top-0 z-40 border-b border-slate-200">
+            <div class="max-w-[1600px] mx-auto px-6 h-16 flex items-center justify-between w-full">
+                <div class="flex items-center gap-2 sm:gap-4">
+                    <button onclick="window.toggleSidebar(true)" class="text-slate-500 hover:text-indigo-600 text-xl">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                    <button onclick="window.navigateHome()" class="text-slate-500 hover:text-indigo-600 text-lg ml-1">
+                        <i class="fa-solid fa-house"></i>
+                    </button>
+                    <div class="h-6 w-px bg-slate-200 hidden sm:block mx-1"></div>
+                    
+                    <img src="./assets/엑스비스CI 슬로건_포지티브.png" alt="AXBIS" class="h-5 sm:h-6 object-contain hidden sm:block">
+                    
+                    <h1 class="text-lg font-black text-slate-800 tracking-tight flex items-center gap-3">
+                        <span id="nav-title" class="text-[13px] font-bold text-slate-500 ml-2">통합 대시보드 홈</span>
+                    </h1>
+                </div>
+                
+                <div class="flex items-center gap-4">
+                    <div class="relative cursor-pointer flex items-center justify-center" onclick="window.toggleNotifications(event)">
+                        <i class="fa-solid fa-bell text-slate-400 hover:text-indigo-500 text-xl transition-colors"></i>
+                        <span id="notification-badge" class="absolute -top-1.5 -right-1.5 flex h-4 w-4 hidden">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-4 w-4 bg-rose-500 text-[9px] text-white justify-center items-center font-bold shadow-sm" id="notification-count">0</span>
+                        </span>
+                        <div id="notification-dropdown" class="absolute right-0 top-8 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 hidden flex-col overflow-hidden z-[9999] cursor-default" onclick="event.stopPropagation()">
+                            <div class="px-4 py-3 border-b border-slate-100 bg-slate-50 font-bold text-sm text-slate-700 flex justify-between items-center">
+                                <span>🔔 알림</span>
+                                <div class="flex gap-3">
+                                    <button onclick="window.markAllNotificationsRead()" class="text-[10px] text-indigo-500 hover:underline">모두 읽음</button>
+                                    <button onclick="window.deleteAllNotifications()" class="text-[10px] text-rose-500 hover:underline">전체 삭제</button>
+                                </div>
+                            </div>
+                            <div id="notification-list" class="max-h-80 overflow-y-auto custom-scrollbar flex flex-col divide-y divide-slate-50">
+                                <div class="p-6 text-center text-slate-400 text-xs font-bold">알림이 없습니다.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="nav-role-badge" class="px-2.5 py-1 rounded-md text-[10px] font-bold text-white shadow-sm">역할</div>
+                </div>
+            </div>
+        </header>
+
+        <main id="app-content" class="flex-1 max-w-[1600px] mx-auto w-full px-6 py-8">
+            </main>
+    </div>
+
+    <ul id="mention-dropdown" class="hidden absolute z-[9999] bg-white border border-slate-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-48 custom-scrollbar"></ul>
 
     <script type="module" src="./js/app.js"></script>
 </body>
