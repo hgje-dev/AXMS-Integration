@@ -1671,33 +1671,47 @@ document.addEventListener('click', function(e) {
 });
 
 // ==========================================
-// 💡 부적합(NCR) 구글 시트 연동 (정식 Sheets API v4 사용)
+// 💡 부적합(NCR) 구글 시트 연동 (토큰 없는 완벽 우회 방식 - CSV 파싱)
 // ==========================================
 window.loadNcrData = async function() {
-    const token = window.googleAccessToken || localStorage.getItem('axmsGoogleToken');
-    if (!token) {
-        if(window.showToast) window.showToast("구글 연동이 필요합니다. (요청서 탭 활용)", "warning");
-        return;
-    }
-
     try {
+        // 구글 시트 ID
         const sheetId = '1ZYwSKvT4QXjFxgftunwdRHWzX4KXoelhZSVjauAJg8s';
-        // 💡 gviz 대신 정식 구글 시트 API 엔드포인트를 사용합니다. (CORS 에러 해결)
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/RawData`;
         
-        const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
+        // 💡 핵심: 구글 시트를 'CSV' 형태로 바로 다운로드 받아서 읽어버립니다. 
+        // 이 방식은 CORS나 구글 보안 토큰 갱신 이슈에서 완전히 자유롭습니다.
+        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=0`;
+
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("시트 읽기 실패");
+
+        const csvText = await res.text();
         
-        if (!res.ok) {
-            if (res.status === 401 || res.status === 403) throw new Error("AUTH_ERROR");
-            throw new Error("API 요청 실패: " + res.status);
-        }
-        
-        const data = await res.json();
-        const rows = data.values;
+        // CSV 파싱 로직 (따옴표 안에 있는 콤마는 무시하고 자릅니다)
+        const parseCSV = (str) => {
+            const arr = []; let quote = false; let row = 0, col = 0;
+            for (let c = 0; c < str.length; c++) {
+                let cc = str[c], nc = str[c+1];
+                arr[row] = arr[row] || [];
+                arr[row][col] = arr[row][col] || '';
+
+                if (cc === '"' && quote && nc === '"') { arr[row][col] += cc; ++c; continue; }
+                if (cc === '"') { quote = !quote; continue; }
+                if (cc === ',' && !quote) { ++col; continue; }
+                if (cc === '\r' && nc === '\n' && !quote) { ++row; col = 0; ++c; continue; }
+                if (cc === '\n' && !quote) { ++row; col = 0; continue; }
+                if (cc === '\r' && !quote) { ++row; col = 0; continue; }
+                arr[row][col] += cc;
+            }
+            return arr;
+        };
+
+        const rows = parseCSV(csvText);
         if (!rows || rows.length < 2) return;
-        
+
         const headers = rows[0];
         
+        // 헤더 인덱스 찾기 (띄어쓰기, 대소문자 무시)
         const getIdx = (keywords) => {
             return headers.findIndex(h => {
                 if (!h) return false;
@@ -1705,7 +1719,7 @@ window.loadNcrData = async function() {
                 return keywords.some(k => normalized.includes(k.toLowerCase().replace(/[\s\(\)\[\]_]/g, '')));
             });
         };
-        
+
         const cPjt = getIdx(['project', 'pjt', '프로젝트']);
         const cNcr = getIdx(['ncrno', 'ncr']);
         const cDate = getIdx(['발생일', 'date']);
@@ -1714,35 +1728,34 @@ window.loadNcrData = async function() {
         const cType = getIdx(['유형', 'type']);
         const cDesc = getIdx(['내용', '부적합내용', 'content', 'desc']);
         const cStat = getIdx(['진행', '현황', '상태', 'status']);
-        
-        window.ncrData = rows.slice(1).map(row => ({
-            pjtCode: cPjt !== -1 ? (row[cPjt] || '').trim() : '',
-            ncrNo: cNcr !== -1 ? (row[cNcr] || '') : '',
-            date: cDate !== -1 ? (row[cDate] || '') : '',
-            drawingNo: cDraw !== -1 ? (row[cDraw] || '') : '',
-            partName: cPart !== -1 ? (row[cPart] || '') : '',
-            type: cType !== -1 ? (row[cType] || '') : '',
-            content: cDesc !== -1 ? (row[cDesc] || '') : '',
-            status: cStat !== -1 ? (row[cStat] || '') : ''
-        })).filter(n => n.pjtCode);
-        
+
+        // 데이터 매핑
+        window.ncrData = rows.slice(1).map(row => {
+            return {
+                pjtCode: cPjt !== -1 && row[cPjt] ? row[cPjt].trim() : '',
+                ncrNo: cNcr !== -1 && row[cNcr] ? row[cNcr].trim() : '',
+                date: cDate !== -1 && row[cDate] ? row[cDate].trim() : '',
+                drawingNo: cDraw !== -1 && row[cDraw] ? row[cDraw].trim() : '',
+                partName: cPart !== -1 && row[cPart] ? row[cPart].trim() : '',
+                type: cType !== -1 && row[cType] ? row[cType].trim() : '',
+                content: cDesc !== -1 && row[cDesc] ? row[cDesc].trim() : '',
+                status: cStat !== -1 && row[cStat] ? row[cStat].trim() : ''
+            };
+        }).filter(n => n.pjtCode); // PJT 코드가 있는 행만 킵
+
         window.renderProjectStatusList();
-        
+
         const modal = document.getElementById('ncr-modal');
         if (modal && !modal.classList.contains('hidden')) {
             const pjtCode = document.getElementById('ncr-project-title').dataset.code;
             if (pjtCode) window.renderNcrList(pjtCode);
         }
-        
-        if(window.showToast) window.showToast("부적합(NCR) 시트 동기화 완료", "success");
+
+        if(window.showToast) window.showToast("부적합(NCR) 데이터 동기화 완료!", "success");
 
     } catch(e) {
         console.error("NCR 로드 에러:", e);
-        if (e.message === "AUTH_ERROR") {
-            if(window.showToast) window.showToast("시트 읽기 권한이 없습니다. [요청서] 탭에서 구글 계정을 다시 연동해주세요.", "warning");
-        } else {
-            if(window.showToast) window.showToast("시트 데이터를 불러오지 못했습니다.", "error");
-        }
+        if(window.showToast) window.showToast("시트 접근 오류: 시트가 '뷰어'로 공개되어 있는지 확인하세요.", "error");
     }
 };
 
@@ -1763,6 +1776,37 @@ window.closeNcrModal = function() {
 window.renderNcrList = function(pjtCode) {
     const tbody = document.getElementById('ncr-list-tbody');
     if (!tbody) return;
+    
+    const safeTargetCode = String(pjtCode).replace(/\s/g, '').toUpperCase();
+    const list = (window.ncrData || []).filter(n => String(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeTargetCode);
+    
+    let total = list.length, completed = list.filter(n => n.status.includes('완료') || n.status.includes('종결')).length;
+    
+    document.getElementById('ncr-total-cnt').innerText = total;
+    document.getElementById('ncr-pending-cnt').innerText = total - completed;
+    document.getElementById('ncr-comp-cnt').innerText = completed;
+    
+    if (total === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-8 text-slate-400 font-bold bg-white">등록된 부적합 내역이 없습니다.</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = list.map(n => {
+        const isComp = n.status.includes('완료') || n.status.includes('종결');
+        const textClass = isComp ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-700';
+        const badge = isComp ? `<span class="bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">완료</span>` : `<span class="bg-rose-50 text-rose-600 border border-rose-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">진행중</span>`;
+        
+        return `<tr class="hover:bg-slate-50 transition-colors bg-white border-b border-slate-100">
+            <td class="p-3 text-center font-bold text-slate-500 whitespace-nowrap">${n.ncrNo || '-'}</td>
+            <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.date || '-'}</td>
+            <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.drawingNo || '-'}</td>
+            <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.partName || '-'}</td>
+            <td class="p-3 text-center whitespace-nowrap"><span class="bg-slate-100 px-2 py-1 border border-slate-200 rounded font-bold">${n.type || '-'}</span></td>
+            <td class="p-3 font-medium ${textClass} break-all">${n.content || '-'}</td>
+            <td class="p-3 text-center whitespace-nowrap">${badge}</td>
+        </tr>`;
+    }).join('');
+};
     
     // 시트의 코드와 현황판의 코드 비교 시, 띄어쓰기 및 대소문자를 무시하도록 강화
     const safeTargetCode = String(pjtCode).replace(/\s/g, '').toUpperCase();
