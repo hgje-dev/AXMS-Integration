@@ -8,7 +8,7 @@ let unsubscribeEmails = null;
 
 window.currentReqEmails = []; 
 
-// 💡 1. 안전한 날짜 파싱 유틸 (리스트 렌더링 & 코멘트 에러 방지용)
+// 💡 안전한 날짜 파싱 유틸 (리스트 렌더링 & 코멘트 에러 방지용 핵심 함수)
 window.reqGetSafeMillis = function(val) {
     try { 
         if (!val) return 0; 
@@ -19,7 +19,7 @@ window.reqGetSafeMillis = function(val) {
     } catch(e) { return 0; }
 };
 
-// 💡 2. 검색 및 필터링 상태 변수
+// 💡 검색 및 필터링 상태 변수
 window.currentReqStatusFilter = 'all';
 window.currentReqYearFilter = '';
 window.currentReqMonthFilter = '';
@@ -59,7 +59,7 @@ window.resetReqFilters = function() {
 };
 
 // ==========================================
-// 🚀 3. 구글 API 연동 (Drive & Gmail)
+// 🚀 구글 API 연동 (Drive & Gmail)
 // ==========================================
 const GOOGLE_CLIENT_ID = '924354535197-joakn7gpfj4d3oirpd1pu3un9j7689q9.apps.googleusercontent.com';
 const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/gmail.send';
@@ -242,7 +242,7 @@ window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
 };
 
 // ==========================================
-// 💡 4. 수신 담당자 설정 관리
+// 💡 수신 담당자 설정 관리 (초성 검색)
 // ==========================================
 window.openEmailSettingsModal = function() {
     if(document.getElementById('new-req-email-user')) document.getElementById('new-req-email-user').value = '';
@@ -326,9 +326,8 @@ window.removeReqEmail = async function(idx) {
     } catch(e) { window.showToast("삭제 실패", "error"); }
 };
 
-
 // ==========================================
-// 💡 5. 핵심 폼 데이터 추출 함수 (절대 누락 금지)
+// 💡 폼 데이터 추출 헬퍼 
 // ==========================================
 window.getReqFormData = function() {
     let reqTitle = '', pjtName = '', reqValid = false;
@@ -438,14 +437,41 @@ window.getReqFormData = function() {
 
 
 // ==========================================
-// 💡 6. 폼 UI 제어 및 모달 표시
+// 💡 폼 UI 제어 및 권한 잠금 기능 (핵심)
 // ==========================================
 window.openWriteModal = function(editId = null) { 
     window.editingReqId = editId; 
     
-    // 초기화
-    const fieldsToClear = ['req-pjt-code','req-pjt-name','req-title','req-company','req-location','req-start-date','req-end-date','req-est-md','req-content', 'req-pur-title','req-pur-pjt-code','req-pur-pjt-name','req-pur-ship-date','pur-spec-etc-memo'];
-    fieldsToClear.forEach(id => { if(document.getElementById(id)) document.getElementById(id).value = ''; });
+    // 💡 1. 폼 및 버튼 활성화 상태 초기화 (이전 ReadOnly 상태 해제)
+    document.querySelectorAll('#collab-form-fields input, #collab-form-fields select, #collab-form-fields textarea').forEach(el => el.disabled = false);
+    document.querySelectorAll('#purchase-form-fields input, #purchase-form-fields select, #purchase-form-fields textarea').forEach(el => el.disabled = false);
+    
+    const dropzone = document.getElementById('req-dropzone');
+    if(dropzone) dropzone.style.pointerEvents = 'auto';
+    
+    const btnSave = document.getElementById('btn-req-save');
+    if(btnSave) btnSave.classList.remove('hidden');
+    
+    const btnDraft = document.querySelector('button[onclick="window.saveDraftRequest()"]');
+    if(btnDraft) btnDraft.classList.remove('hidden');
+
+    // 콜랩용 초기화
+    if(document.getElementById('req-pjt-code')) document.getElementById('req-pjt-code').value = ''; 
+    if(document.getElementById('req-pjt-name')) document.getElementById('req-pjt-name').value = ''; 
+    if(document.getElementById('req-title')) document.getElementById('req-title').value = ''; 
+    if(document.getElementById('req-company')) document.getElementById('req-company').value = ''; 
+    if(document.getElementById('req-location')) document.getElementById('req-location').value = ''; 
+    if(document.getElementById('req-start-date')) document.getElementById('req-start-date').value = ''; 
+    if(document.getElementById('req-end-date')) document.getElementById('req-end-date').value = ''; 
+    if(document.getElementById('req-est-md')) document.getElementById('req-est-md').value = ''; 
+    if(document.getElementById('req-content')) document.getElementById('req-content').value = ''; 
+
+    // 구매의뢰용(Spec) 초기화
+    if(document.getElementById('req-pur-title')) document.getElementById('req-pur-title').value = '';
+    if(document.getElementById('req-pur-pjt-code')) document.getElementById('req-pur-pjt-code').value = '';
+    if(document.getElementById('req-pur-pjt-name')) document.getElementById('req-pur-pjt-name').value = '';
+    if(document.getElementById('req-pur-ship-date')) document.getElementById('req-pur-ship-date').value = '';
+    if(document.getElementById('pur-spec-etc-memo')) document.getElementById('pur-spec-etc-memo').value = '';
     
     ['app','qty','unit','las-wave','las-power','las-maker','las-type','las-ch','las-len','las-core','las-cool','opt-type','opt-mnt','opt-col','opt-split','opt-lens','opt-scan','opt-cam','opt-lit','acc-pc','acc-ctrl','acc-air','acc-rtc'].forEach(k => {
         if(document.getElementById(`pur-spec-${k}`)) document.getElementById(`pur-spec-${k}`).value = (k==='qty') ? '1' : '';
@@ -497,7 +523,7 @@ window.openWriteModal = function(editId = null) {
                 if(rEl) rEl.checked = true;
             }
 
-            // 구매 셋 (Spec 복원)
+            // 구매 셋 (Spec 복원 로직)
             if(document.getElementById('req-pur-title')) document.getElementById('req-pur-title').value = req.reqTitle || req.title || '';
             if(document.getElementById('req-pur-pjt-code')) document.getElementById('req-pur-pjt-code').value = req.pjtCode || '';
             if(document.getElementById('req-pur-pjt-name')) document.getElementById('req-pur-pjt-name').value = req.pjtName || '';
@@ -548,7 +574,20 @@ window.openWriteModal = function(editId = null) {
                 }
             }
 
-            if (window.userProfile && window.userProfile.role === 'admin') {
+            // 💡 2. [보안 로직] 접수(progress) 또는 완료(completed) 상태일 때 관리자를 제외하고 폼 수정 불가
+            const isAccepted = (req.status === 'progress' || req.status === 'completed');
+            const isAdmin = window.userProfile && window.userProfile.role === 'admin';
+            
+            if (isAccepted && !isAdmin) {
+                document.querySelectorAll('#collab-form-fields input, #collab-form-fields select, #collab-form-fields textarea').forEach(el => el.disabled = true);
+                document.querySelectorAll('#purchase-form-fields input, #purchase-form-fields select, #purchase-form-fields textarea').forEach(el => el.disabled = true);
+                
+                if(dropzone) dropzone.style.pointerEvents = 'none';
+                if(btnSave) btnSave.classList.add('hidden');
+                if(btnDraft) btnDraft.classList.add('hidden');
+            }
+
+            if (isAdmin) {
                 const adminMenu = document.getElementById('admin-actions');
                 const btnAccept = document.getElementById('btn-admin-accept');
                 const btnComplete = document.getElementById('btn-admin-complete');
@@ -592,7 +631,7 @@ window.closeWriteModal = function() {
 };
 
 // ==========================================
-// 💡 7. 모달 프롬프트 및 액션 (Save, Accept, Complete)
+// 💡 모달 프롬프트 연결 로직 (Save, Accept, Complete)
 // ==========================================
 window.saveDraftRequest = async function() {
     const { data, currentReq } = window.getReqFormData();
@@ -648,7 +687,10 @@ window.executeSaveRequest = async function() {
     if(sm) { sm.classList.add('hidden'); sm.classList.remove('flex'); }
     
     const btn = document.getElementById('btn-req-save');
-    if(btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 전송 중...'; }
+    if(btn) {
+        btn.disabled = true; 
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 전송 중...';
+    }
 
     let { data, currentReq } = window.getReqFormData();
     
@@ -670,7 +712,7 @@ window.executeSaveRequest = async function() {
         }
         data.fileUrl = fileUrl || (currentReq ? currentReq.fileUrl : null);
 
-        // 엑셀 자동생성 로직 (구매 의뢰서 전용)
+        // 엑셀 자동생성 로직
         if (window.currentAppId === 'purchase' && typeof window.ExcelJS !== 'undefined') {
             window.showToast("구매 의뢰서 엑셀 양식을 생성 중입니다...");
             try {
@@ -881,7 +923,7 @@ window.revertRequest = async function() {
 };
 
 // ==========================================
-// 💡 8. 데이터 로드 및 테이블 렌더링
+// 💡 데이터 로드 및 테이블 렌더링 (동적 컬럼 적용)
 // ==========================================
 window.loadRequestsData = function(appId) { 
     if(unsubscribeRequests) unsubscribeRequests(); 
@@ -1022,11 +1064,12 @@ window.renderRequestList = function() {
                     <td class="p-3 font-black text-indigo-800 truncate max-w-[250px]">${safeReqTitle}</td>
                     <td class="p-3 text-center font-bold text-rose-500">${safeShipDate}</td>
                     <td class="p-3 text-center font-bold text-slate-600">${r.authorName} <span class="text-[9px] bg-slate-100 text-slate-400 px-1 py-0.5 rounded block mt-0.5 w-max mx-auto">${r.authorTeam||''}</span></td>
+                    <td class="p-3 text-center font-bold text-indigo-600">${safeManager}</td>
                     <td class="p-3 text-center text-slate-500 font-medium">${dCreate}</td>
                     <td class="p-3 text-center text-blue-500 font-bold">${dAccept}</td>
                     <td class="p-3 text-center text-emerald-500 font-bold">${dComp}</td>
                     <td class="p-3 text-center" onclick="event.stopPropagation()">
-                        <button onclick="window.deleteRequest('${r.id}')" class="text-slate-300 hover:text-rose-500 transition-colors p-2"><i class="fa-solid fa-trash-can"></i></button>
+                        <button onclick="window.deleteRequest('${r.id}')" class="text-slate-300 hover:text-rose-500 transition-colors p-2 flex items-center justify-center mx-auto"><i class="fa-solid fa-trash-can"></i></button>
                     </td>
                 </tr>`;
             } else {
@@ -1044,7 +1087,7 @@ window.renderRequestList = function() {
                     <td class="p-3 text-center text-blue-500 font-bold">${dAccept}</td>
                     <td class="p-3 text-center text-emerald-500 font-bold">${dComp}</td>
                     <td class="p-3 text-center" onclick="event.stopPropagation()">
-                        <button onclick="window.deleteRequest('${r.id}')" class="text-slate-300 hover:text-rose-500 transition-colors p-2"><i class="fa-solid fa-trash-can"></i></button>
+                        <button onclick="window.deleteRequest('${r.id}')" class="text-slate-300 hover:text-rose-500 transition-colors p-2 flex items-center justify-center mx-auto"><i class="fa-solid fa-trash-can"></i></button>
                     </td>
                 </tr>`;
             }
@@ -1067,7 +1110,7 @@ window.deleteRequest = async function(id) {
 };
 
 // ==========================================
-// 💡 9. 코멘트 모달 로직
+// 💡 코멘트 모달 로직 (에러 방지 처리 포함)
 // ==========================================
 window.openCommentModal = function(reqId, title) { 
     const cmtInput = document.getElementById('cmt-req-id');
