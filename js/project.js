@@ -1671,52 +1671,41 @@ document.addEventListener('click', function(e) {
 });
 
 // ==========================================
-// 💡 부적합(NCR) 구글 시트 연동 (토큰 인증 + gviz API 하이브리드)
+// 💡 부적합(NCR) 구글 시트 연동 (정식 Sheets API v4 사용)
 // ==========================================
 window.loadNcrData = async function() {
+    const token = window.googleAccessToken || localStorage.getItem('axmsGoogleToken');
+    if (!token) {
+        if(window.showToast) window.showToast("구글 연동이 필요합니다. (요청서 탭 활용)", "warning");
+        return;
+    }
+
     try {
-        // 💡 앱에 로그인된 구글 토큰을 가져옵니다.
-        const token = window.googleAccessToken || localStorage.getItem('axmsGoogleToken');
-
         const sheetId = '1ZYwSKvT4QXjFxgftunwdRHWzX4KXoelhZSVjauAJg8s';
-        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=RawData`;
-
-        // 💡 회사 보안 시트일 경우를 대비해 토큰을 헤더에 실어서 보냅니다.
-        const fetchOptions = token ? { headers: { 'Authorization': 'Bearer ' + token } } : {};
-        const res = await fetch(url, fetchOptions);
-
-        if (!res.ok) {
-            // 토큰이 만료되었거나 접근 권한이 없는 경우
-            if (res.status === 401 || res.status === 403) {
-                throw new Error("AUTH_ERROR");
-            }
-            throw new Error("HTTP " + res.status);
-        }
-
-        // 응답 텍스트에서 JSON 데이터 부분만 추출
-        const text = await res.text();
-        const start = text.indexOf('{');
-        const end = text.lastIndexOf('}');
-        if (start === -1 || end === -1) throw new Error("데이터 파싱 실패");
+        // 💡 gviz 대신 정식 구글 시트 API 엔드포인트를 사용합니다. (CORS 에러 해결)
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/RawData`;
         
-        const jsonString = text.substring(start, end + 1);
-        const data = JSON.parse(jsonString);
-
-        if (!data || !data.table || !data.table.cols || !data.table.rows) return;
-
-        // 헤더(열 이름) 추출
-        const cols = data.table.cols.map(c => c ? c.label : '');
-        const rows = data.table.rows;
-
-        // 띄어쓰기, 대소문자를 무시하고 정확히 열 위치를 찾는 함수
+        const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
+        
+        if (!res.ok) {
+            if (res.status === 401 || res.status === 403) throw new Error("AUTH_ERROR");
+            throw new Error("API 요청 실패: " + res.status);
+        }
+        
+        const data = await res.json();
+        const rows = data.values;
+        if (!rows || rows.length < 2) return;
+        
+        const headers = rows[0];
+        
         const getIdx = (keywords) => {
-            return cols.findIndex(h => {
+            return headers.findIndex(h => {
                 if (!h) return false;
                 const normalized = String(h).toLowerCase().replace(/[\s\(\)\[\]_]/g, '');
                 return keywords.some(k => normalized.includes(k.toLowerCase().replace(/[\s\(\)\[\]_]/g, '')));
             });
         };
-
+        
         const cPjt = getIdx(['project', 'pjt', '프로젝트']);
         const cNcr = getIdx(['ncrno', 'ncr']);
         const cDate = getIdx(['발생일', 'date']);
@@ -1725,40 +1714,34 @@ window.loadNcrData = async function() {
         const cType = getIdx(['유형', 'type']);
         const cDesc = getIdx(['내용', '부적합내용', 'content', 'desc']);
         const cStat = getIdx(['진행', '현황', '상태', 'status']);
-
-        window.ncrData = rows.map(row => {
-            // 셀 값을 안전하게 가져오는 헬퍼
-            const getCellVal = (idx) => {
-                if (idx === -1 || !row.c[idx]) return '';
-                return row.c[idx].f ? String(row.c[idx].f) : (row.c[idx].v !== null ? String(row.c[idx].v) : '');
-            };
-
-            return {
-                pjtCode: getCellVal(cPjt).trim(),
-                ncrNo: getCellVal(cNcr),
-                date: getCellVal(cDate),
-                drawingNo: getCellVal(cDraw),
-                partName: getCellVal(cPart),
-                type: getCellVal(cType),
-                content: getCellVal(cDesc),
-                status: getCellVal(cStat)
-            };
-        }).filter(n => n.pjtCode); 
-
+        
+        window.ncrData = rows.slice(1).map(row => ({
+            pjtCode: cPjt !== -1 ? (row[cPjt] || '').trim() : '',
+            ncrNo: cNcr !== -1 ? (row[cNcr] || '') : '',
+            date: cDate !== -1 ? (row[cDate] || '') : '',
+            drawingNo: cDraw !== -1 ? (row[cDraw] || '') : '',
+            partName: cPart !== -1 ? (row[cPart] || '') : '',
+            type: cType !== -1 ? (row[cType] || '') : '',
+            content: cDesc !== -1 ? (row[cDesc] || '') : '',
+            status: cStat !== -1 ? (row[cStat] || '') : ''
+        })).filter(n => n.pjtCode);
+        
         window.renderProjectStatusList();
-
+        
         const modal = document.getElementById('ncr-modal');
         if (modal && !modal.classList.contains('hidden')) {
             const pjtCode = document.getElementById('ncr-project-title').dataset.code;
             if (pjtCode) window.renderNcrList(pjtCode);
         }
+        
+        if(window.showToast) window.showToast("부적합(NCR) 시트 동기화 완료", "success");
 
     } catch(e) {
         console.error("NCR 로드 에러:", e);
         if (e.message === "AUTH_ERROR") {
-            if(window.showToast) window.showToast("구글 권한이 만료되었습니다. [요청서] 탭에서 구글 계정을 다시 연동해주세요.", "warning");
+            if(window.showToast) window.showToast("시트 읽기 권한이 없습니다. [요청서] 탭에서 구글 계정을 다시 연동해주세요.", "warning");
         } else {
-            if(window.showToast) window.showToast("시트 접근 오류: 회사 보안 정책으로 막혔거나 시트 이름이 다릅니다.", "error");
+            if(window.showToast) window.showToast("시트 데이터를 불러오지 못했습니다.", "error");
         }
     }
 };
