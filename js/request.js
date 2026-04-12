@@ -19,7 +19,6 @@ const DRIVE_FOLDERS = {
     'repair': '1YSIVOQhoq2gWnhSze-mmYgyDs0XkaeGj' 
 };
 
-// 💡 Drag & Drop 파일 선택 처리
 window.handleFileSelect = function(files) {
     if (files && files.length > 0) {
         const fileInput = document.getElementById('req-file');
@@ -44,7 +43,6 @@ window.initGoogleAPI = function() {
         return;
     }
     
-    // 💡 로컬 스토리지에 토큰이 캐싱되어 있는지 확인 (1시간 이내)
     const storedToken = localStorage.getItem('axmsGoogleToken');
     const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiry');
     
@@ -61,7 +59,6 @@ window.initGoogleAPI = function() {
         document.getElementById('google-auth-status')?.classList.remove('hidden');
         document.getElementById('google-auth-status')?.classList.add('flex');
     } else {
-        // 만료되었거나 없으면 연동 버튼 표시
         document.getElementById('google-auth-section')?.classList.remove('hidden');
         document.getElementById('google-auth-status')?.classList.add('hidden');
         document.getElementById('google-auth-status')?.classList.remove('flex');
@@ -77,7 +74,6 @@ window.initGoogleAPI = function() {
             }
             window.googleAccessToken = response.access_token;
             
-            // 💡 토큰과 만료 시간(1시간 = 3600초)을 로컬 스토리지에 캐싱
             localStorage.setItem('axmsGoogleToken', response.access_token);
             localStorage.setItem('axmsGoogleTokenExpiry', Date.now() + 3500 * 1000);
 
@@ -125,30 +121,34 @@ window.uploadFileToDrive = async function(file, folderId) {
     return data.id; 
 };
 
+// 💡 지정된 이메일로 템플릿 발송 (로고 반영)
 window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
     if (!window.googleAccessToken) throw new Error("구글 인증이 필요합니다.");
     
+    // 💡 저장소에 올라간 깃허브 Raw 이미지 경로를 활용하여 메일 내 로고 표시
+    const logoUrl = "https://raw.githubusercontent.com/hgje-dev/AXMS-Integration/main/assets/%EC%97%91%EC%8A%A4%EB%B9%84%EC%8A%A4CI%20%EC%8A%AC%EB%A1%9C%EA%B1%B4_%ED%8F%AC%EC%A7%80%ED%8B%B0%EB%B8%8C.png";
+
     let subject = `[AXBIS] ${reqData.type === 'collab' ? '협업/조립 요청' : reqData.type} - ${reqData.title}`;
     let bodyHtml = `
         <div style="font-family: sans-serif; padding: 20px; background: #f8fafc; border-radius: 10px;">
-            <h2 style="color: #4f46e5;">AXBIS 시스템 자동 알림</h2>
+            <img src="${logoUrl}" alt="AXBIS" style="height: 28px; margin-bottom: 15px;">
             <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
                 <p><strong>구분:</strong> ${reqData.category || '-'}</p>
                 <p><strong>프로젝트명:</strong> ${reqData.pjtName || '-'}</p>
                 <p><strong>요청자:</strong> ${reqData.authorName} (${reqData.authorTeam})</p>
                 <p><strong>내용:</strong><br>${String(reqData.content || '').replace(/\n/g, '<br>')}</p>
-                ${reqData.fileUrl ? `<p><strong>첨부파일:</strong> <a href="${reqData.fileUrl}">문서 확인하기</a></p>` : ''}
+                ${reqData.fileUrl ? `<p style="margin-top:20px;"><strong>첨부파일:</strong> <a href="${reqData.fileUrl}" style="color:#4f46e5; font-weight:bold;">문서 확인하기</a></p>` : ''}
             </div>
-            <p style="font-size: 12px; color: #94a3b8; margin-top: 20px;">본 메일은 AXBIS 포털에서 자동 발송되었습니다.</p>
+            <p style="font-size: 11px; color: #94a3b8; margin-top: 20px;">본 메일은 AXBIS 클라우드 포털에서 자동 발송되었습니다.</p>
         </div>
     `;
 
     if(type === 'progress') {
         subject = `[AXBIS 접수완료] 요청하신 내역이 접수되었습니다 - ${reqData.title}`;
-        bodyHtml = `<h2>요청하신 내역이 접수되어 진행 중입니다.</h2>${bodyHtml}`;
+        bodyHtml = `<h2 style="color: #4f46e5; font-size:18px;">요청하신 내역이 정상적으로 접수되어 진행 중입니다.</h2>${bodyHtml}`;
     } else if (type === 'completed') {
         subject = `[AXBIS 작업완료] 요청하신 작업이 완료되었습니다 - ${reqData.title}`;
-        bodyHtml = `<h2>요청하신 작업이 성공적으로 완료되었습니다.</h2>${bodyHtml}`;
+        bodyHtml = `<h2 style="color: #10b981; font-size:18px;">요청하신 작업이 성공적으로 완료되었습니다.</h2>${bodyHtml}`;
     }
 
     const emailRaw = `To: ${recipientEmail}\r\n` +
@@ -171,6 +171,9 @@ window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
     return true;
 };
 
+// ==========================================
+// 폼 UI 제어 및 저장/수정 로직
+// ==========================================
 window.openWriteModal = function(editId = null) { 
     window.editingReqId = editId; 
     
@@ -182,6 +185,7 @@ window.openWriteModal = function(editId = null) {
     document.getElementById('req-end-date').value = ''; 
     document.getElementById('req-est-md').value = ''; 
     document.getElementById('req-content').value = ''; 
+    document.getElementById('req-recipient-email').value = ADMIN_EMAIL; // 기본값 리셋
     window.clearSelectedFile();
     
     document.getElementById('req-file-link-wrap').classList.add('hidden');
@@ -210,6 +214,7 @@ window.openWriteModal = function(editId = null) {
             document.getElementById('req-end-date').value = req.endDate || ''; 
             document.getElementById('req-est-md').value = req.estMd || ''; 
             document.getElementById('req-content').value = req.content || ''; 
+            if(req.recipientEmail) document.getElementById('req-recipient-email').value = req.recipientEmail;
             
             if(req.category) {
                 const rEl = document.querySelector(`input[name="req-category"][value="${req.category}"]`);
@@ -234,18 +239,34 @@ window.openWriteModal = function(editId = null) {
                 badge.innerText = "접수 대기중";
             }
 
+            // 💡 관리자 버튼 상태 제어 (되돌리기 기능 포함)
             if (window.userProfile && window.userProfile.role === 'admin') {
                 const adminMenu = document.getElementById('admin-actions');
+                const btnAccept = document.getElementById('btn-admin-accept');
+                const btnComplete = document.getElementById('btn-admin-complete');
+                const btnRevert = document.getElementById('btn-admin-revert');
+
                 adminMenu.classList.remove('hidden');
-                if(req.status === 'completed') adminMenu.classList.add('hidden'); 
+
+                if (req.status === 'completed') {
+                    btnAccept.classList.add('hidden');
+                    btnComplete.classList.add('hidden');
+                    btnRevert.classList.remove('hidden');
+                } else if (req.status === 'progress') {
+                    btnAccept.classList.add('hidden');
+                    btnComplete.classList.remove('hidden');
+                    btnRevert.classList.add('hidden');
+                } else {
+                    btnAccept.classList.remove('hidden');
+                    btnComplete.classList.add('hidden');
+                    btnRevert.classList.add('hidden');
+                }
             }
         }
     }
 
     document.getElementById('write-modal').classList.remove('hidden'); 
     document.getElementById('write-modal').classList.add('flex'); 
-
-    // 모달 뜰 때마다 구글 인증 초기화 (캐싱 처리 완료)
     window.initGoogleAPI();
 };
 
@@ -260,6 +281,7 @@ window.saveRequest = async function(btn) {
     const endDate = document.getElementById('req-end-date').value;
     const content = document.getElementById('req-content').value.trim();
     const fileInput = document.getElementById('req-file');
+    const recipientEmail = document.getElementById('req-recipient-email').value.trim();
     
     const category = document.querySelector('input[name="req-category"]:checked')?.value || '';
 
@@ -270,6 +292,9 @@ window.saveRequest = async function(btn) {
     if (!window.googleAccessToken) {
         return window.showToast("파일 업로드 및 메일 발송을 위해 [구글 계정 연동]을 먼저 진행해주세요.", "warning");
     }
+
+    // 💡 작성 확인 다이얼로그
+    if(!confirm(`입력하신 내용을 바탕으로 요청서를 저장하고\n[${recipientEmail || '관리자'}] 에게 메일을 발송하시겠습니까?`)) return;
 
     btn.disabled = true; 
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 전송 중...';
@@ -297,6 +322,7 @@ window.saveRequest = async function(btn) {
             estMd: parseFloat(document.getElementById('req-est-md').value) || 0,
             category: category,
             content: content,
+            recipientEmail: recipientEmail || ADMIN_EMAIL, // 지정된 수신자 저장
             fileUrl: fileUrl || (window.editingReqId ? window.currentRequestList.find(r=>r.id===window.editingReqId)?.fileUrl : null),
             authorUid: window.currentUser.uid, 
             authorName: window.userProfile.name, 
@@ -312,10 +338,10 @@ window.saveRequest = async function(btn) {
             await addDoc(collection(db,"requests"), data); 
         } 
 
-        window.showToast("관리자에게 확인 메일을 발송합니다...");
-        await window.sendNotificationEmail('pending', data, ADMIN_EMAIL);
+        window.showToast("지정된 수신자에게 확인 메일을 발송합니다...");
+        await window.sendNotificationEmail('pending', data, data.recipientEmail);
 
-        window.showToast("성공적으로 등록 및 송부되었습니다."); 
+        window.showToast("성공적으로 등록 및 메일 발송이 완료되었습니다."); 
         window.closeWriteModal(); 
     } catch(e) { 
         console.error(e);
@@ -330,11 +356,14 @@ window.acceptRequest = async function() {
     if (!window.editingReqId) return;
     if (!window.googleAccessToken) return window.showToast("구글 연동을 먼저 해주세요.", "error");
 
+    // 💡 접수 확인 다이얼로그
+    if(!confirm("이 요청을 공식적으로 '접수(진행 중)' 처리하고 요청자에게 알림 메일을 보내시겠습니까?")) return;
+
     const req = window.currentRequestList.find(r => r.id === window.editingReqId);
     try {
         await setDoc(doc(db, "requests", window.editingReqId), { status: 'progress', updatedAt: Date.now() }, { merge: true });
         await window.sendNotificationEmail('progress', req, req.authorEmail);
-        window.showToast("접수 완료 메일이 발송되었습니다.");
+        window.showToast("접수 완료 및 진행 알림 메일이 발송되었습니다.");
         window.closeWriteModal();
     } catch(e) { window.showToast("처리 실패", "error"); }
 };
@@ -343,11 +372,27 @@ window.completeRequest = async function() {
     if (!window.editingReqId) return;
     if (!window.googleAccessToken) return window.showToast("구글 연동을 먼저 해주세요.", "error");
 
+    // 💡 완료 확인 다이얼로그
+    if(!confirm("이 요청을 '작업 완료' 처리하고 요청자에게 알림 메일을 보내시겠습니까?")) return;
+
     const req = window.currentRequestList.find(r => r.id === window.editingReqId);
     try {
         await setDoc(doc(db, "requests", window.editingReqId), { status: 'completed', updatedAt: Date.now() }, { merge: true });
         await window.sendNotificationEmail('completed', req, req.authorEmail);
-        window.showToast("작업 완료 메일이 발송되었습니다.");
+        window.showToast("작업 완료 처리 및 알림 메일이 발송되었습니다.");
+        window.closeWriteModal();
+    } catch(e) { window.showToast("처리 실패", "error"); }
+};
+
+// 💡 관리자용: 완료된 상태를 진행중으로 되돌리기
+window.revertRequest = async function() {
+    if (!window.editingReqId) return;
+    
+    if(!confirm("이 요청을 다시 '진행 중' 상태로 되돌리시겠습니까?")) return;
+
+    try {
+        await setDoc(doc(db, "requests", window.editingReqId), { status: 'progress', updatedAt: Date.now() }, { merge: true });
+        window.showToast("진행 중 상태로 성공적으로 되돌렸습니다.");
         window.closeWriteModal();
     } catch(e) { window.showToast("처리 실패", "error"); }
 };
