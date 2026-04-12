@@ -9,7 +9,7 @@ let unsubscribeRequests = null;
 // ==========================================
 const GOOGLE_CLIENT_ID = '924354535197-joakn7gpfj4d3oirpd1pu3un9j7689q9.apps.googleusercontent.com';
 const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/gmail.send';
-const ADMIN_EMAIL = 'admin@axbis.ai'; // 기본 수신 관리자 이메일 (필요시 변경)
+const ADMIN_EMAIL = 'mfg@axbis.ai'; // 기본 수신 관리자 이메일 (필요시 변경)
 
 window.googleAccessToken = null;
 
