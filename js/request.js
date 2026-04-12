@@ -185,6 +185,37 @@ window.uploadFileToDrive = async function(file, folderId) {
     return data.id; 
 };
 
+// 💡 PJT 코드로 하위 폴더 찾기 (없으면 생성하는 핵심 함수)
+async function getOrCreateSubfolder(parentFolderId, folderName) {
+    if (!window.googleAccessToken) throw new Error("구글 인증이 필요합니다.");
+    
+    const query = `name='${encodeURIComponent(folderName)}' and mimeType='application/vnd.google-apps.folder' and '${parentFolderId}' in parents and trashed=false`;
+    const findRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}`, {
+        headers: { 'Authorization': 'Bearer ' + window.googleAccessToken }
+    });
+    
+    const folderData = await findRes.json();
+    
+    if (folderData.files && folderData.files.length > 0) {
+        return folderData.files[0].id;
+    } else {
+        const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+            method: 'POST',
+            headers: { 
+                'Authorization': 'Bearer ' + window.googleAccessToken, 
+                'Content-Type': 'application/json' 
+            },
+            body: JSON.stringify({ 
+                name: folderName, 
+                mimeType: 'application/vnd.google-apps.folder', 
+                parents: [parentFolderId] 
+            })
+        });
+        const newData = await createRes.json();
+        return newData.id;
+    }
+}
+
 window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
     if (!window.googleAccessToken) throw new Error("구글 인증이 필요합니다.");
     if (!recipientEmail) return false;
@@ -324,7 +355,7 @@ window.removeReqEmail = async function(idx) {
 
 
 // ==========================================
-// 💡 폼 데이터 추출 함수 (에러 원천 차단)
+// 💡 폼 데이터 추출 함수
 // ==========================================
 window.getReqFormData = function() {
     let reqTitle = '', pjtName = '', reqValid = false;
@@ -592,10 +623,14 @@ window.saveDraftRequest = async function() {
     const fileInput = document.getElementById('req-file');
     try { 
         let fileUrl = null;
-        const targetFolderId = DRIVE_FOLDERS[window.currentAppId] || '';
-
+        // 💡 임시저장 시에도 폴더 분류
+        let targetFolderId = DRIVE_FOLDERS[window.currentAppId] || '';
+        
         if (fileInput && fileInput.files.length > 0 && targetFolderId && window.googleAccessToken) {
             window.showToast("파일을 업로드 중입니다...");
+            if (window.currentAppId === 'purchase' && data.pjtCode) {
+                targetFolderId = await getOrCreateSubfolder(targetFolderId, data.pjtCode);
+            }
             const fileId = await window.uploadFileToDrive(fileInput.files[0], targetFolderId);
             fileUrl = `https://drive.google.com/file/d/${fileId}/view`;
         }
@@ -629,7 +664,7 @@ window.executeSaveRequest = async function() {
     const sm = document.getElementById('req-send-modal');
     if(sm) { sm.classList.add('hidden'); sm.classList.remove('flex'); }
     
-    const btn = document.getElementById('btn-req-save');
+    const btn = document.getElementById('btn-req-save-exec');
     if(btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 전송 중...'; }
 
     let { data, currentReq } = window.getReqFormData();
@@ -642,7 +677,12 @@ window.executeSaveRequest = async function() {
     try { 
         let fileUrl = null;
         let excelFileUrl = null;
-        const targetFolderId = DRIVE_FOLDERS[window.currentAppId] || '';
+        let targetFolderId = DRIVE_FOLDERS[window.currentAppId] || '';
+
+        // 💡 프로젝트 코드 폴더 찾거나 생성
+        if (window.currentAppId === 'purchase' && data.pjtCode) {
+            targetFolderId = await getOrCreateSubfolder(targetFolderId, data.pjtCode);
+        }
 
         if (fileInput && fileInput.files.length > 0 && targetFolderId) {
             window.showToast("구글 드라이브에 첨부 파일을 업로드 중입니다...");
@@ -683,10 +723,11 @@ window.executeSaveRequest = async function() {
                 
                 const buffer = await wb.xlsx.writeBuffer();
                 const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-                const excelFile = new File([blob], `모듈구매의뢰서_${data.pjtName}_${data.authorName}.xlsx`, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                const excelFile = new File([blob], `모듈구매의뢰서_${data.pjtCode||data.pjtName}_${data.authorName}.xlsx`, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
                 
                 window.showToast("생성된 엑셀을 드라이브에 업로드 중입니다...");
-                const excelFileId = await window.uploadFileToDrive(excelFile, '18SE2vn_OjZKWWOnthyrVA4fPoIcQP490'); 
+                // 💡 PJT 코드 폴더에 저장
+                const excelFileId = await window.uploadFileToDrive(excelFile, targetFolderId); 
                 excelFileUrl = `https://drive.google.com/file/d/${excelFileId}/view`;
                 data.excelFileUrl = excelFileUrl;
             } catch(excelErr) { console.error(excelErr); }
@@ -704,7 +745,7 @@ window.executeSaveRequest = async function() {
         window.closeWriteModal(); 
     } catch(e) { window.showToast("오류 발생: " + e.message, "error"); 
     } finally { 
-        if(btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-regular fa-paper-plane"></i> 저장 및 메일 발송'; }
+        if(btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane mr-1"></i> 발송하기'; }
     }
 };
 
@@ -761,6 +802,7 @@ window.promptCompleteRequest = function() {
             fileSection.classList.remove('hidden');
             const fileInput = document.getElementById('req-complete-file');
             if(fileInput) fileInput.value = '';
+            document.getElementById('req-complete-file-name').innerText = '';
         } else {
             fileSection.classList.add('hidden');
         }
@@ -777,7 +819,7 @@ window.executeCompleteRequest = async function() {
     const cm = document.getElementById('req-complete-modal');
     if(cm) { cm.classList.add('hidden'); cm.classList.remove('flex'); }
     const btn = document.getElementById('btn-req-complete-exec');
-    if(btn) { btn.disabled = true; btn.innerHTML = '처리중...'; }
+    if(btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 처리중...'; }
 
     const req = window.currentRequestList.find(r => r.id === window.editingReqId);
     const sendEmail = document.getElementById('req-complete-email')?.value.trim() || '';
@@ -790,9 +832,16 @@ window.executeCompleteRequest = async function() {
 
     try {
         let resultFileUrl = null;
+        let targetFolderId = DRIVE_FOLDERS[window.currentAppId] || '';
+
+        // 💡 PJT 코드 폴더에 완료 검수 리스트 업로드
+        if (window.currentAppId === 'purchase' && req.pjtCode) {
+            targetFolderId = await getOrCreateSubfolder(targetFolderId, req.pjtCode);
+        }
+
         if (fileInput && fileInput.files.length > 0) {
             window.showToast("완료 결과물(검수 리스트)을 드라이브에 업로드 중입니다...");
-            const fileId = await window.uploadFileToDrive(fileInput.files[0], DRIVE_FOLDERS[window.currentAppId]);
+            const fileId = await window.uploadFileToDrive(fileInput.files[0], targetFolderId);
             resultFileUrl = `https://drive.google.com/file/d/${fileId}/view`;
         }
 
@@ -874,6 +923,7 @@ window.renderRequestList = function() {
     const th = document.getElementById('req-thead-tr');
     if(!tb || !th) return; 
 
+    // 💡 헤더에 [요청서], [검수] 열 추가
     if (window.currentAppId === 'purchase') {
         th.innerHTML = `
             <th class="p-4 font-bold text-center w-20">현재 상태</th>
@@ -881,6 +931,8 @@ window.renderRequestList = function() {
             <th class="p-4 font-bold min-w-[200px] max-w-[250px]">프로젝트명</th>
             <th class="p-4 font-bold text-center">PJT 코드</th>
             <th class="p-4 font-bold min-w-[200px] max-w-[250px] text-indigo-300">의뢰서 제목</th>
+            <th class="p-4 font-bold text-center text-teal-400 w-16">요청서</th>
+            <th class="p-4 font-bold text-center text-emerald-400 w-16">검수</th>
             <th class="p-4 font-bold text-center text-rose-400">출하요청일</th>
             <th class="p-4 font-bold text-center">담당자</th>
             <th class="p-4 font-bold text-center text-slate-400">등록일</th>
@@ -926,7 +978,7 @@ window.renderRequestList = function() {
     });
 
     if(displayList.length === 0) { 
-        tb.innerHTML='<tr><td colspan="11" class="text-center p-8 text-slate-400 font-bold border-b border-slate-100">조건에 맞는 요청서가 없습니다.</td></tr>'; 
+        tb.innerHTML=`<tr><td colspan="${window.currentAppId === 'purchase' ? 13 : 11}" class="text-center p-8 text-slate-400 font-bold border-b border-slate-100">조건에 맞는 요청서가 없습니다.</td></tr>`; 
         return; 
     } 
 
@@ -958,6 +1010,10 @@ window.renderRequestList = function() {
 
             if (window.currentAppId === 'purchase') {
                 const safeShipDate = r.shipDate || '-';
+                // 💡 다운로드/열기 링크 버튼 UI 생성
+                const reqDocHtml = r.excelFileUrl ? `<a href="${r.excelFileUrl}" target="_blank" onclick="event.stopPropagation()" class="text-teal-600 hover:text-white hover:bg-teal-500 bg-teal-50 border border-teal-200 px-2 py-1 rounded text-[11px] shadow-sm font-bold transition-colors" title="요청서 엑셀 다운로드"><i class="fa-solid fa-file-excel"></i></a>` : `<span class="text-slate-300">-</span>`;
+                const inspDocHtml = r.resultFileUrl ? `<a href="${r.resultFileUrl}" target="_blank" onclick="event.stopPropagation()" class="text-emerald-600 hover:text-white hover:bg-emerald-500 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded text-[11px] shadow-sm font-bold transition-colors" title="검수 리스트 확인"><i class="fa-solid fa-file-circle-check"></i></a>` : `<span class="text-slate-300">-</span>`;
+
                 return `
                 <tr class="hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.openWriteModal('${r.id}')">
                     <td class="p-3 text-center">${badge}</td>
@@ -965,9 +1021,10 @@ window.renderRequestList = function() {
                     <td class="p-3 font-bold text-slate-700 truncate max-w-[200px]">${safeTitle}</td>
                     <td class="p-3 text-center font-bold text-indigo-700">${r.pjtCode||'-'}</td>
                     <td class="p-3 font-black text-indigo-800 truncate max-w-[250px]">${safeReqTitle}</td>
+                    <td class="p-3 text-center">${reqDocHtml}</td>
+                    <td class="p-3 text-center">${inspDocHtml}</td>
                     <td class="p-3 text-center font-bold text-rose-500">${safeShipDate}</td>
                     <td class="p-3 text-center font-bold text-slate-600">${r.authorName} <span class="text-[9px] bg-slate-100 text-slate-400 px-1 py-0.5 rounded block mt-0.5 w-max mx-auto">${r.authorTeam||''}</span></td>
-                    <td class="p-3 text-center font-bold text-indigo-600">${safeManager}</td>
                     <td class="p-3 text-center text-slate-500 font-medium">${dCreate}</td>
                     <td class="p-3 text-center text-blue-500 font-bold">${dAccept}</td>
                     <td class="p-3 text-center text-emerald-500 font-bold">${dComp}</td>
