@@ -33,6 +33,7 @@ const getSafeMillis = function(val) {
 
 const getSafeString = function(val) { return (val === null || val === undefined) ? '' : String(val); };
 
+// 💡 메인 카운트 로더 (모든 항목의 실시간 개수 감시)
 window.loadCounts = function() {
     try {
         onSnapshot(collection(db, "project_comments"), function(snap) { 
@@ -137,6 +138,7 @@ window.loadProjectStatusData = function() {
     });
 };
 
+// 💡 PJT 현황판 리스트 렌더링
 window.renderProjectStatusList = function() {
     const tbody = document.getElementById('proj-dash-tbody'); if(!tbody) return;
     let displayList = window.getFilteredProjects();
@@ -292,10 +294,13 @@ window.openPurchaseModal = function(projectId, title) {
     document.getElementById('pur-req-id').value = projectId; document.getElementById('pur-project-title').innerText = title; 
     window.resetPurchaseForm(); document.getElementById('purchase-modal').classList.replace('hidden', 'flex'); 
     if(window.initGoogleAPI) window.initGoogleAPI();
+    
     if (currentPurchaseUnsubscribe) currentPurchaseUnsubscribe(); 
     currentPurchaseUnsubscribe = onSnapshot(query(collection(db, "project_purchases"), where("projectId", "==", projectId)), function(snap) { 
-        let list = []; snap.forEach(doc => list.push({ id: doc.id, ...doc.data() })); list.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
-        const listEl = document.getElementById('purchase-list'); if(list.length === 0) { listEl.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 내역이 없습니다.</div>'; return; }
+        let list = []; snap.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
+        list.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
+        const listEl = document.getElementById('purchase-list');
+        if(list.length === 0) { listEl.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 구매 내역이 없습니다.</div>'; return; }
         listEl.innerHTML = list.map(item => {
             let dateStr = item.createdAt ? (window.getDateTimeStr ? window.getDateTimeStr(new Date(getSafeMillis(item.createdAt))) : new Date(getSafeMillis(item.createdAt)).toLocaleString()) : '';
             let safeContent = String(item.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
@@ -323,10 +328,13 @@ window.openDesignModal = function(projectId, title) {
     document.getElementById('des-req-id').value = projectId; document.getElementById('des-project-title').innerText = title; 
     window.resetDesignForm(); document.getElementById('design-modal').classList.replace('hidden', 'flex'); 
     if(window.initGoogleAPI) window.initGoogleAPI();
+
     if (currentDesignUnsubscribe) currentDesignUnsubscribe(); 
     currentDesignUnsubscribe = onSnapshot(query(collection(db, "project_designs"), where("projectId", "==", projectId)), function(snap) { 
-        let list = []; snap.forEach(doc => list.push({ id: doc.id, ...doc.data() })); list.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
-        const listEl = document.getElementById('design-list'); if(list.length === 0) { listEl.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 설계 파일이 없습니다.</div>'; return; }
+        let list = []; snap.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
+        list.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
+        const listEl = document.getElementById('design-list');
+        if(list.length === 0) { listEl.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 설계 파일이 없습니다.</div>'; return; }
         listEl.innerHTML = list.map(item => {
             let dateStr = item.createdAt ? (window.getDateTimeStr ? window.getDateTimeStr(new Date(getSafeMillis(item.createdAt))) : new Date(getSafeMillis(item.createdAt)).toLocaleString()) : '';
             let safeContent = String(item.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
@@ -354,10 +362,13 @@ window.openPjtScheduleModal = function(projectId, title) {
     document.getElementById('sch-req-id').value = projectId; document.getElementById('sch-project-title').innerText = title; 
     window.resetPjtScheduleForm(); document.getElementById('pjt-schedule-modal').classList.replace('hidden', 'flex'); 
     if(window.initGoogleAPI) window.initGoogleAPI();
+
     if (currentPjtScheduleUnsubscribe) currentPjtScheduleUnsubscribe(); 
     currentPjtScheduleUnsubscribe = onSnapshot(query(collection(db, "project_schedules"), where("projectId", "==", projectId)), function(snap) { 
-        let list = []; snap.forEach(doc => list.push({ id: doc.id, ...doc.data() })); list.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
-        const listEl = document.getElementById('pjt-schedule-list'); if(list.length === 0) { listEl.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 PJT 일정이 없습니다.</div>'; return; }
+        let list = []; snap.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
+        list.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
+        const listEl = document.getElementById('pjt-schedule-list');
+        if(list.length === 0) { listEl.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 PJT 일정이 없습니다.</div>'; return; }
         listEl.innerHTML = list.map(item => {
             let dateStr = item.createdAt ? (window.getDateTimeStr ? window.getDateTimeStr(new Date(getSafeMillis(item.createdAt))) : new Date(getSafeMillis(item.createdAt)).toLocaleString()) : '';
             let safeContent = String(item.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
@@ -1645,3 +1656,87 @@ document.addEventListener('click', function(e) {
         d.classList.add('hidden');
     }
 });
+
+// 💡 구글 드라이브 대용량 파일 XHR 업로드 & 진행률 UI 렌더링
+async function handleDriveUploadWithProgress(fileInput, projectName) {
+    if(!window.googleAccessToken) {
+        if(window.initGoogleAPI) window.initGoogleAPI();
+        if(window.authenticateGoogle && !window.googleAccessToken) window.authenticateGoogle();
+        if(!window.googleAccessToken) throw new Error("구글 인증이 필요합니다. [연동하기] 버튼을 눌러주세요.");
+    }
+    
+    const file = fileInput.files[0];
+    if (!file) throw new Error("파일이 없습니다.");
+
+    // 프로젝트 이름으로 된 폴더 찾기 또는 생성
+    const safeProjectName = projectName ? projectName.replace(/[\/\\]/g, '_') : '미분류 프로젝트';
+    const findFolderRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${encodeURIComponent(safeProjectName)}' and mimeType='application/vnd.google-apps.folder' and '${TARGET_DRIVE_FOLDER}' in parents and trashed=false`, {
+        headers: { 'Authorization': 'Bearer ' + window.googleAccessToken }
+    });
+    const folderData = await findFolderRes.json();
+    
+    let targetFolderId = '';
+    if (folderData.files && folderData.files.length > 0) {
+        targetFolderId = folderData.files[0].id;
+    } else {
+        const createFolderRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: safeProjectName, mimeType: 'application/vnd.google-apps.folder', parents: [TARGET_DRIVE_FOLDER] })
+        });
+        const newFolderData = await createFolderRes.json();
+        targetFolderId = newFolderData.id;
+    }
+
+    // UI 프로그레스 창 표시
+    const progressModal = document.getElementById('upload-progress-modal');
+    const progressBar = document.getElementById('upload-progress-bar');
+    const progressText = document.getElementById('upload-progress-text');
+    const progressSize = document.getElementById('upload-progress-size');
+    const progressFilename = document.getElementById('upload-progress-filename');
+    
+    if(progressModal) progressModal.classList.replace('hidden', 'flex');
+    if(progressBar) progressBar.style.width = '0%';
+    if(progressText) progressText.innerText = '0%';
+    if(progressFilename) progressFilename.innerText = file.name;
+    const totalMb = (file.size / (1024 * 1024)).toFixed(2);
+    if(progressSize) progressSize.innerText = `0.00 MB / ${totalMb} MB`;
+
+    return new Promise((resolve, reject) => {
+        const metadata = { name: file.name, parents: [targetFolderId] };
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('file', file);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', true);
+        xhr.setRequestHeader('Authorization', 'Bearer ' + window.googleAccessToken);
+
+        xhr.upload.onprogress = function(e) {
+            if (e.lengthComputable) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                const loadedMb = (e.loaded / (1024 * 1024)).toFixed(2);
+                if(progressBar) progressBar.style.width = percent + '%';
+                if(progressText) progressText.innerText = percent + '%';
+                if(progressSize) progressSize.innerText = `${loadedMb} MB / ${totalMb} MB`;
+            }
+        };
+
+        xhr.onload = function() {
+            if(progressModal) progressModal.classList.replace('flex', 'hidden');
+            if (xhr.status >= 200 && xhr.status < 300) {
+                const data = JSON.parse(xhr.responseText);
+                resolve(`https://drive.google.com/file/d/${data.id}/view`);
+            } else {
+                reject(new Error("파일 업로드 실패: " + xhr.responseText));
+            }
+        };
+
+        xhr.onerror = function() {
+            if(progressModal) progressModal.classList.replace('flex', 'hidden');
+            reject(new Error("네트워크 오류 발생"));
+        };
+
+        xhr.send(form);
+    });
+}
