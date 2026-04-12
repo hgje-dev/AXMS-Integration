@@ -95,7 +95,7 @@ window.processDashboardData = function() {
                 const shipEst = getSafeString(data.d_shipEst);
                 const status = getSafeString(data.status);
                 
-                // 💡 투입 공수 합산 기준을 finalMd(최종)와 outMd(외주)로 변경
+                // 투입 공수 합산 기준을 finalMd(최종)와 outMd(외주)로 변경
                 const fMd = parseFloat(data.finalMd) || 0;
                 const eMd = parseFloat(data.estMd) || 0;
                 const oMd = parseFloat(data.outMd) || 0;
@@ -123,7 +123,7 @@ window.processDashboardData = function() {
                     stats[status] = 1;
                 }
                 
-                // 💡 총 예정/최종/외주 공수에 프로젝트 합산
+                // 총 예정/최종/외주 공수에 프로젝트 합산
                 stats.estMd += eMd;
                 stats.finalMd += fMd;
                 stats.outMd += oMd;
@@ -134,7 +134,7 @@ window.processDashboardData = function() {
                     let mIdx = parseInt(targetMonthStr.split('-')[1]) - 1;
                     if (mIdx >= 0 && mIdx < 12) {
                         annualPlanData[mIdx] += eMd;
-                        annualActData[mIdx] += fMd; // 💡 차트의 실적 MD도 최종 MD로 그림
+                        annualActData[mIdx] += fMd; // 차트의 실적 MD도 최종 MD로 그림
                         if (status === 'completed') {
                             monthlyCompleted[mIdx]++;
                         }
@@ -184,18 +184,18 @@ window.processDashboardData = function() {
         const elEstMd = document.getElementById('dash-pd-estMd');
         if (elEstMd) elEstMd.innerText = stats.estMd.toFixed(1);
         
-        // 💡 총 투입(최종) 공수 업데이트
+        // 총 투입(최종) 공수 업데이트
         const elCurMd = document.getElementById('dash-pd-curMd');
         if (elCurMd) elCurMd.innerText = stats.finalMd.toFixed(1);
 
-        // 💡 총 외주 공수 업데이트
+        // 총 외주 공수 업데이트
         const elOutMd = document.getElementById('dash-pd-outMd');
         if (elOutMd) elOutMd.innerText = stats.outMd.toFixed(1);
         
         const elVariance = document.getElementById('dash-pd-variance');
         if (elVariance) {
             if (stats.estMd > 0) {
-                // 💡 편차율도 최종 MD 기준으로 계산
+                // 편차율도 최종 MD 기준으로 계산
                 let varianceVal = ((stats.finalMd - stats.estMd) / stats.estMd * 100).toFixed(1);
                 elVariance.innerText = varianceVal + '%';
             } else {
@@ -209,7 +209,7 @@ window.processDashboardData = function() {
         const elWorkload = document.getElementById('dash-pd-workload');
         if (elWorkload) {
             if (window.teamMembers && window.teamMembers.length > 0) {
-                // 💡 부하율도 최종 MD 기준으로 계산
+                // 부하율도 최종 MD 기준으로 계산
                 let workLoadVal = (stats.finalMd / (window.teamMembers.length * 240) * 100).toFixed(1);
                 elWorkload.innerText = workLoadVal + '%';
             } else {
@@ -357,7 +357,7 @@ window.processPeriodData = function() {
         const shipEn = getSafeString(p.d_shipEn);
         const shipEst = getSafeString(p.d_shipEst);
         
-        // 💡 투입 공수 합산 기준을 finalMd와 outMd로 변경
+        // 투입 공수 합산 기준을 finalMd와 outMd로 변경
         const fMd = parseFloat(p.finalMd) || 0;
         const oMd = parseFloat(p.outMd) || 0;
         
@@ -376,7 +376,7 @@ window.processPeriodData = function() {
 
         if (!isTargetThisPeriod) return;
 
-        // 💡 타겟 프로젝트의 최종 MD와 외주 MD를 누적
+        // 타겟 프로젝트의 최종 MD와 외주 MD를 누적
         periodFinalMdTotal += fMd;
         periodOutMdTotal += oMd;
 
@@ -422,7 +422,7 @@ window.processPeriodData = function() {
     const elPeriodUrgent = document.getElementById('pd-period-urgent');
     if (elPeriodUrgent) elPeriodUrgent.innerText = urgent;
     
-    // 💡 하단 미니대시보드 총 투입MD(최종) 및 외주MD 업데이트
+    // 하단 미니대시보드 총 투입MD(최종) 및 외주MD 업데이트
     const elPeriodTotalMd = document.getElementById('pd-period-total-md');
     if (elPeriodTotalMd) elPeriodTotalMd.innerText = periodFinalMdTotal.toFixed(1);
 
@@ -434,7 +434,7 @@ window.processPeriodData = function() {
         let teamCount = window.teamMembers ? window.teamMembers.length : 0;
         if (teamCount > 0) {
             let workingDays = (type === 'month') ? 20 : 5;
-            // 💡 부하율도 최종 MD 기준으로 계산
+            // 부하율도 최종 MD 기준으로 계산
             let pWorkload = (periodFinalMdTotal / (teamCount * workingDays)) * 100;
             elPeriodWorkload.innerText = pWorkload.toFixed(1) + '%';
         } else {
@@ -549,6 +549,7 @@ function renderPeriodCharts(type, val, projects, mgrCounts, periodFinalMdTotal) 
     }, { indexAxis: 'y', maintainAspectRatio: false, scales: { x: { beginAtZero: true, ticks: { stepSize: 1 }, border: { dash: [4, 4] } }, y: { grid: { display: false } } }, plugins: { legend: { display: false } } });
 }
 
+// 💡 엑셀 출력 기능 고도화 (대시보드 리포트 & 데이터 시트)
 window.exportDashboardExcel = async function() {
     if (window.userProfile && window.userProfile.role !== 'admin') {
         if (window.showToast) window.showToast('보고서 다운로드는 관리자만 가능합니다.', 'error');
@@ -560,31 +561,92 @@ window.exportDashboardExcel = async function() {
     }
 
     try {
-        if (window.showToast) window.showToast("엑셀 파일을 생성 중입니다...", "success");
+        if (window.showToast) window.showToast("엑셀 현황 보고서를 생성 중입니다...", "success");
         const wb = new window.ExcelJS.Workbook();
-        
-        const ws1 = wb.addWorksheet('연간_현황_요약', { views: [{ showGridLines: false }] });
-        ws1.columns = [{ width: 25 }, { width: 20 }];
-        ws1.getCell('A1').value = '[' + window.currentDashStats.year + '년] 프로젝트 연간 현황 요약';
-        ws1.getCell('A1').font = { bold: true, size: 14 };
-        
-        const sumData = [
-            ['지표', '수치'],
-            ['완료(출하) 건수', window.currentDashStats.completed + '건'],
-            ['대기/보류 건수', window.currentDashStats.pending + '건'],
-            ['진행중/검수중 건수', (window.currentDashStats.progress + window.currentDashStats.inspecting) + '건'],
-            ['총 예정 공수', parseFloat(window.currentDashStats.estMd).toFixed(1) + ' MD'],
-            ['총 투입(최종) 공수', parseFloat(window.currentDashStats.finalMd).toFixed(1) + ' MD'],
-            ['총 외주 공수', parseFloat(window.currentDashStats.outMd).toFixed(1) + ' MD'],
-            ['목표대비 출하 평균 오차', window.currentDashStats.avgShipError + ' 일']
-        ];
-        
-        sumData.forEach(function(row, i) {
-            let r = ws1.addRow(row);
-            if (i === 0) { r.font = { bold: true }; r.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } }; }
-            r.eachCell(function(c) { c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }; });
-        });
 
+        // 1. 대시보드 요약 시트
+        const ws1 = wb.addWorksheet('📊 대시보드_요약', { views: [{ showGridLines: false }] });
+
+        // 열 너비 설정 (그리드 레이아웃용)
+        ws1.columns = [
+            { width: 2 },   // A: 여백
+            { width: 15 },  // B
+            { width: 15 },  // C
+            { width: 15 },  // D
+            { width: 2 },   // E: 여백
+            { width: 15 },  // F
+            { width: 15 },  // G
+            { width: 15 },  // H
+            { width: 2 },   // I: 여백
+            { width: 15 },  // J
+            { width: 15 },  // K
+            { width: 15 },  // L
+        ];
+
+        // 타이틀
+        ws1.mergeCells('B2:L3');
+        const titleCell = ws1.getCell('B2');
+        titleCell.value = `AXBIS 프로젝트 통합 대시보드 현황 보고서 (${window.currentDashStats.year}년)`;
+        titleCell.font = { name: '맑은 고딕', size: 20, bold: true, color: { argb: 'FF1E293B' } };
+        titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
+
+        // 기본 정보
+        ws1.mergeCells('B4:D4');
+        ws1.getCell('B4').value = `출력일시: ${new Date().toLocaleString()}`;
+        ws1.getCell('B4').font = { size: 10, color: { argb: 'FF64748B' } };
+
+        ws1.mergeCells('F4:H4');
+        ws1.getCell('F4').value = `출력자: ${window.userProfile.name} (${window.userProfile.team})`;
+        ws1.getCell('F4').font = { size: 10, color: { argb: 'FF64748B' } };
+
+        // KPI 카드 생성 헬퍼 함수
+        const createKPICard = (startRow, startCol, endRow, endCol, title, value, subtext, bgColor, titleColor, valColor) => {
+            ws1.mergeCells(`${startCol}${startRow}:${endCol}${startRow}`);
+            ws1.mergeCells(`${startCol}${startRow+1}:${endCol}${endRow-1}`);
+            ws1.mergeCells(`${startCol}${endRow}:${endCol}${endRow}`);
+
+            for(let r=startRow; r<=endRow; r++) {
+                for(let c=ws1.getColumn(startCol).number; c<=ws1.getColumn(endCol).number; c++) {
+                    let cell = ws1.getCell(r, c);
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+                    cell.border = {
+                        top: {style: r===startRow?'medium':'none', color: {argb: titleColor}},
+                        bottom: {style: r===endRow?'medium':'none', color: {argb: titleColor}},
+                        left: {style: c===ws1.getColumn(startCol).number?'medium':'none', color: {argb: titleColor}},
+                        right: {style: c===ws1.getColumn(endCol).number?'medium':'none', color: {argb: titleColor}}
+                    };
+                }
+            }
+
+            let tCell = ws1.getCell(`${startCol}${startRow}`);
+            tCell.value = title;
+            tCell.font = { bold: true, size: 11, color: { argb: titleColor } };
+            tCell.alignment = { vertical: 'middle', horizontal: 'center', indent: 1 };
+
+            let vCell = ws1.getCell(`${startCol}${startRow+1}`);
+            vCell.value = value;
+            vCell.font = { bold: true, size: 24, color: { argb: valColor } };
+            vCell.alignment = { vertical: 'middle', horizontal: 'center' };
+
+            let sCell = ws1.getCell(`${startCol}${endRow}`);
+            sCell.value = subtext;
+            sCell.font = { size: 9, color: { argb: 'FF64748B' } };
+            sCell.alignment = { vertical: 'middle', horizontal: 'center' };
+        };
+
+        // 1열 (건수/오차)
+        createKPICard(6, 'B', 9, 'D', '완료 (출하)', `${window.currentDashStats.completed} 건`, '해당 연도 출하 기준', 'FFF0FDF4', 'FF10B981', 'FF059669'); // Emerald
+        createKPICard(6, 'F', 9, 'H', '진행 및 검수중', `${window.currentDashStats.progress + window.currentDashStats.inspecting} 건`, '제작 및 검수 진행중', 'FFEFF6FF', 'FF3B82F6', 'FF1D4ED8'); // Blue
+        createKPICard(6, 'J', 9, 'L', '목표대비 출하 평균 오차', `${window.currentDashStats.avgShipError} 일`, '출하완료 PJT 평균', 'FFF0F9FF', 'FF0EA5E9', 'FF0284C7'); // Sky
+
+        // 2열 (MD/효율성)
+        createKPICard(11, 'B', 14, 'D', '총 예정 공수', `${parseFloat(window.currentDashStats.estMd).toFixed(1)} MD`, '타겟 프로젝트 합산', 'FFEEF2FF', 'FF6366F1', 'FF4338CA'); // Indigo
+        createKPICard(11, 'F', 14, 'H', '총 투입 공수 (최종)', `${parseFloat(window.currentDashStats.finalMd).toFixed(1)} MD`, '타겟 프로젝트 합산', 'FFF5F3FF', 'FF8B5CF6', 'FF6D28D9'); // Purple
+        let varianceVal = window.currentDashStats.estMd > 0 ? ((window.currentDashStats.finalMd - window.currentDashStats.estMd) / window.currentDashStats.estMd * 100).toFixed(1) : 0;
+        createKPICard(11, 'J', 14, 'L', '계획대비 편차율', `${varianceVal}%`, '(최종 - 예정) / 예정', 'FFFFFBEB', 'FFF59E0B', 'FFD97706'); // Amber
+
+
+        // 2. 조회기간 프로젝트 상세 시트
         const typeSelect = document.getElementById('period-type-select');
         let periodTypeStr = '';
         if (typeSelect && typeSelect.value === 'month') {
@@ -594,34 +656,130 @@ window.exportDashboardExcel = async function() {
             let wEl = document.getElementById('period-value-week');
             if (wEl) periodTypeStr = wEl.value;
         }
-            
-        const ws2 = wb.addWorksheet('조회기간_프로젝트상세', { views: [{ showGridLines: false }] });
-        ws2.columns = [ { width: 10 }, { width: 15 }, { width: 40 }, { width: 15 }, { width: 10 }, { width: 15 }, { width: 12 }, { width: 15 }, { width: 12 }, { width: 10 } ];
-        ws2.getCell('A1').value = '[' + periodTypeStr + '] 기간 내 프로젝트 리스트';
-        ws2.getCell('A1').font = { bold: true, size: 14 };
 
-        const headers = ['파트', 'PJT 코드', '프로젝트명', '예정출하일', '진행률(%)', '현재상태', '예정MD', '외주MD', '최종MD', '편차'];
+        const ws2 = wb.addWorksheet('📋 조회기간_프로젝트상세', { views: [{ showGridLines: false }] });
+        ws2.columns = [
+            { width: 12 }, // 파트
+            { width: 18 }, // PJT 코드
+            { width: 45 }, // 프로젝트명
+            { width: 15 }, // 현재상태
+            { width: 12 }, // 진행률
+            { width: 15 }, // 예정출하일
+            { width: 15 }, // 실제출하일
+            { width: 12 }, // 예정MD
+            { width: 12 }, // 실투입MD
+            { width: 12 }, // 외주MD
+            { width: 12 }, // 최종MD
+            { width: 12 }  // 편차
+        ];
+
+        ws2.mergeCells('A1:L2');
+        ws2.getCell('A1').value = `[${periodTypeStr}] 기간 내 프로젝트 리스트`;
+        ws2.getCell('A1').font = { bold: true, size: 16, color: {argb: 'FF1E293B'} };
+        ws2.getCell('A1').alignment = { vertical: 'middle', horizontal: 'left' };
+
+        const headers = ['파트', 'PJT 코드', '프로젝트명', '현재상태', '진행률(%)', '예정출하일', '실제출하일', '예정MD', '실투입MD', '외주MD', '최종MD', '편차'];
         let hr = ws2.addRow(headers);
-        hr.font = { bold: true, color: { argb: 'FFFFFFFF' } }; 
+        hr.font = { bold: true, color: { argb: 'FFFFFFFF' } };
         hr.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } };
-        hr.eachCell(function(c) { c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }; c.alignment = { horizontal: 'center' }; });
+        hr.height = 25;
+        hr.eachCell(function(c) {
+            c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+            c.alignment = { vertical: 'middle', horizontal: 'center' };
+        });
 
         const sMap = { 'pending': '대기/보류', 'progress': '진행중', 'inspecting': '검수중', 'completed': '완료', 'rejected': '불가' };
         const sortedProjects = window.currentPeriodProjects.slice().sort(function(a, b) { return b.periodFinalMd - a.periodFinalMd; });
-        
+
         sortedProjects.forEach(function(p) {
-            let safeStatus = p.status;
-            if (sMap[p.status]) safeStatus = sMap[p.status];
-            let variance = (parseFloat(p.finalMd || 0) - parseFloat(p.estMd || 0)).toFixed(1);
-            
-            let row = ws2.addRow([ p.part || '-', p.code || '-', p.name || '-', p.d_shipEst || '-', p.progress || 0, safeStatus, p.estMd || 0, p.outMd || 0, parseFloat(p.periodFinalMd).toFixed(1), variance ]);
-            row.eachCell(function(c) { c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }; });
+            let safeStatus = sMap[p.status] || p.status;
+            let cMd = parseFloat(p.currentMd) || 0;
+            let eMd = parseFloat(p.estMd) || 0;
+            let oMd = parseFloat(p.outMd) || 0;
+            let fMd = parseFloat(p.periodFinalMd) || 0;
+            let variance = (fMd - eMd).toFixed(1);
+
+            let row = ws2.addRow([
+                p.part || '-',
+                p.code || '-',
+                p.name || '-',
+                safeStatus,
+                (p.progress || 0) + '%',
+                p.d_shipEst || '-',
+                p.d_shipEn || '-',
+                eMd,
+                cMd,
+                oMd,
+                fMd.toFixed(1),
+                variance
+            ]);
+
+            row.eachCell(function(c, colNumber) {
+                c.border = { top: { style: 'thin', color:{argb:'FFE2E8F0'} }, left: { style: 'thin', color:{argb:'FFE2E8F0'} }, bottom: { style: 'thin', color:{argb:'FFE2E8F0'} }, right: { style: 'thin', color:{argb:'FFE2E8F0'} } };
+                c.alignment = { vertical: 'middle', horizontal: (colNumber === 3) ? 'left' : 'center' };
+
+                if (colNumber >= 8) {
+                    c.numFmt = '#,##0.0';
+                    if (colNumber === 12) { 
+                        let numVar = parseFloat(variance);
+                        if (numVar > 0) c.font = { color: { argb: 'FFEF4444' }, bold: true }; 
+                        else if (numVar < 0) c.font = { color: { argb: 'FF3B82F6' }, bold: true }; 
+                    }
+                }
+            });
+        });
+
+
+        // 3. 전체 데이터 Raw 시트
+        const ws3 = wb.addWorksheet('💾 전체_Raw_Data');
+        ws3.columns = [
+            { header: 'ID', key: 'id', width: 20 },
+            { header: '카테고리', key: 'category', width: 12 },
+            { header: '파트', key: 'part', width: 12 },
+            { header: '상태', key: 'status', width: 12 },
+            { header: 'PJT코드', key: 'code', width: 18 },
+            { header: '프로젝트명', key: 'name', width: 40 },
+            { header: '고객사', key: 'company', width: 20 },
+            { header: '담당자', key: 'manager', width: 15 },
+            { header: '예정MD', key: 'estMd', width: 10 },
+            { header: '실투입MD', key: 'currentMd', width: 10 },
+            { header: '외주MD', key: 'outMd', width: 10 },
+            { header: '최종MD', key: 'finalMd', width: 10 },
+            { header: '총투입인원', key: 'totPers', width: 10 },
+            { header: '조립예정일', key: 'd_asmEst', width: 15 },
+            { header: '출하예정일', key: 'd_shipEst', width: 15 },
+            { header: '출하실제일', key: 'd_shipEn', width: 15 },
+        ];
+
+        let rawHeader = ws3.getRow(1);
+        rawHeader.font = { bold: true };
+        rawHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+
+        (window.allDashProjects || []).forEach(p => {
+            ws3.addRow({
+                id: p.id,
+                category: p.category,
+                part: p.part,
+                status: sMap[p.status] || p.status,
+                code: p.code,
+                name: p.name,
+                company: p.company,
+                manager: p.manager,
+                estMd: p.estMd || 0,
+                currentMd: p.currentMd || 0,
+                outMd: p.outMd || 0,
+                finalMd: p.finalMd || 0,
+                totPers: p.totPers || 0,
+                d_asmEst: p.d_asmEst,
+                d_shipEst: p.d_shipEst,
+                d_shipEn: p.d_shipEn
+            });
         });
 
         const buffer = await wb.xlsx.writeBuffer();
         let todayStr = new Date().toISOString().split('T')[0];
-        window.saveAs(new Blob([buffer]), 'AXMS_월말보고서_' + todayStr + '.xlsx');
-        
+        window.saveAs(new Blob([buffer]), 'AXBIS_PJT현황보고서_' + todayStr + '.xlsx');
+
     } catch (e) { 
         console.error(e); 
         if (window.showToast) window.showToast("엑셀 파일 생성 중 오류가 발생했습니다.", "error"); 
