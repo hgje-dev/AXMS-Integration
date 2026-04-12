@@ -1,103 +1,39 @@
-/* 💡 글로벌 폰트 (Pretendard) 설정 */
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
 
+/* 💡 다크모드 제거 및 라이트모드 고정 */
 body { 
     font-family: 'Pretendard', sans-serif; 
     background-color: #f8fafc; 
     color: #1e293b;
     overflow-x: hidden; 
-    transition: background-color 0.3s, color 0.3s; 
 }
 
-/* 💡 커스텀 스크롤바 */
+/* 커스텀 스크롤바 */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
 
-/* 💡 인풋 및 폼 요소 공통 스타일 */
+/* 폼 요소 */
 input:focus, select:focus, textarea:focus { 
     outline: none; 
     border-color: #6366f1; 
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15); 
 }
-input[type="number"], input[type="text"], input[type="date"], select { 
-    transition: all 0.2s ease-in-out; 
-}
-input:disabled, select:disabled, textarea:disabled { 
-    background-color: #f1f5f9; 
-    cursor: not-allowed; 
-    color: #94a3b8; 
-    border-color: #e2e8f0; 
-    opacity: 0.8; 
-}
-.table-input { background-color: transparent; border-color: transparent; }
-.table-input:hover:not(:disabled) { background-color: #f1f5f9; border-color: #e2e8f0; }
+input:disabled { background-color: #f1f5f9; color: #94a3b8; cursor: not-allowed; }
 
-/* 💡 애니메이션 (토스트 팝업 및 리스트 등장) */
-@keyframes slideIn { 
-    from { transform: translateY(-100%); opacity: 0; } 
-    to { transform: translateY(0); opacity: 1; } 
-}
+/* 애니메이션 */
+@keyframes slideIn { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 .toast { animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; z-index: 9999; }
 
-@keyframes fadeIn { 
-    from { opacity: 0; transform: translateY(10px); } 
-    to { opacity: 1; transform: translateY(0); } 
-}
-.row-enter { animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.row-enter { animation: fadeIn 0.4s ease-out forwards; }
 
-/* 💡 호버 및 상호작용 효과 */
-.card-hover { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-.card-hover:hover:not(.locked-card) { 
-    transform: translateY(-5px); 
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1); 
-}
-.locked-card { cursor: not-allowed; opacity: 0.6; filter: grayscale(80%); }
+/* 카드 및 레이아웃 */
+.sidebar-transition { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+.card-hover { transition: all 0.3s ease; }
+.card-hover:hover { transform: translateY(-5px); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); }
 
-.gantt-bar { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 99px; }
-.gantt-bar:hover { 
-    filter: brightness(1.15); 
-    transform: scaleY(1.15); 
-    z-index: 10; 
-    cursor: pointer; 
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); 
-}
-
-.glass-dark { 
-    background: linear-gradient(145deg, #1e293b 0%, #0f172a 100%); 
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.1); 
-}
-
-.btn-hover-effect { transition: all 0.2s ease; }
-.btn-hover-effect:hover:not(:disabled) { 
-    transform: translateY(-1px); 
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
-}
-
-/* 💡 모달 블러 및 기타 UI 클래스 */
-#login-modal, #project-list-modal, #dashboard-modal, #admin-users-modal, #history-modal, #save-option-modal, #unsaved-changes-modal { 
-    backdrop-filter: blur(10px); 
-}
-
-.pur-input { 
-    width: 100%; 
-    padding: 0.5rem 0.75rem; 
-    border: 1px solid #e2e8f0; 
-    border-radius: 0.5rem; 
-    background-color: #f8fafc; 
-    font-size: 0.875rem; 
-    font-weight: 600; 
-    color: #334155; 
-    transition: all 0.2s; 
-}
-.pur-label { 
-    display: block; 
-    font-size: 0.65rem; 
-    font-weight: 700; 
-    color: #64748b; 
-    margin-bottom: 0.25rem; 
-    text-transform: uppercase; 
-}
-.sidebar-transition { transition: transform 0.3s ease-in-out; }
+/* 테이블 호버 */
+tr.hover\:bg-slate-50:hover { background-color: #f1f5f9 !important; }
