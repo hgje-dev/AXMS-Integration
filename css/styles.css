@@ -1,41 +1,55 @@
-/* 💡 다크모드 제거 및 라이트모드 최적화 */
-:root {
-    --bg-main: #f8fafc;
-    --bg-card: #ffffff;
-    --text-main: #1e293b;
-    --text-muted: #64748b;
-    --accent: #4f46e5;
+/* 💡 글로벌 폰트 (Pretendard) 설정 */
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+body { 
+    font-family: 'Pretendard', sans-serif; 
+    background-color: #f8fafc; /* 라이트모드 고정 배경색 */
+    color: #1e293b; /* 라이트모드 고정 텍스트색 */
+    overflow-x: hidden; 
 }
 
-body {
-    background-color: var(--bg-main);
-    color: var(--text-main);
-}
+/* 💡 커스텀 스크롤바 */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-/* 다크모드 클래스(.dark) 관련 스타일 모두 삭제 */
+/* 💡 인풋 및 폼 요소 공통 스타일 */
+input:focus, select:focus, textarea:focus { 
+    outline: none; 
+    border-color: #6366f1; 
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15); 
+}
+input:disabled, select:disabled, textarea:disabled { 
+    background-color: #f1f5f9; 
+    cursor: not-allowed; 
+    color: #94a3b8; 
+    border-color: #e2e8f0; 
+    opacity: 0.8; 
+}
+.table-input { background-color: transparent; border-color: transparent; }
+.table-input:hover:not(:disabled) { background-color: #f1f5f9; border-color: #e2e8f0; }
 
-.custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
+/* 💡 애니메이션 (토스트 팝업 및 리스트 등장) */
+@keyframes slideIn { 
+    from { transform: translateY(-100%); opacity: 0; } 
+    to { transform: translateY(0); opacity: 1; } 
 }
-.custom-scrollbar::-webkit-scrollbar-track {
-    background: #f1f1f1;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 10px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
-}
+.toast { animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; z-index: 9999; }
 
-/* 프로젝트 현황판 테이블 스타일 */
-#pjt-list-tbody tr:hover {
-    background-color: #f1f5f9;
+@keyframes fadeIn { 
+    from { opacity: 0; transform: translateY(10px); } 
+    to { opacity: 1; transform: translateY(0); } 
 }
+.row-enter { animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 
-/* 드라이브 연동 알림 디자인 */
-.google-status-bar {
-    background: #fffbeb;
-    border: 1px solid #fde68a;
-    color: #92400e;
+/* 💡 카드 호버 및 잠금(비활성화) 효과 */
+.card-hover { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+.card-hover:hover:not(.locked-card) { 
+    transform: translateY(-5px); 
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1); 
 }
+.locked-card { cursor: not-allowed; opacity: 0.6; filter: grayscale(80%); }
+
+/* 💡 사이드바 트랜지션 */
+.sidebar-transition { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
