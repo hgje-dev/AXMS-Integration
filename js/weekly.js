@@ -197,7 +197,7 @@ window.deleteTeamMember = async function(id) {
     }
 };
 
-// 💡 공지사항 편집 로직
+// 공지사항 편집 로직
 window.editNotice = async function() {
     const el = document.getElementById('weekly-notice-text');
     const currentText = el ? el.innerText : '';
@@ -759,12 +759,29 @@ window.exportWeeklyLogsExcel = async function() {
         let submittedLogs = window.currentWeeklyLogList.filter(l => l.isSubmitted);
         submittedCount = submittedLogs.length;
         
+        // 요약을 위한 데이터 추출
+        let compTasks = [];
+        let progTasks = [];
+        let issueList = [];
+
         submittedLogs.forEach(log => {
-            if (String(log.issues || '').trim() !== '') issueCount++;
+            let author = log.authorName || '알수없음';
+            
+            if (String(log.issues || '').trim() !== '') {
+                issueCount++;
+                issueList.push(`[${author}] ${log.issues.trim()}`);
+            }
+            
             if (log.tasks && Array.isArray(log.tasks)) {
                 log.tasks.forEach(t => {
-                    if (t.status === '완료') completedCount++;
-                    if (t.status === '진행 중') progressCount++;
+                    if (t.status === '완료') {
+                        completedCount++;
+                        compTasks.push(`[${author}] ${t.content}`);
+                    }
+                    if (t.status === '진행 중') {
+                        progressCount++;
+                        progTasks.push(`[${author}] ${t.content}`);
+                    }
                 });
             }
         });
@@ -829,10 +846,54 @@ window.exportWeeklyLogsExcel = async function() {
             sCell.alignment = { vertical: 'middle', horizontal: 'center' };
         };
 
-        // KPI 정보 세팅 (이모지 제거됨)
+        // KPI 정보 세팅 
         createKPICard(6, 'B', 9, 'D', '제출된 일지', `${submittedCount} 명`, `전체 팀원: ${totalTeamCount}명`, 'FFF1F5F9', 'FF475569', 'FF334155'); 
         createKPICard(6, 'F', 9, 'H', '완료된 업무', `${completedCount} 건`, '금주 완료 처리됨', 'FFF0FDF4', 'FF10B981', 'FF059669'); 
         createKPICard(6, 'J', 9, 'L', '이슈 및 지연', `${issueCount} 건`, '이슈가 등록된 일지 수', 'FFFFF1F2', 'FFF43F5E', 'FFE11D48'); 
+
+        // 💡 주간 내용 요약 블록 추가
+        let summaryStartRow = 11;
+        ws1.mergeCells(`B${summaryStartRow}:L${summaryStartRow}`);
+        let secTitle = ws1.getCell(`B${summaryStartRow}`);
+        secTitle.value = '■ 주간 업무 주요 내용 요약';
+        secTitle.font = { bold: true, size: 14, color: { argb: 'FF1E293B' } };
+
+        let currentRow = summaryStartRow + 2;
+
+        const addSummaryBlock = (title, items, titleColor, bgColor) => {
+            ws1.mergeCells(`B${currentRow}:L${currentRow}`);
+            let tCell = ws1.getCell(`B${currentRow}`);
+            tCell.value = title;
+            tCell.font = { bold: true, color: { argb: titleColor } };
+            tCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+            tCell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+            currentRow++;
+
+            if (items.length === 0) {
+                ws1.mergeCells(`B${currentRow}:L${currentRow}`);
+                let cCell = ws1.getCell(`B${currentRow}`);
+                cCell.value = '해당 내역이 없습니다.';
+                cCell.font = { color: { argb: 'FF94A3B8' } };
+                cCell.alignment = { vertical: 'middle', horizontal: 'center' };
+                cCell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+                currentRow++;
+            } else {
+                items.forEach(item => {
+                    ws1.mergeCells(`B${currentRow}:L${currentRow}`);
+                    let cCell = ws1.getCell(`B${currentRow}`);
+                    cCell.value = '- ' + item;
+                    cCell.alignment = { wrapText: true, vertical: 'top' };
+                    cCell.border = { top: {style:'thin', color: {argb: 'FFE2E8F0'}}, left: {style:'thin', color: {argb: 'FFE2E8F0'}}, bottom: {style:'thin', color: {argb: 'FFE2E8F0'}}, right: {style:'thin', color: {argb: 'FFE2E8F0'}} };
+                    currentRow++;
+                });
+            }
+            currentRow++; // 블록 간 여백
+        };
+
+        addSummaryBlock('[완료된 주요 업무]', compTasks, 'FF059669', 'FFF0FDF4'); // Emerald
+        addSummaryBlock('[진행 중인 주요 업무]', progTasks, 'FF1D4ED8', 'FFEFF6FF'); // Blue
+        addSummaryBlock('[주요 이슈 및 지연 사항]', issueList, 'FFE11D48', 'FFFFF1F2'); // Rose
+
 
         // 2. 상세 내역 시트 생성
         const ws2 = wb.addWorksheet('주간_상세_내역', { views: [{ showGridLines: false }] });
