@@ -82,7 +82,7 @@ window.processDashboardData = function() {
         }
 
         const year = selectedYearStr; 
-        let stats = { estMd: 0, curMd: 0, completed: 0, pending: 0, progress: 0, inspecting: 0, rejected: 0 }; 
+        let stats = { estMd: 0, finalMd: 0, outMd: 0, completed: 0, pending: 0, progress: 0, inspecting: 0, rejected: 0 }; 
         let annualPlanData = Array(12).fill(0); 
         let annualActData = Array(12).fill(0); 
         let monthlyCompleted = Array(12).fill(0);
@@ -94,8 +94,11 @@ window.processDashboardData = function() {
                 const shipEn = getSafeString(data.d_shipEn);
                 const shipEst = getSafeString(data.d_shipEst);
                 const status = getSafeString(data.status);
-                const cMd = parseFloat(data.currentMd) || 0;
+                
+                // 💡 투입 공수 합산 기준을 finalMd(최종)와 outMd(외주)로 변경
+                const fMd = parseFloat(data.finalMd) || 0;
                 const eMd = parseFloat(data.estMd) || 0;
+                const oMd = parseFloat(data.outMd) || 0;
                 
                 let isTargetThisYear = false;
                 
@@ -120,9 +123,10 @@ window.processDashboardData = function() {
                     stats[status] = 1;
                 }
                 
-                // 총 예정/투입 공수에 프로젝트 합산
+                // 💡 총 예정/최종/외주 공수에 프로젝트 합산
                 stats.estMd += eMd;
-                stats.curMd += cMd;
+                stats.finalMd += fMd;
+                stats.outMd += oMd;
 
                 // 월별 차트 데이터 세팅
                 let targetMonthStr = (status === 'completed') ? shipEn : shipEst;
@@ -130,7 +134,7 @@ window.processDashboardData = function() {
                     let mIdx = parseInt(targetMonthStr.split('-')[1]) - 1;
                     if (mIdx >= 0 && mIdx < 12) {
                         annualPlanData[mIdx] += eMd;
-                        annualActData[mIdx] += cMd;
+                        annualActData[mIdx] += fMd; // 💡 차트의 실적 MD도 최종 MD로 그림
                         if (status === 'completed') {
                             monthlyCompleted[mIdx]++;
                         }
@@ -162,7 +166,8 @@ window.processDashboardData = function() {
             completed: stats.completed,
             rejected: stats.rejected,
             estMd: stats.estMd,
-            curMd: stats.curMd,
+            finalMd: stats.finalMd,
+            outMd: stats.outMd,
             avgShipError: finalAvgShipError
         };
 
@@ -179,13 +184,19 @@ window.processDashboardData = function() {
         const elEstMd = document.getElementById('dash-pd-estMd');
         if (elEstMd) elEstMd.innerText = stats.estMd.toFixed(1);
         
+        // 💡 총 투입(최종) 공수 업데이트
         const elCurMd = document.getElementById('dash-pd-curMd');
-        if (elCurMd) elCurMd.innerText = stats.curMd.toFixed(1);
+        if (elCurMd) elCurMd.innerText = stats.finalMd.toFixed(1);
+
+        // 💡 총 외주 공수 업데이트
+        const elOutMd = document.getElementById('dash-pd-outMd');
+        if (elOutMd) elOutMd.innerText = stats.outMd.toFixed(1);
         
         const elVariance = document.getElementById('dash-pd-variance');
         if (elVariance) {
             if (stats.estMd > 0) {
-                let varianceVal = ((stats.curMd - stats.estMd) / stats.estMd * 100).toFixed(1);
+                // 💡 편차율도 최종 MD 기준으로 계산
+                let varianceVal = ((stats.finalMd - stats.estMd) / stats.estMd * 100).toFixed(1);
                 elVariance.innerText = varianceVal + '%';
             } else {
                 elVariance.innerText = '0%';
@@ -198,7 +209,8 @@ window.processDashboardData = function() {
         const elWorkload = document.getElementById('dash-pd-workload');
         if (elWorkload) {
             if (window.teamMembers && window.teamMembers.length > 0) {
-                let workLoadVal = (stats.curMd / (window.teamMembers.length * 240) * 100).toFixed(1);
+                // 💡 부하율도 최종 MD 기준으로 계산
+                let workLoadVal = (stats.finalMd / (window.teamMembers.length * 240) * 100).toFixed(1);
                 elWorkload.innerText = workLoadVal + '%';
             } else {
                 elWorkload.innerText = '0%';
@@ -274,7 +286,7 @@ window.renderCharts = function(stats, monthlyCompleted, planData, actData) {
         labels: months, 
         datasets: [
             { label: '계획 MD', data: planData, borderColor: '#cbd5e1', backgroundColor: gradPlan, fill: true, tension: 0.4, borderWidth: 3, pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: '#fff', pointBorderWidth: 2 }, 
-            { label: '실적 MD', data: actData, borderColor: '#6366f1', backgroundColor: gradAct, fill: true, tension: 0.4, borderWidth: 3, pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: '#fff', pointBorderWidth: 2 }
+            { label: '실적(최종) MD', data: actData, borderColor: '#6366f1', backgroundColor: gradAct, fill: true, tension: 0.4, borderWidth: 3, pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: '#fff', pointBorderWidth: 2 }
         ] 
     }, { 
         maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, 
@@ -337,14 +349,17 @@ window.processPeriodData = function() {
         } 
     }
 
-    let pending = 0, progress = 0, urgent = 0, periodCompleted = 0, periodMdTotal = 0, mgrCounts = {}; 
+    let pending = 0, progress = 0, urgent = 0, periodCompleted = 0, periodFinalMdTotal = 0, periodOutMdTotal = 0, mgrCounts = {}; 
     let list = [];
     
     window.allDashProjects.forEach(function(p) {
         const status = getSafeString(p.status);
         const shipEn = getSafeString(p.d_shipEn);
         const shipEst = getSafeString(p.d_shipEst);
-        const cMd = parseFloat(p.currentMd) || 0;
+        
+        // 💡 투입 공수 합산 기준을 finalMd와 outMd로 변경
+        const fMd = parseFloat(p.finalMd) || 0;
+        const oMd = parseFloat(p.outMd) || 0;
         
         let isTargetThisPeriod = false;
 
@@ -361,7 +376,9 @@ window.processPeriodData = function() {
 
         if (!isTargetThisPeriod) return;
 
-        periodMdTotal += cMd;
+        // 💡 타겟 프로젝트의 최종 MD와 외주 MD를 누적
+        periodFinalMdTotal += fMd;
+        periodOutMdTotal += oMd;
 
         if (status === 'completed') periodCompleted++;
         if (status === 'pending') pending++;
@@ -377,7 +394,7 @@ window.processPeriodData = function() {
         }
 
         let projectDataCopy = Object.assign({}, p);
-        projectDataCopy.periodMd = cMd;
+        projectDataCopy.periodFinalMd = fMd;
         list.push(projectDataCopy);
     });
 
@@ -387,9 +404,9 @@ window.processPeriodData = function() {
     const thPeriodMd = document.getElementById('th-period-md');
     if (labelPeriodMd && thPeriodMd) {
         if (type === 'month') { 
-            labelPeriodMd.innerText = "월간 총 투입 공수"; thPeriodMd.innerText = "투입MD"; 
+            labelPeriodMd.innerText = "월간 총 투입(최종) 공수"; thPeriodMd.innerText = "최종MD"; 
         } else { 
-            labelPeriodMd.innerText = "주간 총 투입 공수"; thPeriodMd.innerText = "투입MD"; 
+            labelPeriodMd.innerText = "주간 총 투입(최종) 공수"; thPeriodMd.innerText = "최종MD"; 
         }
     }
 
@@ -405,15 +422,20 @@ window.processPeriodData = function() {
     const elPeriodUrgent = document.getElementById('pd-period-urgent');
     if (elPeriodUrgent) elPeriodUrgent.innerText = urgent;
     
+    // 💡 하단 미니대시보드 총 투입MD(최종) 및 외주MD 업데이트
     const elPeriodTotalMd = document.getElementById('pd-period-total-md');
-    if (elPeriodTotalMd) elPeriodTotalMd.innerText = periodMdTotal.toFixed(1);
+    if (elPeriodTotalMd) elPeriodTotalMd.innerText = periodFinalMdTotal.toFixed(1);
+
+    const elPeriodOutMd = document.getElementById('pd-period-out-md');
+    if (elPeriodOutMd) elPeriodOutMd.innerText = periodOutMdTotal.toFixed(1);
 
     const elPeriodWorkload = document.getElementById('pd-period-workload');
     if (elPeriodWorkload) {
         let teamCount = window.teamMembers ? window.teamMembers.length : 0;
         if (teamCount > 0) {
             let workingDays = (type === 'month') ? 20 : 5;
-            let pWorkload = (periodMdTotal / (teamCount * workingDays)) * 100;
+            // 💡 부하율도 최종 MD 기준으로 계산
+            let pWorkload = (periodFinalMdTotal / (teamCount * workingDays)) * 100;
             elPeriodWorkload.innerText = pWorkload.toFixed(1) + '%';
         } else {
             elPeriodWorkload.innerText = '0%';
@@ -425,7 +447,7 @@ window.processPeriodData = function() {
         if (list.length === 0) {
             tbody.innerHTML = '<tr><td colspan="10" class="text-center p-6 text-slate-400 font-bold">내역 없음</td></tr>';
         } else {
-            const sortedList = list.sort(function(a, b) { return b.periodMd - a.periodMd; });
+            const sortedList = list.sort(function(a, b) { return b.periodFinalMd - a.periodFinalMd; });
             const statusMap = { 'pending':'대기/보류', 'progress':'진행중', 'inspecting':'검수중', 'completed':'완료', 'rejected':'불가' };
             
             let htmlStr = '';
@@ -437,9 +459,9 @@ window.processPeriodData = function() {
                 const safeProg = p.progress || 0;
                 let safeStatus = statusMap[p.status] || p.status;
                 const safeEstMd = p.estMd || 0;
-                const safePeriodMd = p.periodMd.toFixed(1);
-                const safeFinalMd = p.finalMd || 0;
-                const diffMd = (parseFloat(p.finalMd || 0) - parseFloat(p.estMd || 0)).toFixed(1);
+                const safeOutMd = p.outMd || 0;
+                const safePeriodFinalMd = p.periodFinalMd.toFixed(1);
+                const diffMd = (parseFloat(p.periodFinalMd || 0) - parseFloat(p.estMd || 0)).toFixed(1);
                 
                 htmlStr += '<tr class="hover:bg-slate-50 border-b border-slate-100">';
                 htmlStr += '<td class="p-2 text-center">' + safePart + '</td>';
@@ -449,8 +471,8 @@ window.processPeriodData = function() {
                 htmlStr += '<td class="p-2 text-center text-emerald-600 font-bold">' + safeProg + '%</td>';
                 htmlStr += '<td class="p-2 text-center text-slate-500">' + safeStatus + '</td>';
                 htmlStr += '<td class="p-2 text-center">' + safeEstMd + '</td>';
-                htmlStr += '<td class="p-2 text-center font-black text-indigo-600 bg-indigo-50/30">' + safePeriodMd + '</td>';
-                htmlStr += '<td class="p-2 text-center text-purple-600 font-bold">' + safeFinalMd + '</td>';
+                htmlStr += '<td class="p-2 text-center text-amber-500 font-bold">' + safeOutMd + '</td>';
+                htmlStr += '<td class="p-2 text-center font-black text-indigo-600 bg-indigo-50/30">' + safePeriodFinalMd + '</td>';
                 htmlStr += '<td class="p-2 text-center font-bold">' + diffMd + '</td>';
                 htmlStr += '</tr>';
             });
@@ -461,10 +483,10 @@ window.processPeriodData = function() {
         if (countLabel) countLabel.innerText = '총 ' + list.length + '건';
     }
     
-    renderPeriodCharts(type, val, list, mgrCounts, periodMdTotal);
+    renderPeriodCharts(type, val, list, mgrCounts, periodFinalMdTotal);
 };
 
-function renderPeriodCharts(type, val, projects, mgrCounts, periodMdTotal) {
+function renderPeriodCharts(type, val, projects, mgrCounts, periodFinalMdTotal) {
     const createChart = function(id, cType, data, options) {
         const canvas = document.getElementById(id); 
         if (!canvas) return;
@@ -513,7 +535,7 @@ function renderPeriodCharts(type, val, projects, mgrCounts, periodMdTotal) {
         labels: ['현재 기간'], 
         datasets: [
             { label: '계획 MD', data: [estTotal], backgroundColor: '#cbd5e1', borderRadius: 6, maxBarThickness: 60 }, 
-            { label: '실적 MD', data: [periodMdTotal], backgroundColor: '#6366f1', borderRadius: 6, maxBarThickness: 60 }
+            { label: '실적(최종) MD', data: [periodFinalMdTotal], backgroundColor: '#6366f1', borderRadius: 6, maxBarThickness: 60 }
         ] 
     }, { maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, border: { dash: [4, 4] } } }, plugins: { legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8 } } } });
 
@@ -552,7 +574,8 @@ window.exportDashboardExcel = async function() {
             ['대기/보류 건수', window.currentDashStats.pending + '건'],
             ['진행중/검수중 건수', (window.currentDashStats.progress + window.currentDashStats.inspecting) + '건'],
             ['총 예정 공수', parseFloat(window.currentDashStats.estMd).toFixed(1) + ' MD'],
-            ['총 투입 공수', parseFloat(window.currentDashStats.curMd).toFixed(1) + ' MD'],
+            ['총 투입(최종) 공수', parseFloat(window.currentDashStats.finalMd).toFixed(1) + ' MD'],
+            ['총 외주 공수', parseFloat(window.currentDashStats.outMd).toFixed(1) + ' MD'],
             ['목표대비 출하 평균 오차', window.currentDashStats.avgShipError + ' 일']
         ];
         
@@ -577,21 +600,21 @@ window.exportDashboardExcel = async function() {
         ws2.getCell('A1').value = '[' + periodTypeStr + '] 기간 내 프로젝트 리스트';
         ws2.getCell('A1').font = { bold: true, size: 14 };
 
-        const headers = ['파트', 'PJT 코드', '프로젝트명', '예정출하일', '진행률(%)', '현재상태', '예정MD', '투입MD', '최종MD', '편차'];
+        const headers = ['파트', 'PJT 코드', '프로젝트명', '예정출하일', '진행률(%)', '현재상태', '예정MD', '외주MD', '최종MD', '편차'];
         let hr = ws2.addRow(headers);
         hr.font = { bold: true, color: { argb: 'FFFFFFFF' } }; 
         hr.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } };
         hr.eachCell(function(c) { c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }; c.alignment = { horizontal: 'center' }; });
 
         const sMap = { 'pending': '대기/보류', 'progress': '진행중', 'inspecting': '검수중', 'completed': '완료', 'rejected': '불가' };
-        const sortedProjects = window.currentPeriodProjects.slice().sort(function(a, b) { return b.periodMd - a.periodMd; });
+        const sortedProjects = window.currentPeriodProjects.slice().sort(function(a, b) { return b.periodFinalMd - a.periodFinalMd; });
         
         sortedProjects.forEach(function(p) {
             let safeStatus = p.status;
             if (sMap[p.status]) safeStatus = sMap[p.status];
             let variance = (parseFloat(p.finalMd || 0) - parseFloat(p.estMd || 0)).toFixed(1);
             
-            let row = ws2.addRow([ p.part || '-', p.code || '-', p.name || '-', p.d_shipEst || '-', p.progress || 0, safeStatus, p.estMd || 0, parseFloat(p.periodMd).toFixed(1), p.finalMd || 0, variance ]);
+            let row = ws2.addRow([ p.part || '-', p.code || '-', p.name || '-', p.d_shipEst || '-', p.progress || 0, safeStatus, p.estMd || 0, p.outMd || 0, parseFloat(p.periodFinalMd).toFixed(1), variance ]);
             row.eachCell(function(c) { c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }; });
         });
 
