@@ -349,6 +349,15 @@
 
     <ul id="mention-dropdown" class="hidden absolute z-[9999] bg-white border border-slate-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-48 custom-scrollbar"></ul>
 
-    <script type="module" src="./js/app.js"></script>
+    <script type="module" src="./js/app.js?ver=1005"></script>
+    <script>
+        window.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                if(typeof window.checkLogin !== 'function') {
+                    alert("🚨 [치명적 에러] 자바스크립트 파일이 아예 로딩되지 못했습니다!\n\n키보드 F12를 눌러 [Console] 탭에 나오는 빨간색 에러 메시지를 확인해주세요.\n\n(참고: 깃허브 폴더명이 대소문자가 정확한지 확인해주세요!)");
+                }
+            }, 2000);
+        });
+    </script>
 </body>
 </html>
