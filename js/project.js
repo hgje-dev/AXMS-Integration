@@ -20,7 +20,7 @@ window.currentMonthFilter = '';
 window.calendarCurrentDate = new Date();
 window.hideCompletedFilter = false; 
 window.ganttTodayOffset = 0;
-window.ncrData = []; // 💡 부적합 데이터 저장용 배열
+window.ncrData = [];
 
 const getSafeMillis = (val) => { 
     try { 
@@ -67,7 +67,6 @@ window.loadCounts = function() {
             window.renderProjectStatusList();
         });
         
-        // 💡 앱 시작 시 NCR 데이터 로드 실행
         window.loadNcrData();
     } catch(e) { console.warn("카운트 로드 실패:", e); }
 };
@@ -218,8 +217,10 @@ window.renderProjectStatusList = function() {
     const tbody = document.getElementById('proj-dash-tbody'); if(!tbody) return;
     let displayList = window.getFilteredProjects();
     
-    // 💡 열 개수가 32개로 늘어났으므로 빈 화면일 때 colspan 32 적용
-    if(displayList.length === 0) { tbody.innerHTML = '<tr><td colspan="32" class="text-center p-6 text-slate-400 font-bold border-b border-slate-100 bg-white">프로젝트가 없습니다.</td></tr>'; return; }
+    if(displayList.length === 0) { 
+        tbody.innerHTML = '<tr><td colspan="32" class="text-center p-6 text-slate-400 font-bold border-b border-slate-100 bg-white">프로젝트가 없습니다.</td></tr>'; 
+        return; 
+    }
     
     const statusMap = { 
         'pending': '<span class="text-slate-500 bg-slate-100 px-2 py-0.5 rounded shadow-sm border border-slate-200">대기/보류</span>', 
@@ -242,14 +243,12 @@ window.renderProjectStatusList = function() {
         const desCnt = (window.projectDesignCounts && window.projectDesignCounts[item.id]) || 0;
         const schCnt = (window.projectScheduleCounts && window.projectScheduleCounts[item.id]) || 0;
 
-        // 💡 띄어쓰기 및 대소문자 무시한 NCR 미결 항목 계산
         const safeItemCode = String(item.code || '').replace(/\s/g, '').toUpperCase();
         const pjtNcrData = (window.ncrData || []).filter(n => String(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeItemCode);
         const unresolvedNcrCnt = pjtNcrData.filter(n => !(n.status.includes('완료') || n.status.includes('종결') || n.status.includes('완료됨'))).length;
 
         let trHtml = `<tr class="group hover:bg-indigo-50/50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.editProjStatus('${item.id}')">`;
         
-        // 스크롤 고정 영역 (왼쪽)
         trHtml += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 0px; min-width: 40px; max-width: 40px;" onclick="event.stopPropagation()"><button onclick="window.deleteProjStatus('${item.id}')" class="text-slate-300 hover:text-rose-500 p-1.5 rounded"><i class="fa-solid fa-trash-can"></i></button></td>`;
         trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 40px; min-width: 80px; max-width: 80px;">${getSafeString(item.category)}</td>`;
         trHtml += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 120px; min-width: 50px; max-width: 50px;" onclick="event.stopPropagation()"><button onclick="window.openCommentModal('${item.id}', '${safeNameJs}')" class="text-amber-400 relative"><i class="fa-regular fa-comment-dots text-lg"></i>${cCnt ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-amber-200">${cCnt}</span>` : ''}</button></td>`;
@@ -260,14 +259,12 @@ window.renderProjectStatusList = function() {
         trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center font-black text-emerald-600 bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 660px; min-width: 60px; max-width: 60px;">${parseFloat(item.progress) || 0}%</td>`;
         trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20 shadow-[3px_0_5px_-1px_rgba(0,0,0,0.1)] border-r-slate-300" style="left: 720px; min-width: 80px; max-width: 80px;">${statusMap[item.status] || ''}</td>`;
         
-        // 스크롤 영역 (일반 td)
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center font-bold text-slate-600">${getSafeString(item.manager)}</td>`;
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openPurchaseModal('${item.id}', '${safeNameJs}')" class="text-amber-500 relative"><i class="fa-solid fa-cart-shopping text-lg"></i>${purCnt ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-amber-200">${purCnt}</span>` : ''}</button></td>`;
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openDesignModal('${item.id}', '${safeNameJs}')" class="text-teal-400 relative"><i class="fa-solid fa-pen-ruler text-lg"></i>${desCnt ? `<span class="absolute -top-1 -right-2 bg-teal-100 text-teal-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-teal-200">${desCnt}</span>` : ''}</button></td>`;
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openPjtScheduleModal('${item.id}', '${safeNameJs}')" class="text-fuchsia-400 relative"><i class="fa-regular fa-calendar-check text-lg"></i>${schCnt ? `<span class="absolute -top-1 -right-2 bg-fuchsia-100 text-fuchsia-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-fuchsia-200">${schCnt}</span>` : ''}</button></td>`;
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openDailyLogModal('${item.id}', '${safeNameJs}', ${parseFloat(item.progress)||0})" class="text-sky-400 relative"><i class="fa-solid fa-book text-lg"></i>${lCnt ? `<span class="absolute -top-1 -right-2 bg-sky-100 text-sky-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-sky-200">${lCnt}</span>` : ''}</button></td>`;
         
-        // 💡 부적합 렌더링
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()">
             <button onclick="window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-rose-500 relative transition-transform hover:scale-110">
                 <i class="fa-solid fa-file-circle-exclamation text-lg"></i>
@@ -1002,7 +999,7 @@ window.renderDailyLogs = function(logs) {
             
             let btnHtml = '';
             if (log.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin') {
-                btnHtml = '<button onclick="window.editDailyLog(\'' + log.id + '\')" class="text-slate-400 hover:text-sky-500 transition-colors" title="수정"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteDailyLog(\'' + log.id + '\')" class="text-slate-400 hover:text-rose-500 transition-colors" title="삭제"><i class="fa-solid fa-trash-can"></i></button>';
+                btnHtml = '<button onclick="window.editDailyLog(\'' + log.id + '\')" class="text-slate-400 hover:text-sky-50 transition-colors" title="수정"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteDailyLog(\'' + log.id + '\')" class="text-slate-400 hover:text-rose-500 transition-colors" title="삭제"><i class="fa-solid fa-trash-can"></i></button>';
             }
             
             listHtml += '<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1 hover:shadow-md transition-shadow"><div class="flex justify-between items-center"><div class="flex items-center gap-3"><span class="font-bold text-sky-600 text-xs flex items-center gap-1"><i class="fa-regular fa-calendar text-sky-400"></i> ' + log.date + '</span><span class="font-black text-slate-700 text-sm">' + log.authorName + '</span></div><div class="flex gap-2">' + btnHtml + '</div></div><div class="text-slate-700 font-medium text-[13px] pl-1 mt-2 break-words leading-relaxed">' + safeContent + '</div>' + imgHtml + '</div>'; 
@@ -1675,11 +1672,7 @@ document.addEventListener('click', function(e) {
 // ==========================================
 window.loadNcrData = async function() {
     try {
-        // 구글 시트 ID
         const sheetId = '1ZYwSKvT4QXjFxgftunwdRHWzX4KXoelhZSVjauAJg8s';
-        
-        // 💡 핵심: 구글 시트를 'CSV' 형태로 바로 다운로드 받아서 읽어버립니다. 
-        // 이 방식은 CORS나 구글 보안 토큰 갱신 이슈에서 완전히 자유롭습니다.
         const url = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=0`;
 
         const res = await fetch(url);
@@ -1687,7 +1680,6 @@ window.loadNcrData = async function() {
 
         const csvText = await res.text();
         
-        // CSV 파싱 로직 (따옴표 안에 있는 콤마는 무시하고 자릅니다)
         const parseCSV = (str) => {
             const arr = []; let quote = false; let row = 0, col = 0;
             for (let c = 0; c < str.length; c++) {
@@ -1711,7 +1703,6 @@ window.loadNcrData = async function() {
 
         const headers = rows[0];
         
-        // 헤더 인덱스 찾기 (띄어쓰기, 대소문자 무시)
         const getIdx = (keywords) => {
             return headers.findIndex(h => {
                 if (!h) return false;
@@ -1729,7 +1720,6 @@ window.loadNcrData = async function() {
         const cDesc = getIdx(['내용', '부적합내용', 'content', 'desc']);
         const cStat = getIdx(['진행', '현황', '상태', 'status']);
 
-        // 데이터 매핑
         window.ncrData = rows.slice(1).map(row => {
             return {
                 pjtCode: cPjt !== -1 && row[cPjt] ? row[cPjt].trim() : '',
@@ -1741,7 +1731,7 @@ window.loadNcrData = async function() {
                 content: cDesc !== -1 && row[cDesc] ? row[cDesc].trim() : '',
                 status: cStat !== -1 && row[cStat] ? row[cStat].trim() : ''
             };
-        }).filter(n => n.pjtCode); // PJT 코드가 있는 행만 킵
+        }).filter(n => n.pjtCode);
 
         window.renderProjectStatusList();
 
@@ -1777,38 +1767,6 @@ window.renderNcrList = function(pjtCode) {
     const tbody = document.getElementById('ncr-list-tbody');
     if (!tbody) return;
     
-    const safeTargetCode = String(pjtCode).replace(/\s/g, '').toUpperCase();
-    const list = (window.ncrData || []).filter(n => String(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeTargetCode);
-    
-    let total = list.length, completed = list.filter(n => n.status.includes('완료') || n.status.includes('종결')).length;
-    
-    document.getElementById('ncr-total-cnt').innerText = total;
-    document.getElementById('ncr-pending-cnt').innerText = total - completed;
-    document.getElementById('ncr-comp-cnt').innerText = completed;
-    
-    if (total === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-8 text-slate-400 font-bold bg-white">등록된 부적합 내역이 없습니다.</td></tr>';
-        return;
-    }
-    
-    tbody.innerHTML = list.map(n => {
-        const isComp = n.status.includes('완료') || n.status.includes('종결');
-        const textClass = isComp ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-700';
-        const badge = isComp ? `<span class="bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">완료</span>` : `<span class="bg-rose-50 text-rose-600 border border-rose-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">진행중</span>`;
-        
-        return `<tr class="hover:bg-slate-50 transition-colors bg-white border-b border-slate-100">
-            <td class="p-3 text-center font-bold text-slate-500 whitespace-nowrap">${n.ncrNo || '-'}</td>
-            <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.date || '-'}</td>
-            <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.drawingNo || '-'}</td>
-            <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.partName || '-'}</td>
-            <td class="p-3 text-center whitespace-nowrap"><span class="bg-slate-100 px-2 py-1 border border-slate-200 rounded font-bold">${n.type || '-'}</span></td>
-            <td class="p-3 font-medium ${textClass} break-all">${n.content || '-'}</td>
-            <td class="p-3 text-center whitespace-nowrap">${badge}</td>
-        </tr>`;
-    }).join('');
-};
-    
-    // 시트의 코드와 현황판의 코드 비교 시, 띄어쓰기 및 대소문자를 무시하도록 강화
     const safeTargetCode = String(pjtCode).replace(/\s/g, '').toUpperCase();
     const list = (window.ncrData || []).filter(n => String(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeTargetCode);
     
