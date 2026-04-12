@@ -100,7 +100,7 @@ window.processDashboardData = function() {
         }
 
         const year = selectedYearStr; 
-        let stats = { estMd: 0, curMd: 0, completed: 0, delayed: 0, pending: 0, progress: 0, inspecting: 0, rejected: 0 }; 
+        let stats = { estMd: 0, curMd: 0, completed: 0, pending: 0, progress: 0, inspecting: 0, rejected: 0 }; 
         let annualPlanData = Array(12).fill(0); 
         let annualActData = Array(12).fill(0); 
         let monthlyCompleted = Array(12).fill(0);
@@ -114,29 +114,35 @@ window.processDashboardData = function() {
                 const status = getSafeString(data.status);
                 
                 let isInYear = false;
+                let isTargetThisYear = false; // 공수 계산용 타겟 연도 확인
                 
-                // ✨ 수정 포인트 1: 완료된 건은 오직 '실제 출하일(shipEn)' 기준으로만 연도 필터링
                 if (status === 'completed') {
                     if (shipEn.startsWith(year)) {
                         isInYear = true;
+                        isTargetThisYear = true;
                     }
                 } else {
-                    // 미완료 건들은 예정일 기준이거나 진행중이면 포함시킴
                     if (shipEst.startsWith(year) || status === 'pending' || status === 'progress' || status === 'inspecting') {
                         isInYear = true;
+                    }
+                    if (shipEst.startsWith(year)) {
+                        isTargetThisYear = true;
                     }
                 }
 
                 if (!isInYear) return;
                 
-                // 상태별 카운트 (여기서 completed가 정상적으로 1 올라감)
                 if (stats[status] !== undefined) {
-                    stats[status] = stats[status] + 1;
+                    stats[status]++;
                 } else {
                     stats[status] = 1;
                 }
                 
-                // 연간 계획 MD 누적 (예정일 기준)
+                // 예정 공수는 목표 연도인 경우에만 누적 (과거 밀린 프로젝트 합산 방지)
+                if (isTargetThisYear) {
+                    stats.estMd += parseFloat(data.estMd) || 0;
+                }
+                
                 if (shipEst.startsWith(year)) { 
                     let mIdx = parseInt(shipEst.split('-')[1]) - 1; 
                     if (mIdx >= 0 && mIdx < 12) {
@@ -144,7 +150,6 @@ window.processDashboardData = function() {
                     }
                 }
                 
-                // ✨ 수정 포인트 2: 월별 출하 추이 데이터 세팅 (중복 카운트 제거)
                 if (status === 'completed' && shipEn.startsWith(year)) {
                     let mIdx = parseInt(shipEn.split('-')[1]) - 1; 
                     if (mIdx >= 0 && mIdx < 12) {
@@ -152,16 +157,8 @@ window.processDashboardData = function() {
                     }
                 }
                 
-                stats.estMd += parseFloat(data.estMd) || 0;
-                
-                if (status !== 'completed' && shipEst) { 
-                    const diffTime = new Date(shipEst).getTime() - new Date().getTime();
-                    if (diffTime / (1000 * 60 * 60 * 24) <= 7) {
-                        stats.delayed++; 
-                    }
-                }
-                
-                if (shipEn && shipEst && status === 'completed') {
+                // 출하 오차는 해당 연도에 출하된(Completed) 프로젝트만 계산
+                if (status === 'completed' && shipEn.startsWith(year) && shipEst) {
                     const enD = new Date(shipEn);
                     const estD = new Date(shipEst);
                     if (!isNaN(enD.getTime()) && !isNaN(estD.getTime())) { 
@@ -198,7 +195,6 @@ window.processDashboardData = function() {
             inspecting: stats.inspecting,
             completed: stats.completed,
             rejected: stats.rejected,
-            delayed: stats.delayed,
             estMd: stats.estMd,
             curMd: stats.curMd,
             avgShipError: finalAvgShipError
@@ -213,9 +209,6 @@ window.processDashboardData = function() {
         
         const elCompleted = document.getElementById('dash-pd-completed');
         if (elCompleted) elCompleted.innerText = stats.completed;
-        
-        const elDelayed = document.getElementById('dash-pd-delayed');
-        if (elDelayed) elDelayed.innerText = stats.delayed;
         
         const elEstMd = document.getElementById('dash-pd-estMd');
         if (elEstMd) elEstMd.innerText = stats.estMd.toFixed(1);
@@ -378,15 +371,18 @@ window.processPeriodData = function() {
         } 
     }
 
-    let pending = 0, progress = 0, urgent = 0, periodMdTotal = 0, mgrCounts = {}; 
+    let pending = 0, progress = 0, urgent = 0, periodCompleted = 0, periodMdTotal = 0, mgrCounts = {}; 
     let list = [];
     
     window.allDashProjects.forEach(function(p) {
         let relevant = false;
         
-        // ✨ 수정 포인트 3: 기간별 상세 분석에서도 완료건은 실제 출하일 기준으로만 판단
         if (p.status === 'completed') {
-            if (p.d_shipEn && p.d_shipEn >= start && p.d_shipEn <= end) relevant = true;
+            // 완료된 건은 실제 출하일 기준으로만 판단
+            if (p.d_shipEn && p.d_shipEn >= start && p.d_shipEn <= end) {
+                relevant = true;
+                periodCompleted++;
+            }
         } else {
             if (p.status === 'pending' || p.status === 'progress' || p.status === 'inspecting') relevant = true;
             if (p.d_shipEst && p.d_shipEst >= start && p.d_shipEst <= end) relevant = true;
@@ -432,6 +428,9 @@ window.processPeriodData = function() {
             labelPeriodMd.innerText = "주간 총 투입 공수"; thPeriodMd.innerText = "해당주 투입MD"; 
         }
     }
+
+    const elPeriodCompleted = document.getElementById('pd-period-completed');
+    if (elPeriodCompleted) elPeriodCompleted.innerText = periodCompleted;
 
     const elPeriodPending = document.getElementById('pd-period-pending');
     if (elPeriodPending) elPeriodPending.innerText = pending; 
@@ -587,7 +586,6 @@ window.exportDashboardExcel = async function() {
             ['완료(출하) 건수', window.currentDashStats.completed + '건'],
             ['대기/보류 건수', window.currentDashStats.pending + '건'],
             ['진행중/검수중 건수', (window.currentDashStats.progress + window.currentDashStats.inspecting) + '건'],
-            ['지연 위험 건수', window.currentDashStats.delayed + '건'],
             ['총 예정 공수', parseFloat(window.currentDashStats.estMd).toFixed(1) + ' MD'],
             ['총 투입 공수', parseFloat(window.currentDashStats.curMd).toFixed(1) + ' MD'],
             ['목표대비 출하 평균 오차', window.currentDashStats.avgShipError + ' 일']
