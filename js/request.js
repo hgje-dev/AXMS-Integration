@@ -8,7 +8,6 @@ let unsubscribeEmails = null;
 
 window.currentReqEmails = []; 
 
-// 💡 안전한 날짜 파싱 유틸 (리스트 안 뜸 & 코멘트 에러 방지용 핵심 함수!) - 절대 삭제 금지!
 window.reqGetSafeMillis = function(val) {
     try { 
         if (!val) return 0; 
@@ -19,7 +18,6 @@ window.reqGetSafeMillis = function(val) {
     } catch(e) { return 0; }
 };
 
-// 💡 검색 및 필터링 상태 변수
 window.currentReqStatusFilter = 'all';
 window.currentReqYearFilter = '';
 window.currentReqMonthFilter = '';
@@ -58,9 +56,6 @@ window.resetReqFilters = function() {
     window.renderRequestList();
 };
 
-// ==========================================
-// 🚀 구글 API 연동 (Drive & Gmail)
-// ==========================================
 const GOOGLE_CLIENT_ID = '924354535197-joakn7gpfj4d3oirpd1pu3un9j7689q9.apps.googleusercontent.com';
 const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/gmail.send';
 
@@ -193,7 +188,7 @@ window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
                 <p><strong>요청자:</strong> ${reqData.authorName} (${reqData.authorTeam})</p>
                 ${reqData.manager ? `<p><strong>담당자:</strong> <span style="color:#4f46e5; font-weight:bold;">${reqData.manager}</span></p>` : ''}
                 <p><strong>발송자(시스템 계정):</strong> ${window.userProfile.name} (${window.userProfile.email})</p>
-                <p><strong>요청 내용:</strong><br>${String(reqData.content || '없음').replace(/\n/g, '<br>')}</p>
+                <p><strong>요청 내용:</strong><br>${String(reqData.content || '시스템 내 상세 사양을 확인해주세요.').replace(/\n/g, '<br>')}</p>
                 ${reqData.fileUrl ? `<p style="margin-top:20px;"><strong>첨부파일(원문):</strong> <a href="${reqData.fileUrl}" style="color:#4f46e5; font-weight:bold;">문서 확인하기</a></p>` : ''}
             </div>
     `;
@@ -234,9 +229,6 @@ window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
     return true;
 };
 
-// ==========================================
-// 💡 수신 담당자 설정 관리 (초성 검색)
-// ==========================================
 window.openEmailSettingsModal = function() {
     document.getElementById('new-req-email-user').value = '';
     document.getElementById('req-user-autocomplete').classList.add('hidden');
@@ -316,12 +308,12 @@ window.removeReqEmail = async function(idx) {
 
 
 // ==========================================
-// 💡 폼 UI 제어 (협업 vs 구매의뢰 분기)
+// 💡 폼 UI 제어 (동적 사양서 로드 로직 추가)
 // ==========================================
 window.openWriteModal = function(editId = null) { 
     window.editingReqId = editId; 
     
-    // 초기화
+    // 콜랩용 초기화
     if(document.getElementById('req-pjt-code')) document.getElementById('req-pjt-code').value = ''; 
     if(document.getElementById('req-pjt-name')) document.getElementById('req-pjt-name').value = ''; 
     if(document.getElementById('req-title')) document.getElementById('req-title').value = ''; 
@@ -332,11 +324,21 @@ window.openWriteModal = function(editId = null) {
     if(document.getElementById('req-est-md')) document.getElementById('req-est-md').value = ''; 
     if(document.getElementById('req-content')) document.getElementById('req-content').value = ''; 
 
+    // 구매의뢰(Spec) 용 초기화
     if(document.getElementById('req-pur-title')) document.getElementById('req-pur-title').value = '';
     if(document.getElementById('req-pur-pjt-code')) document.getElementById('req-pur-pjt-code').value = '';
     if(document.getElementById('req-pur-pjt-name')) document.getElementById('req-pur-pjt-name').value = '';
     if(document.getElementById('req-pur-ship-date')) document.getElementById('req-pur-ship-date').value = '';
-    if(document.getElementById('req-pur-content')) document.getElementById('req-pur-content').value = '';
+    if(document.getElementById('pur-spec-etc-memo')) document.getElementById('pur-spec-etc-memo').value = '';
+    
+    // 구매 Select/Text 초기화
+    ['app','qty','unit','las-wave','las-power','las-maker','las-type','las-ch','las-len','las-core','las-cool','opt-type','opt-mnt','opt-col','opt-split','opt-lens','opt-scan','opt-cam','opt-lit','acc-pc','acc-ctrl','acc-air','acc-rtc'].forEach(k => {
+        if(document.getElementById(`pur-spec-${k}`)) document.getElementById(`pur-spec-${k}`).value = (k==='qty') ? '1' : '';
+        if(document.getElementById(`pur-spec-${k}-etc`)) document.getElementById(`pur-spec-${k}-etc`).value = '';
+    });
+    // 구매 다중 체크박스 초기화
+    document.querySelectorAll('input[name="pur_spec_opt_opts"]').forEach(cb => cb.checked = false);
+    if(document.getElementById('pur-spec-opt-opts-etc')) document.getElementById('pur-spec-opt-opts-etc').value = '';
 
     window.clearSelectedFile();
     
@@ -349,17 +351,16 @@ window.openWriteModal = function(editId = null) {
     if(collabRadio) collabRadio.checked = true;
 
     const titleMap = { 'collab': '협업/조립 요청서', 'purchase': '모듈 구매 의뢰서', 'repair': '수리/점검 요청서' };
-    
     if(document.getElementById('req-header-title')) document.getElementById('req-header-title').innerText = titleMap[window.currentAppId] || '요청서 관리';
-    if(document.getElementById('req-modal-title')) document.getElementById('req-modal-title').innerText = (titleMap[window.currentAppId] || '요청서') + ' 작성';
+    if(document.getElementById('req-modal-title')) document.getElementById('req-modal-title').innerText = (titleMap[window.currentAppId] || '요청서').replace('새 ', '') + ' 작성';
 
-    if (window.currentAppId === 'collab') {
-        if(document.getElementById('collab-form-fields')) document.getElementById('collab-form-fields').classList.remove('hidden');
-        if(document.getElementById('purchase-form-fields')) document.getElementById('purchase-form-fields').classList.add('hidden');
-    } else if (window.currentAppId === 'purchase') {
+    const modalContent = document.getElementById('write-modal-content');
+    if (window.currentAppId === 'purchase') {
+        if(modalContent) { modalContent.classList.remove('max-w-2xl'); modalContent.classList.add('max-w-4xl'); }
         if(document.getElementById('collab-form-fields')) document.getElementById('collab-form-fields').classList.add('hidden');
         if(document.getElementById('purchase-form-fields')) document.getElementById('purchase-form-fields').classList.remove('hidden');
     } else {
+        if(modalContent) { modalContent.classList.add('max-w-2xl'); modalContent.classList.remove('max-w-4xl'); }
         if(document.getElementById('collab-form-fields')) document.getElementById('collab-form-fields').classList.remove('hidden');
         if(document.getElementById('purchase-form-fields')) document.getElementById('purchase-form-fields').classList.add('hidden');
     }
@@ -377,18 +378,35 @@ window.openWriteModal = function(editId = null) {
             if(document.getElementById('req-end-date')) document.getElementById('req-end-date').value = req.endDate || ''; 
             if(document.getElementById('req-est-md')) document.getElementById('req-est-md').value = req.estMd || ''; 
             if(document.getElementById('req-content')) document.getElementById('req-content').value = req.content || ''; 
-            
             if(req.category) {
                 const rEl = document.querySelector(`input[name="req-category"][value="${req.category}"]`);
                 if(rEl) rEl.checked = true;
             }
 
-            // 구매 셋
+            // 💡 구매 셋 (Spec 복원 로직)
             if(document.getElementById('req-pur-title')) document.getElementById('req-pur-title').value = req.reqTitle || req.title || '';
             if(document.getElementById('req-pur-pjt-code')) document.getElementById('req-pur-pjt-code').value = req.pjtCode || '';
             if(document.getElementById('req-pur-pjt-name')) document.getElementById('req-pur-pjt-name').value = req.pjtName || '';
             if(document.getElementById('req-pur-ship-date')) document.getElementById('req-pur-ship-date').value = req.shipDate || '';
-            if(document.getElementById('req-pur-content')) document.getElementById('req-pur-content').value = req.content || '';
+            
+            if (req.spec) {
+                const s = req.spec;
+                ['app','qty','unit','lasWave','lasPower','lasMaker','lasType','lasCh','lasLen','lasCore','lasCool','optType','optMnt','optCol','optSplit','optLens','optScan','optCam','optLit','accPc','accCtrl','accAir','accRtc'].forEach(k => {
+                    // HTML id는 '-' 로 구분되므로 변환
+                    const htmlKey = k.replace(/([A-Z])/g, "-$1").toLowerCase();
+                    if(document.getElementById(`pur-spec-${htmlKey}`)) document.getElementById(`pur-spec-${htmlKey}`).value = s[k] || '';
+                    if(document.getElementById(`pur-spec-${htmlKey}-etc`)) document.getElementById(`pur-spec-${htmlKey}-etc`).value = s[`${k}Etc`] || '';
+                });
+
+                if(s.optOpts && Array.isArray(s.optOpts)) {
+                    s.optOpts.forEach(val => {
+                        const cb = document.querySelector(`input[name="pur_spec_opt_opts"][value="${val}"]`);
+                        if(cb) cb.checked = true;
+                    });
+                }
+                if(document.getElementById('pur-spec-opt-opts-etc')) document.getElementById('pur-spec-opt-opts-etc').value = s.optOptsEtc || '';
+                if(document.getElementById('pur-spec-etc-memo')) document.getElementById('pur-spec-etc-memo').value = s.etcMemo || '';
+            }
 
             if(req.fileUrl && document.getElementById('req-file-link-wrap')) {
                 document.getElementById('req-file-link-wrap').classList.remove('hidden');
@@ -454,10 +472,6 @@ window.closeWriteModal = function() {
         m.classList.remove('flex'); 
     }
 };
-
-// ==========================================
-// 💡 모달 프롬프트 연결 로직 (Save, Accept, Complete)
-// ==========================================
 
 window.promptSaveRequest = function() {
     let reqTitle, pjtName, reqValid = false;
@@ -544,7 +558,64 @@ window.executeSaveRequest = async function() {
         data.pjtName = document.getElementById('req-pur-pjt-name')?.value.trim() || '';
         data.pjtCode = document.getElementById('req-pur-pjt-code')?.value.trim() || '';
         data.shipDate = document.getElementById('req-pur-ship-date')?.value || '';
-        data.content = document.getElementById('req-pur-content')?.value.trim() || '';
+        
+        // 💡 구매의뢰서 상세 스펙(Spec) 데이터 추출
+        data.spec = {
+            app: document.getElementById('pur-spec-app')?.value || '',
+            appEtc: document.getElementById('pur-spec-app-etc')?.value || '',
+            qty: document.getElementById('pur-spec-qty')?.value || '1',
+            unit: document.getElementById('pur-spec-unit')?.value || 'EA',
+            
+            lasWave: document.getElementById('pur-spec-las-wave')?.value || '',
+            lasWaveEtc: document.getElementById('pur-spec-las-wave-etc')?.value || '',
+            lasPower: document.getElementById('pur-spec-las-power')?.value || '',
+            lasPowerEtc: document.getElementById('pur-spec-las-power-etc')?.value || '',
+            lasMaker: document.getElementById('pur-spec-las-maker')?.value || '',
+            lasMakerEtc: document.getElementById('pur-spec-las-maker-etc')?.value || '',
+            lasType: document.getElementById('pur-spec-las-type')?.value || '',
+            lasTypeEtc: document.getElementById('pur-spec-las-type-etc')?.value || '',
+            lasCh: document.getElementById('pur-spec-las-ch')?.value || '',
+            lasChEtc: document.getElementById('pur-spec-las-ch-etc')?.value || '',
+            lasLen: document.getElementById('pur-spec-las-len')?.value || '',
+            lasLenEtc: document.getElementById('pur-spec-las-len-etc')?.value || '',
+            lasCore: document.getElementById('pur-spec-las-core')?.value || '',
+            lasCoreEtc: document.getElementById('pur-spec-las-core-etc')?.value || '',
+            lasCool: document.getElementById('pur-spec-las-cool')?.value || '',
+            lasCoolEtc: document.getElementById('pur-spec-las-cool-etc')?.value || '',
+
+            optType: document.getElementById('pur-spec-opt-type')?.value || '',
+            optTypeEtc: document.getElementById('pur-spec-opt-type-etc')?.value || '',
+            optMnt: document.getElementById('pur-spec-opt-mnt')?.value || '',
+            optMntEtc: document.getElementById('pur-spec-opt-mnt-etc')?.value || '',
+            optCol: document.getElementById('pur-spec-opt-col')?.value || '',
+            optColEtc: document.getElementById('pur-spec-opt-col-etc')?.value || '',
+            optSplit: document.getElementById('pur-spec-opt-split')?.value || '',
+            optSplitEtc: document.getElementById('pur-spec-opt-split-etc')?.value || '',
+            optLens: document.getElementById('pur-spec-opt-lens')?.value || '',
+            optLensEtc: document.getElementById('pur-spec-opt-lens-etc')?.value || '',
+            optScan: document.getElementById('pur-spec-opt-scan')?.value || '',
+            optScanEtc: document.getElementById('pur-spec-opt-scan-etc')?.value || '',
+            optCam: document.getElementById('pur-spec-opt-cam')?.value || '',
+            optCamEtc: document.getElementById('pur-spec-opt-cam-etc')?.value || '',
+            optLit: document.getElementById('pur-spec-opt-lit')?.value || '',
+            optLitEtc: document.getElementById('pur-spec-opt-lit-etc')?.value || '',
+            
+            optOpts: Array.from(document.querySelectorAll('input[name="pur_spec_opt_opts"]:checked')).map(cb => cb.value),
+            optOptsEtc: document.getElementById('pur-spec-opt-opts-etc')?.value || '',
+
+            accPc: document.getElementById('pur-spec-acc-pc')?.value || '',
+            accPcEtc: document.getElementById('pur-spec-acc-pc-etc')?.value || '',
+            accCtrl: document.getElementById('pur-spec-acc-ctrl')?.value || '',
+            accCtrlEtc: document.getElementById('pur-spec-acc-ctrl-etc')?.value || '',
+            accAir: document.getElementById('pur-spec-acc-air')?.value || '',
+            accAirEtc: document.getElementById('pur-spec-acc-air-etc')?.value || '',
+            accRtc: document.getElementById('pur-spec-acc-rtc')?.value || '',
+            accRtcEtc: document.getElementById('pur-spec-acc-rtc-etc')?.value || '',
+
+            etcMemo: document.getElementById('pur-spec-etc-memo')?.value || ''
+        };
+        // 메일 본문용 텍스트 간략화
+        data.content = `[시스템 등록 사양서 확인 요망]\n요청일: ${data.shipDate}\n기타메모: ${data.spec.etcMemo}`;
     }
 
     const fileInput = document.getElementById('req-file');
@@ -726,9 +797,6 @@ window.revertRequest = async function() {
     } catch(e) { window.showToast("처리 실패", "error"); }
 };
 
-// ==========================================
-// 💡 데이터 로드 및 테이블 렌더링 (동적 컬럼 적용)
-// ==========================================
 window.loadRequestsData = function(appId) { 
     if(unsubscribeRequests) unsubscribeRequests(); 
     unsubscribeRequests = onSnapshot(query(collection(db, "requests"), where("type", "==", appId)), (s) => { 
@@ -911,9 +979,6 @@ window.deleteRequest = async function(id) {
     } 
 };
 
-// ==========================================
-// 💡 코멘트 모달 로직 (에러 방지 처리 포함)
-// ==========================================
 window.openCommentModal = function(reqId, title) { 
     const cmtInput = document.getElementById('cmt-req-id');
     if(cmtInput) cmtInput.value = reqId; 
