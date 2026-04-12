@@ -1561,5 +1561,3 @@ window.deleteLinkItem = async function(projectId, index) {
         window.renderLinksList(projectId); 
     } catch(e) { window.showToast("삭제 실패", "error"); } 
 };
-
-}
