@@ -282,7 +282,7 @@
             </div>
 
             <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                <label class="text-[11px] font-bold text-slate-500 mb-3 flex items-center gap-1.5"><i class="fa-brands fa-google-drive text-emerald-500"></i> 첨부 파일 <span class="text-slate-400 font-normal">(필요 시 양식 파일 첨부)</span></label>
+                <label class="text-[11px] font-bold text-slate-500 mb-3 flex items-center gap-1.5"><i class="fa-brands fa-google-drive text-emerald-500"></i> 첨부 파일 <span class="text-slate-400 font-normal">(필요 시 양식 파일 등 첨부)</span></label>
                 
                 <div id="req-dropzone" class="border-2 border-dashed border-slate-300 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 hover:border-indigo-400 transition-colors relative" 
                      onclick="document.getElementById('req-file').click()" 
@@ -368,7 +368,7 @@
         </div>
         <div class="px-6 py-4 border-t bg-white flex justify-end gap-2">
             <button onclick="document.getElementById('req-send-modal').classList.add('hidden'); document.getElementById('req-send-modal').classList.remove('flex');" class="px-5 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-colors">취소</button>
-            <button onclick="window.executeSaveRequest()" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors"><i class="fa-solid fa-paper-plane mr-1"></i> 발송하기</button>
+            <button onclick="window.executeSaveRequest()" id="btn-req-save-exec" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors"><i class="fa-solid fa-paper-plane mr-1"></i> 발송하기</button>
         </div>
     </div>
 </div>
@@ -405,8 +405,22 @@
         <div class="p-6 bg-slate-50/50 space-y-4">
             <p class="text-sm font-bold text-slate-600 leading-relaxed">이 요청을 '작업 완료' 처리하고 아래 수신자에게 알림 메일을 발송하시겠습니까?</p>
             
+            <div id="req-complete-file-section" class="hidden">
+                <label class="block text-[11px] font-bold text-slate-500 mb-1.5 flex items-center gap-1.5"><i class="fa-solid fa-file-arrow-up text-emerald-500"></i> 검수 리스트 첨부 (필수)</label>
+                <div class="border-2 border-dashed border-emerald-200 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-emerald-50 transition-colors relative"
+                     onclick="document.getElementById('req-complete-file').click()"
+                     ondragover="event.preventDefault(); this.classList.add('bg-emerald-50', 'border-emerald-400');"
+                     ondragleave="event.preventDefault(); this.classList.remove('bg-emerald-50', 'border-emerald-400');"
+                     ondrop="event.preventDefault(); this.classList.remove('bg-emerald-50', 'border-emerald-400'); document.getElementById('req-complete-file').files = event.dataTransfer.files; document.getElementById('req-complete-file-name').innerText = event.dataTransfer.files[0] ? event.dataTransfer.files[0].name : '';">
+                    <i class="fa-solid fa-file-circle-check text-3xl text-emerald-300 mb-2 pointer-events-none"></i>
+                    <p class="text-xs font-bold text-slate-600 mb-1 pointer-events-none">클릭하거나 파일을 드래그하세요</p>
+                    <input type="file" id="req-complete-file" class="hidden" onchange="document.getElementById('req-complete-file-name').innerText = this.files[0] ? this.files[0].name : '';">
+                </div>
+                <div id="req-complete-file-name" class="mt-2 text-xs font-bold text-emerald-600 text-center truncate"></div>
+            </div>
+
             <div>
-                <label class="block text-[11px] font-bold text-slate-500 mb-1.5">완료 알림 메일 수신자 (기본 요청자)</label>
+                <label class="block text-[11px] font-bold text-slate-500 mb-1.5 mt-2">완료 알림 메일 수신자 (기본 요청자)</label>
                 <input type="text" id="req-complete-email" placeholder="예: user@axbis.ai" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold outline-emerald-500 bg-white text-slate-700">
             </div>
         </div>
