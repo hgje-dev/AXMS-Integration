@@ -47,7 +47,7 @@
         <div class="p-6 overflow-y-auto custom-scrollbar flex-1 bg-slate-50 space-y-6 min-h-0 relative">
             <input type="hidden" id="req-id">
             
-            <div id="google-auth-section" class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between shadow-sm">
+            <div id="google-auth-section" class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between shadow-sm hidden">
                 <div class="flex items-center gap-3">
                     <div class="w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-sm text-amber-500"><i class="fa-brands fa-google"></i></div>
                     <div>
@@ -56,7 +56,11 @@
                     </div>
                 </div>
                 <button onclick="window.authenticateGoogle()" id="btn-google-auth" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm whitespace-nowrap">연동하기</button>
-                <div id="google-auth-status" class="hidden text-xs font-bold text-emerald-600"><i class="fa-solid fa-check"></i> 연동 완료</div>
+            </div>
+
+            <div id="google-auth-status" class="hidden flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2 shadow-sm">
+                <span class="text-xs font-bold text-emerald-700 flex items-center gap-2"><i class="fa-brands fa-google-drive text-emerald-500 text-base"></i> 구글 드라이브 연동 활성화됨</span>
+                <span class="text-[10px] text-emerald-600 font-bold bg-white px-2 py-0.5 rounded border border-emerald-100 shadow-sm">자동 업로드 ON</span>
             </div>
 
             <div id="collab-form-fields" class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5 hidden">
@@ -125,10 +129,29 @@
             </div>
 
             <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                <label class="text-[11px] font-bold text-slate-500 mb-2 flex items-center gap-1.5"><i class="fa-brands fa-google-drive text-emerald-500"></i> 첨부 파일 (구글 드라이브 연동)</label>
-                <input type="file" id="req-file" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer transition-all">
-                <div id="req-file-link-wrap" class="mt-2 text-xs font-bold hidden">
-                    <a id="req-file-link" href="#" target="_blank" class="text-sky-500 hover:text-sky-700 underline break-all flex items-center gap-1"><i class="fa-solid fa-arrow-up-right-from-square"></i> 첨부된 파일 보기</a>
+                <label class="text-[11px] font-bold text-slate-500 mb-3 flex items-center gap-1.5"><i class="fa-brands fa-google-drive text-emerald-500"></i> 첨부 파일 (선택)</label>
+                
+                <div id="req-dropzone" class="border-2 border-dashed border-slate-300 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 hover:border-indigo-400 transition-colors relative" 
+                     onclick="document.getElementById('req-file').click()" 
+                     ondragover="event.preventDefault(); this.classList.add('bg-indigo-50', 'border-indigo-400');" 
+                     ondragleave="event.preventDefault(); this.classList.remove('bg-indigo-50', 'border-indigo-400');" 
+                     ondrop="event.preventDefault(); this.classList.remove('bg-indigo-50', 'border-indigo-400'); window.handleFileSelect(event.dataTransfer.files);">
+                    
+                    <div class="pointer-events-none text-center">
+                        <i class="fa-solid fa-cloud-arrow-up text-3xl text-indigo-300 mb-3"></i>
+                        <p class="text-sm font-bold text-slate-600 mb-1">클릭하거나 파일을 이곳으로 드래그하세요</p>
+                        <p class="text-[10px] text-slate-400">구글 드라이브에 자동 업로드되어 링크가 첨부됩니다.</p>
+                    </div>
+                    <input type="file" id="req-file" class="hidden" onchange="window.handleFileSelect(this.files)">
+                </div>
+                
+                <div id="req-file-name" class="mt-3 text-xs font-bold text-indigo-600 hidden bg-indigo-50 py-2 px-3 rounded-lg flex items-center justify-between border border-indigo-100 shadow-sm">
+                    <span class="truncate pr-4 flex items-center gap-2"><i class="fa-solid fa-paperclip"></i> <span id="req-file-name-text"></span></span>
+                    <button onclick="window.clearSelectedFile(event)" class="text-indigo-400 hover:text-rose-500"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+
+                <div id="req-file-link-wrap" class="mt-3 text-xs font-bold hidden bg-sky-50 py-2 px-3 rounded-lg border border-sky-100">
+                    <a id="req-file-link" href="#" target="_blank" class="text-sky-600 hover:text-sky-800 underline break-all flex items-center gap-2"><i class="fa-solid fa-arrow-up-right-from-square"></i> 등록된 파일 보기</a>
                 </div>
             </div>
 
