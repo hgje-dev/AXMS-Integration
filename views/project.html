@@ -129,6 +129,7 @@
                         <th class="border border-slate-600 px-2 py-2 text-center text-teal-400 w-16">설계</th>
                         <th class="border border-slate-600 px-2 py-2 text-center text-fuchsia-400 w-16">일정</th>
                         <th class="border border-slate-600 px-2 py-2 text-center text-sky-300">생산일지</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center text-rose-400 w-16">부적합</th>
                         <th class="border border-slate-600 px-2 py-2 text-center text-sky-300">예정MD</th>
                         <th class="border border-slate-600 px-2 py-2 text-center text-purple-300">투입MD</th>
                         <th class="border border-slate-600 px-2 py-2 text-center text-sky-300">최종MD</th>
@@ -676,5 +677,45 @@
             <span id="upload-progress-size">0 MB / 0 MB</span>
         </div>
         <p class="text-[10px] text-rose-500 font-bold mt-4">* 업로드가 완료될 때까지 창을 닫지 마세요.</p>
+    </div>
+</div>
+
+<div id="ncr-modal" class="fixed inset-0 z-[200] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-6xl flex flex-col h-[600px] md:h-[85vh] overflow-hidden">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-rose-50/50">
+            <h2 class="text-base font-extrabold flex items-center gap-2">
+                <i class="fa-solid fa-triangle-exclamation text-rose-500"></i> 
+                <span id="ncr-project-title" class="text-indigo-800 font-black"></span>
+                <span class="text-rose-800 ml-2">부적합(NCR) 상세 현황</span>
+            </h2>
+            <div class="flex items-center gap-2">
+                <button onclick="window.loadNcrData()" class="text-xs font-bold bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 transition-colors"><i class="fa-solid fa-rotate-right"></i> 시트 동기화</button>
+                <button onclick="window.closeNcrModal()" class="text-rose-400 hover:text-rose-600 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+        </div>
+        <div class="p-6 bg-slate-50/50 flex-1 flex flex-col gap-4 min-h-0">
+            <div class="flex gap-3 mb-2">
+                <div class="bg-white border border-slate-200 px-4 py-2 rounded-xl shadow-sm font-bold text-slate-600 text-sm">총 발생 <span id="ncr-total-cnt" class="text-lg text-slate-800 ml-1">0</span>건</div>
+                <div class="bg-rose-50 border border-rose-200 px-4 py-2 rounded-xl shadow-sm font-bold text-rose-600 text-sm">진행중 (미결) <span id="ncr-pending-cnt" class="text-lg text-rose-700 ml-1">0</span>건</div>
+                <div class="bg-emerald-50 border border-emerald-200 px-4 py-2 rounded-xl shadow-sm font-bold text-emerald-600 text-sm">조치 완료 <span id="ncr-comp-cnt" class="text-lg text-emerald-700 ml-1">0</span>건</div>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto custom-scrollbar bg-white rounded-xl border border-slate-200 shadow-sm min-h-0">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-slate-800 text-[11px] text-white sticky top-0 border-b border-slate-100 z-10 shadow-sm">
+                        <tr>
+                            <th class="p-3 text-center whitespace-nowrap">NCR No.</th>
+                            <th class="p-3 text-center whitespace-nowrap"><i class="fa-regular fa-calendar"></i> 발생일</th>
+                            <th class="p-3 text-center whitespace-nowrap">도면번호</th>
+                            <th class="p-3 text-center whitespace-nowrap">Part Name</th>
+                            <th class="p-3 text-center whitespace-nowrap">유형</th>
+                            <th class="p-3 w-[40%]">부적합 내용</th>
+                            <th class="p-3 text-center whitespace-nowrap">진행 현황</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ncr-list-tbody" class="divide-y divide-slate-100 text-xs"></tbody>
+                </table>
+            </div>
+        </div>
     </div>
 </div>
