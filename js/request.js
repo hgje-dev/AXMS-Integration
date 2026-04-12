@@ -8,6 +8,7 @@ let unsubscribeEmails = null;
 
 window.currentReqEmails = []; 
 
+// 💡 안전한 날짜 파싱 유틸 (코멘트 에러 방지용) - 절대 삭제 금지!
 window.reqGetSafeMillis = function(val) {
     try { 
         if (!val) return 0; 
@@ -18,6 +19,7 @@ window.reqGetSafeMillis = function(val) {
     } catch(e) { return 0; }
 };
 
+// 💡 검색 및 필터링 상태 변수
 window.currentReqStatusFilter = 'all';
 window.currentReqYearFilter = '';
 window.currentReqMonthFilter = '';
@@ -172,7 +174,6 @@ window.uploadFileToDrive = async function(file, folderId) {
     return data.id; 
 };
 
-// 💡 템플릿 메일 발송 로직 (완료 파일 첨부 링크 포함)
 window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
     if (!window.googleAccessToken) throw new Error("구글 인증이 필요합니다.");
     if (!recipientEmail) return false;
@@ -203,7 +204,6 @@ window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
     } else if (type === 'completed') {
         subject = `[AXBIS 작업완료] 요청하신 작업이 완료되었습니다 - ${safeTitle}`;
         bodyHtml = `<h2 style="color: #10b981; font-size:18px;">요청하신 작업이 성공적으로 완료되었습니다.</h2>${bodyHtml}`;
-        // 💡 작업 완료 시, 관리자가 올린 검수 리스트 등이 있으면 추가 첨부
         if (reqData.resultFileUrl) {
             bodyHtml += `
             <div style="background: #ecfdf5; border-left: 4px solid #10b981; padding: 15px; margin-top: 15px; border-radius: 4px;">
@@ -234,6 +234,9 @@ window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
     return true;
 };
 
+// ==========================================
+// 💡 수신 담당자 설정 관리 (초성 검색)
+// ==========================================
 window.openEmailSettingsModal = function() {
     document.getElementById('new-req-email-user').value = '';
     document.getElementById('req-user-autocomplete').classList.add('hidden');
@@ -311,7 +314,6 @@ window.removeReqEmail = async function(idx) {
     } catch(e) { window.showToast("삭제 실패", "error"); }
 };
 
-
 // ==========================================
 // 💡 폼 UI 제어 (협업 vs 구매의뢰 분기)
 // ==========================================
@@ -349,7 +351,6 @@ window.openWriteModal = function(editId = null) {
     document.getElementById('req-header-title').innerText = titleMap[window.currentAppId] || '요청서 관리';
     document.getElementById('req-modal-title').innerText = (titleMap[window.currentAppId] || '요청서').replace('새 ', '') + ' 작성';
 
-    // 💡 AppId 에 따라 폼 숨기기/보이기
     if (window.currentAppId === 'collab') {
         document.getElementById('collab-form-fields').classList.remove('hidden');
         document.getElementById('purchase-form-fields').classList.add('hidden');
@@ -374,6 +375,7 @@ window.openWriteModal = function(editId = null) {
             document.getElementById('req-end-date').value = req.endDate || ''; 
             document.getElementById('req-est-md').value = req.estMd || ''; 
             document.getElementById('req-content').value = req.content || ''; 
+            
             if(req.category) {
                 const rEl = document.querySelector(`input[name="req-category"][value="${req.category}"]`);
                 if(rEl) rEl.checked = true;
@@ -464,7 +466,7 @@ window.promptSaveRequest = function() {
         const shipDate = document.getElementById('req-pur-ship-date').value;
         if(reqTitle && pjtName && shipDate) reqValid = true;
     } else {
-        reqValid = true; // repair 통과 (임시)
+        reqValid = true;
     }
 
     if(!reqValid) {
@@ -614,7 +616,6 @@ window.promptCompleteRequest = function() {
 
     const req = window.currentRequestList.find(r => r.id === window.editingReqId);
     
-    // 💡 구매의뢰서인 경우, 파일 첨부 영역 보이기
     const fileSection = document.getElementById('req-complete-file-section');
     if (fileSection) {
         if (window.currentAppId === 'purchase') {
@@ -637,7 +638,6 @@ window.executeCompleteRequest = async function() {
     const sendEmail = document.getElementById('req-complete-email').value.trim();
     const fileInput = document.getElementById('req-complete-file');
 
-    // 💡 구매의뢰서는 검수리스트 무조건 첨부해야 완료 가능하도록 막기
     if (window.currentAppId === 'purchase' && (!fileInput || fileInput.files.length === 0)) {
         return window.showToast("모듈 구매 의뢰서는 작업 완료 시 [레이저 검수 리스트] 파일 첨부가 필수입니다.", "error");
     }
@@ -739,7 +739,6 @@ window.renderRequestList = function() {
     const th = document.getElementById('req-thead-tr');
     if(!tb || !th) return; 
 
-    // 💡 AppId 에 따라 테이블 헤더를 동적으로 그림
     if (window.currentAppId === 'purchase') {
         th.innerHTML = `
             <th class="p-4 font-bold text-center w-20">현재 상태</th>
@@ -821,7 +820,6 @@ window.renderRequestList = function() {
             if (cCount > 0) commentHtml += `<span class="absolute top-0 right-0 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-amber-200">${cCount}</span>`;
             commentHtml += `</button>`;
 
-            // 💡 AppId 에 따라 Body도 동적으로 그림
             if (window.currentAppId === 'purchase') {
                 const safeShipDate = r.shipDate || '-';
                 return `
@@ -850,6 +848,7 @@ window.renderRequestList = function() {
                     <td class="p-3 text-center font-bold text-indigo-700">${r.pjtCode||'-'}</td>
                     <td class="p-3 font-black text-indigo-800 truncate max-w-[250px]">${safeReqTitle}</td>
                     <td class="p-3 text-center font-bold text-slate-600">${r.authorName} <span class="text-[9px] bg-slate-100 text-slate-400 px-1 py-0.5 rounded block mt-0.5 w-max mx-auto">${r.authorTeam||''}</span></td>
+                    <td class="p-3 text-center font-bold text-indigo-600">${safeManager}</td>
                     <td class="p-3 text-center text-slate-500 font-medium">${dCreate}</td>
                     <td class="p-3 text-center text-blue-500 font-bold">${dAccept}</td>
                     <td class="p-3 text-center text-emerald-500 font-bold">${dComp}</td>
