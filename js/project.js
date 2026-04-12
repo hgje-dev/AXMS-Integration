@@ -1739,4 +1739,3 @@ async function handleDriveUploadWithProgress(fileInput, projectName) {
 
         xhr.send(form);
     });
-}
