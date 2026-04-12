@@ -8,7 +8,7 @@ let unsubscribeEmails = null;
 
 window.currentReqEmails = []; 
 
-// 💡 안전한 날짜 파싱 유틸 (리스트 렌더링 & 코멘트 에러 방지용 핵심 함수)
+// 💡 1. 안전한 날짜 파싱 유틸 (리스트 렌더링 & 코멘트 에러 방지용)
 window.reqGetSafeMillis = function(val) {
     try { 
         if (!val) return 0; 
@@ -19,7 +19,7 @@ window.reqGetSafeMillis = function(val) {
     } catch(e) { return 0; }
 };
 
-// 💡 검색 및 필터링 상태 변수
+// 💡 2. 검색 및 필터링 상태 변수
 window.currentReqStatusFilter = 'all';
 window.currentReqYearFilter = '';
 window.currentReqMonthFilter = '';
@@ -59,7 +59,7 @@ window.resetReqFilters = function() {
 };
 
 // ==========================================
-// 🚀 구글 API 연동 (Drive & Gmail)
+// 🚀 3. 구글 API 연동 (Drive & Gmail)
 // ==========================================
 const GOOGLE_CLIENT_ID = '924354535197-joakn7gpfj4d3oirpd1pu3un9j7689q9.apps.googleusercontent.com';
 const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/gmail.send';
@@ -199,7 +199,7 @@ window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
                 <p><strong>요청자:</strong> ${reqData.authorName} (${reqData.authorTeam})</p>
                 ${reqData.manager ? `<p><strong>담당자:</strong> <span style="color:#4f46e5; font-weight:bold;">${reqData.manager}</span></p>` : ''}
                 <p><strong>발송자(시스템 계정):</strong> ${window.userProfile.name} (${window.userProfile.email})</p>
-                <p><strong>요청 내용:</strong><br>${String(reqData.content || '시스템 내 상세 사양을 확인해주세요.').replace(/\n/g, '<br>')}</p>
+                <p><strong>요청 내용:</strong><br>${String(reqData.content || '없음').replace(/\n/g, '<br>')}</p>
                 ${reqData.fileUrl ? `<p style="margin-top:15px;"><strong>첨부파일(원문):</strong> <a href="${reqData.fileUrl}" style="color:#4f46e5; font-weight:bold;">문서 확인하기</a></p>` : ''}
                 ${reqData.excelFileUrl ? `<p style="margin-top:5px;"><strong>✅ 자동생성 엑셀 양식:</strong> <a href="${reqData.excelFileUrl}" style="color:#059669; font-weight:bold;">다운로드/확인하기</a></p>` : ''}
             </div>
@@ -242,7 +242,7 @@ window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
 };
 
 // ==========================================
-// 💡 수신 담당자 설정 관리 (초성 검색)
+// 💡 4. 수신 담당자 설정 관리
 // ==========================================
 window.openEmailSettingsModal = function() {
     if(document.getElementById('new-req-email-user')) document.getElementById('new-req-email-user').value = '';
@@ -328,22 +328,22 @@ window.removeReqEmail = async function(idx) {
 
 
 // ==========================================
-// 💡 폼 데이터 추출 유틸
+// 💡 5. 핵심 폼 데이터 추출 함수 (절대 누락 금지)
 // ==========================================
 window.getReqFormData = function() {
-    let reqTitle, pjtName, reqValid = false;
+    let reqTitle = '', pjtName = '', reqValid = false;
 
     if (window.currentAppId === 'collab') {
-        reqTitle = document.getElementById('req-title')?.value.trim() || '';
-        pjtName = document.getElementById('req-pjt-name')?.value.trim() || '';
-        const startDate = document.getElementById('req-start-date')?.value || '';
-        const endDate = document.getElementById('req-end-date')?.value || '';
-        const content = document.getElementById('req-content')?.value.trim() || '';
+        reqTitle = document.getElementById('req-title') ? document.getElementById('req-title').value.trim() : '';
+        pjtName = document.getElementById('req-pjt-name') ? document.getElementById('req-pjt-name').value.trim() : '';
+        const startDate = document.getElementById('req-start-date') ? document.getElementById('req-start-date').value : '';
+        const endDate = document.getElementById('req-end-date') ? document.getElementById('req-end-date').value : '';
+        const content = document.getElementById('req-content') ? document.getElementById('req-content').value.trim() : '';
         if(reqTitle && pjtName && startDate && endDate && content) reqValid = true;
     } else if (window.currentAppId === 'purchase') {
-        reqTitle = document.getElementById('req-pur-title')?.value.trim() || '';
-        pjtName = document.getElementById('req-pur-pjt-name')?.value.trim() || '';
-        const shipDate = document.getElementById('req-pur-ship-date')?.value || '';
+        reqTitle = document.getElementById('req-pur-title') ? document.getElementById('req-pur-title').value.trim() : '';
+        pjtName = document.getElementById('req-pur-pjt-name') ? document.getElementById('req-pur-pjt-name').value.trim() : '';
+        const shipDate = document.getElementById('req-pur-ship-date') ? document.getElementById('req-pur-ship-date').value : '';
         if(reqTitle && pjtName && shipDate) reqValid = true;
     } else {
         reqValid = true;
@@ -362,71 +362,73 @@ window.getReqFormData = function() {
 
     if (window.currentAppId === 'collab') {
         data.reqTitle = reqTitle;
-        data.title = data.reqTitle;
+        data.title = reqTitle;
         data.pjtName = pjtName;
-        data.pjtCode = document.getElementById('req-pjt-code')?.value.trim() || '';
-        data.company = document.getElementById('req-company')?.value.trim() || '';
-        data.location = document.getElementById('req-location')?.value.trim() || '';
-        data.startDate = document.getElementById('req-start-date')?.value || '';
-        data.endDate = document.getElementById('req-end-date')?.value || '';
-        data.estMd = parseFloat(document.getElementById('req-est-md')?.value) || 0;
-        data.category = document.querySelector('input[name="req-category"]:checked')?.value || '';
-        data.content = document.getElementById('req-content')?.value.trim() || '';
+        data.pjtCode = document.getElementById('req-pjt-code') ? document.getElementById('req-pjt-code').value.trim() : '';
+        data.company = document.getElementById('req-company') ? document.getElementById('req-company').value.trim() : '';
+        data.location = document.getElementById('req-location') ? document.getElementById('req-location').value.trim() : '';
+        data.startDate = document.getElementById('req-start-date') ? document.getElementById('req-start-date').value : '';
+        data.endDate = document.getElementById('req-end-date') ? document.getElementById('req-end-date').value : '';
+        data.estMd = document.getElementById('req-est-md') ? (parseFloat(document.getElementById('req-est-md').value) || 0) : 0;
+        
+        const catEl = document.querySelector('input[name="req-category"]:checked');
+        data.category = catEl ? catEl.value : '';
+        data.content = document.getElementById('req-content') ? document.getElementById('req-content').value.trim() : '';
     } else if (window.currentAppId === 'purchase') {
         data.reqTitle = reqTitle;
-        data.title = data.reqTitle;
+        data.title = reqTitle;
         data.pjtName = pjtName;
-        data.pjtCode = document.getElementById('req-pur-pjt-code')?.value.trim() || '';
-        data.shipDate = document.getElementById('req-pur-ship-date')?.value || '';
+        data.pjtCode = document.getElementById('req-pur-pjt-code') ? document.getElementById('req-pur-pjt-code').value.trim() : '';
+        data.shipDate = document.getElementById('req-pur-ship-date') ? document.getElementById('req-pur-ship-date').value : '';
         
         data.spec = {
-            app: document.getElementById('pur-spec-app')?.value || '',
-            appEtc: document.getElementById('pur-spec-app-etc')?.value || '',
-            qty: document.getElementById('pur-spec-qty')?.value || '1',
-            unit: document.getElementById('pur-spec-unit')?.value || 'EA',
-            lasWave: document.getElementById('pur-spec-las-wave')?.value || '',
-            lasWaveEtc: document.getElementById('pur-spec-las-wave-etc')?.value || '',
-            lasPower: document.getElementById('pur-spec-las-power')?.value || '',
-            lasPowerEtc: document.getElementById('pur-spec-las-power-etc')?.value || '',
-            lasMaker: document.getElementById('pur-spec-las-maker')?.value || '',
-            lasMakerEtc: document.getElementById('pur-spec-las-maker-etc')?.value || '',
-            lasType: document.getElementById('pur-spec-las-type')?.value || '',
-            lasTypeEtc: document.getElementById('pur-spec-las-type-etc')?.value || '',
-            lasCh: document.getElementById('pur-spec-las-ch')?.value || '',
-            lasChEtc: document.getElementById('pur-spec-las-ch-etc')?.value || '',
-            lasLen: document.getElementById('pur-spec-las-len')?.value || '',
-            lasLenEtc: document.getElementById('pur-spec-las-len-etc')?.value || '',
-            lasCore: document.getElementById('pur-spec-las-core')?.value || '',
-            lasCoreEtc: document.getElementById('pur-spec-las-core-etc')?.value || '',
-            lasCool: document.getElementById('pur-spec-las-cool')?.value || '',
-            lasCoolEtc: document.getElementById('pur-spec-las-cool-etc')?.value || '',
-            optType: document.getElementById('pur-spec-opt-type')?.value || '',
-            optTypeEtc: document.getElementById('pur-spec-opt-type-etc')?.value || '',
-            optMnt: document.getElementById('pur-spec-opt-mnt')?.value || '',
-            optMntEtc: document.getElementById('pur-spec-opt-mnt-etc')?.value || '',
-            optCol: document.getElementById('pur-spec-opt-col')?.value || '',
-            optColEtc: document.getElementById('pur-spec-opt-col-etc')?.value || '',
-            optSplit: document.getElementById('pur-spec-opt-split')?.value || '',
-            optSplitEtc: document.getElementById('pur-spec-opt-split-etc')?.value || '',
-            optLens: document.getElementById('pur-spec-opt-lens')?.value || '',
-            optLensEtc: document.getElementById('pur-spec-opt-lens-etc')?.value || '',
-            optScan: document.getElementById('pur-spec-opt-scan')?.value || '',
-            optScanEtc: document.getElementById('pur-spec-opt-scan-etc')?.value || '',
-            optCam: document.getElementById('pur-spec-opt-cam')?.value || '',
-            optCamEtc: document.getElementById('pur-spec-opt-cam-etc')?.value || '',
-            optLit: document.getElementById('pur-spec-opt-lit')?.value || '',
-            optLitEtc: document.getElementById('pur-spec-opt-lit-etc')?.value || '',
+            app: document.getElementById('pur-spec-app') ? document.getElementById('pur-spec-app').value : '',
+            appEtc: document.getElementById('pur-spec-app-etc') ? document.getElementById('pur-spec-app-etc').value : '',
+            qty: document.getElementById('pur-spec-qty') ? document.getElementById('pur-spec-qty').value : '1',
+            unit: document.getElementById('pur-spec-unit') ? document.getElementById('pur-spec-unit').value : 'EA',
+            lasWave: document.getElementById('pur-spec-las-wave') ? document.getElementById('pur-spec-las-wave').value : '',
+            lasWaveEtc: document.getElementById('pur-spec-las-wave-etc') ? document.getElementById('pur-spec-las-wave-etc').value : '',
+            lasPower: document.getElementById('pur-spec-las-power') ? document.getElementById('pur-spec-las-power').value : '',
+            lasPowerEtc: document.getElementById('pur-spec-las-power-etc') ? document.getElementById('pur-spec-las-power-etc').value : '',
+            lasMaker: document.getElementById('pur-spec-las-maker') ? document.getElementById('pur-spec-las-maker').value : '',
+            lasMakerEtc: document.getElementById('pur-spec-las-maker-etc') ? document.getElementById('pur-spec-las-maker-etc').value : '',
+            lasType: document.getElementById('pur-spec-las-type') ? document.getElementById('pur-spec-las-type').value : '',
+            lasTypeEtc: document.getElementById('pur-spec-las-type-etc') ? document.getElementById('pur-spec-las-type-etc').value : '',
+            lasCh: document.getElementById('pur-spec-las-ch') ? document.getElementById('pur-spec-las-ch').value : '',
+            lasChEtc: document.getElementById('pur-spec-las-ch-etc') ? document.getElementById('pur-spec-las-ch-etc').value : '',
+            lasLen: document.getElementById('pur-spec-las-len') ? document.getElementById('pur-spec-las-len').value : '',
+            lasLenEtc: document.getElementById('pur-spec-las-len-etc') ? document.getElementById('pur-spec-las-len-etc').value : '',
+            lasCore: document.getElementById('pur-spec-las-core') ? document.getElementById('pur-spec-las-core').value : '',
+            lasCoreEtc: document.getElementById('pur-spec-las-core-etc') ? document.getElementById('pur-spec-las-core-etc').value : '',
+            lasCool: document.getElementById('pur-spec-las-cool') ? document.getElementById('pur-spec-las-cool').value : '',
+            lasCoolEtc: document.getElementById('pur-spec-las-cool-etc') ? document.getElementById('pur-spec-las-cool-etc').value : '',
+            optType: document.getElementById('pur-spec-opt-type') ? document.getElementById('pur-spec-opt-type').value : '',
+            optTypeEtc: document.getElementById('pur-spec-opt-type-etc') ? document.getElementById('pur-spec-opt-type-etc').value : '',
+            optMnt: document.getElementById('pur-spec-opt-mnt') ? document.getElementById('pur-spec-opt-mnt').value : '',
+            optMntEtc: document.getElementById('pur-spec-opt-mnt-etc') ? document.getElementById('pur-spec-opt-mnt-etc').value : '',
+            optCol: document.getElementById('pur-spec-opt-col') ? document.getElementById('pur-spec-opt-col').value : '',
+            optColEtc: document.getElementById('pur-spec-opt-col-etc') ? document.getElementById('pur-spec-opt-col-etc').value : '',
+            optSplit: document.getElementById('pur-spec-opt-split') ? document.getElementById('pur-spec-opt-split').value : '',
+            optSplitEtc: document.getElementById('pur-spec-opt-split-etc') ? document.getElementById('pur-spec-opt-split-etc').value : '',
+            optLens: document.getElementById('pur-spec-opt-lens') ? document.getElementById('pur-spec-opt-lens').value : '',
+            optLensEtc: document.getElementById('pur-spec-opt-lens-etc') ? document.getElementById('pur-spec-opt-lens-etc').value : '',
+            optScan: document.getElementById('pur-spec-opt-scan') ? document.getElementById('pur-spec-opt-scan').value : '',
+            optScanEtc: document.getElementById('pur-spec-opt-scan-etc') ? document.getElementById('pur-spec-opt-scan-etc').value : '',
+            optCam: document.getElementById('pur-spec-opt-cam') ? document.getElementById('pur-spec-opt-cam').value : '',
+            optCamEtc: document.getElementById('pur-spec-opt-cam-etc') ? document.getElementById('pur-spec-opt-cam-etc').value : '',
+            optLit: document.getElementById('pur-spec-opt-lit') ? document.getElementById('pur-spec-opt-lit').value : '',
+            optLitEtc: document.getElementById('pur-spec-opt-lit-etc') ? document.getElementById('pur-spec-opt-lit-etc').value : '',
             optOpts: Array.from(document.querySelectorAll('input[name="pur_spec_opt_opts"]:checked')).map(cb => cb.value),
-            optOptsEtc: document.getElementById('pur-spec-opt-opts-etc')?.value || '',
-            accPc: document.getElementById('pur-spec-acc-pc')?.value || '',
-            accPcEtc: document.getElementById('pur-spec-acc-pc-etc')?.value || '',
-            accCtrl: document.getElementById('pur-spec-acc-ctrl')?.value || '',
-            accCtrlEtc: document.getElementById('pur-spec-acc-ctrl-etc')?.value || '',
-            accAir: document.getElementById('pur-spec-acc-air')?.value || '',
-            accAirEtc: document.getElementById('pur-spec-acc-air-etc')?.value || '',
-            accRtc: document.getElementById('pur-spec-acc-rtc')?.value || '',
-            accRtcEtc: document.getElementById('pur-spec-acc-rtc-etc')?.value || '',
-            etcMemo: document.getElementById('pur-spec-etc-memo')?.value || ''
+            optOptsEtc: document.getElementById('pur-spec-opt-opts-etc') ? document.getElementById('pur-spec-opt-opts-etc').value : '',
+            accPc: document.getElementById('pur-spec-acc-pc') ? document.getElementById('pur-spec-acc-pc').value : '',
+            accPcEtc: document.getElementById('pur-spec-acc-pc-etc') ? document.getElementById('pur-spec-acc-pc-etc').value : '',
+            accCtrl: document.getElementById('pur-spec-acc-ctrl') ? document.getElementById('pur-spec-acc-ctrl').value : '',
+            accCtrlEtc: document.getElementById('pur-spec-acc-ctrl-etc') ? document.getElementById('pur-spec-acc-ctrl-etc').value : '',
+            accAir: document.getElementById('pur-spec-acc-air') ? document.getElementById('pur-spec-acc-air').value : '',
+            accAirEtc: document.getElementById('pur-spec-acc-air-etc') ? document.getElementById('pur-spec-acc-air-etc').value : '',
+            accRtc: document.getElementById('pur-spec-acc-rtc') ? document.getElementById('pur-spec-acc-rtc').value : '',
+            accRtcEtc: document.getElementById('pur-spec-acc-rtc-etc') ? document.getElementById('pur-spec-acc-rtc-etc').value : '',
+            etcMemo: document.getElementById('pur-spec-etc-memo') ? document.getElementById('pur-spec-etc-memo').value : ''
         };
         data.content = `[시스템 등록 사양서 확인 요망]\n요청일: ${data.shipDate}\n기타메모: ${data.spec.etcMemo}`;
     }
@@ -436,28 +438,14 @@ window.getReqFormData = function() {
 
 
 // ==========================================
-// 💡 폼 UI 제어 (협업 vs 구매의뢰 분기)
+// 💡 6. 폼 UI 제어 및 모달 표시
 // ==========================================
 window.openWriteModal = function(editId = null) { 
     window.editingReqId = editId; 
     
-    // 콜랩용 초기화
-    if(document.getElementById('req-pjt-code')) document.getElementById('req-pjt-code').value = ''; 
-    if(document.getElementById('req-pjt-name')) document.getElementById('req-pjt-name').value = ''; 
-    if(document.getElementById('req-title')) document.getElementById('req-title').value = ''; 
-    if(document.getElementById('req-company')) document.getElementById('req-company').value = ''; 
-    if(document.getElementById('req-location')) document.getElementById('req-location').value = ''; 
-    if(document.getElementById('req-start-date')) document.getElementById('req-start-date').value = ''; 
-    if(document.getElementById('req-end-date')) document.getElementById('req-end-date').value = ''; 
-    if(document.getElementById('req-est-md')) document.getElementById('req-est-md').value = ''; 
-    if(document.getElementById('req-content')) document.getElementById('req-content').value = ''; 
-
-    // 구매의뢰용(Spec) 초기화
-    if(document.getElementById('req-pur-title')) document.getElementById('req-pur-title').value = '';
-    if(document.getElementById('req-pur-pjt-code')) document.getElementById('req-pur-pjt-code').value = '';
-    if(document.getElementById('req-pur-pjt-name')) document.getElementById('req-pur-pjt-name').value = '';
-    if(document.getElementById('req-pur-ship-date')) document.getElementById('req-pur-ship-date').value = '';
-    if(document.getElementById('pur-spec-etc-memo')) document.getElementById('pur-spec-etc-memo').value = '';
+    // 초기화
+    const fieldsToClear = ['req-pjt-code','req-pjt-name','req-title','req-company','req-location','req-start-date','req-end-date','req-est-md','req-content', 'req-pur-title','req-pur-pjt-code','req-pur-pjt-name','req-pur-ship-date','pur-spec-etc-memo'];
+    fieldsToClear.forEach(id => { if(document.getElementById(id)) document.getElementById(id).value = ''; });
     
     ['app','qty','unit','las-wave','las-power','las-maker','las-type','las-ch','las-len','las-core','las-cool','opt-type','opt-mnt','opt-col','opt-split','opt-lens','opt-scan','opt-cam','opt-lit','acc-pc','acc-ctrl','acc-air','acc-rtc'].forEach(k => {
         if(document.getElementById(`pur-spec-${k}`)) document.getElementById(`pur-spec-${k}`).value = (k==='qty') ? '1' : '';
@@ -477,7 +465,6 @@ window.openWriteModal = function(editId = null) {
     if(collabRadio) collabRadio.checked = true;
 
     const titleMap = { 'collab': '협업/조립 요청서', 'purchase': '모듈 구매 의뢰서', 'repair': '수리/점검 요청서' };
-    
     if(document.getElementById('req-header-title')) document.getElementById('req-header-title').innerText = titleMap[window.currentAppId] || '요청서 관리';
     if(document.getElementById('req-modal-title')) document.getElementById('req-modal-title').innerText = (titleMap[window.currentAppId] || '요청서').replace('새 ', '') + ' 작성';
 
@@ -505,13 +492,12 @@ window.openWriteModal = function(editId = null) {
             if(document.getElementById('req-end-date')) document.getElementById('req-end-date').value = req.endDate || ''; 
             if(document.getElementById('req-est-md')) document.getElementById('req-est-md').value = req.estMd || ''; 
             if(document.getElementById('req-content')) document.getElementById('req-content').value = req.content || ''; 
-            
             if(req.category) {
                 const rEl = document.querySelector(`input[name="req-category"][value="${req.category}"]`);
                 if(rEl) rEl.checked = true;
             }
 
-            // 구매 셋 (Spec 복원 로직)
+            // 구매 셋 (Spec 복원)
             if(document.getElementById('req-pur-title')) document.getElementById('req-pur-title').value = req.reqTitle || req.title || '';
             if(document.getElementById('req-pur-pjt-code')) document.getElementById('req-pur-pjt-code').value = req.pjtCode || '';
             if(document.getElementById('req-pur-pjt-name')) document.getElementById('req-pur-pjt-name').value = req.pjtName || '';
@@ -606,10 +592,8 @@ window.closeWriteModal = function() {
 };
 
 // ==========================================
-// 💡 모달 프롬프트 연결 로직 (Save, Accept, Complete)
+// 💡 7. 모달 프롬프트 및 액션 (Save, Accept, Complete)
 // ==========================================
-
-// 1. 임시 저장
 window.saveDraftRequest = async function() {
     const { data, currentReq } = window.getReqFormData();
     data.status = 'draft';
@@ -641,7 +625,6 @@ window.saveDraftRequest = async function() {
     }
 };
 
-// 2. 저장 및 발송
 window.promptSaveRequest = function() {
     const { isValid } = window.getReqFormData();
 
@@ -668,6 +651,7 @@ window.executeSaveRequest = async function() {
     if(btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 전송 중...'; }
 
     let { data, currentReq } = window.getReqFormData();
+    
     if (data.status === 'draft') data.status = 'pending';
 
     const fileInput = document.getElementById('req-file');
@@ -686,7 +670,7 @@ window.executeSaveRequest = async function() {
         }
         data.fileUrl = fileUrl || (currentReq ? currentReq.fileUrl : null);
 
-        // 엑셀 자동생성 로직
+        // 엑셀 자동생성 로직 (구매 의뢰서 전용)
         if (window.currentAppId === 'purchase' && typeof window.ExcelJS !== 'undefined') {
             window.showToast("구매 의뢰서 엑셀 양식을 생성 중입니다...");
             try {
@@ -897,7 +881,7 @@ window.revertRequest = async function() {
 };
 
 // ==========================================
-// 💡 데이터 로드 및 테이블 렌더링
+// 💡 8. 데이터 로드 및 테이블 렌더링
 // ==========================================
 window.loadRequestsData = function(appId) { 
     if(unsubscribeRequests) unsubscribeRequests(); 
@@ -1038,7 +1022,6 @@ window.renderRequestList = function() {
                     <td class="p-3 font-black text-indigo-800 truncate max-w-[250px]">${safeReqTitle}</td>
                     <td class="p-3 text-center font-bold text-rose-500">${safeShipDate}</td>
                     <td class="p-3 text-center font-bold text-slate-600">${r.authorName} <span class="text-[9px] bg-slate-100 text-slate-400 px-1 py-0.5 rounded block mt-0.5 w-max mx-auto">${r.authorTeam||''}</span></td>
-                    <td class="p-3 text-center font-bold text-indigo-600">${safeManager}</td>
                     <td class="p-3 text-center text-slate-500 font-medium">${dCreate}</td>
                     <td class="p-3 text-center text-blue-500 font-bold">${dAccept}</td>
                     <td class="p-3 text-center text-emerald-500 font-bold">${dComp}</td>
@@ -1084,7 +1067,7 @@ window.deleteRequest = async function(id) {
 };
 
 // ==========================================
-// 💡 코멘트 모달 로직 
+// 💡 9. 코멘트 모달 로직
 // ==========================================
 window.openCommentModal = function(reqId, title) { 
     const cmtInput = document.getElementById('cmt-req-id');
