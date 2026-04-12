@@ -4,17 +4,17 @@ import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, on
 import { doc, getDoc, setDoc, collection, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 let allUsersUnsubscribe=null, teamMembersUnsubscribe=null;
-window.isSigningUp = false; // 💡 신규 가입 시 감지기 충돌 방지 플래그
+window.isSigningUp = false; 
 
 window.checkLogin = async () => { 
+    // 💡 철저하게 로그인 창의 데이터만 가져옵니다.
     const e = document.getElementById('login-id')?.value.trim(); 
     const p = document.getElementById('login-pw')?.value.trim(); 
     const err = document.getElementById('login-error'); 
     
-    // 클릭한 버튼 찾기 (로딩 상태 표시용)
     const btn = document.querySelector('button[onclick="window.checkLogin()"]');
 
-    if(err) err.classList.add('hidden'); // 에러 리셋
+    if(err) err.classList.add('hidden'); 
 
     if(!e || !p) { 
         if(err) { err.innerText="이메일과 비밀번호를 입력하세요."; err.classList.remove('hidden'); } 
@@ -38,18 +38,27 @@ window.checkLogin = async () => {
 };
 
 window.signUp = async () => { 
-    const n = document.getElementById('login-name')?.value.trim() || document.getElementById('signup-name')?.value.trim(); 
-    const t = document.getElementById('login-team')?.value || document.getElementById('signup-dept')?.value; 
-    const e = document.getElementById('login-id')?.value.trim() || document.getElementById('signup-id')?.value.trim(); 
-    const p = document.getElementById('login-pw')?.value.trim() || document.getElementById('signup-pw')?.value.trim(); 
-    const err = document.getElementById('login-error') || document.getElementById('signup-error'); 
+    // 💡 철저하게 회원가입 창의 데이터만 가져옵니다. (오류 해결 핵심)
+    const n = document.getElementById('signup-name')?.value.trim(); 
+    const t = document.getElementById('signup-dept')?.value; 
+    const e = document.getElementById('signup-id')?.value.trim(); 
+    const p = document.getElementById('signup-pw')?.value.trim(); 
+    const err = document.getElementById('signup-error'); 
     
     const btn = document.querySelector('button[onclick="window.signUp()"]');
     
-    if(!n || !e || !p) { if(err){ err.innerHTML="모든 정보를 입력하세요."; err.classList.remove('hidden'); } return; } 
-    if(p.length < 6) { if(err){ err.innerHTML="비밀번호는 6자리 이상이어야 합니다."; err.classList.remove('hidden'); } return; } 
+    if(err) err.classList.add('hidden');
+
+    if(!n || !e || !p) { 
+        if(err){ err.innerHTML="모든 정보를 입력하세요."; err.className="text-rose-500 text-[11px] font-bold text-center mt-2 bg-rose-50 p-3 rounded-xl border border-rose-100"; err.classList.remove('hidden'); } 
+        return; 
+    } 
+    if(p.length < 6) { 
+        if(err){ err.innerHTML="비밀번호는 6자리 이상이어야 합니다."; err.className="text-rose-500 text-[11px] font-bold text-center mt-2 bg-rose-50 p-3 rounded-xl border border-rose-100"; err.classList.remove('hidden'); } 
+        return; 
+    } 
     
-    window.isSigningUp = true; // 💡 가입 시작 (로그인 감지기가 쫓아내는 것을 막음)
+    window.isSigningUp = true; 
     if(btn) { btn.innerText = "가입 처리 중..."; btn.disabled = true; }
 
     try { 
@@ -58,16 +67,25 @@ window.signUp = async () => {
             email:e, name:n, team:t, department:t, role:'pending', 
             permissions:{ collab:true, purchase:true, assembly:true, repair:true, 'project-status':true, 'weekly-log':true } 
         }); 
-        if(err){ err.innerHTML="가입 성공! 관리자 승인 대기 중입니다."; err.className="text-emerald-500 text-[11px] font-bold text-center mt-2 bg-emerald-50 p-3 rounded-xl border border-emerald-100 break-words"; err.classList.remove('hidden'); } 
         
-        // 3초 후 강제 로그아웃 시키며 플래그 해제
+        // 가입 성공 메시지 확실하게 표시
+        if(err){ 
+            err.innerHTML="가입 성공! 관리자 승인 대기 중입니다.<br>3초 후 로그인 화면으로 이동합니다."; 
+            err.className="text-emerald-500 text-[11px] font-bold text-center mt-2 bg-emerald-50 p-3 rounded-xl border border-emerald-100 break-words"; 
+            err.classList.remove('hidden'); 
+        } 
+        
         setTimeout(() => {
             window.isSigningUp = false; 
             window.logout();
         }, 3000); 
     } catch(er) { 
         window.isSigningUp = false; 
-        if(err){ err.innerHTML=er.code==='auth/email-already-in-use'?"이미 가입된 이메일입니다. (기존 계정이 삭제된 경우 시스템 관리자에게 문의하세요)":er.message; err.className="text-rose-500 text-[11px] font-bold text-center mt-2 bg-rose-50 p-3 rounded-xl border border-rose-100 break-words"; err.classList.remove('hidden'); } 
+        if(err){ 
+            err.innerHTML=er.code==='auth/email-already-in-use' ? "이미 가입된 이메일입니다." : "에러: " + er.message; 
+            err.className="text-rose-500 text-[11px] font-bold text-center mt-2 bg-rose-50 p-3 rounded-xl border border-rose-100 break-words"; 
+            err.classList.remove('hidden'); 
+        } 
     } finally {
         if(btn) { btn.innerText = "가입 완료"; btn.disabled = false; }
     }
@@ -92,9 +110,9 @@ window.initAuthListeners = () => {
                     } 
                 } 
                 else { 
-                    // 💡 보안 패치: DB에 유저 정보가 없으면 (관리자가 삭제한 경우) 강제 로그아웃
+                    // 💡 보안 패치: DB에 유저 정보가 없으면 (관리자가 삭제한 경우) 강제 로그아웃 (영구 차단)
                     const e = document.getElementById('login-error'); 
-                    if(e) { e.innerHTML="관리자에 의해 영구 차단/삭제되거나 등록되지 않은 계정입니다."; e.classList.remove('hidden'); } 
+                    if(e) { e.innerHTML="관리자에 의해 영구 삭제되거나 차단된 계정입니다."; e.classList.remove('hidden'); } 
                     await signOut(auth); 
                     return; 
                 }
@@ -151,7 +169,7 @@ window.renderAdminUsers = () => {
     sortedUsers.forEach(u => {
         const p = u.permissions || {}; 
         const isP = u.role === 'pending';
-        // 💡 승인 대기중인 유저는 빨간색 뱃지로 확실하게 눈에 띄게 처리!
+        // 💡 승인 대기중인 유저는 빨간색 테두리와 배경으로 확실하게 눈에 띄게 처리!
         const trClass = isP ? 'bg-rose-50/40 border-l-4 border-rose-500' : 'hover:bg-slate-50 transition-colors border-b border-slate-100';
 
         html += `<tr class="${trClass}">
@@ -195,7 +213,7 @@ window.updateUserPerm = async (uid, key, val) => {
     try { const uR = doc(db, "users", uid); const uD = await getDoc(uR); if (uD.exists()) { let p = uD.data().permissions || {}; p[key] = val; await setDoc(uR, { permissions: p }, { merge: true }); if(window.showToast) window.showToast("권한이 업데이트되었습니다."); } } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } 
 };
 
-// 💡 승인 버튼 전용 함수
+// 💡 승인 버튼 전용 함수 추가
 window.approveUser = async (uid) => {
     try {
         await setDoc(doc(db, "users", uid), { role: 'user' }, { merge: true });
@@ -205,12 +223,12 @@ window.approveUser = async (uid) => {
     }
 };
 
-// 💡 계정 삭제 (영구 차단) 로직 개선
+// 💡 계정 영구 차단(삭제) 로직 확립
 window.deleteUser = async (uid) => { 
-    if (!confirm("이 사용자를 정말 삭제하시겠습니까?\n\n삭제 시 해당 사용자의 시스템 접근이 즉시 영구 차단됩니다.\n(참고: 동일한 이메일로 다시 회원가입을 하려면 Firebase Authentication 콘솔에서도 계정을 삭제해주셔야 합니다.)")) return; 
+    if (!confirm("이 사용자를 정말 삭제하시겠습니까?\n\n삭제 시 해당 사용자는 시스템에 다시 로그인할 수 없으며 즉시 차단됩니다.")) return; 
     try { 
         await deleteDoc(doc(db, "users", uid)); 
-        if(window.showToast) window.showToast("계정 권한이 영구적으로 삭제되었습니다."); 
+        if(window.showToast) window.showToast("계정이 영구적으로 삭제(차단) 되었습니다."); 
     } catch (e) { 
         if(window.showToast) window.showToast("오류 발생", "error"); 
     } 
