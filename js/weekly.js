@@ -4,9 +4,10 @@ import { collection, doc, setDoc, addDoc, deleteDoc, query, onSnapshot, where, g
 
 let currentWeeklyLogUnsubscribe = null;
 let currentScheduleUnsubscribe = null;
+let noticeUnsubscribe = null; // 공지사항 실시간 리스너 추가
 
 window.currentWeeklyLogList = [];
-window.allSchedules = []; // 팀 전체 일정용 추가
+window.allSchedules = []; 
 window.currentScheduleList = [];
 window.draftTasks = []; 
 window.wlInvolvedProjects = []; 
@@ -45,7 +46,6 @@ window.switchWeeklyTab = function(tabName) {
     }
 };
 
-// 💡 YYYY-Wxx 주차 정보를 한국식 N월 M주차 및 보고 마감일로 변환하는 함수
 window.updateWeekLabels = function(weekStr) {
     if(!weekStr || !window.getDatesFromWeek) return;
     const dates = window.getDatesFromWeek(weekStr); 
@@ -197,14 +197,50 @@ window.deleteTeamMember = async function(id) {
     }
 };
 
+// 💡 공지사항 편집 로직
+window.editNotice = async function() {
+    const el = document.getElementById('weekly-notice-text');
+    const currentText = el ? el.innerText : '';
+    const newText = prompt("이번 주 공지사항을 입력하세요:", currentText.includes("공지사항을 불러오는") ? '' : currentText);
+    
+    if (newText !== null) {
+        try {
+            await setDoc(doc(db, "settings", "weekly_notice"), { text: newText.trim(), updatedAt: Date.now() }, { merge: true });
+            if(window.showToast) window.showToast("공지사항이 수정되었습니다.");
+        } catch (e) {
+            if(window.showToast) window.showToast("수정 실패", "error");
+        }
+    }
+};
+
 window.loadWeeklyLogsData = function() { 
     const weekInput = document.getElementById('weekly-log-filter-week');
     if (!weekInput || !weekInput.value) return;
     const w = weekInput.value; 
 
-    // 💡 초기 화면 진입 시에도 '로딩중...' 대신 올바른 N주차 라벨이 찍히도록 보장
     if (window.updateWeekLabels) window.updateWeekLabels(w);
+
+    // 공지사항 로드 연동
+    if (!noticeUnsubscribe) {
+        noticeUnsubscribe = onSnapshot(doc(db, "settings", "weekly_notice"), (docSnap) => {
+            const el = document.getElementById('weekly-notice-text');
+            if (el) {
+                if (docSnap.exists() && docSnap.data().text) {
+                    el.innerText = docSnap.data().text;
+                } else {
+                    el.innerText = "등록된 공지사항이 없습니다.";
+                }
+            }
+        });
+    }
     
+    // 엑셀 버튼 권한 처리
+    const exportBtn = document.getElementById('btn-export-weekly');
+    if (exportBtn && window.userProfile && window.userProfile.role === 'admin') {
+        exportBtn.classList.remove('hidden');
+        exportBtn.classList.add('flex');
+    }
+
     if (currentWeeklyLogUnsubscribe) currentWeeklyLogUnsubscribe(); 
     currentWeeklyLogUnsubscribe = onSnapshot(query(collection(db, "weekly_logs_v2"), where("week", "==", w)), function(s) { 
         window.currentWeeklyLogList = []; 
@@ -490,7 +526,6 @@ window.openWeeklyLogWriteModal = async function(editId) {
             window.wlInvolvedProjects = [{ name: existingLog.projectName, code: existingLog.projectCode || '' }];
         }
     } else if (window.currentUser) {
-        // 💡 자동 이월 로직: 이번 주 일지가 없으면, 전주 일지를 뒤져서 '진행 중' 업무 가져오기
         try {
             const d = window.getDatesFromWeek(w).start;
             d.setDate(d.getDate() - 7);
@@ -704,9 +739,87 @@ window.deleteWeeklyLog = async function(id) {
     } 
 };
 
-// ==========================================
-// 개인 일정 (Kanban) 모달 및 렌더링 관리
-// ==========================================
+// 💡 관리자용 주간업무일지 엑셀 다운로드 함수
+window.exportWeeklyLogsExcel = async function() {
+    if (typeof window.ExcelJS === 'undefined') return window.showToast("ExcelJS 모듈을 불러오는 데 실패했습니다.", "error");
+
+    try {
+        window.showToast("주간 업무 일지 엑셀을 생성 중입니다...", "success");
+        const wb = new window.ExcelJS.Workbook();
+        const ws = wb.addWorksheet('주간업무일지');
+
+        ws.columns = [
+            { header: '소속 팀', key: 'team', width: 15 },
+            { header: '작성자', key: 'name', width: 12 },
+            { header: '작성일시', key: 'updated', width: 20 },
+            { header: '일자', key: 'day', width: 12 },
+            { header: '상태', key: 'status', width: 10 },
+            { header: '장소', key: 'loc', width: 12 },
+            { header: '업무 내용', key: 'content', width: 60 },
+            { header: '관여 프로젝트', key: 'pjts', width: 30 },
+            { header: '이슈 및 요청사항', key: 'issues', width: 40 }
+        ];
+
+        ws.getRow(1).eachCell(function(cell) {
+            cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } };
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+        });
+
+        const orderMap = { "월요일": 1, "화요일": 2, "수요일": 3, "목요일": 4, "금요일": 5, "토요일": 6, "일요일": 7, "주간 공통": 99 };
+
+        let submittedLogs = window.currentWeeklyLogList.filter(l => l.isSubmitted);
+        submittedLogs.sort((a,b) => (a.authorTeam||'').localeCompare(b.authorTeam||'') || (a.authorName||'').localeCompare(b.authorName||''));
+
+        submittedLogs.forEach(log => {
+            let team = log.authorTeam || '-';
+            let name = log.authorName || '-';
+            let updated = log.updatedAt ? window.getDateTimeStr(new Date(log.updatedAt)) : '-';
+            
+            let pjtStr = (log.involvedProjects || []).map(p => p.name).join(', ');
+            if(!pjtStr && log.projectName) pjtStr = log.projectName;
+            
+            let issues = log.issues || '';
+
+            if(log.tasks && log.tasks.length > 0) {
+                let sortedTasks = log.tasks.slice().sort((a,b) => (orderMap[a.day]||0) - (orderMap[b.day]||0));
+                sortedTasks.forEach((t, i) => {
+                    let row = ws.addRow({
+                        team: team, name: name, updated: updated,
+                        day: t.day || '-', status: t.status || '-', loc: t.loc || '-', content: t.content || '-',
+                        pjts: i === 0 ? pjtStr : '', 
+                        issues: i === 0 ? issues : ''
+                    });
+                    row.eachCell({ includeEmpty: true }, function(cell) {
+                        cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+                        cell.alignment = { vertical: 'top', wrapText: true };
+                        if (cell.col <= 6) cell.alignment.horizontal = 'center';
+                    });
+                });
+            } else {
+                let row = ws.addRow({
+                    team: team, name: name, updated: updated, day: '-', status: '-', loc: '-', content: '내역 없음', pjts: pjtStr, issues: issues
+                });
+                row.eachCell({ includeEmpty: true }, function(cell) {
+                    cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+                    cell.alignment = { vertical: 'top', wrapText: true, horizontal: 'center' };
+                });
+            }
+        });
+
+        const buffer = await wb.xlsx.writeBuffer();
+        let todayStr = new Date().toISOString().split('T')[0];
+        const weekInput = document.getElementById('weekly-log-filter-week');
+        let wStr = weekInput ? weekInput.value : '';
+        window.saveAs(new Blob([buffer]), `주간업무일지_${wStr}_${todayStr}.xlsx`);
+
+    } catch(e) {
+        console.error(e);
+        if (window.showToast) window.showToast("엑셀 저장 실패", "error");
+    }
+};
+
 window.toggleScheduleComplete = async function(id, isCompleted) {
     try {
         await setDoc(doc(db, "weekly_schedules", id), { isCompleted: isCompleted, updatedAt: Date.now() }, { merge: true });
@@ -736,7 +849,6 @@ window.renderKanbanBoard = function() {
         const events = window.currentScheduleList.filter(function(s) { return s.day === day; });
         const eventsHtml = events.map(function(s) {
             const style = catMap[s.category] || catMap["기타"];
-            // 💡 제목 중심 렌더링
             const safeTitle = String(s.title || s.content || '제목 없음').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const safeTime = String(s.time || '시간 미지정');
             
@@ -754,45 +866,42 @@ window.renderKanbanBoard = function() {
     }).join('');
 };
 
+// 💡 10인 이상 환경을 고려한 팀 일정표 슬림형/스크롤 UI
 window.renderTeamKanbanBoard = function() {
     const board = document.getElementById('weekly-team-kanban-board');
     if (!board) return;
 
     const days = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일'];
     const catMap = {
-        "휴가/연차": { icon: "fa-mug-hot", bg: "bg-emerald-50 border-emerald-200", text: "text-emerald-700", badge: "bg-emerald-100 text-emerald-600" },
-        "휴가/오전": { icon: "fa-sun", bg: "bg-emerald-50 border-emerald-200", text: "text-emerald-700", badge: "bg-emerald-100 text-emerald-600" },
-        "휴가/오후": { icon: "fa-moon", bg: "bg-emerald-50 border-emerald-200", text: "text-emerald-700", badge: "bg-emerald-100 text-emerald-600" },
-        "회의": { icon: "fa-users", bg: "bg-purple-50 border-purple-200", text: "text-purple-700", badge: "bg-purple-100 text-purple-600" },
-        "사내(작업)": { icon: "fa-headphones", bg: "bg-blue-50 border-blue-200", text: "text-blue-700", badge: "bg-blue-100 text-blue-600" },
-        "사내(공통)": { icon: "fa-building", bg: "bg-blue-50 border-blue-200", text: "text-blue-700", badge: "bg-blue-100 text-blue-600" },
-        "출장(국내)": { icon: "fa-car", bg: "bg-orange-50 border-orange-200", text: "text-orange-700", badge: "bg-orange-100 text-orange-600" },
-        "출장(국외)": { icon: "fa-plane", bg: "bg-orange-50 border-orange-200", text: "text-orange-700", badge: "bg-orange-100 text-orange-600" },
-        "기타": { icon: "fa-thumbtack", bg: "bg-slate-50 border-slate-200", text: "text-slate-700", badge: "bg-slate-200 text-slate-600" }
+        "휴가/연차": { icon: "fa-mug-hot", text: "text-emerald-700" },
+        "휴가/오전": { icon: "fa-sun", text: "text-emerald-700" },
+        "휴가/오후": { icon: "fa-moon", text: "text-emerald-700" },
+        "회의": { icon: "fa-users", text: "text-purple-700" },
+        "사내(작업)": { icon: "fa-headphones", text: "text-blue-700" },
+        "사내(공통)": { icon: "fa-building", text: "text-blue-700" },
+        "출장(국내)": { icon: "fa-car", text: "text-orange-700" },
+        "출장(국외)": { icon: "fa-plane", text: "text-orange-700" },
+        "기타": { icon: "fa-thumbtack", text: "text-slate-700" }
     };
 
     board.innerHTML = days.map(function(day) {
-        // 💡 공유된 일정만 필터링 (isShared 값이 없으면 기본 공유로 간주)
         const events = window.allSchedules.filter(function(s) { return s.day === day && s.isShared !== false; });
+        
         const eventsHtml = events.map(function(s) {
             const style = catMap[s.category] || catMap["기타"];
             const safeTitle = String(s.title || s.content || '제목 없음').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const authorName = String(s.authorName || '팀원');
-            const safeTime = String(s.time || '시간 미지정');
-            
-            const completedCardClass = s.isCompleted ? 'opacity-60 bg-slate-100 border-slate-200 grayscale' : style.bg;
-            const completedTextClass = s.isCompleted ? 'line-through text-slate-400' : style.text;
+            const completedTextClass = s.isCompleted ? 'line-through text-slate-400' : 'text-slate-700';
 
-            // 💡 클릭 시 viewSchedule 오픈
-            return '<div class="cursor-pointer hover:-translate-y-0.5 hover:shadow-md rounded-xl border p-3 ' + completedCardClass + ' relative transition-all" onclick="window.viewSchedule(\'' + s.id + '\')"><div class="flex items-center gap-1.5 mb-2.5"><span class="text-[10px] font-black text-white bg-indigo-500 w-fit px-1.5 py-0.5 rounded shadow-sm">' + authorName + '</span><div class="flex items-center gap-1 text-[9px] font-black ' + style.badge + ' w-fit px-1.5 py-0.5 rounded"><i class="fa-solid ' + style.icon + '"></i> ' + s.category + '</div></div><div class="text-xs font-bold ' + completedTextClass + ' mb-1.5 truncate">' + safeTitle + '</div><div class="text-[9px] text-slate-500 font-bold flex items-center gap-1"><i class="fa-regular fa-clock"></i> ' + safeTime + '</div></div>';
+            return '<div class="cursor-pointer hover:bg-slate-100 p-2 border-b border-slate-100 transition-colors" onclick="window.viewSchedule(\'' + s.id + '\')"><div class="flex items-center gap-1.5 mb-1"><span class="text-[9px] font-bold text-white bg-indigo-500 w-fit px-1.5 rounded">' + authorName + '</span><span class="text-[9px] font-bold ' + style.text + '"><i class="fa-solid ' + style.icon + ' mr-0.5"></i>' + s.category + '</span></div><div class="text-xs font-bold truncate ' + completedTextClass + '">' + safeTitle + '</div></div>';
         }).join('');
 
         const isWeekend = (day === '토요일' || day === '일요일');
         const headerColor = isWeekend ? 'text-rose-500' : 'text-slate-700';
-
         let emptyText = events.length === 0 ? '<div class="text-center p-4 text-[11px] font-bold text-slate-400">일정 없음</div>' : '';
 
-        return '<div class="bg-slate-50 rounded-2xl border border-slate-100 flex flex-col min-h-[300px]"><div class="text-center py-3 border-b border-slate-200 bg-white rounded-t-2xl"><h4 class="text-sm font-black ' + headerColor + '">' + day + '</h4></div><div class="p-3 flex-1 flex flex-col gap-2">' + emptyText + eventsHtml + '</div></div>';
+        // 최대 높이 고정 & 스크롤 부착
+        return '<div class="bg-slate-50 rounded-2xl border border-slate-100 flex flex-col h-[350px]"><div class="text-center py-3 border-b border-slate-200 bg-white rounded-t-2xl"><h4 class="text-sm font-black ' + headerColor + '">' + day + '</h4></div><div class="bg-white rounded-b-2xl border-t-0 flex-1 p-1 flex flex-col overflow-y-auto custom-scrollbar">' + emptyText + eventsHtml + '</div></div>';
     }).join('');
 };
 
@@ -846,7 +955,7 @@ window.editSchedule = function(id) {
     }
 };
 
-// 💡 일정 상세보기 모달 (팀 일정용)
+// 💡 일정 상세 보기 (팀 일정용 읽기전용)
 window.viewSchedule = function(id) {
     const s = window.allSchedules.find(function(x) { return x.id === id; });
     if (!s) return;
