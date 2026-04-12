@@ -89,11 +89,11 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="text-[11px] font-bold text-slate-500 mb-1.5 block">프로젝트 코드</label>
-                        <input type="text" id="req-pjt-code" placeholder="예: PRJ-2024-001" class="w-full border border-slate-300 px-4 py-2.5 rounded-xl text-sm outline-indigo-500 bg-slate-50 focus:bg-white transition-colors font-semibold">
+                        <input type="text" id="req-pjt-code" placeholder="예: PRJ-2024-001" oninput="window.showAutocomplete(this,'req-pjt-name','req-company',false)" autocomplete="off" class="w-full border border-slate-300 px-4 py-2.5 rounded-xl text-sm outline-indigo-500 bg-slate-50 focus:bg-white transition-colors font-semibold">
                     </div>
                     <div>
                         <label class="text-[11px] font-bold text-slate-500 mb-1.5 block">프로젝트명 <span class="text-rose-500">*</span></label>
-                        <input type="text" id="req-pjt-name" placeholder="프로젝트명을 입력하세요" class="w-full border border-slate-300 px-4 py-2.5 rounded-xl text-sm outline-indigo-500 bg-slate-50 focus:bg-white transition-colors font-bold">
+                        <input type="text" id="req-pjt-name" placeholder="프로젝트명을 입력하세요" oninput="window.showAutocomplete(this,'req-pjt-code','req-company',true)" autocomplete="off" class="w-full border border-slate-300 px-4 py-2.5 rounded-xl text-sm outline-indigo-500 bg-slate-50 focus:bg-white transition-colors font-bold">
                     </div>
                     <div>
                         <label class="text-[11px] font-bold text-slate-500 mb-1.5 block">고객사</label>
