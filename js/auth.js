@@ -38,9 +38,10 @@ window.checkLogin = async () => {
 };
 
 window.signUp = async () => { 
-    // 💡 철저하게 회원가입 창의 데이터만 가져옵니다. (오류 해결 핵심)
+    // 💡 철저하게 회원가입 창의 데이터만 가져옵니다.
     const n = document.getElementById('signup-name')?.value.trim(); 
     const t = document.getElementById('signup-dept')?.value; 
+    const pos = document.getElementById('signup-position')?.value || '매니저'; // 💡 직책 정보 추출
     const e = document.getElementById('signup-id')?.value.trim(); 
     const p = document.getElementById('signup-pw')?.value.trim(); 
     const err = document.getElementById('signup-error'); 
@@ -64,11 +65,10 @@ window.signUp = async () => {
     try { 
         const uC = await createUserWithEmailAndPassword(auth, e, p); 
         await setDoc(doc(db, "users", uC.user.uid), { 
-            email:e, name:n, team:t, department:t, role:'pending', 
+            email:e, name:n, team:t, department:t, position:pos, role:'pending', // 💡 직책(position) DB 저장
             permissions:{ collab:true, purchase:true, assembly:true, repair:true, 'project-status':true, 'weekly-log':true } 
         }); 
         
-        // 가입 성공 메시지 확실하게 표시
         if(err){ 
             err.innerHTML="가입 성공! 관리자 승인 대기 중입니다.<br>3초 후 로그인 화면으로 이동합니다."; 
             err.className="text-emerald-500 text-[11px] font-bold text-center mt-2 bg-emerald-50 p-3 rounded-xl border border-emerald-100 break-words"; 
@@ -96,7 +96,7 @@ window.logout = async () => { await signOut(auth); location.reload(); };
 window.initAuthListeners = () => {
     console.log("📡 로그인 상태 감지기 실행됨");
     onAuthStateChanged(auth, async (u) => {
-        if (window.isSigningUp) return; // 💡 회원가입 프로세스 중에는 감지기가 개입하지 않음
+        if (window.isSigningUp) return; 
 
         if (u) {
             try {
@@ -110,7 +110,6 @@ window.initAuthListeners = () => {
                     } 
                 } 
                 else { 
-                    // 💡 보안 패치: DB에 유저 정보가 없으면 (관리자가 삭제한 경우) 강제 로그아웃 (영구 차단)
                     const e = document.getElementById('login-error'); 
                     if(e) { e.innerHTML="관리자에 의해 영구 삭제되거나 차단된 계정입니다."; e.classList.remove('hidden'); } 
                     await signOut(auth); 
@@ -169,11 +168,13 @@ window.renderAdminUsers = () => {
     sortedUsers.forEach(u => {
         const p = u.permissions || {}; 
         const isP = u.role === 'pending';
-        // 💡 승인 대기중인 유저는 빨간색 테두리와 배경으로 확실하게 눈에 띄게 처리!
         const trClass = isP ? 'bg-rose-50/40 border-l-4 border-rose-500' : 'hover:bg-slate-50 transition-colors border-b border-slate-100';
+        
+        // 💡 직책 정보 렌더링 추가
+        const safePos = u.position ? `<span class="block text-[10px] text-slate-400 font-normal mt-0.5">${u.position}</span>` : '';
 
         html += `<tr class="${trClass}">
-            <td class="p-3 text-center font-bold text-slate-700">${u.name}</td>
+            <td class="p-3 text-center font-bold text-slate-700">${u.name}${safePos}</td>
             <td class="p-3 text-center text-slate-600">${u.team || u.department || ''}</td>
             <td class="p-3 text-center text-slate-500">${u.email}</td>
             <td class="p-3 text-center">
@@ -213,7 +214,6 @@ window.updateUserPerm = async (uid, key, val) => {
     try { const uR = doc(db, "users", uid); const uD = await getDoc(uR); if (uD.exists()) { let p = uD.data().permissions || {}; p[key] = val; await setDoc(uR, { permissions: p }, { merge: true }); if(window.showToast) window.showToast("권한이 업데이트되었습니다."); } } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } 
 };
 
-// 💡 승인 버튼 전용 함수 추가
 window.approveUser = async (uid) => {
     try {
         await setDoc(doc(db, "users", uid), { role: 'user' }, { merge: true });
@@ -223,12 +223,11 @@ window.approveUser = async (uid) => {
     }
 };
 
-// 💡 계정 영구 차단(삭제) 로직 확립
 window.deleteUser = async (uid) => { 
-    if (!confirm("이 사용자를 정말 삭제하시겠습니까?\n\n삭제 시 해당 사용자는 시스템에 다시 로그인할 수 없으며 즉시 차단됩니다.")) return; 
+    if (!confirm("이 사용자를 정말 삭제하시겠습니까?\n\n삭제 시 해당 사용자의 시스템 접근이 즉시 영구 차단됩니다.\n(참고: 동일한 이메일로 다시 회원가입을 하려면 Firebase Authentication 콘솔에서도 계정을 삭제해주셔야 합니다.)")) return; 
     try { 
         await deleteDoc(doc(db, "users", uid)); 
-        if(window.showToast) window.showToast("계정이 영구적으로 삭제(차단) 되었습니다."); 
+        if(window.showToast) window.showToast("계정 권한이 영구적으로 삭제(차단) 되었습니다."); 
     } catch (e) { 
         if(window.showToast) window.showToast("오류 발생", "error"); 
     } 
