@@ -8,7 +8,7 @@ let unsubscribeEmails = null;
 
 window.currentReqEmails = []; 
 
-// 💡 안전한 날짜 파싱 유틸 (코멘트 에러 방지용) - 절대 삭제 금지!
+// 💡 안전한 날짜 파싱 유틸 (리스트 안 뜸 & 코멘트 에러 방지용 핵심 함수!) - 절대 삭제 금지!
 window.reqGetSafeMillis = function(val) {
     try { 
         if (!val) return 0; 
@@ -314,24 +314,24 @@ window.removeReqEmail = async function(idx) {
     } catch(e) { window.showToast("삭제 실패", "error"); }
 };
 
+
 // ==========================================
 // 💡 폼 UI 제어 (협업 vs 구매의뢰 분기)
 // ==========================================
 window.openWriteModal = function(editId = null) { 
     window.editingReqId = editId; 
     
-    // 콜랩용 초기화
-    document.getElementById('req-pjt-code').value = ''; 
-    document.getElementById('req-pjt-name').value = ''; 
-    document.getElementById('req-title').value = ''; 
-    document.getElementById('req-company').value = ''; 
-    document.getElementById('req-location').value = ''; 
-    document.getElementById('req-start-date').value = ''; 
-    document.getElementById('req-end-date').value = ''; 
-    document.getElementById('req-est-md').value = ''; 
-    document.getElementById('req-content').value = ''; 
+    // 초기화
+    if(document.getElementById('req-pjt-code')) document.getElementById('req-pjt-code').value = ''; 
+    if(document.getElementById('req-pjt-name')) document.getElementById('req-pjt-name').value = ''; 
+    if(document.getElementById('req-title')) document.getElementById('req-title').value = ''; 
+    if(document.getElementById('req-company')) document.getElementById('req-company').value = ''; 
+    if(document.getElementById('req-location')) document.getElementById('req-location').value = ''; 
+    if(document.getElementById('req-start-date')) document.getElementById('req-start-date').value = ''; 
+    if(document.getElementById('req-end-date')) document.getElementById('req-end-date').value = ''; 
+    if(document.getElementById('req-est-md')) document.getElementById('req-est-md').value = ''; 
+    if(document.getElementById('req-content')) document.getElementById('req-content').value = ''; 
 
-    // 구매의뢰용 초기화
     if(document.getElementById('req-pur-title')) document.getElementById('req-pur-title').value = '';
     if(document.getElementById('req-pur-pjt-code')) document.getElementById('req-pur-pjt-code').value = '';
     if(document.getElementById('req-pur-pjt-name')) document.getElementById('req-pur-pjt-name').value = '';
@@ -340,41 +340,43 @@ window.openWriteModal = function(editId = null) {
 
     window.clearSelectedFile();
     
-    document.getElementById('req-file-link-wrap').classList.add('hidden');
-    document.getElementById('req-result-link-wrap').classList.add('hidden');
-    document.getElementById('admin-actions').classList.add('hidden');
-    document.getElementById('req-modal-status-badge').classList.add('hidden');
-    document.querySelector('input[name="req-category"][value="협업"]').checked = true;
-
-    const titleMap = { 'collab': '새 협업/조립 요청서', 'purchase': '새 모듈 구매 의뢰서', 'repair': '새 수리/점검 요청서' };
+    if(document.getElementById('req-file-link-wrap')) document.getElementById('req-file-link-wrap').classList.add('hidden');
+    if(document.getElementById('req-result-link-wrap')) document.getElementById('req-result-link-wrap').classList.add('hidden');
+    if(document.getElementById('admin-actions')) document.getElementById('admin-actions').classList.add('hidden');
+    if(document.getElementById('req-modal-status-badge')) document.getElementById('req-modal-status-badge').classList.add('hidden');
     
-    document.getElementById('req-header-title').innerText = titleMap[window.currentAppId] || '요청서 관리';
-    document.getElementById('req-modal-title').innerText = (titleMap[window.currentAppId] || '요청서').replace('새 ', '') + ' 작성';
+    const collabRadio = document.querySelector('input[name="req-category"][value="협업"]');
+    if(collabRadio) collabRadio.checked = true;
+
+    const titleMap = { 'collab': '협업/조립 요청서', 'purchase': '모듈 구매 의뢰서', 'repair': '수리/점검 요청서' };
+    
+    if(document.getElementById('req-header-title')) document.getElementById('req-header-title').innerText = titleMap[window.currentAppId] || '요청서 관리';
+    if(document.getElementById('req-modal-title')) document.getElementById('req-modal-title').innerText = (titleMap[window.currentAppId] || '요청서') + ' 작성';
 
     if (window.currentAppId === 'collab') {
-        document.getElementById('collab-form-fields').classList.remove('hidden');
-        document.getElementById('purchase-form-fields').classList.add('hidden');
+        if(document.getElementById('collab-form-fields')) document.getElementById('collab-form-fields').classList.remove('hidden');
+        if(document.getElementById('purchase-form-fields')) document.getElementById('purchase-form-fields').classList.add('hidden');
     } else if (window.currentAppId === 'purchase') {
-        document.getElementById('collab-form-fields').classList.add('hidden');
-        document.getElementById('purchase-form-fields').classList.remove('hidden');
+        if(document.getElementById('collab-form-fields')) document.getElementById('collab-form-fields').classList.add('hidden');
+        if(document.getElementById('purchase-form-fields')) document.getElementById('purchase-form-fields').classList.remove('hidden');
     } else {
-        document.getElementById('collab-form-fields').classList.remove('hidden');
-        document.getElementById('purchase-form-fields').classList.add('hidden');
+        if(document.getElementById('collab-form-fields')) document.getElementById('collab-form-fields').classList.remove('hidden');
+        if(document.getElementById('purchase-form-fields')) document.getElementById('purchase-form-fields').classList.add('hidden');
     }
 
     if (editId) {
         const req = window.currentRequestList.find(r => r.id === editId);
         if (req) {
             // 콜랩 셋
-            document.getElementById('req-pjt-code').value = req.pjtCode || ''; 
-            document.getElementById('req-pjt-name').value = req.pjtName || ''; 
-            document.getElementById('req-title').value = req.reqTitle || req.title || ''; 
-            document.getElementById('req-company').value = req.company || ''; 
-            document.getElementById('req-location').value = req.location || ''; 
-            document.getElementById('req-start-date').value = req.startDate || ''; 
-            document.getElementById('req-end-date').value = req.endDate || ''; 
-            document.getElementById('req-est-md').value = req.estMd || ''; 
-            document.getElementById('req-content').value = req.content || ''; 
+            if(document.getElementById('req-pjt-code')) document.getElementById('req-pjt-code').value = req.pjtCode || ''; 
+            if(document.getElementById('req-pjt-name')) document.getElementById('req-pjt-name').value = req.pjtName || ''; 
+            if(document.getElementById('req-title')) document.getElementById('req-title').value = req.reqTitle || req.title || ''; 
+            if(document.getElementById('req-company')) document.getElementById('req-company').value = req.company || ''; 
+            if(document.getElementById('req-location')) document.getElementById('req-location').value = req.location || ''; 
+            if(document.getElementById('req-start-date')) document.getElementById('req-start-date').value = req.startDate || ''; 
+            if(document.getElementById('req-end-date')) document.getElementById('req-end-date').value = req.endDate || ''; 
+            if(document.getElementById('req-est-md')) document.getElementById('req-est-md').value = req.estMd || ''; 
+            if(document.getElementById('req-content')) document.getElementById('req-content').value = req.content || ''; 
             
             if(req.category) {
                 const rEl = document.querySelector(`input[name="req-category"][value="${req.category}"]`);
@@ -388,26 +390,28 @@ window.openWriteModal = function(editId = null) {
             if(document.getElementById('req-pur-ship-date')) document.getElementById('req-pur-ship-date').value = req.shipDate || '';
             if(document.getElementById('req-pur-content')) document.getElementById('req-pur-content').value = req.content || '';
 
-            if(req.fileUrl) {
+            if(req.fileUrl && document.getElementById('req-file-link-wrap')) {
                 document.getElementById('req-file-link-wrap').classList.remove('hidden');
                 document.getElementById('req-file-link').href = req.fileUrl;
             }
-            if(req.resultFileUrl) {
+            if(req.resultFileUrl && document.getElementById('req-result-link-wrap')) {
                 document.getElementById('req-result-link-wrap').classList.remove('hidden');
                 document.getElementById('req-result-link').href = req.resultFileUrl;
             }
 
             const badge = document.getElementById('req-modal-status-badge');
-            badge.classList.remove('hidden');
-            if (req.status === 'completed') {
-                badge.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-600 shadow-sm";
-                badge.innerText = "작업 완료됨";
-            } else if (req.status === 'progress') {
-                badge.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-600 shadow-sm";
-                badge.innerText = "진행 중";
-            } else {
-                badge.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 shadow-sm";
-                badge.innerText = "접수 대기중";
+            if(badge) {
+                badge.classList.remove('hidden');
+                if (req.status === 'completed') {
+                    badge.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-600 shadow-sm";
+                    badge.innerText = "작업 완료됨";
+                } else if (req.status === 'progress') {
+                    badge.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-600 shadow-sm";
+                    badge.innerText = "진행 중";
+                } else {
+                    badge.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 shadow-sm";
+                    badge.innerText = "접수 대기중";
+                }
             }
 
             if (window.userProfile && window.userProfile.role === 'admin') {
@@ -416,35 +420,40 @@ window.openWriteModal = function(editId = null) {
                 const btnComplete = document.getElementById('btn-admin-complete');
                 const btnRevert = document.getElementById('btn-admin-revert');
 
-                adminMenu.classList.remove('hidden');
+                if(adminMenu) adminMenu.classList.remove('hidden');
 
                 if (req.status === 'completed') {
-                    btnAccept.classList.add('hidden');
-                    btnComplete.classList.add('hidden');
-                    btnRevert.classList.remove('hidden');
+                    if(btnAccept) btnAccept.classList.add('hidden');
+                    if(btnComplete) btnComplete.classList.add('hidden');
+                    if(btnRevert) btnRevert.classList.remove('hidden');
                 } else if (req.status === 'progress') {
-                    btnAccept.classList.add('hidden');
-                    btnComplete.classList.remove('hidden');
-                    btnRevert.classList.add('hidden');
+                    if(btnAccept) btnAccept.classList.add('hidden');
+                    if(btnComplete) btnComplete.classList.remove('hidden');
+                    if(btnRevert) btnRevert.classList.add('hidden');
                 } else {
-                    btnAccept.classList.remove('hidden');
-                    btnComplete.classList.add('hidden');
-                    btnRevert.classList.add('hidden');
+                    if(btnAccept) btnAccept.classList.remove('hidden');
+                    if(btnComplete) btnComplete.classList.add('hidden');
+                    if(btnRevert) btnRevert.classList.add('hidden');
                 }
             }
         }
     }
 
-    document.getElementById('write-modal').classList.remove('hidden'); 
-    document.getElementById('write-modal').classList.add('flex'); 
+    const m = document.getElementById('write-modal');
+    if(m) {
+        m.classList.remove('hidden'); 
+        m.classList.add('flex'); 
+    }
     window.initGoogleAPI();
 };
 
 window.closeWriteModal = function() { 
-    document.getElementById('write-modal').classList.add('hidden'); 
-    document.getElementById('write-modal').classList.remove('flex'); 
+    const m = document.getElementById('write-modal');
+    if(m) {
+        m.classList.add('hidden'); 
+        m.classList.remove('flex'); 
+    }
 };
-
 
 // ==========================================
 // 💡 모달 프롬프트 연결 로직 (Save, Accept, Complete)
@@ -454,16 +463,16 @@ window.promptSaveRequest = function() {
     let reqTitle, pjtName, reqValid = false;
 
     if (window.currentAppId === 'collab') {
-        reqTitle = document.getElementById('req-title').value.trim();
-        pjtName = document.getElementById('req-pjt-name').value.trim();
-        const startDate = document.getElementById('req-start-date').value;
-        const endDate = document.getElementById('req-end-date').value;
-        const content = document.getElementById('req-content').value.trim();
+        reqTitle = document.getElementById('req-title')?.value.trim() || '';
+        pjtName = document.getElementById('req-pjt-name')?.value.trim() || '';
+        const startDate = document.getElementById('req-start-date')?.value || '';
+        const endDate = document.getElementById('req-end-date')?.value || '';
+        const content = document.getElementById('req-content')?.value.trim() || '';
         if(reqTitle && pjtName && startDate && endDate && content) reqValid = true;
     } else if (window.currentAppId === 'purchase') {
-        reqTitle = document.getElementById('req-pur-title').value.trim();
-        pjtName = document.getElementById('req-pur-pjt-name').value.trim();
-        const shipDate = document.getElementById('req-pur-ship-date').value;
+        reqTitle = document.getElementById('req-pur-title')?.value.trim() || '';
+        pjtName = document.getElementById('req-pur-pjt-name')?.value.trim() || '';
+        const shipDate = document.getElementById('req-pur-ship-date')?.value || '';
         if(reqTitle && pjtName && shipDate) reqValid = true;
     } else {
         reqValid = true;
@@ -481,23 +490,35 @@ window.promptSaveRequest = function() {
         return window.showToast("상단 [수신 담당자 설정]에서 메일을 받을 사람을 먼저 지정해주세요.", "warning");
     }
     
-    document.getElementById('req-send-email-display').innerText = window.currentReqEmails.join(', ');
+    if(document.getElementById('req-send-email-display')) {
+        document.getElementById('req-send-email-display').innerText = window.currentReqEmails.join(', ');
+    }
     
-    document.getElementById('req-send-modal').classList.remove('hidden');
-    document.getElementById('req-send-modal').classList.add('flex');
+    const sm = document.getElementById('req-send-modal');
+    if(sm) {
+        sm.classList.remove('hidden');
+        sm.classList.add('flex');
+    }
 };
 
 window.executeSaveRequest = async function() {
-    document.getElementById('req-send-modal').classList.add('hidden');
-    document.getElementById('req-send-modal').classList.remove('flex');
+    const sm = document.getElementById('req-send-modal');
+    if(sm) {
+        sm.classList.add('hidden');
+        sm.classList.remove('flex');
+    }
     
     const btn = document.getElementById('btn-req-save');
-    btn.disabled = true; 
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 전송 중...';
+    if(btn) {
+        btn.disabled = true; 
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 전송 중...';
+    }
+
+    const currentReq = window.editingReqId ? window.currentRequestList.find(r=>r.id===window.editingReqId) : null;
 
     let data = {
         type: window.currentAppId, 
-        status: window.editingReqId ? window.currentRequestList.find(r=>r.id===window.editingReqId).status : 'pending', 
+        status: currentReq ? currentReq.status : 'pending', 
         authorUid: window.currentUser.uid, 
         authorName: window.userProfile.name, 
         authorEmail: window.userProfile.email,
@@ -506,24 +527,24 @@ window.executeSaveRequest = async function() {
     };
 
     if (window.currentAppId === 'collab') {
-        data.reqTitle = document.getElementById('req-title').value.trim();
+        data.reqTitle = document.getElementById('req-title')?.value.trim() || '';
         data.title = data.reqTitle;
-        data.pjtName = document.getElementById('req-pjt-name').value.trim();
-        data.pjtCode = document.getElementById('req-pjt-code').value.trim();
-        data.company = document.getElementById('req-company').value.trim();
-        data.location = document.getElementById('req-location').value.trim();
-        data.startDate = document.getElementById('req-start-date').value;
-        data.endDate = document.getElementById('req-end-date').value;
-        data.estMd = parseFloat(document.getElementById('req-est-md').value) || 0;
+        data.pjtName = document.getElementById('req-pjt-name')?.value.trim() || '';
+        data.pjtCode = document.getElementById('req-pjt-code')?.value.trim() || '';
+        data.company = document.getElementById('req-company')?.value.trim() || '';
+        data.location = document.getElementById('req-location')?.value.trim() || '';
+        data.startDate = document.getElementById('req-start-date')?.value || '';
+        data.endDate = document.getElementById('req-end-date')?.value || '';
+        data.estMd = parseFloat(document.getElementById('req-est-md')?.value) || 0;
         data.category = document.querySelector('input[name="req-category"]:checked')?.value || '';
-        data.content = document.getElementById('req-content').value.trim();
+        data.content = document.getElementById('req-content')?.value.trim() || '';
     } else if (window.currentAppId === 'purchase') {
-        data.reqTitle = document.getElementById('req-pur-title').value.trim();
+        data.reqTitle = document.getElementById('req-pur-title')?.value.trim() || '';
         data.title = data.reqTitle;
-        data.pjtName = document.getElementById('req-pur-pjt-name').value.trim();
-        data.pjtCode = document.getElementById('req-pur-pjt-code').value.trim();
-        data.shipDate = document.getElementById('req-pur-ship-date').value;
-        data.content = document.getElementById('req-pur-content').value.trim();
+        data.pjtName = document.getElementById('req-pur-pjt-name')?.value.trim() || '';
+        data.pjtCode = document.getElementById('req-pur-pjt-code')?.value.trim() || '';
+        data.shipDate = document.getElementById('req-pur-ship-date')?.value || '';
+        data.content = document.getElementById('req-pur-content')?.value.trim() || '';
     }
 
     const fileInput = document.getElementById('req-file');
@@ -534,12 +555,12 @@ window.executeSaveRequest = async function() {
         let fileUrl = null;
         const targetFolderId = DRIVE_FOLDERS[window.currentAppId] || '';
 
-        if (fileInput.files.length > 0 && targetFolderId) {
+        if (fileInput && fileInput.files.length > 0 && targetFolderId) {
             window.showToast("구글 드라이브에 파일을 업로드 중입니다...");
             const fileId = await window.uploadFileToDrive(fileInput.files[0], targetFolderId);
             fileUrl = `https://drive.google.com/file/d/${fileId}/view`;
         }
-        data.fileUrl = fileUrl || (window.editingReqId ? window.currentRequestList.find(r=>r.id===window.editingReqId)?.fileUrl : null);
+        data.fileUrl = fileUrl || (currentReq ? currentReq.fileUrl : null);
 
         if(window.editingReqId) { 
             await setDoc(doc(db,"requests",window.editingReqId), data, {merge:true}); 
@@ -559,8 +580,10 @@ window.executeSaveRequest = async function() {
         console.error(e);
         window.showToast("오류 발생: " + e.message, "error"); 
     } finally { 
-        btn.disabled = false; 
-        btn.innerHTML = '<i class="fa-regular fa-paper-plane"></i> 저장 및 메일 발송'; 
+        if(btn) {
+            btn.disabled = false; 
+            btn.innerHTML = '<i class="fa-regular fa-paper-plane"></i> 저장 및 메일 발송'; 
+        }
     }
 };
 
@@ -576,19 +599,25 @@ window.promptAcceptRequest = function() {
     }
 
     const emailEl = document.getElementById('req-accept-email');
-    if(emailEl) emailEl.value = req.authorEmail || '';
+    if(emailEl) emailEl.value = req ? (req.authorEmail || '') : '';
 
-    document.getElementById('req-accept-modal').classList.remove('hidden');
-    document.getElementById('req-accept-modal').classList.add('flex');
+    const am = document.getElementById('req-accept-modal');
+    if(am) {
+        am.classList.remove('hidden');
+        am.classList.add('flex');
+    }
 };
 
 window.executeAcceptRequest = async function() {
-    document.getElementById('req-accept-modal').classList.add('hidden');
-    document.getElementById('req-accept-modal').classList.remove('flex');
+    const am = document.getElementById('req-accept-modal');
+    if(am) {
+        am.classList.add('hidden');
+        am.classList.remove('flex');
+    }
 
     const req = window.currentRequestList.find(r => r.id === window.editingReqId);
-    const managerName = document.getElementById('req-accept-manager').value;
-    const sendEmail = document.getElementById('req-accept-email').value.trim();
+    const managerName = document.getElementById('req-accept-manager')?.value || '';
+    const sendEmail = document.getElementById('req-accept-email')?.value.trim() || '';
 
     try {
         const payload = { 
@@ -620,30 +649,37 @@ window.promptCompleteRequest = function() {
     if (fileSection) {
         if (window.currentAppId === 'purchase') {
             fileSection.classList.remove('hidden');
-            document.getElementById('req-complete-file').value = '';
+            const fileInput = document.getElementById('req-complete-file');
+            if(fileInput) fileInput.value = '';
         } else {
             fileSection.classList.add('hidden');
         }
     }
 
     const emailEl = document.getElementById('req-complete-email');
-    if(emailEl) emailEl.value = req.authorEmail || '';
+    if(emailEl) emailEl.value = req ? (req.authorEmail || '') : '';
 
-    document.getElementById('req-complete-modal').classList.remove('hidden');
-    document.getElementById('req-complete-modal').classList.add('flex');
+    const cm = document.getElementById('req-complete-modal');
+    if(cm) {
+        cm.classList.remove('hidden');
+        cm.classList.add('flex');
+    }
 };
 
 window.executeCompleteRequest = async function() {
     const req = window.currentRequestList.find(r => r.id === window.editingReqId);
-    const sendEmail = document.getElementById('req-complete-email').value.trim();
+    const sendEmail = document.getElementById('req-complete-email')?.value.trim() || '';
     const fileInput = document.getElementById('req-complete-file');
 
     if (window.currentAppId === 'purchase' && (!fileInput || fileInput.files.length === 0)) {
         return window.showToast("모듈 구매 의뢰서는 작업 완료 시 [레이저 검수 리스트] 파일 첨부가 필수입니다.", "error");
     }
 
-    document.getElementById('req-complete-modal').classList.add('hidden');
-    document.getElementById('req-complete-modal').classList.remove('flex');
+    const cm = document.getElementById('req-complete-modal');
+    if(cm) {
+        cm.classList.add('hidden');
+        cm.classList.remove('flex');
+    }
     const btn = document.getElementById('btn-req-complete-exec');
     if(btn) { btn.disabled = true; btn.innerHTML = '처리중...'; }
 
@@ -879,10 +915,15 @@ window.deleteRequest = async function(id) {
 // 💡 코멘트 모달 로직 (에러 방지 처리 포함)
 // ==========================================
 window.openCommentModal = function(reqId, title) { 
-    document.getElementById('cmt-req-id').value = reqId; 
+    const cmtInput = document.getElementById('cmt-req-id');
+    if(cmtInput) cmtInput.value = reqId; 
     window.cancelCommentAction(); 
-    document.getElementById('comment-modal').classList.remove('hidden'); 
-    document.getElementById('comment-modal').classList.add('flex'); 
+    
+    const cModal = document.getElementById('comment-modal');
+    if(cModal) {
+        cModal.classList.remove('hidden'); 
+        cModal.classList.add('flex'); 
+    }
     window.loadComments(reqId); 
 };
 
@@ -931,42 +972,57 @@ window.renderComments = function(topLevelComments) {
                         const rImgHtml = r.imageUrl ? '<div class="mt-2 rounded-lg overflow-hidden border border-slate-200 w-fit max-w-[200px]"><img src="' + r.imageUrl + '" class="w-full h-auto cursor-pointer" onclick="window.open(\'' + r.imageUrl + '\')"></div>' : ''; 
                         
                         let replyBtnHtml = '';
-                        if (r.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin') {
+                        if (r.authorUid === window.currentUser?.uid || (window.userProfile && window.userProfile.role === 'admin')) {
                             replyBtnHtml = '<button onclick="window.editComment(\'' + r.id + '\')" class="text-slate-400 hover:text-amber-500 px-1"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteComment(\'' + r.id + '\')" class="text-slate-400 hover:text-rose-500 px-1"><i class="fa-solid fa-trash-can"></i></button>';
                         }
                         
                         let rDateStr = r.createdAt ? (window.getDateTimeStr ? window.getDateTimeStr(new Date(window.reqGetSafeMillis(r.createdAt))) : new Date(window.reqGetSafeMillis(r.createdAt)).toLocaleString()) : '';
 
-                        repliesHtml += '<div class="bg-slate-50 p-4 rounded-xl border border-slate-100"><div class="flex justify-between items-start mb-2"><div class="flex items-center gap-2"><i class="fa-solid fa-reply text-[10px] text-slate-400 rotate-180 scale-y-[-1]"></i><span class="font-black text-slate-700 text-sm">' + r.authorName + '</span><span class="text-xs font-medium text-slate-400">' + rDateStr + '</span></div><div class="flex gap-2">' + replyBtnHtml + '</div></div><div class="text-slate-700 text-[13px] font-medium pl-6 break-words">' + safeReplyContent + '</div>' + rImgHtml + '</div>'; 
+                        repliesHtml += '<div class="bg-slate-50 p-4 rounded-xl border border-slate-100"><div class="flex justify-between items-start mb-2"><div class="flex items-center gap-2"><i class="fa-solid fa-reply text-[10px] text-slate-400 rotate-180 scale-y-[-1]"></i><span class="font-black text-slate-700 text-sm">' + (r.authorName||'익명') + '</span><span class="text-xs font-medium text-slate-400">' + rDateStr + '</span></div><div class="flex gap-2">' + replyBtnHtml + '</div></div><div class="text-slate-700 text-[13px] font-medium pl-6 break-words">' + safeReplyContent + '</div>' + rImgHtml + '</div>'; 
                     }); 
                     repliesHtml += '</div>'; 
                 } 
                 
                 let mainBtnHtml = '';
-                if (c.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin') {
+                if (c.authorUid === window.currentUser?.uid || (window.userProfile && window.userProfile.role === 'admin')) {
                     mainBtnHtml = '<button onclick="window.editComment(\'' + c.id + '\')" class="text-slate-400 hover:text-amber-500 px-1"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteComment(\'' + c.id + '\')" class="text-slate-400 hover:text-rose-500 px-1"><i class="fa-solid fa-trash-can"></i></button>';
                 }
                 
                 let cDateStr = c.createdAt ? (window.getDateTimeStr ? window.getDateTimeStr(new Date(window.reqGetSafeMillis(c.createdAt))) : new Date(window.reqGetSafeMillis(c.createdAt)).toLocaleString()) : '';
 
-                listHtml += '<div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm"><div class="flex justify-between items-start mb-3"><div class="flex items-center gap-2"><span class="font-black text-slate-800 text-[15px]">' + c.authorName + '</span><span class="text-xs font-medium text-slate-400">' + cDateStr + '</span></div><div class="flex gap-2"><button onclick="window.setReplyTo(\'' + c.id + '\', \'' + c.authorName + '\')" class="text-[11px] bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 px-3 py-1 rounded-lg font-bold transition-colors shadow-sm">답글달기</button>' + mainBtnHtml + '</div></div><div class="text-slate-800 text-[14px] font-medium pl-1 mb-2 break-words leading-relaxed">' + safeContent + '</div>' + cImgHtml + repliesHtml + '</div>'; 
+                listHtml += '<div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm"><div class="flex justify-between items-start mb-3"><div class="flex items-center gap-2"><span class="font-black text-slate-800 text-[15px]">' + (c.authorName||'익명') + '</span><span class="text-xs font-medium text-slate-400">' + cDateStr + '</span></div><div class="flex gap-2"><button onclick="window.setReplyTo(\'' + c.id + '\', \'' + (c.authorName||'익명') + '\')" class="text-[11px] bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 px-3 py-1 rounded-lg font-bold transition-colors shadow-sm">답글달기</button>' + mainBtnHtml + '</div></div><div class="text-slate-800 text-[14px] font-medium pl-1 mb-2 break-words leading-relaxed">' + safeContent + '</div>' + cImgHtml + repliesHtml + '</div>'; 
             } catch(e2) { console.error(e2); }
         });
         list.innerHTML = listHtml;
-    } catch(e) { list.innerHTML = '<div class="text-center p-8 text-rose-500 font-bold">렌더링 오류 발생</div>'; }
+    } catch(e) { 
+        list.innerHTML = '<div class="text-center p-8 text-rose-500 font-bold">렌더링 오류 발생</div>'; 
+        console.error("Comment Render Error:", e);
+    }
 };
 
 window.saveCommentItem = async function() { 
-    const reqId = document.getElementById('cmt-req-id').value; 
-    const content = document.getElementById('new-cmt-text').value.trim(); 
-    const parentId = document.getElementById('reply-to-id').value || null; 
-    const editId = document.getElementById('editing-cmt-id').value; 
+    const reqIdEl = document.getElementById('cmt-req-id');
+    if(!reqIdEl) return;
+    const reqId = reqIdEl.value; 
+    
+    const contentEl = document.getElementById('new-cmt-text');
+    const content = contentEl ? contentEl.value.trim() : ''; 
+    
+    const parentIdEl = document.getElementById('reply-to-id');
+    const parentId = parentIdEl ? parentIdEl.value : null; 
+    
+    const editIdEl = document.getElementById('editing-cmt-id');
+    const editId = editIdEl ? editIdEl.value : ''; 
+    
     const fileInput = document.getElementById('new-cmt-image'); 
     
-    if(!content && fileInput.files.length === 0) return window.showToast("코멘트 내용이나 사진을 첨부하세요.", "error"); 
+    if(!content && (!fileInput || fileInput.files.length === 0)) return window.showToast("코멘트 내용이나 사진을 첨부하세요.", "error"); 
     
-    document.getElementById('btn-cmt-save').innerHTML = '저장중..'; 
-    document.getElementById('btn-cmt-save').disabled = true; 
+    const btn = document.getElementById('btn-cmt-save');
+    if(btn) {
+        btn.innerHTML = '저장중..'; 
+        btn.disabled = true; 
+    }
     
     const saveData = async function(base64Img) { 
         try { 
@@ -990,11 +1046,13 @@ window.saveCommentItem = async function() {
         } catch(e) { 
             window.showToast("저장 중 오류 발생", "error"); 
         } finally { 
-            document.getElementById('btn-cmt-save').innerHTML = '작성'; 
-            document.getElementById('btn-cmt-save').disabled = false; 
+            if(btn) {
+                btn.innerHTML = '작성'; 
+                btn.disabled = false; 
+            }
         } 
     }; 
-    if(fileInput.files.length > 0) { 
+    if(fileInput && fileInput.files.length > 0) { 
         window.resizeAndConvertToBase64(fileInput.files[0], function(base64) { saveData(base64); }); 
     } else { 
         saveData(null); 
@@ -1005,34 +1063,56 @@ window.editComment = function(id) {
     const comment = window.currentComments.find(function(c) { return c.id === id; }); 
     if(!comment) return; 
     window.cancelCommentAction(); 
-    document.getElementById('editing-cmt-id').value = id; 
-    document.getElementById('new-cmt-text').value = comment.content || ''; 
-    document.getElementById('btn-cmt-save').innerText = '수정'; 
-    document.getElementById('reply-indicator-name').innerHTML = '<i class="fa-solid fa-pen mr-1"></i> 코멘트 내용 수정 중'; 
-    document.getElementById('reply-indicator').classList.remove('hidden'); 
-    document.getElementById('new-cmt-text').focus(); 
+    
+    const editIdEl = document.getElementById('editing-cmt-id');
+    if(editIdEl) editIdEl.value = id; 
+    
+    const textEl = document.getElementById('new-cmt-text');
+    if(textEl) textEl.value = comment.content || ''; 
+    
+    const btn = document.getElementById('btn-cmt-save');
+    if(btn) btn.innerText = '수정'; 
+    
+    const indicatorName = document.getElementById('reply-indicator-name');
+    if(indicatorName) indicatorName.innerHTML = '<i class="fa-solid fa-pen mr-1"></i> 코멘트 내용 수정 중'; 
+    
+    const indicator = document.getElementById('reply-indicator');
+    if(indicator) indicator.classList.remove('hidden'); 
+    
+    if(textEl) textEl.focus(); 
 };
 
 window.setReplyTo = function(commentId, authorName) { 
     window.cancelCommentAction(); 
-    document.getElementById('reply-to-id').value = commentId; 
-    document.getElementById('reply-indicator-name').innerHTML = '<i class="fa-solid fa-reply rotate-180 scale-y-[-1] mr-1"></i> <b class="text-indigo-800">' + authorName + '</b> 님에게 답글 작성 중'; 
-    document.getElementById('reply-indicator').classList.remove('hidden'); 
-    document.getElementById('new-cmt-text').focus(); 
+    
+    const replyToEl = document.getElementById('reply-to-id');
+    if(replyToEl) replyToEl.value = commentId; 
+    
+    const indicatorName = document.getElementById('reply-indicator-name');
+    if(indicatorName) indicatorName.innerHTML = '<i class="fa-solid fa-reply rotate-180 scale-y-[-1] mr-1"></i> <b class="text-indigo-800">' + authorName + '</b> 님에게 답글 작성 중'; 
+    
+    const indicator = document.getElementById('reply-indicator');
+    if(indicator) indicator.classList.remove('hidden'); 
+    
+    const textEl = document.getElementById('new-cmt-text');
+    if(textEl) textEl.focus(); 
 };
 
 window.cancelCommentAction = function() { 
-    document.getElementById('reply-to-id').value = ''; 
-    document.getElementById('editing-cmt-id').value = ''; 
-    document.getElementById('new-cmt-text').value = ''; 
-    document.getElementById('new-cmt-image').value = ''; 
-    document.getElementById('btn-cmt-save').innerText = '작성'; 
-    document.getElementById('reply-indicator').classList.add('hidden'); 
+    if(document.getElementById('reply-to-id')) document.getElementById('reply-to-id').value = ''; 
+    if(document.getElementById('editing-cmt-id')) document.getElementById('editing-cmt-id').value = ''; 
+    if(document.getElementById('new-cmt-text')) document.getElementById('new-cmt-text').value = ''; 
+    if(document.getElementById('new-cmt-image')) document.getElementById('new-cmt-image').value = ''; 
+    if(document.getElementById('btn-cmt-save')) document.getElementById('btn-cmt-save').innerText = '작성'; 
+    if(document.getElementById('reply-indicator')) document.getElementById('reply-indicator').classList.add('hidden'); 
 };
 
 window.closeCommentModal = function() { 
-    document.getElementById('comment-modal').classList.add('hidden'); 
-    document.getElementById('comment-modal').classList.remove('flex'); 
+    const cModal = document.getElementById('comment-modal');
+    if(cModal) {
+        cModal.classList.add('hidden'); 
+        cModal.classList.remove('flex'); 
+    }
     if (currentCommentUnsubscribe) { currentCommentUnsubscribe(); currentCommentUnsubscribe = null; } 
 };
 
