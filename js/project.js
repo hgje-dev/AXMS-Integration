@@ -20,6 +20,7 @@ window.currentMonthFilter = '';
 window.calendarCurrentDate = new Date();
 window.hideCompletedFilter = false; 
 window.ganttTodayOffset = 0;
+window.ncrData = [];
 
 const getSafeMillis = (val) => { 
     try { 
@@ -65,6 +66,7 @@ window.loadCounts = function() {
             snap.forEach(doc => { let pid = doc.data().projectId; if(pid) window.projectScheduleCounts[pid] = (window.projectScheduleCounts[pid]||0)+1; }); 
             window.renderProjectStatusList();
         });
+        window.loadNcrData();
     } catch(e) { console.warn("카운트 로드 실패:", e); }
 };
 
@@ -213,7 +215,7 @@ window.loadProjectStatusData = function() {
 window.renderProjectStatusList = function() {
     const tbody = document.getElementById('proj-dash-tbody'); if(!tbody) return;
     let displayList = window.getFilteredProjects();
-    if(displayList.length === 0) { tbody.innerHTML = '<tr><td colspan="31" class="text-center p-6 text-slate-400 font-bold border-b border-slate-100 bg-white">프로젝트가 없습니다.</td></tr>'; return; }
+    if(displayList.length === 0) { tbody.innerHTML = '<tr><td colspan="32" class="text-center p-6 text-slate-400 font-bold border-b border-slate-100 bg-white">프로젝트가 없습니다.</td></tr>'; return; }
     
     const statusMap = { 
         'pending': '<span class="text-slate-500 bg-slate-100 px-2 py-0.5 rounded shadow-sm border border-slate-200">대기/보류</span>', 
@@ -236,13 +238,16 @@ window.renderProjectStatusList = function() {
         const desCnt = (window.projectDesignCounts && window.projectDesignCounts[item.id]) || 0;
         const schCnt = (window.projectScheduleCounts && window.projectScheduleCounts[item.id]) || 0;
 
+        const pjtNcrData = (window.ncrData || []).filter(n => n.pjtCode === item.code);
+        const unresolvedNcrCnt = pjtNcrData.filter(n => !(n.status.includes('완료') || n.status.includes('종결') || n.status.includes('완료됨'))).length;
+
         let trHtml = `<tr class="group hover:bg-indigo-50/50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.editProjStatus('${item.id}')">`;
         
         // 스크롤 고정 영역 (왼쪽)
         trHtml += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 0px; min-width: 40px; max-width: 40px;" onclick="event.stopPropagation()"><button onclick="window.deleteProjStatus('${item.id}')" class="text-slate-300 hover:text-rose-500 p-1.5 rounded"><i class="fa-solid fa-trash-can"></i></button></td>`;
         trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 40px; min-width: 80px; max-width: 80px;">${getSafeString(item.category)}</td>`;
-        trHtml += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 120px; min-width: 50px; max-width: 50px;" onclick="event.stopPropagation()"><button onclick="window.openCommentModal('${item.id}', '${safeNameJs}')" class="text-amber-400 relative"><i class="fa-regular fa-comment-dots text-lg"></i>${cCnt ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full">${cCnt}</span>` : ''}</button></td>`;
-        trHtml += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 170px; min-width: 50px; max-width: 50px;" onclick="event.stopPropagation()"><button onclick="window.openIssueModal('${item.id}', '${safeNameJs}')" class="text-rose-400 relative"><i class="fa-solid fa-triangle-exclamation text-lg"></i>${iCnt ? `<span class="absolute -top-1 -right-2 bg-rose-100 text-rose-600 text-[9px] font-bold px-1 rounded-full">${iCnt}</span>` : ''}</button></td>`;
+        trHtml += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 120px; min-width: 50px; max-width: 50px;" onclick="event.stopPropagation()"><button onclick="window.openCommentModal('${item.id}', '${safeNameJs}')" class="text-amber-400 relative"><i class="fa-regular fa-comment-dots text-lg"></i>${cCnt ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-amber-200">${cCnt}</span>` : ''}</button></td>`;
+        trHtml += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 170px; min-width: 50px; max-width: 50px;" onclick="event.stopPropagation()"><button onclick="window.openIssueModal('${item.id}', '${safeNameJs}')" class="text-rose-400 relative"><i class="fa-solid fa-triangle-exclamation text-lg"></i>${iCnt ? `<span class="absolute -top-1 -right-2 bg-rose-100 text-rose-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-rose-200">${iCnt}</span>` : ''}</button></td>`;
         trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center font-bold text-indigo-700 bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 220px; min-width: 110px; max-width: 110px;">${getSafeString(item.code)}</td>`;
         trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 truncate max-w-[220px] bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 330px; min-width: 220px;">${safeNameHtml}</td>`;
         trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center truncate max-w-[110px] bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 550px; min-width: 110px;">${getSafeString(item.company)}</td>`;
@@ -251,11 +256,18 @@ window.renderProjectStatusList = function() {
         
         // 스크롤 영역 (일반 td)
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center font-bold text-slate-600">${getSafeString(item.manager)}</td>`;
-        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openPurchaseModal('${item.id}', '${safeNameJs}')" class="text-amber-500 relative"><i class="fa-solid fa-cart-shopping text-lg"></i>${purCnt ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full">${purCnt}</span>` : ''}</button></td>`;
-        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openDesignModal('${item.id}', '${safeNameJs}')" class="text-teal-400 relative"><i class="fa-solid fa-pen-ruler text-lg"></i>${desCnt ? `<span class="absolute -top-1 -right-2 bg-teal-100 text-teal-600 text-[9px] font-bold px-1 rounded-full">${desCnt}</span>` : ''}</button></td>`;
-        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openPjtScheduleModal('${item.id}', '${safeNameJs}')" class="text-fuchsia-400 relative"><i class="fa-regular fa-calendar-check text-lg"></i>${schCnt ? `<span class="absolute -top-1 -right-2 bg-fuchsia-100 text-fuchsia-600 text-[9px] font-bold px-1 rounded-full">${schCnt}</span>` : ''}</button></td>`;
-        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openDailyLogModal('${item.id}', '${safeNameJs}', ${parseFloat(item.progress)||0})" class="text-sky-400 relative"><i class="fa-solid fa-book text-lg"></i>${lCnt ? `<span class="absolute -top-1 -right-2 bg-sky-100 text-sky-600 text-[9px] font-bold px-1 rounded-full">${lCnt}</span>` : ''}</button></td>`;
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openPurchaseModal('${item.id}', '${safeNameJs}')" class="text-amber-500 relative"><i class="fa-solid fa-cart-shopping text-lg"></i>${purCnt ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-amber-200">${purCnt}</span>` : ''}</button></td>`;
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openDesignModal('${item.id}', '${safeNameJs}')" class="text-teal-400 relative"><i class="fa-solid fa-pen-ruler text-lg"></i>${desCnt ? `<span class="absolute -top-1 -right-2 bg-teal-100 text-teal-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-teal-200">${desCnt}</span>` : ''}</button></td>`;
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openPjtScheduleModal('${item.id}', '${safeNameJs}')" class="text-fuchsia-400 relative"><i class="fa-regular fa-calendar-check text-lg"></i>${schCnt ? `<span class="absolute -top-1 -right-2 bg-fuchsia-100 text-fuchsia-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-fuchsia-200">${schCnt}</span>` : ''}</button></td>`;
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openDailyLogModal('${item.id}', '${safeNameJs}', ${parseFloat(item.progress)||0})" class="text-sky-400 relative"><i class="fa-solid fa-book text-lg"></i>${lCnt ? `<span class="absolute -top-1 -right-2 bg-sky-100 text-sky-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-sky-200">${lCnt}</span>` : ''}</button></td>`;
         
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()">
+            <button onclick="window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-rose-500 relative transition-transform hover:scale-110">
+                <i class="fa-solid fa-file-circle-exclamation text-lg"></i>
+                ${unresolvedNcrCnt > 0 ? `<span class="absolute -top-1 -right-2 bg-rose-100 text-rose-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-rose-200">${unresolvedNcrCnt}</span>` : ''}
+            </button>
+        </td>`;
+
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center text-sky-600">${item.estMd||0}</td>`;
         trHtml += `<td class="border border-slate-200 px-1 py-1 text-center font-bold" onclick="event.stopPropagation()"><button onclick="window.openMdLogModal('${item.id}', '${safeNameJs}', ${cMd})" class="text-purple-600 underline">${cMd}</button></td>`;
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center font-bold">${fMd.toFixed(1)}</td>`;
@@ -275,7 +287,7 @@ window.renderProjectStatusList = function() {
         
         let linksHtml = '';
         if(item.links && Array.isArray(item.links)) { 
-            linksHtml = item.links.map(lnk => `<a href="${getSafeString(lnk?.url)}" target="_blank" title="${getSafeString(lnk?.name)}" class="text-teal-500 hover:text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded transition-colors"><i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i></a>`).join(''); 
+            linksHtml = item.links.map(lnk => `<a href="${getSafeString(lnk?.url)}" target="_blank" title="${getSafeString(lnk?.name)}" class="text-teal-500 hover:text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded transition-colors"><i class="fa-solid fa-link text-[10px]"></i></a>`).join(''); 
         }
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><div class="flex items-center justify-center gap-1 flex-wrap"><button onclick="window.openLinkModal('${item.id}', '${safeNameJs}')" class="text-slate-400 hover:text-teal-500 transition-colors bg-slate-50 px-1.5 py-0.5 rounded shadow-sm border border-slate-200"><i class="fa-solid fa-link"></i></button>${linksHtml}</div></td>`;
         
@@ -285,7 +297,6 @@ window.renderProjectStatusList = function() {
     tbody.innerHTML = htmlStr;
 };
 
-// 💡 구글 드라이브 대용량 파일 XHR 업로드 & 진행률 UI 렌더링
 async function handleDriveUploadWithProgress(fileInput, projectName) {
     if(!window.googleAccessToken) {
         if(window.initGoogleAPI) window.initGoogleAPI();
@@ -367,7 +378,6 @@ async function handleDriveUploadWithProgress(fileInput, projectName) {
     });
 }
 
-// 🛒 구매 관리 모달 로직
 window.openPurchaseModal = function(projectId, title) { 
     document.getElementById('pur-req-id').value = projectId; document.getElementById('pur-project-title').innerText = title; 
     window.resetPurchaseForm(); document.getElementById('purchase-modal').classList.replace('hidden', 'flex'); 
@@ -402,7 +412,6 @@ window.savePurchaseItem = async function() {
 };
 window.deletePurchase = async function(id) { if(confirm("삭제하시겠습니까?")) await deleteDoc(doc(db, "project_purchases", id)); };
 
-// 📐 설계 관리 모달 로직
 window.openDesignModal = function(projectId, title) { 
     document.getElementById('des-req-id').value = projectId; document.getElementById('des-project-title').innerText = title; 
     window.resetDesignForm(); document.getElementById('design-modal').classList.replace('hidden', 'flex'); 
@@ -437,7 +446,6 @@ window.saveDesignItem = async function() {
 };
 window.deleteDesign = async function(id) { if(confirm("삭제하시겠습니까?")) await deleteDoc(doc(db, "project_designs", id)); };
 
-// 📅 일정(PJT일정표) 관리 모달 로직
 window.openPjtScheduleModal = function(projectId, title) { 
     document.getElementById('sch-req-id').value = projectId; document.getElementById('sch-project-title').innerText = title; 
     window.resetPjtScheduleForm(); document.getElementById('pjt-schedule-modal').classList.replace('hidden', 'flex'); 
@@ -1654,3 +1662,114 @@ document.addEventListener('click', function(e) {
         d.classList.add('hidden');
     }
 });
+
+// ==========================================
+// 💡 부적합(NCR) 구글 시트 연동 로직 (강력한 파싱 적용)
+// ==========================================
+window.loadNcrData = async function() {
+    const token = window.googleAccessToken || localStorage.getItem('axmsGoogleToken');
+    if (!token) {
+        if(window.showToast) window.showToast("구글 연동이 필요합니다. (요청서 탭 활용)", "warning");
+        return;
+    }
+
+    try {
+        const sheetId = '1ZYwSKvT4QXjFxgftunwdRHWzX4KXoelhZSVjauAJg8s';
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/RawData`;
+        
+        const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
+        if (!res.ok) throw new Error("시트 데이터를 불러올 수 없습니다.");
+        
+        const data = await res.json();
+        const rows = data.values;
+        if (!rows || rows.length < 2) return;
+        
+        const headers = rows[0];
+        
+        // 대소문자 무시, 공백/특수문자 무시하여 헤더 인덱스를 정확하게 찾아내는 함수
+        const getIdx = (keywords) => {
+            return headers.findIndex(h => {
+                if (!h) return false;
+                const normalized = String(h).toLowerCase().replace(/[\s\(\)\[\]_]/g, '');
+                return keywords.some(k => normalized.includes(k.toLowerCase().replace(/[\s\(\)\[\]_]/g, '')));
+            });
+        };
+        
+        const cPjt = getIdx(['project', 'pjt', '프로젝트']);
+        const cNcr = getIdx(['ncrno', 'ncr']);
+        const cDate = getIdx(['발생일', 'date']);
+        const cDraw = getIdx(['도면번호', '도면', 'drawing']);
+        const cPart = getIdx(['파트네임', 'partname', 'part']);
+        const cType = getIdx(['유형', 'type']);
+        const cDesc = getIdx(['내용', '부적합내용', 'content', 'desc']);
+        const cStat = getIdx(['진행', '현황', '상태', 'status']);
+        
+        window.ncrData = rows.slice(1).map(row => ({
+            pjtCode: cPjt !== -1 ? (row[cPjt] || '') : '',
+            ncrNo: cNcr !== -1 ? (row[cNcr] || '') : '',
+            date: cDate !== -1 ? (row[cDate] || '') : '',
+            drawingNo: cDraw !== -1 ? (row[cDraw] || '') : '',
+            partName: cPart !== -1 ? (row[cPart] || '') : '',
+            type: cType !== -1 ? (row[cType] || '') : '',
+            content: cDesc !== -1 ? (row[cDesc] || '') : '',
+            status: cStat !== -1 ? (row[cStat] || '') : ''
+        })).filter(n => n.pjtCode);
+        
+        window.renderProjectStatusList();
+        
+        const modal = document.getElementById('ncr-modal');
+        if (modal && !modal.classList.contains('hidden')) {
+            const pjtCode = document.getElementById('ncr-project-title').dataset.code;
+            if (pjtCode) window.renderNcrList(pjtCode);
+        }
+    } catch(e) {
+        console.error("NCR 로드 에러:", e);
+    }
+};
+
+window.openNcrModal = function(pjtCode, pjtName) {
+    const titleEl = document.getElementById('ncr-project-title');
+    if (titleEl) {
+        titleEl.innerText = `[${pjtCode}] ${pjtName}`;
+        titleEl.dataset.code = pjtCode;
+    }
+    document.getElementById('ncr-modal').classList.replace('hidden', 'flex');
+    window.renderNcrList(pjtCode);
+};
+
+window.closeNcrModal = function() {
+    document.getElementById('ncr-modal').classList.replace('flex', 'hidden');
+};
+
+window.renderNcrList = function(pjtCode) {
+    const tbody = document.getElementById('ncr-list-tbody');
+    if (!tbody) return;
+    
+    const list = (window.ncrData || []).filter(n => n.pjtCode === pjtCode);
+    let total = list.length, completed = list.filter(n => n.status.includes('완료') || n.status.includes('종결')).length;
+    
+    document.getElementById('ncr-total-cnt').innerText = total;
+    document.getElementById('ncr-pending-cnt').innerText = total - completed;
+    document.getElementById('ncr-comp-cnt').innerText = completed;
+    
+    if (total === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-8 text-slate-400 font-bold bg-white">등록된 부적합 내역이 없습니다.</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = list.map(n => {
+        const isComp = n.status.includes('완료') || n.status.includes('종결');
+        const textClass = isComp ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-700';
+        const badge = isComp ? `<span class="bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">완료</span>` : `<span class="bg-rose-50 text-rose-600 border border-rose-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">진행중</span>`;
+        
+        return `<tr class="hover:bg-slate-50 transition-colors bg-white border-b border-slate-100">
+            <td class="p-3 text-center font-bold text-slate-500 whitespace-nowrap">${n.ncrNo || '-'}</td>
+            <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.date || '-'}</td>
+            <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.drawingNo || '-'}</td>
+            <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.partName || '-'}</td>
+            <td class="p-3 text-center whitespace-nowrap"><span class="bg-slate-100 px-2 py-1 border border-slate-200 rounded font-bold">${n.type || '-'}</span></td>
+            <td class="p-3 font-medium ${textClass} break-all">${n.content || '-'}</td>
+            <td class="p-3 text-center whitespace-nowrap">${badge}</td>
+        </tr>`;
+    }).join('');
+};
