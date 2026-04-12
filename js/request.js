@@ -8,7 +8,21 @@ let unsubscribeEmails = null;
 
 window.currentReqEmails = []; 
 
-// 💡 안전한 날짜 파싱 유틸 (리스트 렌더링 & 코멘트 에러 방지용 핵심 함수)
+// 💡 안전한 데이터 추출 도우미 함수 (TypeError 원천 차단)
+const getVal = (id) => {
+    const el = document.getElementById(id);
+    return el && el.value ? el.value.trim() : '';
+};
+const getNum = (id) => {
+    const el = document.getElementById(id);
+    return el && el.value ? (parseFloat(el.value) || 0) : 0;
+};
+const setVal = (id, val) => {
+    const el = document.getElementById(id);
+    if(el) el.value = val;
+};
+
+// 💡 안전한 날짜 파싱 유틸
 window.reqGetSafeMillis = function(val) {
     try { 
         if (!val) return 0; 
@@ -19,7 +33,9 @@ window.reqGetSafeMillis = function(val) {
     } catch(e) { return 0; }
 };
 
+// ==========================================
 // 💡 검색 및 필터링 상태 변수
+// ==========================================
 window.currentReqStatusFilter = 'all';
 window.currentReqYearFilter = '';
 window.currentReqMonthFilter = '';
@@ -51,9 +67,9 @@ window.resetReqFilters = function() {
     window.currentReqMonthFilter = '';
     window.currentReqSearch = '';
     
-    if(document.getElementById('filter-req-year')) document.getElementById('filter-req-year').value = '';
-    if(document.getElementById('filter-req-month')) document.getElementById('filter-req-month').value = '';
-    if(document.getElementById('filter-req-search')) document.getElementById('filter-req-search').value = '';
+    setVal('filter-req-year', '');
+    setVal('filter-req-month', '');
+    setVal('filter-req-search', '');
     
     window.renderRequestList();
 };
@@ -77,17 +93,20 @@ window.handleFileSelect = function(files) {
         const fileInput = document.getElementById('req-file');
         const dataTransfer = new DataTransfer();
         dataTransfer.items.add(files[0]);
-        fileInput.files = dataTransfer.files;
+        if(fileInput) fileInput.files = dataTransfer.files;
         
-        document.getElementById('req-file-name-text').innerText = files[0].name;
-        document.getElementById('req-file-name').classList.remove('hidden');
+        const nameText = document.getElementById('req-file-name-text');
+        const nameWrap = document.getElementById('req-file-name');
+        if(nameText) nameText.innerText = files[0].name;
+        if(nameWrap) nameWrap.classList.remove('hidden');
     }
 };
 
 window.clearSelectedFile = function(e) {
     if(e) e.stopPropagation();
-    document.getElementById('req-file').value = '';
-    document.getElementById('req-file-name').classList.add('hidden');
+    setVal('req-file', '');
+    const nameWrap = document.getElementById('req-file-name');
+    if(nameWrap) nameWrap.classList.add('hidden');
 };
 
 window.initGoogleAPI = function() {
@@ -98,6 +117,8 @@ window.initGoogleAPI = function() {
     
     const storedToken = localStorage.getItem('axmsGoogleToken');
     const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiry');
+    const authSection = document.getElementById('google-auth-section');
+    const authStatus = document.getElementById('google-auth-status');
     
     if (storedToken && storedExpiry && Date.now() < parseInt(storedExpiry)) {
         window.googleAccessToken = storedToken;
@@ -108,17 +129,11 @@ window.initGoogleAPI = function() {
                 gapi.client.load('gmail', 'v1');
             });
         });
-        if(document.getElementById('google-auth-section')) document.getElementById('google-auth-section').classList.add('hidden');
-        if(document.getElementById('google-auth-status')) {
-            document.getElementById('google-auth-status').classList.remove('hidden');
-            document.getElementById('google-auth-status').classList.add('flex');
-        }
+        if(authSection) authSection.classList.add('hidden');
+        if(authStatus) { authStatus.classList.remove('hidden'); authStatus.classList.add('flex'); }
     } else {
-        if(document.getElementById('google-auth-section')) document.getElementById('google-auth-section').classList.remove('hidden');
-        if(document.getElementById('google-auth-status')) {
-            document.getElementById('google-auth-status').classList.add('hidden');
-            document.getElementById('google-auth-status').classList.remove('flex');
-        }
+        if(authSection) authSection.classList.remove('hidden');
+        if(authStatus) { authStatus.classList.add('hidden'); authStatus.classList.remove('flex'); }
     }
     
     window.tokenClient = google.accounts.oauth2.initTokenClient({
@@ -130,15 +145,11 @@ window.initGoogleAPI = function() {
                 return;
             }
             window.googleAccessToken = response.access_token;
-            
             localStorage.setItem('axmsGoogleToken', response.access_token);
             localStorage.setItem('axmsGoogleTokenExpiry', Date.now() + 3500 * 1000);
 
-            if(document.getElementById('google-auth-section')) document.getElementById('google-auth-section').classList.add('hidden');
-            if(document.getElementById('google-auth-status')) {
-                document.getElementById('google-auth-status').classList.remove('hidden');
-                document.getElementById('google-auth-status').classList.add('flex');
-            }
+            if(authSection) authSection.classList.add('hidden');
+            if(authStatus) { authStatus.classList.remove('hidden'); authStatus.classList.add('flex'); }
             window.showToast("구글 드라이브 연동이 완료되었습니다.");
             
             gapi.load('client', () => {
@@ -152,18 +163,12 @@ window.initGoogleAPI = function() {
 };
 
 window.authenticateGoogle = function() {
-    if (!window.tokenClient) {
-        window.showToast("구글 API를 불러오는 중입니다. 잠시 후 다시 시도해주세요.", "warning");
-        return;
-    }
-    if (!window.googleAccessToken) {
-        window.tokenClient.requestAccessToken({prompt: 'consent'});
-    }
+    if (!window.tokenClient) return window.showToast("구글 API를 불러오는 중입니다. 잠시 후 다시 시도해주세요.", "warning");
+    if (!window.googleAccessToken) window.tokenClient.requestAccessToken({prompt: 'consent'});
 };
 
 window.uploadFileToDrive = async function(file, folderId) {
     if (!window.googleAccessToken) throw new Error("구글 인증이 필요합니다.");
-    
     const metadata = { name: file.name, parents: [folderId] };
     const form = new FormData();
     form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
@@ -242,23 +247,20 @@ window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
 };
 
 // ==========================================
-// 💡 수신 담당자 설정 관리 (초성 검색)
+// 💡 수신 담당자 설정 관리
 // ==========================================
 window.openEmailSettingsModal = function() {
-    if(document.getElementById('new-req-email-user')) document.getElementById('new-req-email-user').value = '';
-    if(document.getElementById('req-user-autocomplete')) document.getElementById('req-user-autocomplete').classList.add('hidden');
+    setVal('new-req-email-user', '');
+    const ac = document.getElementById('req-user-autocomplete');
+    if(ac) ac.classList.add('hidden');
     window.renderReqEmailList();
-    if(document.getElementById('req-email-setting-modal')) {
-        document.getElementById('req-email-setting-modal').classList.remove('hidden');
-        document.getElementById('req-email-setting-modal').classList.add('flex');
-    }
+    const modal = document.getElementById('req-email-setting-modal');
+    if(modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
 };
 
 window.closeEmailSettingsModal = function() {
-    if(document.getElementById('req-email-setting-modal')) {
-        document.getElementById('req-email-setting-modal').classList.add('hidden');
-        document.getElementById('req-email-setting-modal').classList.remove('flex');
-    }
+    const modal = document.getElementById('req-email-setting-modal');
+    if(modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
 };
 
 window.renderReqEmailList = function() {
@@ -281,11 +283,7 @@ window.showReqUserAutocomplete = function(inputEl) {
     const dropdown = document.getElementById('req-user-autocomplete');
     if(!dropdown) return;
     
-    if(val.length < 1) { 
-        dropdown.classList.add('hidden'); 
-        return; 
-    }
-
+    if(val.length < 1) { dropdown.classList.add('hidden'); return; }
     const matches = (window.allSystemUsers || []).filter(u => window.matchString(val, u.name));
 
     if(matches.length > 0) {
@@ -293,18 +291,16 @@ window.showReqUserAutocomplete = function(inputEl) {
         dropdown.innerHTML = matches.map(m => `
             <li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-slate-700 font-bold text-xs border-b border-slate-50 last:border-0 truncate transition-colors flex justify-between items-center" 
                 onmousedown="window.addReqEmailSelected('${m.email}')">
-                <span>${m.name}</span>
-                <span class="text-[10px] text-slate-400">${m.email}</span>
+                <span>${m.name}</span><span class="text-[10px] text-slate-400">${m.email}</span>
             </li>
         `).join('');
-    } else {
-        dropdown.classList.add('hidden');
-    }
+    } else { dropdown.classList.add('hidden'); }
 };
 
 window.addReqEmailSelected = async function(email) {
-    if(document.getElementById('new-req-email-user')) document.getElementById('new-req-email-user').value = '';
-    if(document.getElementById('req-user-autocomplete')) document.getElementById('req-user-autocomplete').classList.add('hidden');
+    setVal('new-req-email-user', '');
+    const ac = document.getElementById('req-user-autocomplete');
+    if(ac) ac.classList.add('hidden');
     
     if(!email) return;
     if(window.currentReqEmails.includes(email)) return window.showToast("이미 등록된 담당자입니다.", "warning");
@@ -328,22 +324,22 @@ window.removeReqEmail = async function(idx) {
 
 
 // ==========================================
-// 💡 폼 데이터 추출 헬퍼 
+// 💡 폼 데이터 추출 함수 (에러 원천 차단)
 // ==========================================
 window.getReqFormData = function() {
     let reqTitle = '', pjtName = '', reqValid = false;
 
     if (window.currentAppId === 'collab') {
-        reqTitle = document.getElementById('req-title')?.value.trim() || '';
-        pjtName = document.getElementById('req-pjt-name')?.value.trim() || '';
-        const startDate = document.getElementById('req-start-date')?.value || '';
-        const endDate = document.getElementById('req-end-date')?.value || '';
-        const content = document.getElementById('req-content')?.value.trim() || '';
+        reqTitle = getVal('req-title');
+        pjtName = getVal('req-pjt-name');
+        const startDate = getVal('req-start-date');
+        const endDate = getVal('req-end-date');
+        const content = getVal('req-content');
         if(reqTitle && pjtName && startDate && endDate && content) reqValid = true;
     } else if (window.currentAppId === 'purchase') {
-        reqTitle = document.getElementById('req-pur-title')?.value.trim() || '';
-        pjtName = document.getElementById('req-pur-pjt-name')?.value.trim() || '';
-        const shipDate = document.getElementById('req-pur-ship-date')?.value || '';
+        reqTitle = getVal('req-pur-title');
+        pjtName = getVal('req-pur-pjt-name');
+        const shipDate = getVal('req-pur-ship-date');
         if(reqTitle && pjtName && shipDate) reqValid = true;
     } else {
         reqValid = true;
@@ -364,71 +360,49 @@ window.getReqFormData = function() {
         data.reqTitle = reqTitle;
         data.title = reqTitle;
         data.pjtName = pjtName;
-        data.pjtCode = document.getElementById('req-pjt-code') ? document.getElementById('req-pjt-code').value.trim() : '';
-        data.company = document.getElementById('req-company') ? document.getElementById('req-company').value.trim() : '';
-        data.location = document.getElementById('req-location') ? document.getElementById('req-location').value.trim() : '';
-        data.startDate = document.getElementById('req-start-date') ? document.getElementById('req-start-date').value : '';
-        data.endDate = document.getElementById('req-end-date') ? document.getElementById('req-end-date').value : '';
-        data.estMd = document.getElementById('req-est-md') ? (parseFloat(document.getElementById('req-est-md').value) || 0) : 0;
+        data.pjtCode = getVal('req-pjt-code');
+        data.company = getVal('req-company');
+        data.location = getVal('req-location');
+        data.startDate = getVal('req-start-date');
+        data.endDate = getVal('req-end-date');
+        data.estMd = getNum('req-est-md');
         
         const catEl = document.querySelector('input[name="req-category"]:checked');
         data.category = catEl ? catEl.value : '';
-        data.content = document.getElementById('req-content') ? document.getElementById('req-content').value.trim() : '';
+        data.content = getVal('req-content');
     } else if (window.currentAppId === 'purchase') {
         data.reqTitle = reqTitle;
         data.title = reqTitle;
         data.pjtName = pjtName;
-        data.pjtCode = document.getElementById('req-pur-pjt-code') ? document.getElementById('req-pur-pjt-code').value.trim() : '';
-        data.shipDate = document.getElementById('req-pur-ship-date') ? document.getElementById('req-pur-ship-date').value : '';
+        data.pjtCode = getVal('req-pur-pjt-code');
+        data.shipDate = getVal('req-pur-ship-date');
         
         data.spec = {
-            app: document.getElementById('pur-spec-app') ? document.getElementById('pur-spec-app').value : '',
-            appEtc: document.getElementById('pur-spec-app-etc') ? document.getElementById('pur-spec-app-etc').value : '',
-            qty: document.getElementById('pur-spec-qty') ? document.getElementById('pur-spec-qty').value : '1',
-            unit: document.getElementById('pur-spec-unit') ? document.getElementById('pur-spec-unit').value : 'EA',
-            lasWave: document.getElementById('pur-spec-las-wave') ? document.getElementById('pur-spec-las-wave').value : '',
-            lasWaveEtc: document.getElementById('pur-spec-las-wave-etc') ? document.getElementById('pur-spec-las-wave-etc').value : '',
-            lasPower: document.getElementById('pur-spec-las-power') ? document.getElementById('pur-spec-las-power').value : '',
-            lasPowerEtc: document.getElementById('pur-spec-las-power-etc') ? document.getElementById('pur-spec-las-power-etc').value : '',
-            lasMaker: document.getElementById('pur-spec-las-maker') ? document.getElementById('pur-spec-las-maker').value : '',
-            lasMakerEtc: document.getElementById('pur-spec-las-maker-etc') ? document.getElementById('pur-spec-las-maker-etc').value : '',
-            lasType: document.getElementById('pur-spec-las-type') ? document.getElementById('pur-spec-las-type').value : '',
-            lasTypeEtc: document.getElementById('pur-spec-las-type-etc') ? document.getElementById('pur-spec-las-type-etc').value : '',
-            lasCh: document.getElementById('pur-spec-las-ch') ? document.getElementById('pur-spec-las-ch').value : '',
-            lasChEtc: document.getElementById('pur-spec-las-ch-etc') ? document.getElementById('pur-spec-las-ch-etc').value : '',
-            lasLen: document.getElementById('pur-spec-las-len') ? document.getElementById('pur-spec-las-len').value : '',
-            lasLenEtc: document.getElementById('pur-spec-las-len-etc') ? document.getElementById('pur-spec-las-len-etc').value : '',
-            lasCore: document.getElementById('pur-spec-las-core') ? document.getElementById('pur-spec-las-core').value : '',
-            lasCoreEtc: document.getElementById('pur-spec-las-core-etc') ? document.getElementById('pur-spec-las-core-etc').value : '',
-            lasCool: document.getElementById('pur-spec-las-cool') ? document.getElementById('pur-spec-las-cool').value : '',
-            lasCoolEtc: document.getElementById('pur-spec-las-cool-etc') ? document.getElementById('pur-spec-las-cool-etc').value : '',
-            optType: document.getElementById('pur-spec-opt-type') ? document.getElementById('pur-spec-opt-type').value : '',
-            optTypeEtc: document.getElementById('pur-spec-opt-type-etc') ? document.getElementById('pur-spec-opt-type-etc').value : '',
-            optMnt: document.getElementById('pur-spec-opt-mnt') ? document.getElementById('pur-spec-opt-mnt').value : '',
-            optMntEtc: document.getElementById('pur-spec-opt-mnt-etc') ? document.getElementById('pur-spec-opt-mnt-etc').value : '',
-            optCol: document.getElementById('pur-spec-opt-col') ? document.getElementById('pur-spec-opt-col').value : '',
-            optColEtc: document.getElementById('pur-spec-opt-col-etc') ? document.getElementById('pur-spec-opt-col-etc').value : '',
-            optSplit: document.getElementById('pur-spec-opt-split') ? document.getElementById('pur-spec-opt-split').value : '',
-            optSplitEtc: document.getElementById('pur-spec-opt-split-etc') ? document.getElementById('pur-spec-opt-split-etc').value : '',
-            optLens: document.getElementById('pur-spec-opt-lens') ? document.getElementById('pur-spec-opt-lens').value : '',
-            optLensEtc: document.getElementById('pur-spec-opt-lens-etc') ? document.getElementById('pur-spec-opt-lens-etc').value : '',
-            optScan: document.getElementById('pur-spec-opt-scan') ? document.getElementById('pur-spec-opt-scan').value : '',
-            optScanEtc: document.getElementById('pur-spec-opt-scan-etc') ? document.getElementById('pur-spec-opt-scan-etc').value : '',
-            optCam: document.getElementById('pur-spec-opt-cam') ? document.getElementById('pur-spec-opt-cam').value : '',
-            optCamEtc: document.getElementById('pur-spec-opt-cam-etc') ? document.getElementById('pur-spec-opt-cam-etc').value : '',
-            optLit: document.getElementById('pur-spec-opt-lit') ? document.getElementById('pur-spec-opt-lit').value : '',
-            optLitEtc: document.getElementById('pur-spec-opt-lit-etc') ? document.getElementById('pur-spec-opt-lit-etc').value : '',
+            app: getVal('pur-spec-app'), appEtc: getVal('pur-spec-app-etc'),
+            qty: getVal('pur-spec-qty') || '1', unit: getVal('pur-spec-unit') || 'EA',
+            lasWave: getVal('pur-spec-las-wave'), lasWaveEtc: getVal('pur-spec-las-wave-etc'),
+            lasPower: getVal('pur-spec-las-power'), lasPowerEtc: getVal('pur-spec-las-power-etc'),
+            lasMaker: getVal('pur-spec-las-maker'), lasMakerEtc: getVal('pur-spec-las-maker-etc'),
+            lasType: getVal('pur-spec-las-type'), lasTypeEtc: getVal('pur-spec-las-type-etc'),
+            lasCh: getVal('pur-spec-las-ch'), lasChEtc: getVal('pur-spec-las-ch-etc'),
+            lasLen: getVal('pur-spec-las-len'), lasLenEtc: getVal('pur-spec-las-len-etc'),
+            lasCore: getVal('pur-spec-las-core'), lasCoreEtc: getVal('pur-spec-las-core-etc'),
+            lasCool: getVal('pur-spec-las-cool'), lasCoolEtc: getVal('pur-spec-las-cool-etc'),
+            optType: getVal('pur-spec-opt-type'), optTypeEtc: getVal('pur-spec-opt-type-etc'),
+            optMnt: getVal('pur-spec-opt-mnt'), optMntEtc: getVal('pur-spec-opt-mnt-etc'),
+            optCol: getVal('pur-spec-opt-col'), optColEtc: getVal('pur-spec-opt-col-etc'),
+            optSplit: getVal('pur-spec-opt-split'), optSplitEtc: getVal('pur-spec-opt-split-etc'),
+            optLens: getVal('pur-spec-opt-lens'), optLensEtc: getVal('pur-spec-opt-lens-etc'),
+            optScan: getVal('pur-spec-opt-scan'), optScanEtc: getVal('pur-spec-opt-scan-etc'),
+            optCam: getVal('pur-spec-opt-cam'), optCamEtc: getVal('pur-spec-opt-cam-etc'),
+            optLit: getVal('pur-spec-opt-lit'), optLitEtc: getVal('pur-spec-opt-lit-etc'),
             optOpts: Array.from(document.querySelectorAll('input[name="pur_spec_opt_opts"]:checked')).map(cb => cb.value),
-            optOptsEtc: document.getElementById('pur-spec-opt-opts-etc') ? document.getElementById('pur-spec-opt-opts-etc').value : '',
-            accPc: document.getElementById('pur-spec-acc-pc') ? document.getElementById('pur-spec-acc-pc').value : '',
-            accPcEtc: document.getElementById('pur-spec-acc-pc-etc') ? document.getElementById('pur-spec-acc-pc-etc').value : '',
-            accCtrl: document.getElementById('pur-spec-acc-ctrl') ? document.getElementById('pur-spec-acc-ctrl').value : '',
-            accCtrlEtc: document.getElementById('pur-spec-acc-ctrl-etc') ? document.getElementById('pur-spec-acc-ctrl-etc').value : '',
-            accAir: document.getElementById('pur-spec-acc-air') ? document.getElementById('pur-spec-acc-air').value : '',
-            accAirEtc: document.getElementById('pur-spec-acc-air-etc') ? document.getElementById('pur-spec-acc-air-etc').value : '',
-            accRtc: document.getElementById('pur-spec-acc-rtc') ? document.getElementById('pur-spec-acc-rtc').value : '',
-            accRtcEtc: document.getElementById('pur-spec-acc-rtc-etc') ? document.getElementById('pur-spec-acc-rtc-etc').value : '',
-            etcMemo: document.getElementById('pur-spec-etc-memo') ? document.getElementById('pur-spec-etc-memo').value : ''
+            optOptsEtc: getVal('pur-spec-opt-opts-etc'),
+            accPc: getVal('pur-spec-acc-pc'), accPcEtc: getVal('pur-spec-acc-pc-etc'),
+            accCtrl: getVal('pur-spec-acc-ctrl'), accCtrlEtc: getVal('pur-spec-acc-ctrl-etc'),
+            accAir: getVal('pur-spec-acc-air'), accAirEtc: getVal('pur-spec-acc-air-etc'),
+            accRtc: getVal('pur-spec-acc-rtc'), accRtcEtc: getVal('pur-spec-acc-rtc-etc'),
+            etcMemo: getVal('pur-spec-etc-memo')
         };
         data.content = `[시스템 등록 사양서 확인 요망]\n요청일: ${data.shipDate}\n기타메모: ${data.spec.etcMemo}`;
     }
@@ -436,14 +410,13 @@ window.getReqFormData = function() {
     return { data, isValid: reqValid, currentReq };
 };
 
-
 // ==========================================
-// 💡 6. 폼 UI 제어 및 권한 잠금 기능 (핵심)
+// 💡 폼 UI 제어 (권한 잠금 포함)
 // ==========================================
 window.openWriteModal = function(editId = null) { 
     window.editingReqId = editId; 
     
-    // 💡 모달창 열 때 일단 모두 '활성화' 상태로 초기화 (잠금 해제)
+    // 💡 권한 잠금 해제 (초기화)
     document.querySelectorAll('#collab-form-fields input, #collab-form-fields select, #collab-form-fields textarea').forEach(el => el.disabled = false);
     document.querySelectorAll('#purchase-form-fields input, #purchase-form-fields select, #purchase-form-fields textarea').forEach(el => el.disabled = false);
     
@@ -456,30 +429,16 @@ window.openWriteModal = function(editId = null) {
     const btnDraft = document.querySelector('button[onclick="window.saveDraftRequest()"]');
     if(btnDraft) btnDraft.classList.remove('hidden');
 
-    // 콜랩용 초기화
-    if(document.getElementById('req-pjt-code')) document.getElementById('req-pjt-code').value = ''; 
-    if(document.getElementById('req-pjt-name')) document.getElementById('req-pjt-name').value = ''; 
-    if(document.getElementById('req-title')) document.getElementById('req-title').value = ''; 
-    if(document.getElementById('req-company')) document.getElementById('req-company').value = ''; 
-    if(document.getElementById('req-location')) document.getElementById('req-location').value = ''; 
-    if(document.getElementById('req-start-date')) document.getElementById('req-start-date').value = ''; 
-    if(document.getElementById('req-end-date')) document.getElementById('req-end-date').value = ''; 
-    if(document.getElementById('req-est-md')) document.getElementById('req-est-md').value = ''; 
-    if(document.getElementById('req-content')) document.getElementById('req-content').value = ''; 
+    // 입력 필드 초기화
+    ['req-pjt-code','req-pjt-name','req-title','req-company','req-location','req-start-date','req-end-date','req-est-md','req-content',
+     'req-pur-title','req-pur-pjt-code','req-pur-pjt-name','req-pur-ship-date','pur-spec-etc-memo'].forEach(id => setVal(id, ''));
 
-    // 구매의뢰용(Spec) 초기화
-    if(document.getElementById('req-pur-title')) document.getElementById('req-pur-title').value = '';
-    if(document.getElementById('req-pur-pjt-code')) document.getElementById('req-pur-pjt-code').value = '';
-    if(document.getElementById('req-pur-pjt-name')) document.getElementById('req-pur-pjt-name').value = '';
-    if(document.getElementById('req-pur-ship-date')) document.getElementById('req-pur-ship-date').value = '';
-    if(document.getElementById('pur-spec-etc-memo')) document.getElementById('pur-spec-etc-memo').value = '';
-    
     ['app','qty','unit','las-wave','las-power','las-maker','las-type','las-ch','las-len','las-core','las-cool','opt-type','opt-mnt','opt-col','opt-split','opt-lens','opt-scan','opt-cam','opt-lit','acc-pc','acc-ctrl','acc-air','acc-rtc'].forEach(k => {
-        if(document.getElementById(`pur-spec-${k}`)) document.getElementById(`pur-spec-${k}`).value = (k==='qty') ? '1' : '';
-        if(document.getElementById(`pur-spec-${k}-etc`)) document.getElementById(`pur-spec-${k}-etc`).value = '';
+        setVal(`pur-spec-${k}`, (k==='qty') ? '1' : '');
+        setVal(`pur-spec-${k}-etc`, '');
     });
     document.querySelectorAll('input[name="pur_spec_opt_opts"]').forEach(cb => cb.checked = false);
-    if(document.getElementById('pur-spec-opt-opts-etc')) document.getElementById('pur-spec-opt-opts-etc').value = '';
+    setVal('pur-spec-opt-opts-etc', '');
 
     window.clearSelectedFile();
     
@@ -509,33 +468,32 @@ window.openWriteModal = function(editId = null) {
     if (editId) {
         const req = window.currentRequestList.find(r => r.id === editId);
         if (req) {
-            // 콜랩 셋
-            if(document.getElementById('req-pjt-code')) document.getElementById('req-pjt-code').value = req.pjtCode || ''; 
-            if(document.getElementById('req-pjt-name')) document.getElementById('req-pjt-name').value = req.pjtName || ''; 
-            if(document.getElementById('req-title')) document.getElementById('req-title').value = req.reqTitle || req.title || ''; 
-            if(document.getElementById('req-company')) document.getElementById('req-company').value = req.company || ''; 
-            if(document.getElementById('req-location')) document.getElementById('req-location').value = req.location || ''; 
-            if(document.getElementById('req-start-date')) document.getElementById('req-start-date').value = req.startDate || ''; 
-            if(document.getElementById('req-end-date')) document.getElementById('req-end-date').value = req.endDate || ''; 
-            if(document.getElementById('req-est-md')) document.getElementById('req-est-md').value = req.estMd || ''; 
-            if(document.getElementById('req-content')) document.getElementById('req-content').value = req.content || ''; 
+            setVal('req-pjt-code', req.pjtCode || '');
+            setVal('req-pjt-name', req.pjtName || '');
+            setVal('req-title', req.reqTitle || req.title || '');
+            setVal('req-company', req.company || '');
+            setVal('req-location', req.location || '');
+            setVal('req-start-date', req.startDate || '');
+            setVal('req-end-date', req.endDate || '');
+            setVal('req-est-md', req.estMd || '');
+            setVal('req-content', req.content || '');
+            
             if(req.category) {
                 const rEl = document.querySelector(`input[name="req-category"][value="${req.category}"]`);
                 if(rEl) rEl.checked = true;
             }
 
-            // 구매 셋 (Spec 복원 로직)
-            if(document.getElementById('req-pur-title')) document.getElementById('req-pur-title').value = req.reqTitle || req.title || '';
-            if(document.getElementById('req-pur-pjt-code')) document.getElementById('req-pur-pjt-code').value = req.pjtCode || '';
-            if(document.getElementById('req-pur-pjt-name')) document.getElementById('req-pur-pjt-name').value = req.pjtName || '';
-            if(document.getElementById('req-pur-ship-date')) document.getElementById('req-pur-ship-date').value = req.shipDate || '';
+            setVal('req-pur-title', req.reqTitle || req.title || '');
+            setVal('req-pur-pjt-code', req.pjtCode || '');
+            setVal('req-pur-pjt-name', req.pjtName || '');
+            setVal('req-pur-ship-date', req.shipDate || '');
             
             if (req.spec) {
                 const s = req.spec;
                 ['app','qty','unit','lasWave','lasPower','lasMaker','lasType','lasCh','lasLen','lasCore','lasCool','optType','optMnt','optCol','optSplit','optLens','optScan','optCam','optLit','accPc','accCtrl','accAir','accRtc'].forEach(k => {
                     const htmlKey = k.replace(/([A-Z])/g, "-$1").toLowerCase();
-                    if(document.getElementById(`pur-spec-${htmlKey}`)) document.getElementById(`pur-spec-${htmlKey}`).value = s[k] || '';
-                    if(document.getElementById(`pur-spec-${htmlKey}-etc`)) document.getElementById(`pur-spec-${htmlKey}-etc`).value = s[`${k}Etc`] || '';
+                    setVal(`pur-spec-${htmlKey}`, s[k] || '');
+                    setVal(`pur-spec-${htmlKey}-etc`, s[`${k}Etc`] || '');
                 });
 
                 if(s.optOpts && Array.isArray(s.optOpts)) {
@@ -544,8 +502,8 @@ window.openWriteModal = function(editId = null) {
                         if(cb) cb.checked = true;
                     });
                 }
-                if(document.getElementById('pur-spec-opt-opts-etc')) document.getElementById('pur-spec-opt-opts-etc').value = s.optOptsEtc || '';
-                if(document.getElementById('pur-spec-etc-memo')) document.getElementById('pur-spec-etc-memo').value = s.etcMemo || '';
+                setVal('pur-spec-opt-opts-etc', s.optOptsEtc || '');
+                setVal('pur-spec-etc-memo', s.etcMemo || '');
             }
 
             if(req.fileUrl && document.getElementById('req-file-link-wrap')) {
@@ -575,20 +533,18 @@ window.openWriteModal = function(editId = null) {
                 }
             }
 
-            // 💡 [핵심 보안 로직] 접수(진행중) 또는 완료 상태일 때, '관리자'가 아니면 폼 수정 및 저장 불가
+            // 💡 [핵심 보안 로직] 접수 또는 완료 상태일 때, 관리자가 아니면 폼 잠금
             const isAccepted = (req.status === 'progress' || req.status === 'completed');
             const isAdmin = window.userProfile && window.userProfile.role === 'admin';
 
             if (isAccepted && !isAdmin) {
                 document.querySelectorAll('#collab-form-fields input, #collab-form-fields select, #collab-form-fields textarea').forEach(el => el.disabled = true);
                 document.querySelectorAll('#purchase-form-fields input, #purchase-form-fields select, #purchase-form-fields textarea').forEach(el => el.disabled = true);
-
                 if(dropzone) dropzone.style.pointerEvents = 'none';
                 if(btnSave) btnSave.classList.add('hidden');
                 if(btnDraft) btnDraft.classList.add('hidden');
             }
 
-            // 관리자 전용 액션 버튼 제어
             if (isAdmin) {
                 const adminMenu = document.getElementById('admin-actions');
                 const btnAccept = document.getElementById('btn-admin-accept');
@@ -617,23 +573,17 @@ window.openWriteModal = function(editId = null) {
     }
 
     const m = document.getElementById('write-modal');
-    if(m) {
-        m.classList.remove('hidden'); 
-        m.classList.add('flex'); 
-    }
+    if(m) { m.classList.remove('hidden'); m.classList.add('flex'); }
     window.initGoogleAPI();
 };
 
 window.closeWriteModal = function() { 
     const m = document.getElementById('write-modal');
-    if(m) {
-        m.classList.add('hidden'); 
-        m.classList.remove('flex'); 
-    }
+    if(m) { m.classList.add('hidden'); m.classList.remove('flex'); }
 };
 
 // ==========================================
-// 💡 7. 모달 프롬프트 및 액션 (Save, Accept, Complete)
+// 💡 모달 프롬프트 및 액션 
 // ==========================================
 window.saveDraftRequest = async function() {
     const { data, currentReq } = window.getReqFormData();
@@ -660,28 +610,19 @@ window.saveDraftRequest = async function() {
 
         window.showToast("임시 저장되었습니다."); 
         window.closeWriteModal(); 
-    } catch(e) { 
-        console.error(e);
-        window.showToast("오류 발생: " + e.message, "error"); 
-    }
+    } catch(e) { window.showToast("오류 발생: " + e.message, "error"); }
 };
 
 window.promptSaveRequest = function() {
     const { isValid } = window.getReqFormData();
-
     if(!isValid) return window.showToast("별표(*)가 있는 필수 항목을 모두 입력해주세요.", "error");
     if (!window.googleAccessToken) return window.showToast("파일 업로드 및 메일 발송을 위해 [구글 계정 연동]을 먼저 진행해주세요.", "warning");
     if (window.currentReqEmails.length === 0) return window.showToast("상단 [수신 담당자 설정]에서 메일을 받을 사람을 먼저 지정해주세요.", "warning");
     
-    if(document.getElementById('req-send-email-display')) {
-        document.getElementById('req-send-email-display').innerText = window.currentReqEmails.join(', ');
-    }
+    if(document.getElementById('req-send-email-display')) document.getElementById('req-send-email-display').innerText = window.currentReqEmails.join(', ');
     
     const sm = document.getElementById('req-send-modal');
-    if(sm) {
-        sm.classList.remove('hidden');
-        sm.classList.add('flex');
-    }
+    if(sm) { sm.classList.remove('hidden'); sm.classList.add('flex'); }
 };
 
 window.executeSaveRequest = async function() {
@@ -689,13 +630,9 @@ window.executeSaveRequest = async function() {
     if(sm) { sm.classList.add('hidden'); sm.classList.remove('flex'); }
     
     const btn = document.getElementById('btn-req-save');
-    if(btn) {
-        btn.disabled = true; 
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 전송 중...';
-    }
+    if(btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 전송 중...'; }
 
     let { data, currentReq } = window.getReqFormData();
-    
     if (data.status === 'draft') data.status = 'pending';
 
     const fileInput = document.getElementById('req-file');
@@ -714,13 +651,11 @@ window.executeSaveRequest = async function() {
         }
         data.fileUrl = fileUrl || (currentReq ? currentReq.fileUrl : null);
 
-        // 엑셀 자동생성 로직 (구매 의뢰서 전용)
         if (window.currentAppId === 'purchase' && typeof window.ExcelJS !== 'undefined') {
             window.showToast("구매 의뢰서 엑셀 양식을 생성 중입니다...");
             try {
                 const wb = new window.ExcelJS.Workbook();
                 const ws = wb.addWorksheet('모듈구매의뢰서');
-                
                 ws.columns = [ { width: 25 }, { width: 40 }, { width: 25 }, { width: 40 } ];
                 
                 ws.addRow(['요청자', data.authorName + ' (' + data.authorTeam + ')', '작성일', window.getLocalDateStr(new Date())]);
@@ -754,17 +689,11 @@ window.executeSaveRequest = async function() {
                 const excelFileId = await window.uploadFileToDrive(excelFile, '18SE2vn_OjZKWWOnthyrVA4fPoIcQP490'); 
                 excelFileUrl = `https://drive.google.com/file/d/${excelFileId}/view`;
                 data.excelFileUrl = excelFileUrl;
-            } catch(excelErr) {
-                console.error("Excel generation failed:", excelErr);
-            }
+            } catch(excelErr) { console.error(excelErr); }
         }
 
-        if(window.editingReqId) { 
-            await setDoc(doc(db,"requests",window.editingReqId), data, {merge:true}); 
-        } else { 
-            data.createdAt = Date.now(); 
-            await addDoc(collection(db,"requests"), data); 
-        } 
+        if(window.editingReqId) { await setDoc(doc(db,"requests",window.editingReqId), data, {merge:true}); 
+        } else { data.createdAt = Date.now(); await addDoc(collection(db,"requests"), data); } 
 
         if(recipientEmails) {
             window.showToast("지정된 수신자에게 메일을 발송합니다...");
@@ -773,14 +702,9 @@ window.executeSaveRequest = async function() {
 
         window.showToast("성공적으로 저장 및 메일 발송이 완료되었습니다."); 
         window.closeWriteModal(); 
-    } catch(e) { 
-        console.error(e);
-        window.showToast("오류 발생: " + e.message, "error"); 
+    } catch(e) { window.showToast("오류 발생: " + e.message, "error"); 
     } finally { 
-        if(btn) {
-            btn.disabled = false; 
-            btn.innerHTML = '<i class="fa-regular fa-paper-plane"></i> 저장 및 메일 발송'; 
-        }
+        if(btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-regular fa-paper-plane"></i> 저장 및 메일 발송'; }
     }
 };
 
@@ -799,30 +723,19 @@ window.promptAcceptRequest = function() {
     if(emailEl) emailEl.value = req ? (req.authorEmail || '') : '';
 
     const am = document.getElementById('req-accept-modal');
-    if(am) {
-        am.classList.remove('hidden');
-        am.classList.add('flex');
-    }
+    if(am) { am.classList.remove('hidden'); am.classList.add('flex'); }
 };
 
 window.executeAcceptRequest = async function() {
     const am = document.getElementById('req-accept-modal');
-    if(am) {
-        am.classList.add('hidden');
-        am.classList.remove('flex');
-    }
+    if(am) { am.classList.add('hidden'); am.classList.remove('flex'); }
 
     const req = window.currentRequestList.find(r => r.id === window.editingReqId);
     const managerName = document.getElementById('req-accept-manager')?.value || '';
     const sendEmail = document.getElementById('req-accept-email')?.value.trim() || '';
 
     try {
-        const payload = { 
-            status: 'progress', 
-            manager: managerName, 
-            acceptedAt: Date.now(),
-            updatedAt: Date.now() 
-        };
+        const payload = { status: 'progress', manager: managerName, acceptedAt: Date.now(), updatedAt: Date.now() };
         await setDoc(doc(db, "requests", window.editingReqId), payload, { merge: true });
         
         const updatedReq = Object.assign({}, req, payload); 
@@ -857,18 +770,12 @@ window.promptCompleteRequest = function() {
     if(emailEl) emailEl.value = req ? (req.authorEmail || '') : '';
 
     const cm = document.getElementById('req-complete-modal');
-    if(cm) {
-        cm.classList.remove('hidden');
-        cm.classList.add('flex');
-    }
+    if(cm) { cm.classList.remove('hidden'); cm.classList.add('flex'); }
 };
 
 window.executeCompleteRequest = async function() {
     const cm = document.getElementById('req-complete-modal');
-    if(cm) {
-        cm.classList.add('hidden');
-        cm.classList.remove('flex');
-    }
+    if(cm) { cm.classList.add('hidden'); cm.classList.remove('flex'); }
     const btn = document.getElementById('btn-req-complete-exec');
     if(btn) { btn.disabled = true; btn.innerHTML = '처리중...'; }
 
@@ -889,11 +796,7 @@ window.executeCompleteRequest = async function() {
             resultFileUrl = `https://drive.google.com/file/d/${fileId}/view`;
         }
 
-        const payload = { 
-            status: 'completed', 
-            completedAt: Date.now(),
-            updatedAt: Date.now() 
-        };
+        const payload = { status: 'completed', completedAt: Date.now(), updatedAt: Date.now() };
         if (resultFileUrl) payload.resultFileUrl = resultFileUrl;
 
         await setDoc(doc(db, "requests", window.editingReqId), payload, { merge: true });
@@ -906,9 +809,7 @@ window.executeCompleteRequest = async function() {
             window.showToast("작업이 완료 처리되었습니다.");
         }
         window.closeWriteModal();
-    } catch(e) { 
-        window.showToast("처리 실패", "error"); 
-    } finally {
+    } catch(e) { window.showToast("처리 실패", "error"); } finally {
         if(btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-flag-checkered mr-1"></i> 완료 처리 및 발송'; }
     }
 };
@@ -925,7 +826,7 @@ window.revertRequest = async function() {
 };
 
 // ==========================================
-// 💡 8. 데이터 로드 및 테이블 렌더링
+// 💡 데이터 로드 및 테이블 렌더링
 // ==========================================
 window.loadRequestsData = function(appId) { 
     if(unsubscribeRequests) unsubscribeRequests(); 
@@ -1112,7 +1013,7 @@ window.deleteRequest = async function(id) {
 };
 
 // ==========================================
-// 💡 9. 코멘트 모달 로직
+// 💡 코멘트 모달 로직
 // ==========================================
 window.openCommentModal = function(reqId, title) { 
     const cmtInput = document.getElementById('cmt-req-id');
