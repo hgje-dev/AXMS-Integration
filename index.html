@@ -244,7 +244,7 @@
     <aside id="sidebar" class="fixed top-0 left-0 h-full w-72 bg-white shadow-2xl z-[110] transform -translate-x-full sidebar-transition flex flex-col">
         
         <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-            <span class="text-indigo-600 font-black tracking-tighter text-xl">AXBIS</span>
+            <img src="./assets/엑스비스CI 슬로건_포지티브.png" alt="AXBIS" class="h-6 object-contain">
             <button onclick="window.toggleSidebar(false)" class="text-slate-400 hover:text-rose-500 p-1">
                 <i class="fa-solid fa-xmark text-xl"></i>
             </button>
@@ -253,6 +253,7 @@
         <div class="p-4 bg-indigo-50 border-b border-indigo-100 flex flex-col gap-1">
             <span class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Signed in as</span>
             <div class="font-black text-indigo-700 text-sm truncate" id="sidebar-user-name">User Name</div>
+            <div class="text-[11px] font-bold text-slate-600 truncate" id="sidebar-user-position">직책</div>
             <div class="text-xs text-slate-500 font-medium" id="sidebar-team-badge">Team</div>
         </div>
         
@@ -279,7 +280,7 @@
             <div class="border-t border-slate-100 my-3"></div>
             
             <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-3 mb-2">Request Forms</div>
-            <button onclick="window.openApp('collab', '협업 요청서')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 hover:text-blue-600 transition-colors text-left group">
+            <button onclick="window.openApp('collab', '협업/조립 요청서')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 hover:text-blue-600 transition-colors text-left group">
                 <div class="w-6 text-center text-slate-400 group-hover:text-blue-500"><i class="fa-regular fa-handshake"></i></div> 협업/조립 요청서
             </button>
             <button onclick="window.openApp('purchase', '모듈 구매 의뢰서')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 hover:text-emerald-600 transition-colors text-left group">
@@ -326,9 +327,11 @@
                         <i class="fa-solid fa-house"></i>
                     </button>
                     <div class="h-6 w-px bg-slate-200 hidden sm:block mx-1"></div>
-                    <span class="text-indigo-600 font-black tracking-tighter hidden sm:block">AXBIS</span>
+                    
+                    <img src="./assets/엑스비스CI 슬로건_포지티브.png" alt="AXBIS" class="h-5 sm:h-6 object-contain hidden sm:block">
+                    
                     <h1 class="text-lg font-black text-slate-800 tracking-tight flex items-center gap-3">
-                        <span id="nav-title" class="text-[13px] font-bold text-slate-500">통합 대시보드 홈</span>
+                        <span id="nav-title" class="text-[13px] font-bold text-slate-500 ml-2">통합 대시보드 홈</span>
                     </h1>
                 </div>
                 
@@ -363,15 +366,6 @@
 
     <ul id="mention-dropdown" class="hidden absolute z-[9999] bg-white border border-slate-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-48 custom-scrollbar"></ul>
 
-    <script type="module" src="./js/app.js?ver=1007"></script>
-    <script>
-        window.addEventListener('DOMContentLoaded', () => {
-            setTimeout(() => {
-                if(typeof window.checkLogin !== 'function') {
-                    alert("🚨 [치명적 에러] 자바스크립트 파일이 아예 로딩되지 못했습니다!\n\n키보드 F12를 눌러 [Console] 탭에 나오는 빨간색 에러 메시지를 확인해주세요.\n\n(참고: 깃허브 폴더명이 대소문자가 정확한지 확인해주세요!)");
-                }
-            }, 2000);
-        });
-    </script>
+    <script type="module" src="./js/app.js"></script>
 </body>
 </html>
