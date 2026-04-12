@@ -1019,7 +1019,6 @@ window.renderKanbanBoard = function() {
     }).join('');
 };
 
-// 10인 이상 환경을 고려한 팀 일정표 슬림형/스크롤 UI
 window.renderTeamKanbanBoard = function() {
     const board = document.getElementById('weekly-team-kanban-board');
     if (!board) return;
@@ -1053,7 +1052,6 @@ window.renderTeamKanbanBoard = function() {
         const headerColor = isWeekend ? 'text-rose-500' : 'text-slate-700';
         let emptyText = events.length === 0 ? '<div class="text-center p-4 text-[11px] font-bold text-slate-400">일정 없음</div>' : '';
 
-        // 최대 높이 고정 & 스크롤 부착
         return '<div class="bg-slate-50 rounded-2xl border border-slate-100 flex flex-col h-[350px]"><div class="text-center py-3 border-b border-slate-200 bg-white rounded-t-2xl"><h4 class="text-sm font-black ' + headerColor + '">' + day + '</h4></div><div class="bg-white rounded-b-2xl border-t-0 flex-1 p-1 flex flex-col overflow-y-auto custom-scrollbar">' + emptyText + eventsHtml + '</div></div>';
     }).join('');
 };
@@ -1108,7 +1106,6 @@ window.editSchedule = function(id) {
     }
 };
 
-// 일정 상세 보기 (팀 일정용 읽기전용)
 window.viewSchedule = function(id) {
     const s = window.allSchedules.find(function(x) { return x.id === id; });
     if (!s) return;
