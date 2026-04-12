@@ -6,29 +6,35 @@
                     <i class="fa-solid fa-calendar-check text-2xl"></i>
                 </div>
                 <div>
-                    <h2 class="text-xl font-black text-slate-800 flex items-center gap-2">주간 업무 일지</h2>
-                    <p class="text-xs text-slate-500 font-bold mt-1">보고 마감: <span class="text-indigo-500">매주 수요일</span></p>
+                    <h2 class="text-xl font-black text-slate-800 flex items-center gap-2">
+                        주간 업무 일지 
+                        <span id="top-my-submit-status" class="text-[10px] px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 font-bold ml-1 shadow-sm">확인중</span>
+                    </h2>
+                    <p class="text-xs text-slate-500 font-bold mt-1">보고 기간: <span id="weekly-period-text" class="text-slate-700"></span> <span class="mx-1 text-slate-300">|</span> 마감: <span id="weekly-deadline-text" class="text-rose-500"></span></p>
                 </div>
             </div>
 
             <div class="flex bg-slate-100 p-1.5 rounded-xl">
-                <button id="tab-team-btn" onclick="window.switchWeeklyTab('team')" class="px-6 py-2 text-sm font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-2">
-                    <i class="fa-solid fa-users"></i> 팀 업무 현황
+                <button id="tab-team-btn" onclick="window.switchWeeklyTab('team')" class="px-5 py-2 text-sm font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-users"></i> 업무 현황
                 </button>
-                <button id="tab-my-btn" onclick="window.switchWeeklyTab('my')" class="px-6 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-2">
-                    <i class="fa-regular fa-user"></i> 나의 일정표
+                <button id="tab-team-sch-btn" onclick="window.switchWeeklyTab('team-sch')" class="px-5 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-users-viewfinder"></i> 팀 일정
+                </button>
+                <button id="tab-my-btn" onclick="window.switchWeeklyTab('my')" class="px-5 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-regular fa-calendar-user"></i> 나의 일정
                 </button>
             </div>
 
             <div class="flex items-center gap-3">
-                <button onclick="window.openTeamModal()" class="text-[11px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-2 rounded-xl transition-colors border border-indigo-100 flex items-center gap-1.5">
+                <button onclick="window.openTeamModal()" class="text-[11px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-2 rounded-xl transition-colors border border-indigo-100 flex items-center gap-1.5 whitespace-nowrap hidden sm:flex">
                     <i class="fa-solid fa-users-gear"></i> 팀원 관리
                 </button>
                 
-                <div class="flex items-center bg-white border border-slate-200 rounded-xl p-1 shadow-sm relative">
+                <div class="flex items-center bg-white border border-slate-200 rounded-xl p-1 shadow-sm relative shrink-0">
                     <button onclick="window.changeWeeklyWeek(-1)" class="px-3 py-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-all z-10"><i class="fa-solid fa-chevron-left"></i></button>
                     
-                    <div class="relative flex items-center justify-center px-4 cursor-pointer z-0 group">
+                    <div class="relative flex items-center justify-center px-4 cursor-pointer z-0 group min-w-[140px]">
                         <span id="weekly-display-text" class="text-sm font-black text-slate-700 pointer-events-none group-hover:text-indigo-600 transition-colors">로딩중...</span>
                         <i class="fa-regular fa-calendar ml-2 text-slate-400 pointer-events-none group-hover:text-indigo-500 transition-colors"></i>
                         <input type="week" id="weekly-log-filter-week" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.handleWeekChange(this.value)">
@@ -37,8 +43,8 @@
                     <button onclick="window.changeWeeklyWeek(1)" class="px-3 py-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-all z-10"><i class="fa-solid fa-chevron-right"></i></button>
                 </div>
 
-                <button onclick="window.openWeeklyLogWriteModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
-                    <i class="fa-solid fa-plus"></i> 나의 일지 작성
+                <button onclick="window.openWeeklyLogWriteModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-plus"></i> 일지 작성
                 </button>
             </div>
         </div>
@@ -87,12 +93,12 @@
             </div>
         </div>
 
-        <div class="flex gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm">
-            <div class="relative flex-1 max-w-xs">
+        <div class="flex gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex-wrap md:flex-nowrap">
+            <div class="relative flex-1 w-full md:max-w-xs">
                 <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
                 <input type="text" id="weekly-search-name" placeholder="팀원 이름..." class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-indigo-500 font-bold" oninput="window.filterWeeklyLogs()">
             </div>
-            <div class="relative flex-1">
+            <div class="relative flex-1 w-full">
                 <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
                 <input type="text" id="weekly-search-content" placeholder="업무 내용, 이슈 등 검색어 입력..." class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-indigo-500 font-bold" oninput="window.filterWeeklyLogs()">
             </div>
@@ -101,14 +107,20 @@
         <div id="weekly-log-feed" class="space-y-6"></div>
     </div>
 
+    <div id="weekly-team-sch-view" class="hidden space-y-6">
+        <div class="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+            <h3 class="text-base font-black text-slate-800"><i class="fa-solid fa-users-viewfinder text-indigo-500 mr-2"></i> 이번 주 팀 전체 일정</h3>
+            <span class="text-xs text-slate-500 font-bold">휴가 및 공통 미팅 현황</span>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-7 gap-4" id="weekly-team-kanban-board"></div>
+    </div>
+
     <div id="weekly-my-view" class="hidden space-y-6">
         <div class="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-            <h3 class="text-base font-black text-slate-800">이번 주 개인 일정</h3>
+            <h3 class="text-base font-black text-slate-800"><i class="fa-regular fa-calendar-user text-indigo-500 mr-2"></i> 이번 주 개인 일정</h3>
             <button onclick="window.openScheduleModal()" class="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-4 py-2 rounded-xl text-xs font-bold transition-colors border border-indigo-100 flex items-center gap-1.5"><i class="fa-solid fa-plus"></i> 일정 추가</button>
         </div>
-        
-        <div class="grid grid-cols-2 md:grid-cols-7 gap-4" id="weekly-kanban-board">
-            </div>
+        <div class="grid grid-cols-2 md:grid-cols-7 gap-4" id="weekly-kanban-board"></div>
     </div>
 </div>
 
@@ -166,28 +178,16 @@
                 <div class="space-y-4">
                     <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative">
                         <h4 class="text-[11px] font-bold text-slate-500 mb-2">관여한 프로젝트 (선택)</h4>
-                        <div id="wl-pjt-tags" class="flex flex-wrap gap-2 mb-2 empty:hidden"></div>
-                        <div class="flex gap-2">
+                        
+                        <div class="flex gap-2 mb-3">
                             <div class="relative flex-1">
                                 <input type="text" id="wl-pjt-input" placeholder="프로젝트명 검색..." oninput="window.showAutocomplete(this, 'wl-temp-pjt-code', '', true)" onkeydown="if(event.key==='Enter') { event.preventDefault(); window.addWlProject(); }" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-indigo-500 font-bold bg-slate-50">
                                 <input type="hidden" id="wl-temp-pjt-code">
                             </div>
                             <button onclick="window.addWlProject()" class="bg-slate-800 hover:bg-slate-700 text-white px-4 rounded-xl text-xs font-bold transition-colors shadow-sm shrink-0">추가</button>
                         </div>
-                    </div>
-
-                    <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                        <h4 class="text-[11px] font-bold text-slate-500 mb-2">총 투입 시간 (선택)</h4>
-                        <div class="flex items-center gap-3">
-                            <div class="relative w-24">
-                                <input type="number" id="wl-time-h" placeholder="0" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-center text-sm font-black outline-indigo-500 bg-slate-50">
-                                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">h</span>
-                            </div>
-                            <div class="relative w-24">
-                                <input type="number" id="wl-time-m" placeholder="0" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-center text-sm font-black outline-indigo-500 bg-slate-50">
-                                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">m</span>
-                            </div>
-                        </div>
+                        
+                        <div id="wl-pjt-tags" class="flex flex-wrap gap-2 empty:hidden"></div>
                     </div>
                 </div>
             </div>
