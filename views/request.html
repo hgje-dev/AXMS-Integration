@@ -1,20 +1,20 @@
 <div class="space-y-6 max-w-[1600px] mx-auto pb-10">
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-2">
-        <div class="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm flex flex-col justify-center relative overflow-hidden">
+        <div onclick="window.setReqStatusFilter('all')" class="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm flex flex-col justify-center relative overflow-hidden cursor-pointer hover:ring-2 ring-slate-300 transition-all">
             <div class="flex justify-between items-start mb-2 relative z-10"><span class="text-[12px] font-bold text-slate-500">총 요청 건수</span><i class="fa-solid fa-list-ul text-slate-300 text-lg"></i></div>
             <p class="text-3xl font-black text-slate-800 relative z-10"><span id="req-dash-total">0</span><span class="text-sm ml-1 font-bold text-slate-400">건</span></p>
         </div>
-        <div class="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm flex flex-col justify-center border-b-4 border-b-slate-400">
+        <div onclick="window.setReqStatusFilter('pending')" class="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm flex flex-col justify-center border-b-4 border-b-slate-400 cursor-pointer hover:ring-2 ring-slate-300 transition-all">
             <div class="flex justify-between items-start mb-2"><span class="text-[12px] font-bold text-slate-600">접수 대기중</span><div class="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-500"><i class="fa-solid fa-pause text-[10px]"></i></div></div>
             <p class="text-3xl font-black text-slate-700"><span id="req-dash-pending">0</span><span class="text-sm ml-1 font-bold text-slate-400">건</span></p>
         </div>
-        <div class="bg-white rounded-3xl p-5 border border-blue-200 shadow-sm flex flex-col justify-center border-b-4 border-b-blue-400">
+        <div onclick="window.setReqStatusFilter('progress')" class="bg-white rounded-3xl p-5 border border-blue-200 shadow-sm flex flex-col justify-center border-b-4 border-b-blue-400 cursor-pointer hover:ring-2 ring-blue-300 transition-all">
             <div class="flex justify-between items-start mb-2"><span class="text-[12px] font-bold text-blue-600">진행 중 (작업중)</span><div class="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-500"><i class="fa-solid fa-person-digging text-[10px]"></i></div></div>
             <p class="text-3xl font-black text-blue-700"><span id="req-dash-progress">0</span><span class="text-sm ml-1 font-bold text-blue-400">건</span></p>
         </div>
-        <div class="bg-white rounded-3xl p-5 border border-emerald-200 shadow-sm flex flex-col justify-center border-b-4 border-b-emerald-400 relative overflow-hidden">
+        <div onclick="window.setReqStatusFilter('completed')" class="bg-white rounded-3xl p-5 border border-emerald-200 shadow-sm flex flex-col justify-center border-b-4 border-b-emerald-400 relative overflow-hidden cursor-pointer hover:ring-2 ring-emerald-300 transition-all">
             <div class="absolute -right-4 -bottom-4 opacity-5"><i class="fa-solid fa-circle-check text-8xl text-emerald-500"></i></div>
-            <div class="flex justify-between items-start mb-2 relative z-10"><span class="text-[12px] font-bold text-emerald-600">작업 완료됨</span><div class="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-500"><i class="fa-solid fa-check text-[10px]"></i></div></div>
+            <div class="flex justify-between items-start mb-2 relative z-10"><span class="text-[12px] font-bold text-emerald-600">완료됨 (올해)</span><div class="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-500"><i class="fa-solid fa-check text-[10px]"></i></div></div>
             <p class="text-3xl font-black text-emerald-600 relative z-10"><span id="req-dash-completed">0</span><span class="text-sm ml-1 font-bold text-emerald-400">건</span></p>
         </div>
     </div>
@@ -39,21 +39,40 @@
                 <i class="fa-solid fa-plus"></i> 새 요청서 작성
             </button>
         </div>
+
+        <div class="flex items-center justify-between px-6 py-3 bg-slate-50 border-b border-slate-100 gap-4 flex-wrap">
+            <div class="flex items-center gap-2">
+                <select id="filter-req-year" onchange="window.filterReqByYear(this.value)" class="border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-600 outline-none cursor-pointer">
+                    <option value="">전체 연도</option>
+                    <option value="2024">2024년</option>
+                    <option value="2025">2025년</option>
+                    <option value="2026">2026년</option>
+                    <option value="2027">2027년</option>
+                </select>
+                <input type="month" id="filter-req-month" onchange="window.filterReqByMonth(this.value)" class="border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-600 outline-none cursor-pointer">
+                <button onclick="window.resetReqFilters()" class="bg-white border border-slate-300 hover:bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-sm transition-colors"><i class="fa-solid fa-rotate-right"></i> 초기화</button>
+            </div>
+            <div class="relative">
+                <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                <input type="text" id="filter-req-search" oninput="window.filterReqBySearch(this.value)" placeholder="PJT코드, 명칭, 요청서 제목 검색..." class="border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-xs font-bold text-slate-600 outline-indigo-500 w-64 sm:w-80 shadow-sm">
+            </div>
+        </div>
         
-        <div id="request-list-container" class="overflow-x-auto min-h-[500px] p-4 bg-slate-50/50">
+        <div id="request-list-container" class="overflow-x-auto min-h-[500px] p-4 bg-white">
             <table class="w-full text-left border-collapse bg-white border border-slate-200 shadow-sm rounded-xl overflow-hidden whitespace-nowrap">
                 <thead class="bg-slate-800 text-white text-[11px] uppercase tracking-wider">
                     <tr>
-                        <th class="p-4 font-bold text-center w-24">현재 상태</th>
+                        <th class="p-4 font-bold text-center w-20">현재 상태</th>
                         <th class="p-4 font-bold text-center text-amber-300 w-16">코멘트</th>
-                        <th class="p-4 font-bold text-center w-24">구분</th>
-                        <th class="p-4 font-bold min-w-[250px]">요청 제목 (프로젝트명)</th>
-                        <th class="p-4 font-bold text-center">요청자</th>
-                        <th class="p-4 font-bold text-center text-indigo-300">담당자</th>
-                        <th class="p-4 font-bold text-center">등록일</th>
-                        <th class="p-4 font-bold text-center text-blue-300">진행시작일</th>
-                        <th class="p-4 font-bold text-center text-emerald-300">완료일</th>
-                        <th class="p-4 font-bold text-center w-20">기능</th>
+                        <th class="p-4 font-bold text-center w-20">구분</th>
+                        <th class="p-4 font-bold min-w-[200px] max-w-[250px]">프로젝트명</th>
+                        <th class="p-4 font-bold text-center">PJT 코드</th>
+                        <th class="p-4 font-bold min-w-[200px] max-w-[250px] text-indigo-300">요청서 제목</th>
+                        <th class="p-4 font-bold text-center">담당자</th>
+                        <th class="p-4 font-bold text-center text-slate-400">등록일</th>
+                        <th class="p-4 font-bold text-center text-blue-400">진행시작일</th>
+                        <th class="p-4 font-bold text-center text-emerald-400">완료일</th>
+                        <th class="p-4 font-bold text-center w-16">기능</th>
                     </tr>
                 </thead>
                 <tbody id="request-tbody" class="divide-y divide-slate-100 text-xs"></tbody>
@@ -117,6 +136,11 @@
                             <div class="border border-slate-200 text-center py-2.5 rounded-xl text-sm font-bold text-slate-500 peer-checked:bg-indigo-50 peer-checked:border-indigo-500 peer-checked:text-indigo-700 transition-all shadow-sm">Setup</div>
                         </label>
                     </div>
+                </div>
+                
+                <div>
+                    <label class="text-[11px] font-bold text-slate-500 mb-1.5 block">요청서 제목 <span class="text-rose-500">*</span></label>
+                    <input type="text" id="req-title" placeholder="요청서의 핵심 제목을 명확하게 입력하세요" autocomplete="off" class="w-full border border-slate-300 px-4 py-2.5 rounded-xl text-sm outline-indigo-500 bg-indigo-50/50 focus:bg-white transition-colors font-bold text-indigo-900 shadow-sm">
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">
@@ -207,11 +231,13 @@
             <h2 class="text-base font-extrabold text-slate-800"><i class="fa-solid fa-envelope-circle-check text-indigo-500 mr-1.5"></i> 수신 담당자 설정</h2>
             <button onclick="window.closeEmailSettingsModal()" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-lg"></i></button>
         </div>
-        <div class="p-6 bg-white space-y-4">
+        <div class="p-6 bg-white space-y-4 relative">
             <p class="text-xs text-slate-500 font-bold mb-2 leading-relaxed">요청서 작성 시 아래 등록된 모든 담당자에게 메일이 자동 발송됩니다.</p>
-            <div class="flex gap-2">
-                <input type="email" id="new-req-email" placeholder="추가할 이메일 입력" class="flex-1 border border-slate-300 rounded-xl px-3 py-2.5 text-sm outline-indigo-500 font-bold" onkeypress="if(event.key==='Enter') window.addReqEmail()">
-                <button onclick="window.addReqEmail()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-colors shrink-0 shadow-sm">추가</button>
+            <div class="flex gap-2 relative">
+                <div class="relative flex-1">
+                    <input type="text" id="new-req-email-user" placeholder="팀원 이름 초성 검색..." class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm outline-indigo-500 font-bold" oninput="window.showReqUserAutocomplete(this)" autocomplete="off">
+                    <ul id="req-user-autocomplete" class="hidden absolute z-[9999] bg-white border border-indigo-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-full custom-scrollbar py-1 mt-1 left-0"></ul>
+                </div>
             </div>
             <div>
                 <label class="block text-[11px] font-bold text-slate-500 mb-2 mt-4">현재 등록된 수신 담당자 리스트</label>
@@ -255,7 +281,7 @@
             </div>
             <div>
                 <label class="block text-[11px] font-bold text-slate-500 mb-1.5">접수 완료 알림 메일 수신자 (요청자)</label>
-                <input type="text" id="req-accept-email" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold outline-blue-500 bg-white" readonly>
+                <input type="text" id="req-accept-email" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold outline-blue-500 bg-slate-100 text-slate-500" readonly>
             </div>
         </div>
         <div class="px-6 py-4 border-t bg-white flex justify-end gap-2">
@@ -275,7 +301,7 @@
             <p class="text-sm font-bold text-slate-600 leading-relaxed">이 요청을 '작업 완료' 처리하고 아래 수신자에게 알림 메일을 발송하시겠습니까?</p>
             <div>
                 <label class="block text-[11px] font-bold text-slate-500 mb-1.5">완료 알림 메일 수신자 (요청자)</label>
-                <input type="text" id="req-complete-email" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold outline-emerald-500 bg-white" readonly>
+                <input type="text" id="req-complete-email" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold outline-emerald-500 bg-slate-100 text-slate-500" readonly>
             </div>
         </div>
         <div class="px-6 py-4 border-t bg-white flex justify-end gap-2">
