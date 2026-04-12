@@ -34,14 +34,18 @@
                 <div class="flex items-center bg-white border border-slate-200 rounded-xl p-1 shadow-sm relative shrink-0">
                     <button onclick="window.changeWeeklyWeek(-1)" class="px-3 py-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-all z-10"><i class="fa-solid fa-chevron-left"></i></button>
                     
-                    <div class="relative flex items-center justify-center px-4 cursor-pointer z-0 group min-w-[140px]">
-                        <span id="weekly-display-text" class="text-sm font-black text-slate-700 pointer-events-none group-hover:text-indigo-600 transition-colors">데이터 로드중...</span>
-                        <i class="fa-regular fa-calendar ml-2 text-slate-400 pointer-events-none group-hover:text-indigo-500 transition-colors"></i>
-                        <input type="week" id="weekly-log-filter-week" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.handleWeekChange(this.value)">
+                    <div class="relative flex items-center justify-center px-4 cursor-pointer z-10 group min-w-[140px] h-full" onclick="document.getElementById('weekly-log-filter-week').showPicker()">
+                        <span id="weekly-display-text" class="text-sm font-black text-slate-700 group-hover:text-indigo-600 transition-colors">데이터 로드중...</span>
+                        <i class="fa-regular fa-calendar ml-2 text-slate-400 group-hover:text-indigo-500 transition-colors"></i>
+                        <input type="week" id="weekly-log-filter-week" class="absolute w-0 h-0 opacity-0 -z-10" onchange="window.handleWeekChange(this.value)">
                     </div>
                     
                     <button onclick="window.changeWeeklyWeek(1)" class="px-3 py-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-all z-10"><i class="fa-solid fa-chevron-right"></i></button>
                 </div>
+
+                <button id="btn-export-weekly" onclick="window.exportWeeklyLogsExcel()" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md transition-colors items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-file-excel"></i> 엑셀 다운로드
+                </button>
 
                 <button onclick="window.openWeeklyLogWriteModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2 whitespace-nowrap">
                     <i class="fa-solid fa-plus"></i> 일지 작성
@@ -53,9 +57,9 @@
     <div class="bg-indigo-50/50 rounded-2xl border border-indigo-100 p-5 shadow-sm relative group">
         <div class="flex justify-between items-center mb-2">
             <h3 class="text-sm font-black text-indigo-800 flex items-center gap-2"><i class="fa-solid fa-bullhorn text-indigo-500"></i> 이번 주 공지사항</h3>
-            <button class="text-xs font-bold text-indigo-400 hover:text-indigo-600 hidden group-hover:block transition-colors admin-only"><i class="fa-solid fa-pen"></i> 수정</button>
+            <button onclick="window.editNotice()" class="text-xs font-bold text-indigo-400 hover:text-indigo-600 hidden group-hover:block transition-colors admin-only"><i class="fa-solid fa-pen"></i> 수정</button>
         </div>
-        <p class="text-sm text-slate-700 font-medium ml-6">이번 주 금요일 오후 4시부터 전체 타운홀 미팅이 있습니다. 업무 일지는 목요일까지 작성 부탁드립니다.</p>
+        <p id="weekly-notice-text" class="text-sm text-slate-700 font-medium ml-6">공지사항을 불러오는 중입니다...</p>
     </div>
 
     <div id="weekly-team-view" class="space-y-6 block">
@@ -175,17 +179,18 @@
                     <h4 class="text-[11px] font-bold text-orange-600 mb-2 flex items-center gap-1"><i class="fa-regular fa-comment-dots"></i> 요청사항 및 이슈 (선택)</h4>
                     <textarea id="wl-issues" oninput="window.handleMention(this)" placeholder="팀원들에게 공유할 이슈나 타 부서에 요청할 사항을 상세히 적어주세요." class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-orange-500 h-[104px] resize-none custom-scrollbar"></textarea>
                 </div>
-                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative">
-                    <h4 class="text-[11px] font-bold text-slate-500 mb-3 flex items-center gap-1.5"><i class="fa-solid fa-folder-open text-indigo-400"></i> 관여한 프로젝트 (선택)</h4>
-                    
-                    <div class="flex gap-2 mb-3">
-                        <div class="relative flex-1">
-                            <input type="text" id="wl-pjt-input" placeholder="프로젝트명 검색..." oninput="window.showAutocomplete(this, 'wl-temp-pjt-code', '', true)" onkeydown="if(event.key==='Enter') { event.preventDefault(); window.addWlProject(); }" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-indigo-500 font-bold bg-slate-50">
-                            <input type="hidden" id="wl-temp-pjt-code">
+                <div class="space-y-4">
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative">
+                        <h4 class="text-[11px] font-bold text-slate-500 mb-2">관여한 프로젝트 (선택)</h4>
+                        <div class="flex gap-2 mb-3">
+                            <div class="relative flex-1">
+                                <input type="text" id="wl-pjt-input" placeholder="프로젝트명 검색..." oninput="window.showAutocomplete(this, 'wl-temp-pjt-code', '', true)" onkeydown="if(event.key==='Enter') { event.preventDefault(); window.addWlProject(); }" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-indigo-500 font-bold bg-slate-50">
+                                <input type="hidden" id="wl-temp-pjt-code">
+                            </div>
+                            <button onclick="window.addWlProject()" class="bg-slate-800 hover:bg-slate-700 text-white px-4 rounded-xl text-xs font-bold transition-colors shadow-sm shrink-0">추가</button>
                         </div>
-                        <button onclick="window.addWlProject()" class="bg-slate-800 hover:bg-slate-700 text-white px-4 rounded-xl text-xs font-bold transition-colors shadow-sm shrink-0">추가</button>
+                        <div id="wl-pjt-tags" class="flex flex-wrap gap-2 empty:hidden mt-2"></div>
                     </div>
-                    <div id="wl-pjt-tags" class="flex flex-wrap gap-2 empty:hidden mt-2"></div>
                 </div>
             </div>
         </div>
