@@ -20,7 +20,7 @@ window.currentMonthFilter = '';
 window.calendarCurrentDate = new Date();
 window.hideCompletedFilter = false; 
 window.ganttTodayOffset = 0;
-window.ncrData = [];
+window.ncrData = []; // 💡 부적합 데이터 저장용 배열
 
 const getSafeMillis = (val) => { 
     try { 
@@ -66,6 +66,8 @@ window.loadCounts = function() {
             snap.forEach(doc => { let pid = doc.data().projectId; if(pid) window.projectScheduleCounts[pid] = (window.projectScheduleCounts[pid]||0)+1; }); 
             window.renderProjectStatusList();
         });
+        
+        // 💡 앱 시작 시 NCR 데이터 로드 실행
         window.loadNcrData();
     } catch(e) { console.warn("카운트 로드 실패:", e); }
 };
@@ -215,6 +217,8 @@ window.loadProjectStatusData = function() {
 window.renderProjectStatusList = function() {
     const tbody = document.getElementById('proj-dash-tbody'); if(!tbody) return;
     let displayList = window.getFilteredProjects();
+    
+    // 💡 열 개수가 32개로 늘어났으므로 빈 화면일 때 colspan 32 적용
     if(displayList.length === 0) { tbody.innerHTML = '<tr><td colspan="32" class="text-center p-6 text-slate-400 font-bold border-b border-slate-100 bg-white">프로젝트가 없습니다.</td></tr>'; return; }
     
     const statusMap = { 
@@ -238,7 +242,9 @@ window.renderProjectStatusList = function() {
         const desCnt = (window.projectDesignCounts && window.projectDesignCounts[item.id]) || 0;
         const schCnt = (window.projectScheduleCounts && window.projectScheduleCounts[item.id]) || 0;
 
-        const pjtNcrData = (window.ncrData || []).filter(n => n.pjtCode === item.code);
+        // 💡 띄어쓰기 및 대소문자 무시한 NCR 미결 항목 계산
+        const safeItemCode = String(item.code || '').replace(/\s/g, '').toUpperCase();
+        const pjtNcrData = (window.ncrData || []).filter(n => String(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeItemCode);
         const unresolvedNcrCnt = pjtNcrData.filter(n => !(n.status.includes('완료') || n.status.includes('종결') || n.status.includes('완료됨'))).length;
 
         let trHtml = `<tr class="group hover:bg-indigo-50/50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.editProjStatus('${item.id}')">`;
@@ -261,6 +267,7 @@ window.renderProjectStatusList = function() {
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openPjtScheduleModal('${item.id}', '${safeNameJs}')" class="text-fuchsia-400 relative"><i class="fa-regular fa-calendar-check text-lg"></i>${schCnt ? `<span class="absolute -top-1 -right-2 bg-fuchsia-100 text-fuchsia-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-fuchsia-200">${schCnt}</span>` : ''}</button></td>`;
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openDailyLogModal('${item.id}', '${safeNameJs}', ${parseFloat(item.progress)||0})" class="text-sky-400 relative"><i class="fa-solid fa-book text-lg"></i>${lCnt ? `<span class="absolute -top-1 -right-2 bg-sky-100 text-sky-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-sky-200">${lCnt}</span>` : ''}</button></td>`;
         
+        // 💡 부적합 렌더링
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()">
             <button onclick="window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-rose-500 relative transition-transform hover:scale-110">
                 <i class="fa-solid fa-file-circle-exclamation text-lg"></i>
@@ -1664,37 +1671,42 @@ document.addEventListener('click', function(e) {
 });
 
 // ==========================================
-// 💡 부적합(NCR) 구글 시트 연동 로직 (강력한 파싱 적용)
+// 💡 부적합(NCR) 구글 시트 연동 (토큰 없이 뷰어 권한으로 가져오기)
 // ==========================================
 window.loadNcrData = async function() {
-    const token = window.googleAccessToken || localStorage.getItem('axmsGoogleToken');
-    if (!token) {
-        if(window.showToast) window.showToast("구글 연동이 필요합니다. (요청서 탭 활용)", "warning");
-        return;
-    }
-
     try {
         const sheetId = '1ZYwSKvT4QXjFxgftunwdRHWzX4KXoelhZSVjauAJg8s';
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/RawData`;
         
-        const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
-        if (!res.ok) throw new Error("시트 데이터를 불러올 수 없습니다.");
+        // 💡 핵심: OAuth 토큰 없이 '뷰어' 권한으로 데이터를 가져오는 구글 기본 엔드포인트
+        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=RawData`;
+
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("시트에 접근할 수 없습니다.");
+
+        // 응답 텍스트에서 JSON 데이터 부분만 추출
+        const text = await res.text();
+        const start = text.indexOf('{');
+        const end = text.lastIndexOf('}');
+        if (start === -1 || end === -1) throw new Error("데이터 파싱 실패");
         
-        const data = await res.json();
-        const rows = data.values;
-        if (!rows || rows.length < 2) return;
-        
-        const headers = rows[0];
-        
-        // 대소문자 무시, 공백/특수문자 무시하여 헤더 인덱스를 정확하게 찾아내는 함수
+        const jsonString = text.substring(start, end + 1);
+        const data = JSON.parse(jsonString);
+
+        if (!data || !data.table || !data.table.cols || !data.table.rows) return;
+
+        // 헤더(열 이름) 추출
+        const cols = data.table.cols.map(c => c ? c.label : '');
+        const rows = data.table.rows;
+
+        // 띄어쓰기, 대소문자를 무시하고 정확히 열 위치를 찾는 함수
         const getIdx = (keywords) => {
-            return headers.findIndex(h => {
+            return cols.findIndex(h => {
                 if (!h) return false;
                 const normalized = String(h).toLowerCase().replace(/[\s\(\)\[\]_]/g, '');
                 return keywords.some(k => normalized.includes(k.toLowerCase().replace(/[\s\(\)\[\]_]/g, '')));
             });
         };
-        
+
         const cPjt = getIdx(['project', 'pjt', '프로젝트']);
         const cNcr = getIdx(['ncrno', 'ncr']);
         const cDate = getIdx(['발생일', 'date']);
@@ -1703,27 +1715,37 @@ window.loadNcrData = async function() {
         const cType = getIdx(['유형', 'type']);
         const cDesc = getIdx(['내용', '부적합내용', 'content', 'desc']);
         const cStat = getIdx(['진행', '현황', '상태', 'status']);
-        
-        window.ncrData = rows.slice(1).map(row => ({
-            pjtCode: cPjt !== -1 ? (row[cPjt] || '') : '',
-            ncrNo: cNcr !== -1 ? (row[cNcr] || '') : '',
-            date: cDate !== -1 ? (row[cDate] || '') : '',
-            drawingNo: cDraw !== -1 ? (row[cDraw] || '') : '',
-            partName: cPart !== -1 ? (row[cPart] || '') : '',
-            type: cType !== -1 ? (row[cType] || '') : '',
-            content: cDesc !== -1 ? (row[cDesc] || '') : '',
-            status: cStat !== -1 ? (row[cStat] || '') : ''
-        })).filter(n => n.pjtCode);
-        
+
+        window.ncrData = rows.map(row => {
+            // 셀 값을 안전하게 가져오는 헬퍼
+            const getCellVal = (idx) => {
+                if (idx === -1 || !row.c[idx]) return '';
+                return row.c[idx].f ? String(row.c[idx].f) : (row.c[idx].v !== null ? String(row.c[idx].v) : '');
+            };
+
+            return {
+                pjtCode: getCellVal(cPjt).trim(),
+                ncrNo: getCellVal(cNcr),
+                date: getCellVal(cDate),
+                drawingNo: getCellVal(cDraw),
+                partName: getCellVal(cPart),
+                type: getCellVal(cType),
+                content: getCellVal(cDesc),
+                status: getCellVal(cStat)
+            };
+        }).filter(n => n.pjtCode); // PJT 코드가 비어있지 않은 행만 필터링
+
         window.renderProjectStatusList();
-        
+
         const modal = document.getElementById('ncr-modal');
         if (modal && !modal.classList.contains('hidden')) {
             const pjtCode = document.getElementById('ncr-project-title').dataset.code;
             if (pjtCode) window.renderNcrList(pjtCode);
         }
+
     } catch(e) {
         console.error("NCR 로드 에러:", e);
+        if(window.showToast) window.showToast("시트 접근 오류: 일반 액세스가 '링크가 있는 모든 사용자'로 설정되었는지 확인하세요.", "error");
     }
 };
 
@@ -1745,7 +1767,10 @@ window.renderNcrList = function(pjtCode) {
     const tbody = document.getElementById('ncr-list-tbody');
     if (!tbody) return;
     
-    const list = (window.ncrData || []).filter(n => n.pjtCode === pjtCode);
+    // 시트의 코드와 현황판의 코드 비교 시, 띄어쓰기 및 대소문자를 무시하도록 강화
+    const safeTargetCode = String(pjtCode).replace(/\s/g, '').toUpperCase();
+    const list = (window.ncrData || []).filter(n => String(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeTargetCode);
+    
     let total = list.length, completed = list.filter(n => n.status.includes('완료') || n.status.includes('종결')).length;
     
     document.getElementById('ncr-total-cnt').innerText = total;
