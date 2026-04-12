@@ -67,7 +67,7 @@
             <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-slate-400"><p class="text-[11px] font-bold text-slate-500 mb-1">대기 / 보류</p><p class="text-2xl font-black text-slate-700" id="pd-period-pending">0</p></div>
             <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-blue-400"><p class="text-[11px] font-bold text-slate-500 mb-1">작업 진행중</p><p class="text-2xl font-black text-blue-600" id="pd-period-progress">0</p></div>
             <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-rose-400"><p class="text-[11px] font-bold text-slate-500 mb-1">납기 임박</p><p class="text-2xl font-black text-rose-600" id="pd-period-urgent">0</p></div>
-            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-purple-400"><p class="text-[11px] font-bold text-slate-500 mb-1" id="label-period-md">해당 기간 투입 공수</p><p class="text-2xl font-black text-purple-600"><span id="pd-period-total-md">0.0</span><span class="text-sm text-slate-400 ml-1">MD</span></p></div>
+            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-purple-400"><p class="text-[11px] font-bold text-slate-500 mb-1" id="label-period-md">총 투입 공수</p><p class="text-2xl font-black text-purple-600"><span id="pd-period-total-md">0.0</span><span class="text-sm text-slate-400 ml-1">MD</span></p></div>
             <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-fuchsia-400"><p class="text-[11px] font-bold text-slate-500 mb-1">해당 기간 부하율</p><p class="text-2xl font-black text-fuchsia-600" id="pd-period-workload">0.0%</p></div>
         </div>
 
@@ -82,7 +82,7 @@
             <div class="overflow-x-auto custom-scrollbar max-h-[400px]">
                 <table class="w-full text-left border-collapse text-[11px] whitespace-nowrap">
                     <thead class="bg-white text-slate-500 sticky top-0 border-b z-10 shadow-sm">
-                        <tr><th class="p-3 font-bold text-center">파트</th><th class="p-3 font-bold text-center">PJT 코드</th><th class="p-3 font-bold">프로젝트명</th><th class="p-3 font-bold text-center text-rose-500">예정출하일</th><th class="p-3 font-bold text-center text-emerald-500">진행률</th><th class="p-3 font-bold text-center">현재상태</th><th class="p-3 font-bold text-center">예정MD</th><th class="p-3 font-bold text-center bg-indigo-50/50 text-indigo-700" id="th-period-md">해당기간 투입MD</th><th class="p-3 font-bold text-center text-purple-600">최종MD</th><th class="p-3 font-bold text-center text-amber-500">편차</th></tr>
+                        <tr><th class="p-3 font-bold text-center">파트</th><th class="p-3 font-bold text-center">PJT 코드</th><th class="p-3 font-bold">프로젝트명</th><th class="p-3 font-bold text-center text-rose-500">예정출하일</th><th class="p-3 font-bold text-center text-emerald-500">진행률</th><th class="p-3 font-bold text-center">현재상태</th><th class="p-3 font-bold text-center">예정MD</th><th class="p-3 font-bold text-center bg-indigo-50/50 text-indigo-700" id="th-period-md">투입MD</th><th class="p-3 font-bold text-center text-purple-600">최종MD</th><th class="p-3 font-bold text-center text-amber-500">편차</th></tr>
                     </thead>
                     <tbody id="period-table-body" class="divide-y divide-slate-100 text-slate-700"></tbody>
                 </table>
