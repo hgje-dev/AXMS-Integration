@@ -22,15 +22,20 @@
     <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
         <div class="px-6 py-4 flex flex-col md:flex-row justify-between items-center bg-white gap-4 border-b border-slate-100">
             <div class="flex items-center gap-4">
-                <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner">
+                <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner shrink-0">
                     <i class="fa-regular fa-handshake text-2xl"></i>
                 </div>
                 <div>
-                    <h2 class="text-xl font-black text-slate-800 flex items-center gap-2" id="req-header-title">요청서 관리</h2>
+                    <div class="flex items-center gap-3">
+                        <h2 class="text-xl font-black text-slate-800 flex items-center gap-2" id="req-header-title">요청서 관리</h2>
+                        <button onclick="window.openEmailSettingsModal()" class="text-[10px] font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 border border-slate-200 px-2 py-1 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm">
+                            <i class="fa-solid fa-envelope-circle-check"></i> 수신 담당자 설정
+                        </button>
+                    </div>
                     <p class="text-xs text-slate-500 font-bold mt-1">AXBIS 통합 요청 관리 시스템</p>
                 </div>
             </div>
-            <button onclick="window.openWriteModal()" class="bg-indigo-600 hover:bg-indigo-700 transition-colors text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md flex items-center gap-2">
+            <button onclick="window.openWriteModal()" class="bg-indigo-600 hover:bg-indigo-700 transition-colors text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md flex items-center gap-2 whitespace-nowrap">
                 <i class="fa-solid fa-plus"></i> 새 요청서 작성
             </button>
         </div>
@@ -87,6 +92,7 @@
             </div>
 
             <div id="collab-form-fields" class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5 hidden">
+                
                 <div class="flex flex-col gap-2">
                     <label class="text-[11px] font-bold text-slate-500">구분 <span class="text-rose-500">*</span></label>
                     <div class="flex gap-2">
@@ -195,6 +201,26 @@
     </div>
 </div>
 
+<div id="req-email-setting-modal" class="fixed inset-0 z-[300] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-slate-50">
+            <h2 class="text-base font-extrabold text-slate-800"><i class="fa-solid fa-envelope-circle-check text-indigo-500 mr-1.5"></i> 수신 담당자 설정</h2>
+            <button onclick="window.closeEmailSettingsModal()" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-lg"></i></button>
+        </div>
+        <div class="p-6 bg-white space-y-4">
+            <p class="text-xs text-slate-500 font-bold mb-2 leading-relaxed">요청서 작성 시 아래 등록된 모든 담당자에게 메일이 자동 발송됩니다.</p>
+            <div class="flex gap-2">
+                <input type="email" id="new-req-email" placeholder="추가할 이메일 입력" class="flex-1 border border-slate-300 rounded-xl px-3 py-2.5 text-sm outline-indigo-500 font-bold" onkeypress="if(event.key==='Enter') window.addReqEmail()">
+                <button onclick="window.addReqEmail()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-colors shrink-0 shadow-sm">추가</button>
+            </div>
+            <div>
+                <label class="block text-[11px] font-bold text-slate-500 mb-2 mt-4">현재 등록된 수신 담당자 리스트</label>
+                <ul id="req-email-list" class="space-y-2 max-h-60 overflow-y-auto custom-scrollbar p-1"></ul>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div id="req-send-modal" class="fixed inset-0 z-[300] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
     <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden">
         <div class="px-6 py-4 border-b flex justify-between items-center bg-indigo-50">
@@ -202,10 +228,11 @@
             <button onclick="document.getElementById('req-send-modal').classList.add('hidden'); document.getElementById('req-send-modal').classList.remove('flex');" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-lg"></i></button>
         </div>
         <div class="p-6 bg-slate-50/50 space-y-4">
-            <p class="text-sm font-bold text-slate-600 leading-relaxed">입력하신 내용을 저장하고 아래 수신자에게 알림 메일을 발송하시겠습니까?</p>
+            <p class="text-sm font-bold text-slate-600 leading-relaxed">입력하신 내용을 저장하고 아래 수신 담당자들에게 알림 메일을 발송하시겠습니까?</p>
             <div>
-                <label class="block text-[11px] font-bold text-slate-500 mb-1.5">수신자 이메일 (쉼표로 구분)</label>
-                <input type="text" id="req-send-email" value="admin@axbis.ai" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold outline-indigo-500 bg-white">
+                <label class="block text-[11px] font-bold text-slate-500 mb-1.5">수신 예정 담당자</label>
+                <div id="req-send-email-display" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold bg-slate-50 text-indigo-700 break-all leading-relaxed"></div>
+                <p class="text-[10px] text-slate-400 mt-1.5">* 수신자는 상단 [수신 담당자 설정]에서 변경할 수 있습니다.</p>
             </div>
         </div>
         <div class="px-6 py-4 border-t bg-white flex justify-end gap-2">
@@ -228,7 +255,7 @@
             </div>
             <div>
                 <label class="block text-[11px] font-bold text-slate-500 mb-1.5">접수 완료 알림 메일 수신자 (요청자)</label>
-                <input type="text" id="req-accept-email" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold outline-blue-500 bg-white">
+                <input type="text" id="req-accept-email" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold outline-blue-500 bg-white" readonly>
             </div>
         </div>
         <div class="px-6 py-4 border-t bg-white flex justify-end gap-2">
@@ -248,7 +275,7 @@
             <p class="text-sm font-bold text-slate-600 leading-relaxed">이 요청을 '작업 완료' 처리하고 아래 수신자에게 알림 메일을 발송하시겠습니까?</p>
             <div>
                 <label class="block text-[11px] font-bold text-slate-500 mb-1.5">완료 알림 메일 수신자 (요청자)</label>
-                <input type="text" id="req-complete-email" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold outline-emerald-500 bg-white">
+                <input type="text" id="req-complete-email" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold outline-emerald-500 bg-white" readonly>
             </div>
         </div>
         <div class="px-6 py-4 border-t bg-white flex justify-end gap-2">
