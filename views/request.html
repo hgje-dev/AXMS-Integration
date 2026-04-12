@@ -1,4 +1,24 @@
-<div class="space-y-6 max-w-7xl mx-auto pb-10">
+<div class="space-y-6 max-w-[1600px] mx-auto pb-10">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-2">
+        <div class="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm flex flex-col justify-center relative overflow-hidden">
+            <div class="flex justify-between items-start mb-2 relative z-10"><span class="text-[12px] font-bold text-slate-500">총 요청 건수</span><i class="fa-solid fa-list-ul text-slate-300 text-lg"></i></div>
+            <p class="text-3xl font-black text-slate-800 relative z-10"><span id="req-dash-total">0</span><span class="text-sm ml-1 font-bold text-slate-400">건</span></p>
+        </div>
+        <div class="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm flex flex-col justify-center border-b-4 border-b-slate-400">
+            <div class="flex justify-between items-start mb-2"><span class="text-[12px] font-bold text-slate-600">접수 대기중</span><div class="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-500"><i class="fa-solid fa-pause text-[10px]"></i></div></div>
+            <p class="text-3xl font-black text-slate-700"><span id="req-dash-pending">0</span><span class="text-sm ml-1 font-bold text-slate-400">건</span></p>
+        </div>
+        <div class="bg-white rounded-3xl p-5 border border-blue-200 shadow-sm flex flex-col justify-center border-b-4 border-b-blue-400">
+            <div class="flex justify-between items-start mb-2"><span class="text-[12px] font-bold text-blue-600">진행 중 (작업중)</span><div class="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-500"><i class="fa-solid fa-person-digging text-[10px]"></i></div></div>
+            <p class="text-3xl font-black text-blue-700"><span id="req-dash-progress">0</span><span class="text-sm ml-1 font-bold text-blue-400">건</span></p>
+        </div>
+        <div class="bg-white rounded-3xl p-5 border border-emerald-200 shadow-sm flex flex-col justify-center border-b-4 border-b-emerald-400 relative overflow-hidden">
+            <div class="absolute -right-4 -bottom-4 opacity-5"><i class="fa-solid fa-circle-check text-8xl text-emerald-500"></i></div>
+            <div class="flex justify-between items-start mb-2 relative z-10"><span class="text-[12px] font-bold text-emerald-600">작업 완료됨</span><div class="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-500"><i class="fa-solid fa-check text-[10px]"></i></div></div>
+            <p class="text-3xl font-black text-emerald-600 relative z-10"><span id="req-dash-completed">0</span><span class="text-sm ml-1 font-bold text-emerald-400">건</span></p>
+        </div>
+    </div>
+
     <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
         <div class="px-6 py-4 flex flex-col md:flex-row justify-between items-center bg-white gap-4 border-b border-slate-100">
             <div class="flex items-center gap-4">
@@ -16,16 +36,19 @@
         </div>
         
         <div id="request-list-container" class="overflow-x-auto min-h-[500px] p-4 bg-slate-50/50">
-            <table class="w-full text-left border-collapse bg-white border border-slate-200 shadow-sm rounded-xl overflow-hidden">
+            <table class="w-full text-left border-collapse bg-white border border-slate-200 shadow-sm rounded-xl overflow-hidden whitespace-nowrap">
                 <thead class="bg-slate-800 text-white text-[11px] uppercase tracking-wider">
                     <tr>
                         <th class="p-4 font-bold text-center w-24">현재 상태</th>
-                        <th class="p-4 font-bold w-24 text-center">구분</th>
-                        <th class="p-4 font-bold">요청 제목 (프로젝트명)</th>
+                        <th class="p-4 font-bold text-center text-amber-300 w-16">코멘트</th>
+                        <th class="p-4 font-bold text-center w-24">구분</th>
+                        <th class="p-4 font-bold min-w-[250px]">요청 제목 (프로젝트명)</th>
                         <th class="p-4 font-bold text-center">요청자</th>
-                        <th class="p-4 font-bold text-center w-32">예정 MD</th>
-                        <th class="p-4 font-bold text-center w-32">등록일</th>
-                        <th class="p-4 font-bold text-center w-24">기능</th>
+                        <th class="p-4 font-bold text-center text-indigo-300">담당자</th>
+                        <th class="p-4 font-bold text-center">등록일</th>
+                        <th class="p-4 font-bold text-center text-blue-300">진행시작일</th>
+                        <th class="p-4 font-bold text-center text-emerald-300">완료일</th>
+                        <th class="p-4 font-bold text-center w-20">기능</th>
                     </tr>
                 </thead>
                 <tbody id="request-tbody" class="divide-y divide-slate-100 text-xs"></tbody>
@@ -64,11 +87,6 @@
             </div>
 
             <div id="collab-form-fields" class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5 hidden">
-                <div class="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100">
-                    <label class="text-[11px] font-bold text-indigo-700 mb-1.5 flex items-center gap-1.5"><i class="fa-regular fa-envelope"></i> 수신자 메일 지정 <span class="text-slate-400 font-normal">(쉼표로 여러 명 지정 가능)</span></label>
-                    <input type="text" id="req-recipient-email" value="admin@axbis.ai" placeholder="예: admin@axbis.ai, manager@axbis.ai" class="w-full border border-indigo-200 px-4 py-2.5 rounded-xl text-sm outline-indigo-500 bg-white focus:shadow-md transition-all font-bold text-indigo-900">
-                </div>
-
                 <div class="flex flex-col gap-2">
                     <label class="text-[11px] font-bold text-slate-500">구분 <span class="text-rose-500">*</span></label>
                     <div class="flex gap-2">
@@ -164,14 +182,112 @@
 
         <div class="px-6 py-4 border-t border-slate-200 bg-white flex justify-between items-center gap-3 z-10">
             <div id="admin-actions" class="flex gap-2 hidden">
-                <button id="btn-admin-accept" onclick="window.acceptRequest()" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-4 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center gap-1.5 shadow-sm"><i class="fa-solid fa-play"></i> 접수 완료(진행)</button>
-                <button id="btn-admin-complete" onclick="window.completeRequest()" class="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-4 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center gap-1.5 shadow-sm"><i class="fa-solid fa-check"></i> 작업 완료 처리</button>
+                <button id="btn-admin-accept" onclick="window.promptAcceptRequest()" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-4 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center gap-1.5 shadow-sm"><i class="fa-solid fa-play"></i> 접수 완료(진행)</button>
+                <button id="btn-admin-complete" onclick="window.promptCompleteRequest()" class="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-4 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center gap-1.5 shadow-sm"><i class="fa-solid fa-check"></i> 작업 완료 처리</button>
                 <button id="btn-admin-revert" onclick="window.revertRequest()" class="bg-amber-100 hover:bg-amber-200 text-amber-700 px-4 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center gap-1.5 shadow-sm hidden"><i class="fa-solid fa-rotate-left"></i> 진행중으로 되돌리기</button>
             </div>
             
             <div class="flex gap-2 ml-auto">
-                <button onclick="window.closeWriteModal()" class="bg-white border border-slate-300 hover:bg-slate-50 text-slate-600 px-6 py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm">취소</button>
-                <button id="btn-req-save" onclick="window.saveRequest(this)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-2.5 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2"><i class="fa-regular fa-paper-plane"></i> 저장 및 메일 발송</button>
+                <button onclick="window.closeWriteModal()" class="bg-white border border-slate-300 hover:bg-slate-50 text-slate-600 px-6 py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm">닫기</button>
+                <button id="btn-req-save" onclick="window.promptSaveRequest()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-2.5 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2"><i class="fa-regular fa-paper-plane"></i> 저장 및 메일 발송</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="req-send-modal" class="fixed inset-0 z-[300] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-indigo-50">
+            <h2 class="text-base font-extrabold text-indigo-800"><i class="fa-regular fa-envelope text-indigo-500 mr-1.5"></i> 요청서 발송 확인</h2>
+            <button onclick="document.getElementById('req-send-modal').classList.add('hidden'); document.getElementById('req-send-modal').classList.remove('flex');" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-lg"></i></button>
+        </div>
+        <div class="p-6 bg-slate-50/50 space-y-4">
+            <p class="text-sm font-bold text-slate-600 leading-relaxed">입력하신 내용을 저장하고 아래 수신자에게 알림 메일을 발송하시겠습니까?</p>
+            <div>
+                <label class="block text-[11px] font-bold text-slate-500 mb-1.5">수신자 이메일 (쉼표로 구분)</label>
+                <input type="text" id="req-send-email" value="admin@axbis.ai" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold outline-indigo-500 bg-white">
+            </div>
+        </div>
+        <div class="px-6 py-4 border-t bg-white flex justify-end gap-2">
+            <button onclick="document.getElementById('req-send-modal').classList.add('hidden'); document.getElementById('req-send-modal').classList.remove('flex');" class="px-5 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-colors">취소</button>
+            <button onclick="window.executeSaveRequest()" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors"><i class="fa-solid fa-paper-plane mr-1"></i> 발송하기</button>
+        </div>
+    </div>
+</div>
+
+<div id="req-accept-modal" class="fixed inset-0 z-[300] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-blue-50">
+            <h2 class="text-base font-extrabold text-blue-800"><i class="fa-solid fa-play text-blue-500 mr-1.5"></i> 요청 접수 및 담당자 지정</h2>
+            <button onclick="document.getElementById('req-accept-modal').classList.add('hidden'); document.getElementById('req-accept-modal').classList.remove('flex');" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-lg"></i></button>
+        </div>
+        <div class="p-6 bg-slate-50/50 space-y-4">
+            <div>
+                <label class="block text-[11px] font-bold text-slate-500 mb-1.5">작업 담당자 지정 <span class="text-rose-500">*</span></label>
+                <select id="req-accept-manager" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold outline-blue-500 bg-white cursor-pointer"></select>
+            </div>
+            <div>
+                <label class="block text-[11px] font-bold text-slate-500 mb-1.5">접수 완료 알림 메일 수신자 (요청자)</label>
+                <input type="text" id="req-accept-email" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold outline-blue-500 bg-white">
+            </div>
+        </div>
+        <div class="px-6 py-4 border-t bg-white flex justify-end gap-2">
+            <button onclick="document.getElementById('req-accept-modal').classList.add('hidden'); document.getElementById('req-accept-modal').classList.remove('flex');" class="px-5 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-colors">취소</button>
+            <button onclick="window.executeAcceptRequest()" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors"><i class="fa-solid fa-check mr-1"></i> 접수 및 알림 발송</button>
+        </div>
+    </div>
+</div>
+
+<div id="req-complete-modal" class="fixed inset-0 z-[300] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-emerald-50">
+            <h2 class="text-base font-extrabold text-emerald-800"><i class="fa-solid fa-check text-emerald-500 mr-1.5"></i> 작업 완료 처리</h2>
+            <button onclick="document.getElementById('req-complete-modal').classList.add('hidden'); document.getElementById('req-complete-modal').classList.remove('flex');" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-lg"></i></button>
+        </div>
+        <div class="p-6 bg-slate-50/50 space-y-4">
+            <p class="text-sm font-bold text-slate-600 leading-relaxed">이 요청을 '작업 완료' 처리하고 아래 수신자에게 알림 메일을 발송하시겠습니까?</p>
+            <div>
+                <label class="block text-[11px] font-bold text-slate-500 mb-1.5">완료 알림 메일 수신자 (요청자)</label>
+                <input type="text" id="req-complete-email" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold outline-emerald-500 bg-white">
+            </div>
+        </div>
+        <div class="px-6 py-4 border-t bg-white flex justify-end gap-2">
+            <button onclick="document.getElementById('req-complete-modal').classList.add('hidden'); document.getElementById('req-complete-modal').classList.remove('flex');" class="px-5 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-colors">취소</button>
+            <button onclick="window.executeCompleteRequest()" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors"><i class="fa-solid fa-flag-checkered mr-1"></i> 완료 처리 및 발송</button>
+        </div>
+    </div>
+</div>
+
+<div id="comment-modal" class="fixed inset-0 z-[400] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col h-[600px] md:h-[85vh] overflow-hidden">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-[#fffbf0]">
+            <h2 class="text-base font-extrabold text-amber-800 flex items-center gap-2">
+                <i class="fa-solid fa-comments text-amber-500"></i> 현황 코멘트 관리
+            </h2>
+            <button onclick="window.closeCommentModal()" class="text-amber-400 hover:text-rose-500 transition-colors">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
+        </div>
+        <div class="p-6 bg-slate-50/50 flex-1 flex flex-col gap-4 min-h-0">
+            <input type="hidden" id="cmt-req-id">
+            <input type="hidden" id="reply-to-id">
+            <input type="hidden" id="editing-cmt-id">
+            <div id="comment-list" class="flex-1 overflow-y-auto space-y-4 custom-scrollbar p-1 min-h-0"></div>
+            <div class="flex flex-col gap-2 mt-2">
+                <div id="reply-indicator" class="hidden flex justify-between bg-indigo-50 px-4 py-2 rounded-xl border border-indigo-100">
+                    <span id="reply-indicator-name" class="text-xs text-indigo-700"></span>
+                    <button onclick="window.cancelCommentAction()" class="text-xs font-bold text-rose-500 hover:text-rose-700">취소</button>
+                </div>
+                <div class="flex gap-2 items-end relative">
+                    <div class="relative flex-1">
+                        <textarea id="new-cmt-text" autocomplete="off" oninput="window.handleMention(this)" onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); document.getElementById('btn-cmt-save').click(); }" class="w-full h-20 border border-slate-300 px-4 py-3 rounded-xl text-sm outline-amber-500 resize-none custom-scrollbar" placeholder="코멘트 남기기... '@'멘션, 자동 링크 변환 (Shift+Enter 줄바꿈)"></textarea>
+                    </div>
+                    <input type="file" id="new-cmt-image" accept="image/*" class="hidden">
+                    <label for="new-cmt-image" class="cursor-pointer text-slate-400 hover:text-amber-500 px-2 py-2 mb-2">
+                        <i class="fa-regular fa-image text-[22px]"></i>
+                    </label>
+                    <button id="btn-cmt-save" onclick="window.saveCommentItem()" class="bg-amber-500 hover:bg-amber-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-sm mb-1 h-11">작성</button>
+                </div>
             </div>
         </div>
     </div>
