@@ -4,13 +4,15 @@ import { collection, doc, setDoc, addDoc, deleteDoc, query, onSnapshot, where, g
 
 let unsubscribeRequests = null;
 let currentCommentUnsubscribe = null;
+let unsubscribeEmails = null; // 💡 수신자 이메일 목록 구독
+
+window.currentReqEmails = []; // 💡 현재 앱(협업/구매/수리)의 수신자 이메일 목록 캐싱
 
 // ==========================================
 // 🚀 구글 API 연동 (Drive & Gmail)
 // ==========================================
 const GOOGLE_CLIENT_ID = '924354535197-joakn7gpfj4d3oirpd1pu3un9j7689q9.apps.googleusercontent.com';
 const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/gmail.send';
-const ADMIN_EMAIL = 'admin@axbis.ai'; 
 
 window.googleAccessToken = null;
 
@@ -122,7 +124,7 @@ window.uploadFileToDrive = async function(file, folderId) {
     return data.id; 
 };
 
-// 💡 지정된 이메일로 템플릿 발송
+// 💡 템플릿 메일 발송 로직 (발송자 명시 포함)
 window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
     if (!window.googleAccessToken) throw new Error("구글 인증이 필요합니다.");
     if (!recipientEmail) return false;
@@ -138,6 +140,7 @@ window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
                 <p><strong>프로젝트명:</strong> ${reqData.pjtName || '-'}</p>
                 <p><strong>요청자:</strong> ${reqData.authorName} (${reqData.authorTeam})</p>
                 ${reqData.manager ? `<p><strong>담당자:</strong> <span style="color:#4f46e5; font-weight:bold;">${reqData.manager}</span></p>` : ''}
+                <p><strong>발송자(시스템 계정):</strong> ${window.userProfile.name} (${window.userProfile.email})</p>
                 <p><strong>내용:</strong><br>${String(reqData.content || '').replace(/\n/g, '<br>')}</p>
                 ${reqData.fileUrl ? `<p style="margin-top:20px;"><strong>첨부파일:</strong> <a href="${reqData.fileUrl}" style="color:#4f46e5; font-weight:bold;">문서 확인하기</a></p>` : ''}
             </div>
@@ -172,6 +175,63 @@ window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
     if (!res.ok) throw new Error("메일 발송 실패");
     return true;
 };
+
+// ==========================================
+// 💡 수신 담당자 설정 관리 로직
+// ==========================================
+window.openEmailSettingsModal = function() {
+    document.getElementById('new-req-email').value = '';
+    window.renderReqEmailList();
+    document.getElementById('req-email-setting-modal').classList.remove('hidden');
+    document.getElementById('req-email-setting-modal').classList.add('flex');
+};
+
+window.closeEmailSettingsModal = function() {
+    document.getElementById('req-email-setting-modal').classList.add('hidden');
+    document.getElementById('req-email-setting-modal').classList.remove('flex');
+};
+
+window.renderReqEmailList = function() {
+    const listEl = document.getElementById('req-email-list');
+    if(!listEl) return;
+    if(window.currentReqEmails.length === 0) {
+        listEl.innerHTML = '<li class="text-center text-xs text-slate-400 font-bold p-4 bg-slate-50 rounded-xl border border-slate-200 border-dashed">등록된 이메일이 없습니다.</li>';
+        return;
+    }
+    listEl.innerHTML = window.currentReqEmails.map((email, idx) => `
+        <li class="flex justify-between items-center bg-white border border-slate-200 px-3 py-2 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+            <span class="text-sm font-bold text-slate-700 flex items-center gap-2"><i class="fa-regular fa-envelope text-slate-400"></i> ${email}</span>
+            <button onclick="window.removeReqEmail(${idx})" class="text-slate-400 hover:text-rose-500 transition-colors p-1"><i class="fa-solid fa-trash-can"></i></button>
+        </li>
+    `).join('');
+};
+
+window.addReqEmail = async function() {
+    const input = document.getElementById('new-req-email');
+    const email = input.value.trim();
+    if(!email) return window.showToast("이메일을 입력하세요.", "warning");
+    
+    if(!/^\S+@\S+\.\S+$/.test(email)) return window.showToast("유효한 이메일 형식이 아닙니다.", "warning");
+    if(window.currentReqEmails.includes(email)) return window.showToast("이미 등록된 이메일입니다.", "warning");
+
+    const newEmails = [...window.currentReqEmails, email];
+    try {
+        await setDoc(doc(db, "settings", "req_emails_" + window.currentAppId), { emails: newEmails }, { merge: true });
+        input.value = '';
+        window.showToast("이메일이 추가되었습니다.");
+    } catch(e) { window.showToast("추가 실패", "error"); }
+};
+
+window.removeReqEmail = async function(idx) {
+    if(!confirm("이 이메일을 수신자 목록에서 삭제하시겠습니까?")) return;
+    const newEmails = [...window.currentReqEmails];
+    newEmails.splice(idx, 1);
+    try {
+        await setDoc(doc(db, "settings", "req_emails_" + window.currentAppId), { emails: newEmails }, { merge: true });
+        window.showToast("삭제되었습니다.");
+    } catch(e) { window.showToast("삭제 실패", "error"); }
+};
+
 
 // ==========================================
 // 폼 UI 제어 및 저장/수정 로직
@@ -275,7 +335,6 @@ window.closeWriteModal = function() {
 // 💡 모달 프롬프트 연결 로직 (Save, Accept, Complete)
 // ==========================================
 
-// 1. 사용자: 저장 및 메일 발송 클릭 시
 window.promptSaveRequest = function() {
     const pjtName = document.getElementById('req-pjt-name').value.trim();
     const startDate = document.getElementById('req-start-date').value;
@@ -290,12 +349,17 @@ window.promptSaveRequest = function() {
         return window.showToast("파일 업로드 및 메일 발송을 위해 [구글 계정 연동]을 먼저 진행해주세요.", "warning");
     }
 
-    // 전용 모달 오픈
+    if (window.currentReqEmails.length === 0) {
+        return window.showToast("상단 [수신 담당자 설정]에서 메일을 받을 사람을 먼저 지정해주세요.", "warning");
+    }
+    
+    // 수신자 디스플레이 채우기
+    document.getElementById('req-send-email-display').innerText = window.currentReqEmails.join(', ');
+    
     document.getElementById('req-send-modal').classList.remove('hidden');
     document.getElementById('req-send-modal').classList.add('flex');
 };
 
-// 모달창에서 발송 클릭 시 실제 실행
 window.executeSaveRequest = async function() {
     document.getElementById('req-send-modal').classList.add('hidden');
     document.getElementById('req-send-modal').classList.remove('flex');
@@ -310,7 +374,9 @@ window.executeSaveRequest = async function() {
     const content = document.getElementById('req-content').value.trim();
     const fileInput = document.getElementById('req-file');
     const category = document.querySelector('input[name="req-category"]:checked')?.value || '';
-    const recipientEmail = document.getElementById('req-send-email').value.trim();
+    
+    // 💡 수신자 다중 지정 연동
+    const recipientEmails = window.currentReqEmails.join(',');
 
     try { 
         let fileUrl = null;
@@ -335,7 +401,7 @@ window.executeSaveRequest = async function() {
             estMd: parseFloat(document.getElementById('req-est-md').value) || 0,
             category: category,
             content: content,
-            recipientEmail: recipientEmail, 
+            recipientEmail: recipientEmails, // 저장 정보 업데이트
             fileUrl: fileUrl || (window.editingReqId ? window.currentRequestList.find(r=>r.id===window.editingReqId)?.fileUrl : null),
             authorUid: window.currentUser.uid, 
             authorName: window.userProfile.name, 
@@ -351,9 +417,9 @@ window.executeSaveRequest = async function() {
             await addDoc(collection(db,"requests"), data); 
         } 
 
-        if(recipientEmail) {
+        if(recipientEmails) {
             window.showToast("지정된 수신자에게 메일을 발송합니다...");
-            await window.sendNotificationEmail('pending', data, recipientEmail);
+            await window.sendNotificationEmail('pending', data, recipientEmails);
         }
 
         window.showToast("성공적으로 저장 및 메일 발송이 완료되었습니다."); 
@@ -367,14 +433,12 @@ window.executeSaveRequest = async function() {
     }
 };
 
-// 2. 관리자: 접수 처리 모달 오픈
 window.promptAcceptRequest = function() {
     if (!window.editingReqId) return;
     if (!window.googleAccessToken) return window.showToast("구글 연동을 먼저 해주세요.", "error");
 
     const req = window.currentRequestList.find(r => r.id === window.editingReqId);
     
-    // 담당자 드롭다운 채우기 (전체 사용자)
     const managerSel = document.getElementById('req-accept-manager');
     if(managerSel) {
         managerSel.innerHTML = '<option value="">선택 안함</option>' + (window.allSystemUsers || []).map(u => `<option value="${u.name}">${u.name} (${u.team||'소속없음'})</option>`).join('');
@@ -404,7 +468,7 @@ window.executeAcceptRequest = async function() {
         };
         await setDoc(doc(db, "requests", window.editingReqId), payload, { merge: true });
         
-        const updatedReq = Object.assign({}, req, payload); // 이메일용
+        const updatedReq = Object.assign({}, req, payload); 
         if (sendEmail) {
             await window.sendNotificationEmail('progress', updatedReq, sendEmail);
             window.showToast("접수 완료 메일이 발송되었습니다.");
@@ -415,7 +479,6 @@ window.executeAcceptRequest = async function() {
     } catch(e) { window.showToast("처리 실패", "error"); }
 };
 
-// 3. 관리자: 완료 처리 모달 오픈
 window.promptCompleteRequest = function() {
     if (!window.editingReqId) return;
     if (!window.googleAccessToken) return window.showToast("구글 연동을 먼저 해주세요.", "error");
@@ -452,7 +515,6 @@ window.executeCompleteRequest = async function() {
     } catch(e) { window.showToast("처리 실패", "error"); }
 };
 
-// 4. 관리자: 진행중으로 되돌리기
 window.revertRequest = async function() {
     if (!window.editingReqId) return;
     if(!confirm("이 요청을 다시 '진행 중' 상태로 되돌리시겠습니까?")) return;
@@ -491,6 +553,16 @@ window.loadRequestsData = function(appId) {
 
         if(window.renderRequestList) window.renderRequestList(); 
     }); 
+    
+    // 💡 수신자 이메일 목록 실시간 동기화
+    if(unsubscribeEmails) unsubscribeEmails();
+    unsubscribeEmails = onSnapshot(doc(db, "settings", "req_emails_" + appId), (docSnap) => {
+        if(docSnap.exists() && docSnap.data().emails) {
+            window.currentReqEmails = docSnap.data().emails;
+        } else {
+            window.currentReqEmails = [];
+        }
+    });
 };
 
 window.renderRequestList = function() { 
@@ -556,7 +628,7 @@ window.deleteRequest = async function(id) {
 };
 
 // ==========================================
-// 코멘트 모달 로직 (PJT 현황판 복붙 활용)
+// 코멘트 모달 로직
 // ==========================================
 window.openCommentModal = function(reqId, title) { 
     document.getElementById('cmt-req-id').value = reqId; 
