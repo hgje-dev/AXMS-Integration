@@ -20,10 +20,9 @@
     </div>
 
     <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-        
         <div class="px-6 py-4 flex flex-col lg:flex-row justify-between items-center bg-white gap-4 border-b border-slate-200">
             <div class="flex items-center gap-4 flex-wrap w-full lg:w-auto">
-                <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner shrink-0">
+                <div id="req-header-icon" class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner shrink-0">
                     <i class="fa-regular fa-handshake text-2xl"></i>
                 </div>
                 <div class="flex flex-col gap-1">
@@ -52,7 +51,7 @@
                     <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
                     <input type="text" id="filter-req-search" oninput="window.filterReqBySearch(this.value)" placeholder="PJT코드, 명칭, 요청서 제목 검색..." class="w-full border border-slate-300 rounded-xl pl-8 pr-3 py-2 text-xs font-bold text-slate-600 outline-indigo-500 shadow-sm bg-slate-50 focus:bg-white transition-colors">
                 </div>
-                <button onclick="window.openWriteModal()" class="bg-indigo-600 hover:bg-indigo-700 transition-colors text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md flex items-center gap-2 whitespace-nowrap shrink-0">
+                <button onclick="window.openWriteModal()" id="btn-header-write" class="bg-indigo-600 hover:bg-indigo-700 transition-colors text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md flex items-center gap-2 whitespace-nowrap shrink-0">
                     <i class="fa-solid fa-plus"></i> 새 요청서 작성
                 </button>
             </div>
@@ -61,19 +60,8 @@
         <div id="request-list-container" class="overflow-x-auto min-h-[500px] p-4 bg-white">
             <table class="w-full text-left border-collapse bg-white border border-slate-200 shadow-sm rounded-xl overflow-hidden whitespace-nowrap">
                 <thead class="bg-slate-800 text-white text-[11px] uppercase tracking-wider">
-                    <tr>
-                        <th class="p-4 font-bold text-center w-20">현재 상태</th>
-                        <th class="p-4 font-bold text-center text-amber-300 w-16">코멘트</th>
-                        <th class="p-4 font-bold text-center w-20">구분</th>
-                        <th class="p-4 font-bold min-w-[200px] max-w-[250px]">프로젝트명</th>
-                        <th class="p-4 font-bold text-center">PJT 코드</th>
-                        <th class="p-4 font-bold min-w-[200px] max-w-[250px] text-indigo-300">요청서 제목</th>
-                        <th class="p-4 font-bold text-center">담당자</th>
-                        <th class="p-4 font-bold text-center text-slate-400">등록일</th>
-                        <th class="p-4 font-bold text-center text-blue-400">진행시작일</th>
-                        <th class="p-4 font-bold text-center text-emerald-400">완료일</th>
-                        <th class="p-4 font-bold text-center w-16">기능</th>
-                    </tr>
+                    <tr id="req-thead-tr">
+                        </tr>
                 </thead>
                 <tbody id="request-tbody" class="divide-y divide-slate-100 text-xs"></tbody>
             </table>
@@ -111,7 +99,6 @@
             </div>
 
             <div id="collab-form-fields" class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5 hidden">
-                
                 <div class="flex flex-col gap-2">
                     <label class="text-[11px] font-bold text-slate-500">구분 <span class="text-rose-500">*</span></label>
                     <div class="flex gap-2">
@@ -181,8 +168,33 @@
                 </div>
             </div>
 
+            <div id="purchase-form-fields" class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5 hidden">
+                <div>
+                    <label class="text-[11px] font-bold text-slate-500 mb-1.5 block">요청서 제목 <span class="text-rose-500">*</span></label>
+                    <input type="text" id="req-pur-title" placeholder="모듈 구매 의뢰서 제목을 입력하세요" autocomplete="off" class="w-full border border-slate-300 px-4 py-2.5 rounded-xl text-sm outline-indigo-500 bg-indigo-50/50 focus:bg-white transition-colors font-bold text-indigo-900 shadow-sm">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-[11px] font-bold text-slate-500 mb-1.5 block">프로젝트 코드</label>
+                        <input type="text" id="req-pur-pjt-code" placeholder="예: PRJ-2024-001" oninput="window.showAutocomplete(this,'req-pur-pjt-name','',false)" autocomplete="off" class="w-full border border-slate-300 px-4 py-2.5 rounded-xl text-sm outline-indigo-500 bg-slate-50 focus:bg-white transition-colors font-semibold">
+                    </div>
+                    <div>
+                        <label class="text-[11px] font-bold text-slate-500 mb-1.5 block">프로젝트명 <span class="text-rose-500">*</span></label>
+                        <input type="text" id="req-pur-pjt-name" placeholder="프로젝트명을 입력하세요" oninput="window.showAutocomplete(this,'req-pur-pjt-code','',true)" autocomplete="off" class="w-full border border-slate-300 px-4 py-2.5 rounded-xl text-sm outline-indigo-500 bg-slate-50 focus:bg-white transition-colors font-bold">
+                    </div>
+                    <div class="col-span-2 md:col-span-1">
+                        <label class="text-[11px] font-bold text-slate-500 mb-1.5 block">출하 요청일 <span class="text-rose-500">*</span></label>
+                        <input type="date" id="req-pur-ship-date" class="w-full border border-rose-300 px-4 py-2.5 rounded-xl text-sm outline-rose-500 bg-rose-50 focus:bg-white transition-colors font-bold text-rose-700">
+                    </div>
+                </div>
+                <div>
+                    <label class="text-[11px] font-bold text-slate-500 mb-1.5 block">비고 / 요청 내용</label>
+                    <textarea id="req-pur-content" placeholder="특이사항이나 추가 요청 내용을 입력해주세요." class="w-full border border-slate-300 px-4 py-3 rounded-xl text-sm outline-indigo-500 h-20 resize-none custom-scrollbar bg-slate-50 focus:bg-white transition-colors font-medium"></textarea>
+                </div>
+            </div>
+
             <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                <label class="text-[11px] font-bold text-slate-500 mb-3 flex items-center gap-1.5"><i class="fa-brands fa-google-drive text-emerald-500"></i> 첨부 파일 (선택)</label>
+                <label class="text-[11px] font-bold text-slate-500 mb-3 flex items-center gap-1.5"><i class="fa-brands fa-google-drive text-emerald-500"></i> 첨부 파일 <span class="text-slate-400 font-normal">(필요 시 양식 첨부)</span></label>
                 
                 <div id="req-dropzone" class="border-2 border-dashed border-slate-300 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 hover:border-indigo-400 transition-colors relative" 
                      onclick="document.getElementById('req-file').click()" 
@@ -203,8 +215,12 @@
                     <button onclick="window.clearSelectedFile(event)" class="text-indigo-400 hover:text-rose-500"><i class="fa-solid fa-xmark"></i></button>
                 </div>
 
-                <div id="req-file-link-wrap" class="mt-3 text-xs font-bold hidden bg-sky-50 py-2 px-3 rounded-lg border border-sky-100">
-                    <a id="req-file-link" href="#" target="_blank" class="text-sky-600 hover:text-sky-800 underline break-all flex items-center gap-2"><i class="fa-solid fa-arrow-up-right-from-square"></i> 등록된 파일 보기</a>
+                <div id="req-file-link-wrap" class="mt-3 text-xs font-bold hidden bg-sky-50 py-2 px-3 rounded-lg border border-sky-100 flex items-center justify-between">
+                    <a id="req-file-link" href="#" target="_blank" class="text-sky-600 hover:text-sky-800 underline break-all flex items-center gap-2"><i class="fa-solid fa-arrow-up-right-from-square"></i> 작성 시 첨부한 파일 보기</a>
+                </div>
+
+                <div id="req-result-link-wrap" class="mt-2 text-xs font-bold hidden bg-emerald-50 py-2 px-3 rounded-lg border border-emerald-100 flex items-center justify-between">
+                    <a id="req-result-link" href="#" target="_blank" class="text-emerald-700 hover:text-emerald-900 underline break-all flex items-center gap-2"><i class="fa-solid fa-file-circle-check"></i> <span id="req-result-label">결과물 / 검수 리스트 확인하기</span></a>
                 </div>
             </div>
 
@@ -298,7 +314,13 @@
             <button onclick="document.getElementById('req-complete-modal').classList.add('hidden'); document.getElementById('req-complete-modal').classList.remove('flex');" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-lg"></i></button>
         </div>
         <div class="p-6 bg-slate-50/50 space-y-4">
-            <p class="text-sm font-bold text-slate-600 leading-relaxed">이 요청을 '작업 완료' 처리하고 아래 수신자에게 알림 메일을 발송하시겠습니까?</p>
+            <p class="text-sm font-bold text-slate-600 leading-relaxed">이 요청을 '작업 완료' 처리하고 요청자에게 알림 메일을 발송하시겠습니까?</p>
+            
+            <div id="req-complete-file-section" class="bg-white p-4 border border-emerald-200 rounded-xl hidden">
+                <label class="block text-[11px] font-bold text-emerald-700 mb-2">레이저 검수 리스트 첨부 <span class="text-rose-500">*필수</span></label>
+                <input type="file" id="req-complete-file" class="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:font-bold file:bg-emerald-100 file:text-emerald-700 hover:file:bg-emerald-200 cursor-pointer transition-all">
+            </div>
+
             <div>
                 <label class="block text-[11px] font-bold text-slate-500 mb-1.5">완료 알림 메일 수신자 (요청자)</label>
                 <input type="text" id="req-complete-email" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold outline-emerald-500 bg-slate-100 text-slate-500" readonly>
@@ -306,7 +328,7 @@
         </div>
         <div class="px-6 py-4 border-t bg-white flex justify-end gap-2">
             <button onclick="document.getElementById('req-complete-modal').classList.add('hidden'); document.getElementById('req-complete-modal').classList.remove('flex');" class="px-5 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-colors">취소</button>
-            <button onclick="window.executeCompleteRequest()" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors"><i class="fa-solid fa-flag-checkered mr-1"></i> 완료 처리 및 발송</button>
+            <button onclick="window.executeCompleteRequest()" id="btn-req-complete-exec" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors"><i class="fa-solid fa-flag-checkered mr-1"></i> 완료 처리 및 발송</button>
         </div>
     </div>
 </div>
