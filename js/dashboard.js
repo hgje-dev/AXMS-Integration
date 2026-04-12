@@ -549,7 +549,7 @@ function renderPeriodCharts(type, val, projects, mgrCounts, periodFinalMdTotal) 
     }, { indexAxis: 'y', maintainAspectRatio: false, scales: { x: { beginAtZero: true, ticks: { stepSize: 1 }, border: { dash: [4, 4] } }, y: { grid: { display: false } } }, plugins: { legend: { display: false } } });
 }
 
-// 💡 엑셀 출력 기능 고도화 (대시보드 리포트 & 데이터 시트)
+// 엑셀 출력 기능 고도화 (대시보드 리포트 & 데이터 시트)
 window.exportDashboardExcel = async function() {
     if (window.userProfile && window.userProfile.role !== 'admin') {
         if (window.showToast) window.showToast('보고서 다운로드는 관리자만 가능합니다.', 'error');
@@ -565,7 +565,7 @@ window.exportDashboardExcel = async function() {
         const wb = new window.ExcelJS.Workbook();
 
         // 1. 대시보드 요약 시트
-        const ws1 = wb.addWorksheet('📊 대시보드_요약', { views: [{ showGridLines: false }] });
+        const ws1 = wb.addWorksheet('대시보드_요약', { views: [{ showGridLines: false }] });
 
         // 열 너비 설정 (그리드 레이아웃용)
         ws1.columns = [
@@ -657,7 +657,7 @@ window.exportDashboardExcel = async function() {
             if (wEl) periodTypeStr = wEl.value;
         }
 
-        const ws2 = wb.addWorksheet('📋 조회기간_프로젝트상세', { views: [{ showGridLines: false }] });
+        const ws2 = wb.addWorksheet('조회기간_프로젝트상세', { views: [{ showGridLines: false }] });
         ws2.columns = [
             { width: 12 }, // 파트
             { width: 18 }, // PJT 코드
@@ -678,7 +678,7 @@ window.exportDashboardExcel = async function() {
         ws2.getCell('A1').font = { bold: true, size: 16, color: {argb: 'FF1E293B'} };
         ws2.getCell('A1').alignment = { vertical: 'middle', horizontal: 'left' };
 
-        const headers = ['파트', 'PJT 코드', '프로젝트명', '현재상태', '진행률(%)', '예정출하일', '실제출하일', '예정MD', '실투입MD', '외주MD', '최종MD', '편차'];
+        const headers = ['파트', 'PJT 코드', '프로젝트명', '현재상태', '진행률', '예정출하일', '실제출하일', '예정MD', '실투입MD', '외주MD', '최종MD', '편차'];
         let hr = ws2.addRow(headers);
         hr.font = { bold: true, color: { argb: 'FFFFFFFF' } };
         hr.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } };
@@ -704,21 +704,23 @@ window.exportDashboardExcel = async function() {
                 p.code || '-',
                 p.name || '-',
                 safeStatus,
-                (p.progress || 0) + '%',
+                (parseFloat(p.progress) || 0) / 100, // 백분율 처리를 위해 100으로 나눔
                 p.d_shipEst || '-',
                 p.d_shipEn || '-',
                 eMd,
                 cMd,
                 oMd,
-                fMd.toFixed(1),
-                variance
+                fMd, // 문자열이 아닌 숫자로 입력
+                parseFloat(variance) // 문자열이 아닌 숫자로 입력
             ]);
 
             row.eachCell(function(c, colNumber) {
                 c.border = { top: { style: 'thin', color:{argb:'FFE2E8F0'} }, left: { style: 'thin', color:{argb:'FFE2E8F0'} }, bottom: { style: 'thin', color:{argb:'FFE2E8F0'} }, right: { style: 'thin', color:{argb:'FFE2E8F0'} } };
                 c.alignment = { vertical: 'middle', horizontal: (colNumber === 3) ? 'left' : 'center' };
 
-                if (colNumber >= 8) {
+                if (colNumber === 5) {
+                    c.numFmt = '0%'; // 엑셀의 백분율 포맷 적용
+                } else if (colNumber >= 8) {
                     c.numFmt = '#,##0.0';
                     if (colNumber === 12) { 
                         let numVar = parseFloat(variance);
@@ -731,7 +733,7 @@ window.exportDashboardExcel = async function() {
 
 
         // 3. 전체 데이터 Raw 시트
-        const ws3 = wb.addWorksheet('💾 전체_Raw_Data');
+        const ws3 = wb.addWorksheet('전체_Raw_Data');
         ws3.columns = [
             { header: 'ID', key: 'id', width: 20 },
             { header: '카테고리', key: 'category', width: 12 },
@@ -765,11 +767,11 @@ window.exportDashboardExcel = async function() {
                 name: p.name,
                 company: p.company,
                 manager: p.manager,
-                estMd: p.estMd || 0,
-                currentMd: p.currentMd || 0,
-                outMd: p.outMd || 0,
-                finalMd: p.finalMd || 0,
-                totPers: p.totPers || 0,
+                estMd: parseFloat(p.estMd) || 0,
+                currentMd: parseFloat(p.currentMd) || 0,
+                outMd: parseFloat(p.outMd) || 0,
+                finalMd: parseFloat(p.finalMd) || 0,
+                totPers: parseInt(p.totPers) || 0,
                 d_asmEst: p.d_asmEst,
                 d_shipEst: p.d_shipEst,
                 d_shipEn: p.d_shipEn
