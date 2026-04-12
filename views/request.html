@@ -64,6 +64,11 @@
             </div>
 
             <div id="collab-form-fields" class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5 hidden">
+                <div class="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100">
+                    <label class="text-[11px] font-bold text-indigo-700 mb-1.5 flex items-center gap-1.5"><i class="fa-regular fa-envelope"></i> 수신자 메일 지정 <span class="text-slate-400 font-normal">(쉼표로 여러 명 지정 가능)</span></label>
+                    <input type="text" id="req-recipient-email" value="admin@axbis.ai" placeholder="예: admin@axbis.ai, manager@axbis.ai" class="w-full border border-indigo-200 px-4 py-2.5 rounded-xl text-sm outline-indigo-500 bg-white focus:shadow-md transition-all font-bold text-indigo-900">
+                </div>
+
                 <div class="flex flex-col gap-2">
                     <label class="text-[11px] font-bold text-slate-500">구분 <span class="text-rose-500">*</span></label>
                     <div class="flex gap-2">
@@ -161,6 +166,7 @@
             <div id="admin-actions" class="flex gap-2 hidden">
                 <button id="btn-admin-accept" onclick="window.acceptRequest()" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-4 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center gap-1.5 shadow-sm"><i class="fa-solid fa-play"></i> 접수 완료(진행)</button>
                 <button id="btn-admin-complete" onclick="window.completeRequest()" class="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-4 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center gap-1.5 shadow-sm"><i class="fa-solid fa-check"></i> 작업 완료 처리</button>
+                <button id="btn-admin-revert" onclick="window.revertRequest()" class="bg-amber-100 hover:bg-amber-200 text-amber-700 px-4 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center gap-1.5 shadow-sm hidden"><i class="fa-solid fa-rotate-left"></i> 진행중으로 되돌리기</button>
             </div>
             
             <div class="flex gap-2 ml-auto">
