@@ -326,6 +326,7 @@ window.removeReqEmail = async function(idx) {
     } catch(e) { window.showToast("삭제 실패", "error"); }
 };
 
+
 // ==========================================
 // 💡 폼 데이터 추출 헬퍼 
 // ==========================================
@@ -333,16 +334,16 @@ window.getReqFormData = function() {
     let reqTitle = '', pjtName = '', reqValid = false;
 
     if (window.currentAppId === 'collab') {
-        reqTitle = document.getElementById('req-title') ? document.getElementById('req-title').value.trim() : '';
-        pjtName = document.getElementById('req-pjt-name') ? document.getElementById('req-pjt-name').value.trim() : '';
-        const startDate = document.getElementById('req-start-date') ? document.getElementById('req-start-date').value : '';
-        const endDate = document.getElementById('req-end-date') ? document.getElementById('req-end-date').value : '';
-        const content = document.getElementById('req-content') ? document.getElementById('req-content').value.trim() : '';
+        reqTitle = document.getElementById('req-title')?.value.trim() || '';
+        pjtName = document.getElementById('req-pjt-name')?.value.trim() || '';
+        const startDate = document.getElementById('req-start-date')?.value || '';
+        const endDate = document.getElementById('req-end-date')?.value || '';
+        const content = document.getElementById('req-content')?.value.trim() || '';
         if(reqTitle && pjtName && startDate && endDate && content) reqValid = true;
     } else if (window.currentAppId === 'purchase') {
-        reqTitle = document.getElementById('req-pur-title') ? document.getElementById('req-pur-title').value.trim() : '';
-        pjtName = document.getElementById('req-pur-pjt-name') ? document.getElementById('req-pur-pjt-name').value.trim() : '';
-        const shipDate = document.getElementById('req-pur-ship-date') ? document.getElementById('req-pur-ship-date').value : '';
+        reqTitle = document.getElementById('req-pur-title')?.value.trim() || '';
+        pjtName = document.getElementById('req-pur-pjt-name')?.value.trim() || '';
+        const shipDate = document.getElementById('req-pur-ship-date')?.value || '';
         if(reqTitle && pjtName && shipDate) reqValid = true;
     } else {
         reqValid = true;
@@ -437,12 +438,12 @@ window.getReqFormData = function() {
 
 
 // ==========================================
-// 💡 폼 UI 제어 및 권한 잠금 기능 (핵심)
+// 💡 6. 폼 UI 제어 및 권한 잠금 기능 (핵심)
 // ==========================================
 window.openWriteModal = function(editId = null) { 
     window.editingReqId = editId; 
     
-    // 💡 1. 폼 및 버튼 활성화 상태 초기화 (이전 ReadOnly 상태 해제)
+    // 💡 모달창 열 때 일단 모두 '활성화' 상태로 초기화 (잠금 해제)
     document.querySelectorAll('#collab-form-fields input, #collab-form-fields select, #collab-form-fields textarea').forEach(el => el.disabled = false);
     document.querySelectorAll('#purchase-form-fields input, #purchase-form-fields select, #purchase-form-fields textarea').forEach(el => el.disabled = false);
     
@@ -574,19 +575,20 @@ window.openWriteModal = function(editId = null) {
                 }
             }
 
-            // 💡 2. [보안 로직] 접수(progress) 또는 완료(completed) 상태일 때 관리자를 제외하고 폼 수정 불가
+            // 💡 [핵심 보안 로직] 접수(진행중) 또는 완료 상태일 때, '관리자'가 아니면 폼 수정 및 저장 불가
             const isAccepted = (req.status === 'progress' || req.status === 'completed');
             const isAdmin = window.userProfile && window.userProfile.role === 'admin';
-            
+
             if (isAccepted && !isAdmin) {
                 document.querySelectorAll('#collab-form-fields input, #collab-form-fields select, #collab-form-fields textarea').forEach(el => el.disabled = true);
                 document.querySelectorAll('#purchase-form-fields input, #purchase-form-fields select, #purchase-form-fields textarea').forEach(el => el.disabled = true);
-                
+
                 if(dropzone) dropzone.style.pointerEvents = 'none';
                 if(btnSave) btnSave.classList.add('hidden');
                 if(btnDraft) btnDraft.classList.add('hidden');
             }
 
+            // 관리자 전용 액션 버튼 제어
             if (isAdmin) {
                 const adminMenu = document.getElementById('admin-actions');
                 const btnAccept = document.getElementById('btn-admin-accept');
@@ -631,7 +633,7 @@ window.closeWriteModal = function() {
 };
 
 // ==========================================
-// 💡 모달 프롬프트 연결 로직 (Save, Accept, Complete)
+// 💡 7. 모달 프롬프트 및 액션 (Save, Accept, Complete)
 // ==========================================
 window.saveDraftRequest = async function() {
     const { data, currentReq } = window.getReqFormData();
@@ -712,7 +714,7 @@ window.executeSaveRequest = async function() {
         }
         data.fileUrl = fileUrl || (currentReq ? currentReq.fileUrl : null);
 
-        // 엑셀 자동생성 로직
+        // 엑셀 자동생성 로직 (구매 의뢰서 전용)
         if (window.currentAppId === 'purchase' && typeof window.ExcelJS !== 'undefined') {
             window.showToast("구매 의뢰서 엑셀 양식을 생성 중입니다...");
             try {
@@ -923,7 +925,7 @@ window.revertRequest = async function() {
 };
 
 // ==========================================
-// 💡 데이터 로드 및 테이블 렌더링 (동적 컬럼 적용)
+// 💡 8. 데이터 로드 및 테이블 렌더링
 // ==========================================
 window.loadRequestsData = function(appId) { 
     if(unsubscribeRequests) unsubscribeRequests(); 
@@ -1110,7 +1112,7 @@ window.deleteRequest = async function(id) {
 };
 
 // ==========================================
-// 💡 코멘트 모달 로직 (에러 방지 처리 포함)
+// 💡 9. 코멘트 모달 로직
 // ==========================================
 window.openCommentModal = function(reqId, title) { 
     const cmtInput = document.getElementById('cmt-req-id');
