@@ -2253,11 +2253,12 @@ window.loadNcrData = async function() {
     try {
         if(window.showToast) window.showToast("부적합(RAWDATA) 데이터를 가져오는 중입니다...", "success");
         
-        // 💡 주의: 아래 작은따옴표('') 사이에 방금 구글 시트에서 복사한 .csv 링크를 그대로 붙여넣으세요!
+        // 💡 방금 구글 시트에서 복사한 완벽한 CSV 링크를 아래 따옴표 안에 그대로 붙여넣으세요!
         const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSYwsWjs8ox503LLsRIeVRbbZ4R7eLgoq0C-ZdYIBIUACCwWyt5oYkAAtIpX9j1taqt1MQaEg1Jjom0/pub?gid=0&single=true&output=csv';
         
-        // 캐시 방지를 위해 타임스탬프 추가
-        const res = await fetch(csvUrl + '&t=' + Date.now());
+        // 링크 주소 형태에 따라 안전하게 타임스탬프(캐시 방지)를 붙여줍니다.
+        const separator = csvUrl.includes('?') ? '&' : '?';
+        const res = await fetch(csvUrl + separator + 't=' + Date.now());
         
         if (!res.ok) {
             throw new Error("시트 데이터를 가져오지 못했습니다.");
@@ -2265,8 +2266,9 @@ window.loadNcrData = async function() {
 
         const csvText = await res.text();
         
+        // 실수로 웹페이지(HTML) 링크를 넣었을 경우를 대비한 방어 로직
         if (csvText.includes('<html') || csvText.includes('<body')) {
-            throw new Error("링크 형식이 잘못되었습니다. (웹에 게시에서 .csv 링크인지 확인해주세요)");
+            throw new Error("링크 형식이 잘못되었습니다. (웹에 게시에서 .csv 링크를 선택했는지 확인해주세요)");
         }
 
         const rows = [];
@@ -2324,67 +2326,7 @@ window.loadNcrData = async function() {
 
     } catch(e) {
         console.error("NCR 로드 에러:", e);
+        // 사용자에게 에러 원인을 더 명확히 보여줍니다.
         if(window.showToast) window.showToast(`동기화 실패: ${e.message}`, "error");
     }
-};
-
-window.openNcrModal = function(pjtCode, pjtName) {
-    const titleEl = document.getElementById('ncr-project-title');
-    if (titleEl) {
-        titleEl.innerText = `[${pjtCode}] ${pjtName}`;
-        titleEl.dataset.code = pjtCode;
-    }
-    document.getElementById('ncr-modal').classList.remove('hidden');
-    document.getElementById('ncr-modal').classList.add('flex');
-    window.renderNcrList(pjtCode);
-};
-
-window.closeNcrModal = function() {
-    document.getElementById('ncr-modal').classList.add('hidden');
-    document.getElementById('ncr-modal').classList.remove('flex');
-};
-
-window.renderNcrList = function(pjtCode) {
-    const tbody = document.getElementById('ncr-list-tbody');
-    if (!tbody) return;
-    
-    const safeTargetCode = String(pjtCode).replace(/\s/g, '').toUpperCase();
-    const list = (window.ncrData || []).filter(n => String(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeTargetCode);
-    
-    let total = list.length;
-    let completed = list.filter(n => {
-        let s = String(n.status || '');
-        return s.includes('완료') || s.includes('종결');
-    }).length;
-    
-    const elTotal = document.getElementById('ncr-total-cnt');
-    if(elTotal) elTotal.innerText = total;
-    
-    const elPending = document.getElementById('ncr-pending-cnt');
-    if(elPending) elPending.innerText = total - completed;
-    
-    const elComp = document.getElementById('ncr-comp-cnt');
-    if(elComp) elComp.innerText = completed;
-    
-    if (total === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-8 text-slate-400 font-bold bg-white">등록된 부적합 내역이 없습니다.</td></tr>';
-        return;
-    }
-    
-    tbody.innerHTML = list.map(n => {
-        let s = String(n.status || '');
-        const isComp = s.includes('완료') || s.includes('종결');
-        const textClass = isComp ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-700';
-        const badge = isComp ? `<span class="bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">완료</span>` : `<span class="bg-rose-50 text-rose-600 border border-rose-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">진행중</span>`;
-        
-        return `<tr class="hover:bg-slate-50 transition-colors bg-white border-b border-slate-100">
-                    <td class="p-3 text-center font-bold text-slate-500 whitespace-nowrap">${n.ncrNo || '-'}</td>
-                    <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.date || '-'}</td>
-                    <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.drawingNo || '-'}</td>
-                    <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.partName || '-'}</td>
-                    <td class="p-3 text-center whitespace-nowrap"><span class="bg-slate-100 px-2 py-1 border border-slate-200 rounded font-bold">${n.type || '-'}</span></td>
-                    <td class="p-3 font-medium ${textClass} break-all">${n.content || '-'}</td>
-                    <td class="p-3 text-center whitespace-nowrap">${badge}</td>
-                </tr>`;
-    }).join('');
 };
