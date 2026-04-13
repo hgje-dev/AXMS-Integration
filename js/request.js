@@ -108,12 +108,12 @@ window.initGoogleAPI = function() {
         return;
     }
     
-    // 💡 핵심 수정 2: 권한이 추가되었으므로 기존 토큰을 버리고 강제로 재로그인 하도록 V2로 변경
     const storedToken = localStorage.getItem('axmsGoogleTokenV2');
     const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
     const authSection = document.getElementById('google-auth-section');
     const authStatus = document.getElementById('google-auth-status');
     const pjtAuthBtn = document.getElementById('btn-pjt-google-auth'); 
+    const pjtAuthStatus = document.getElementById('pjt-google-auth-status'); // 추가됨
     
     if (storedToken && storedExpiry && Date.now() < parseInt(storedExpiry)) {
         window.googleAccessToken = storedToken;
@@ -127,10 +127,12 @@ window.initGoogleAPI = function() {
         if(authSection) authSection.classList.add('hidden');
         if(authStatus) { authStatus.classList.remove('hidden'); authStatus.classList.add('flex'); }
         if(pjtAuthBtn) pjtAuthBtn.classList.add('hidden'); 
+        if(pjtAuthStatus) { pjtAuthStatus.classList.remove('hidden'); pjtAuthStatus.classList.add('flex'); } // 연동됨 표시
     } else {
         if(authSection) authSection.classList.remove('hidden');
         if(authStatus) { authStatus.classList.add('hidden'); authStatus.classList.remove('flex'); }
         if(pjtAuthBtn) pjtAuthBtn.classList.remove('hidden'); 
+        if(pjtAuthStatus) { pjtAuthStatus.classList.add('hidden'); pjtAuthStatus.classList.remove('flex'); } // 버튼 다시 표시
     }
     
     window.tokenClient = google.accounts.oauth2.initTokenClient({
@@ -148,6 +150,7 @@ window.initGoogleAPI = function() {
             if(authSection) authSection.classList.add('hidden');
             if(authStatus) { authStatus.classList.remove('hidden'); authStatus.classList.add('flex'); }
             if(pjtAuthBtn) pjtAuthBtn.classList.add('hidden'); 
+            if(pjtAuthStatus) { pjtAuthStatus.classList.remove('hidden'); pjtAuthStatus.classList.add('flex'); }
             
             window.showToast("구글 계정 연동이 완료되었습니다.");
             
@@ -158,7 +161,6 @@ window.initGoogleAPI = function() {
                 });
             });
             
-            // 연동 성공 시 NCR 데이터 다시 불러오기
             if(window.loadNcrData) window.loadNcrData();
         }
     });
