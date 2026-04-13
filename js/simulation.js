@@ -5,16 +5,11 @@ import {
     addDoc, deleteDoc, query, where, serverTimestamp 
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-/**
- * [필독] 성능 및 보안 강화 사항:
- * 1. Simulation Engine: 연산량이 많은 로직은 js/workers/simulationWorker.js로 분리 (UI 프리징 방지)
- * 2. AI 보안: API Key 노출을 막기 위해 프론트엔드 직접 호출을 제거하고 통합 백엔드 API를 호출하도록 변경
- * 3. 저장소: 지정된 Google Drive 폴더(1qyW-Ym_16tpRUUE0NQuFmwxg3IadF70e) 연동
- */
-
-// 전역 변수 및 설정
+// ==========================================
+// 1. 전역 변수 및 설정
+// ==========================================
 const SIMULATION_DRIVE_FOLDER_ID = "1qyW-Ym_16tpRUUE0NQuFmwxg3IadF70e";
-const simulationWorker = new Worker('./js/workers/simulationWorker.js');
+const simulationWorker = new Worker('./js/simulationWorker.js'); // 경로 수정
 
 window.currentProcessData = window.currentProcessData || [];
 window.latestP50Md = 0;
@@ -22,7 +17,7 @@ window.masterPresets = {};
 window.projectLogs = [];
 
 // ==========================================
-// 1. Web Worker 이벤트 리스너 (계산 결과 수신)
+// 2. Web Worker 이벤트 리스너 (계산 결과 수신)
 // ==========================================
 simulationWorker.onmessage = function(e) {
     const { p10, p50, p90, d10, d50, d90, rArr } = e.data;
@@ -63,7 +58,7 @@ simulationWorker.onmessage = function(e) {
 };
 
 // ==========================================
-// 2. 시뮬레이션 실행 (Worker 호출)
+// 3. 시뮬레이션 실행 (Worker 호출)
 // ==========================================
 window.runSimulation = () => {
     const method = document.getElementById('sim-method')?.value || 'mc';
@@ -99,7 +94,7 @@ window.debouncedRunSimulation = () => {
 };
 
 // ==========================================
-// 3. AI 연동 (보안 강화 - 백엔드 API 서버 호출)
+// 4. AI 연동 (보안 강화 - 백엔드 API 서버 호출)
 // ==========================================
 window.generateGroqInsight = async () => {
     if (!window.latestP50Md) return window.showToast("먼저 시뮬레이션을 실행해주세요.", "error");
@@ -109,8 +104,8 @@ window.generateGroqInsight = async () => {
     if(briefingBox) briefingBox.innerHTML = '<div class="text-center p-4"><i class="fa-solid fa-spinner fa-spin mr-2"></i>AI가 데이터를 분석하고 있습니다...</div>';
 
     try {
-        // 보안을 위해 API Key는 백엔드 서버에서 보관하고, 프론트는 데이터만 전송합니다.
-        const response = await fetch('/api/simulation/analyze', { // 실제 통합 백엔드 엔드포인트
+        // 백엔드 API 호출로 변경
+        const response = await fetch('/api/simulation/analyze', { 
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -153,7 +148,7 @@ window.generateGroqInsight = async () => {
 };
 
 // ==========================================
-// 4. 프로젝트 저장/불러오기 (Firestore & Drive)
+// 5. 프로젝트 저장/불러오기 (Firestore)
 // ==========================================
 window.saveToFirestore = async function(isSilent = false) {
     const pCode = document.getElementById('project-code')?.value;
@@ -186,7 +181,7 @@ window.saveToFirestore = async function(isSilent = false) {
 };
 
 // ==========================================
-// 5. 마스터 프리셋 관리
+// 6. 마스터 프리셋 및 자동 저장 트리거
 // ==========================================
 window.loadMasterPresets = async () => {
     try {
@@ -219,8 +214,21 @@ window.handleTypeChange = () => {
     window.debouncedRunSimulation();
 };
 
+window.handleMethodChange = () => {
+    window.debouncedRunSimulation();
+};
+
+// 💡 누락되었던 자동 저장 트리거 설정 함수 복구 (router.js 호환)
+window.setupAutoSaveTriggers = () => {
+    const triggers = document.querySelectorAll('.calc-trigger');
+    triggers.forEach(el => {
+        el.removeEventListener('input', window.debouncedRunSimulation);
+        el.addEventListener('input', window.debouncedRunSimulation);
+    });
+};
+
 // ==========================================
-// 6. UI 렌더링 로직 (Gantt, Chart, Table)
+// 7. UI 렌더링 로직 (Gantt, Chart, Table)
 // ==========================================
 window.renderProcessTable = () => {
     const tb = document.getElementById('process-tbody');
@@ -333,7 +341,7 @@ window.renderGanttChart = () => {
 };
 
 // ==========================================
-// 7. 엑셀 다운로드 (ExcelJS)
+// 8. 엑셀 다운로드 (ExcelJS)
 // ==========================================
 window.exportToExcel = async () => {
     if (typeof ExcelJS === 'undefined') return window.showToast("라이브러리 로딩 중입니다.", "warning");
