@@ -2,9 +2,9 @@ import { db } from './firebase.js';
 import { collection, doc, setDoc, addDoc, deleteDoc, query, onSnapshot, where, getDocs, writeBatch } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 let worklogsUnsubscribe = null;
-window.currentWorkLogs = []; // 안전하게 앞뒤 1달치 데이터를 모두 들고 있음
-window.whStatMode = 'week'; // 'week' or 'month'
-window.whViewMode = 'grid'; // 'grid' or 'calendar'
+window.currentWorkLogs = [];
+window.whStatMode = 'week';
+window.whViewMode = 'grid';
 window.whPjtSearch = '';
 window.whFilters = { text: '', loc: '', type: '', status: '' };
 window.whSelectedCells = new Set();
@@ -13,20 +13,55 @@ window.whCharts = {};
 
 const WH_TYPES = ['조립', '검수', '설치', 'Setup', '협업', '공통', '기타'];
 const WH_LOCS = ['사내', '국내', '해외'];
-
-// 지정된 구글 드라이브 폴더 ID
 const DRIVE_EXPORT_FOLDER = '1x8atDi95ybFH-YOYkfiaISw7BHdckQX4';
 
-// 1. 초기 로드
+// 💡 1. 2026년 4월 3주 형식으로 표기하는 헬퍼 함수
+window.updateWhWeekDisplay = function(weekStr) {
+    if(!weekStr) return;
+    const { start } = window.getDatesFromWeek(weekStr);
+    const thu = new Date(start);
+    thu.setDate(thu.getDate() + 3); 
+    const year = thu.getFullYear();
+    const month = thu.getMonth() + 1;
+    
+    const firstDayOfMonth = new Date(year, month - 1, 1);
+    let offset = firstDayOfMonth.getDay() - 1; 
+    if(offset === -1) offset = 6; 
+    const weekNum = Math.ceil((thu.getDate() + offset) / 7);
+    
+    const displayEl = document.getElementById('wh-week-display');
+    if (displayEl) displayEl.innerText = `${year}년 ${month}월 ${weekNum}주`;
+};
+
+// 💡 4. 대시보드 접기/펴기 토글 로직
+window.toggleWhDashboard = function() {
+    const content = document.getElementById('wh-dashboard-content');
+    const btn = document.getElementById('wh-dash-toggle-btn');
+    if (!content || !btn) return;
+    
+    if (content.classList.contains('hidden')) {
+        content.classList.remove('hidden');
+        btn.innerHTML = '<i class="fa-solid fa-chevron-up"></i> 접기';
+        btn.classList.add('bg-white', 'text-slate-500');
+        btn.classList.remove('bg-indigo-50', 'text-indigo-600', 'border-indigo-200');
+    } else {
+        content.classList.add('hidden');
+        btn.innerHTML = '<i class="fa-solid fa-chevron-down"></i> 펴기';
+        btn.classList.remove('bg-white', 'text-slate-500');
+        btn.classList.add('bg-indigo-50', 'text-indigo-600', 'border-indigo-200');
+    }
+};
+
 window.loadWorkhoursData = function() {
     const picker = document.getElementById('wh-week-picker');
     if (!picker) return;
     
     if (!picker.value) {
         if(window.getWeekString) picker.value = window.getWeekString(new Date());
-        else picker.value = "2026-W15"; // fallback
+        else picker.value = "2026-W15";
     }
-
+    
+    window.updateWhWeekDisplay(picker.value);
     fetchWorkLogsForContext();
 };
 
@@ -41,19 +76,18 @@ window.changeWhWeek = function(offset) {
         const d = new Date(year, 0, (week + offset - 1) * 7 + 1);
         if (window.getWeekString) {
             picker.value = window.getWeekString(d);
+            window.updateWhWeekDisplay(picker.value);
             window.loadWorkhoursData();
         }
     }
 };
 
-// 💡 넉넉하게 해당 주차가 포함된 전/후 한달씩 (총 3개월) 데이터를 패치하여 달력/그리드 자유롭게 커버
 function fetchWorkLogsForContext() {
     if (worklogsUnsubscribe) worklogsUnsubscribe();
 
     const picker = document.getElementById('wh-week-picker');
     const { start } = window.getDatesFromWeek(picker.value);
     
-    // 타겟 주차의 달을 기준으로 -1달 ~ +1달 범위 조회
     const y = start.getFullYear();
     const m = start.getMonth();
     
@@ -130,7 +164,6 @@ window.resetWhFilters = function() {
     window.applyWhFilters();
 };
 
-// 대시보드 업데이트
 window.updateWhDashboard = function() {
     window.whPjtSearch = document.getElementById('wh-search-pjt')?.value.toLowerCase() || '';
     
@@ -140,7 +173,6 @@ window.updateWhDashboard = function() {
     let targetStart = start;
     let targetEnd = end;
 
-    // 월간 통계일 경우, start가 포함된 월의 1일~말일로 셋팅
     if(window.whStatMode === 'month') {
         const y = start.getFullYear();
         const m = start.getMonth();
@@ -151,11 +183,15 @@ window.updateWhDashboard = function() {
     const tStartStr = window.getLocalDateStr(targetStart);
     const tEndStr = window.getLocalDateStr(targetEnd);
 
-    // 💡 관리자 승인이 완료된 데이터만 && 선택된 기간 내의 데이터만 통계에 반영
     let baseData = window.currentWorkLogs.filter(l => l.isConfirmed && l.date >= tStartStr && l.date <= tEndStr);
     
     if (window.whPjtSearch) {
-        baseData = baseData.filter(l => (l.projectName || '').toLowerCase().includes(window.whPjtSearch) || (l.projectCode || '').toLowerCase().includes(window.whPjtSearch) || window.matchString(window.whPjtSearch, l.projectName || ''));
+        baseData = baseData.filter(l => {
+            const pName = (l.projectName || '').toLowerCase();
+            const pCode = (l.projectCode || '').toLowerCase();
+            const search = window.whPjtSearch;
+            return pName.includes(search) || pCode.includes(search) || window.matchString(search, pName) || window.matchString(search, pCode);
+        });
     }
 
     let totalHours = 0;
@@ -171,12 +207,10 @@ window.updateWhDashboard = function() {
         
         let trendKey = '';
         if (window.whStatMode === 'week') {
-            // 주간 모드: 일자별 (예: 11일(월))
             const d = new Date(log.date);
             const days = ['일','월','화','수','목','금','토'];
             trendKey = `${d.getDate()}일(${days[d.getDay()]})`;
         } else {
-            // 월간 모드: 주차별 (예: W15 주차)
             const d = new Date(log.date);
             trendKey = window.getWeekString ? window.getWeekString(d).split('-')[1] + '주차' : log.date;
         }
@@ -191,7 +225,6 @@ window.updateWhDashboard = function() {
         datesSet.add(log.date);
     });
 
-    // 💡 시간(h)을 MD(Man-Day)로 환산 (1MD = 8h)
     const totalMD = (totalHours / 8).toFixed(1);
     document.getElementById('wh-dash-total-md').innerText = totalMD;
 
@@ -227,7 +260,7 @@ window.updateWhDashboard = function() {
     document.getElementById('wh-dash-extra').innerHTML = extraHtml || '<div class="text-center text-slate-400 py-4 font-bold">데이터 없음</div>';
 };
 
-// 💡 차트 렌더링 고급화 (그라데이션 및 부드러운 곡선)
+// 💡 2. 차트 렌더링 - 짤림 현상(Padding) 완벽 보완
 function renderWhChart(canvasId, type, dataMap, unit, isHorizontal) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
@@ -247,8 +280,8 @@ function renderWhChart(canvasId, type, dataMap, unit, isHorizontal) {
     const data = sortedData.map(d => (d[1]/8).toFixed(1)); 
 
     let bgGradient = ctx.createLinearGradient(0, 0, isHorizontal ? 300 : 0, isHorizontal ? 0 : 300);
-    bgGradient.addColorStop(0, 'rgba(99, 102, 241, 0.85)'); // Indigo 500
-    bgGradient.addColorStop(1, 'rgba(168, 85, 247, 0.5)');  // Purple 500
+    bgGradient.addColorStop(0, 'rgba(99, 102, 241, 0.85)'); 
+    bgGradient.addColorStop(1, 'rgba(168, 85, 247, 0.5)');  
     
     let datasetConfig = {
         data: data,
@@ -261,7 +294,7 @@ function renderWhChart(canvasId, type, dataMap, unit, isHorizontal) {
 
     if(type === 'line') {
         datasetConfig.fill = true;
-        datasetConfig.tension = 0.4; // 부드러운 곡선
+        datasetConfig.tension = 0.4;
         datasetConfig.pointBackgroundColor = '#ffffff';
         datasetConfig.pointBorderColor = '#4f46e5';
         datasetConfig.pointBorderWidth = 2;
@@ -276,6 +309,9 @@ function renderWhChart(canvasId, type, dataMap, unit, isHorizontal) {
             indexAxis: isHorizontal ? 'y' : 'x',
             responsive: true,
             maintainAspectRatio: false,
+            layout: {
+                padding: { bottom: 10 } // 💡 x축 라벨 잘림 방지
+            },
             plugins: { 
                 legend: { display: false },
                 tooltip: { callbacks: { label: (ctx) => `${ctx.raw} ${unit}` } }
@@ -288,7 +324,6 @@ function renderWhChart(canvasId, type, dataMap, unit, isHorizontal) {
     });
 }
 
-// 현황판 / 달력 렌더링 분기
 window.renderWhView = function() {
     if (window.whViewMode === 'grid') renderWhGrid();
     else renderWhCalendar();
@@ -302,6 +337,8 @@ function getFilteredLogs() {
         }
         if (window.whFilters.loc && log.location !== window.whFilters.loc) return false;
         if (window.whFilters.type && log.workType !== window.whFilters.type) return false;
+        
+        // 💡 5. 화면 내 데이터 필터 초성 검색 완벽 연동
         if (window.whFilters.text) {
             const s = window.whFilters.text;
             const fullStr = `${log.authorName} ${log.projectName} ${log.projectCode} ${log.content}`.toLowerCase();
@@ -311,7 +348,7 @@ function getFilteredLogs() {
     });
 }
 
-// 💡 2. 주간 뷰(Grid) 구현: 선택된 주의 월~일 (7일)만 노출
+// 💡 3. 한국 공휴일 및 주말 확실하게 빨간색 처리 (Grid View)
 function renderWhGrid() {
     const thead = document.getElementById('wh-grid-thead');
     const tbody = document.getElementById('wh-grid-tbody');
@@ -324,7 +361,6 @@ function renderWhGrid() {
 
     let headerHtml = `<tr><th class="p-3 w-24 text-center border-r border-slate-200 sticky left-0 bg-slate-100 z-30 shadow-[2px_0_4px_rgba(0,0,0,0.05)]">작업자</th>`;
     
-    // 7일간 루프
     let weekDates = [];
     for (let i = 0; i < 7; i++) {
         let d = new Date(start);
@@ -332,14 +368,15 @@ function renderWhGrid() {
         let dStr = window.getLocalDateStr(d);
         weekDates.push(dStr);
         
-        let isHoliday = !window.isWorkDay(d); // 💡 5. 공휴일/주말 반영
+        // 💡 토(6), 일(0), 대한민국 공휴일(window.isWorkDay 연동) 전부 빨갛게 표기
+        let isHoliday = d.getDay() === 0 || d.getDay() === 6 || !window.isWorkDay(d);
         let colorClass = isHoliday ? 'text-rose-500' : 'text-slate-700';
         let bgClass = isHoliday ? 'bg-rose-50' : '';
         
         let isToday = dStr === window.getLocalDateStr(new Date());
         let todayMark = isToday ? '<div class="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full shadow-sm"></div>' : '';
 
-        headerHtml += `<th class="p-2 min-w-[140px] text-center border-r border-slate-200 relative ${bgClass}"><div class="text-sm font-black ${colorClass}">${d.getDate()}</div><div class="text-[10px] font-bold text-slate-400">${dayNames[d.getDay()]}</div>${todayMark}</th>`;
+        headerHtml += `<th class="p-2 min-w-[140px] text-center border-r border-slate-200 relative ${bgClass}"><div class="text-sm font-black ${colorClass}">${d.getDate()}</div><div class="text-[10px] font-bold ${colorClass}">${dayNames[d.getDay()]}</div>${todayMark}</th>`;
     }
     headerHtml += `</tr>`;
     thead.innerHTML = headerHtml;
@@ -354,7 +391,7 @@ function renderWhGrid() {
         for (let i = 0; i < 7; i++) {
             let dateStr = weekDates[i];
             let d = new Date(dateStr);
-            let isHoliday = !window.isWorkDay(d);
+            let isHoliday = d.getDay() === 0 || d.getDay() === 6 || !window.isWorkDay(d);
             let bgClass = isHoliday ? 'bg-rose-50/30' : '';
             
             let rawLogs = window.currentWorkLogs.filter(l => l.date === dateStr && l.authorName === member.name); 
@@ -383,7 +420,7 @@ function renderWhGrid() {
     tbody.innerHTML = bodyHtml;
 }
 
-// 💡 달력(월간 뷰)
+// 💡 3. 한국 공휴일 및 주말 확실하게 빨간색 처리 (Calendar View)
 function renderWhCalendar() {
     const grid = document.getElementById('wh-calendar-grid');
     const titleEl = document.getElementById('wh-calendar-title');
@@ -411,7 +448,7 @@ function renderWhCalendar() {
         let logs = filteredLogs.filter(l => l.date === dateStr);
         let isToday = dateStr === window.getLocalDateStr(new Date());
         
-        let isHoliday = !window.isWorkDay(d);
+        let isHoliday = d.getDay() === 0 || d.getDay() === 6 || !window.isWorkDay(d);
         let txtClass = isHoliday ? 'text-rose-500' : 'text-slate-700';
         let dateClass = isToday ? 'bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center mx-auto shadow-md' : txtClass;
 
@@ -432,12 +469,9 @@ function renderWhCalendar() {
     grid.innerHTML = html;
 }
 
-// ==========================================
-// 마우스 드래그 다중 선택 로직
-// ==========================================
 window.whCellMouseDown = function(e, cell) {
-    if(e.button !== 0) return; // 좌클릭만 허용
-    if(e.target.tagName === 'I' || e.target.tagName === 'BUTTON' || e.target.closest('div[data-logid]')) return; // 내부 요소 클릭 방해 금지
+    if(e.button !== 0) return; 
+    if(e.target.tagName === 'I' || e.target.tagName === 'BUTTON' || e.target.closest('div[data-logid]')) return;
 
     window.isWhDragging = true;
     window.whClearSelection();
@@ -488,7 +522,6 @@ function updateWhFloatingBar() {
     }
 }
 
-// 일괄 승인/취소 처리
 window.whBulkConfirm = async function(isConfirm) {
     if(window.whSelectedCells.size === 0) return;
     if(!window.userProfile || window.userProfile.role !== 'admin') {
@@ -508,9 +541,6 @@ window.whBulkConfirm = async function(isConfirm) {
     }
 };
 
-// ==========================================
-// 💡 3, 8. 입력 모달 로직 및 자동완성(초성) 로직
-// ==========================================
 window.openWhInputModal = function(dateStr, authorName) {
     if(!authorName && window.teamMembers && window.teamMembers.length > 0) {
         authorName = window.userProfile?.name || window.teamMembers[0].name;
@@ -562,7 +592,6 @@ function appendWhInputRow(logData = null, index = 1) {
     const tr = document.createElement('tr');
     tr.className = 'wh-input-row hover:bg-indigo-50/30 transition-colors border-b border-slate-100 relative';
     
-    // 💡 3. 프로젝트 선택 드롭다운 -> 자동완성 Input으로 대체
     const uniqueId = 'wh-pjt-input-' + Date.now() + '-' + index;
     const pName = logData ? (logData.projectName || '') : '';
     const pCode = logData ? (logData.projectCode || '') : '';
@@ -594,12 +623,11 @@ function appendWhInputRow(logData = null, index = 1) {
     tbody.appendChild(tr);
 }
 
-// 자동완성 로직
+// 💡 5. 초성 검색 완벽 대응 (PJT 코드, 명칭 모두 초성 탐색)
 window.whShowPjtAuto = function(input) {
     const val = input.value.trim().toLowerCase();
     const drop = document.getElementById('wh-pjt-autocomplete');
     
-    // 사용자가 입력값을 지우거나 수정하면 hidden ID는 초기화시킴 (직접 입력 허용)
     const tr = input.closest('tr');
     tr.querySelector('.row-pjt-id').value = '';
     tr.querySelector('.row-pjt-code').value = '';
@@ -610,7 +638,8 @@ window.whShowPjtAuto = function(input) {
         if(p.status === 'completed' || p.status === 'rejected') return false;
         let name = (p.name || '').toLowerCase();
         let code = (p.code || '').toLowerCase();
-        return name.includes(val) || code.includes(val) || window.matchString(val, p.name);
+        // 💡 초성 매칭 연동: 명칭(name)과 코드(code)에 모두 matchString 실행
+        return name.includes(val) || code.includes(val) || window.matchString(val, p.name) || window.matchString(val, p.code);
     });
 
     if(matches.length > 0) {
@@ -646,7 +675,6 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// 💡 8. 저장 안되던 버그 완벽 수정 (프로젝트 미선택시 텍스트값 허용)
 window.saveWhInputData = async function() {
     const dateStr = document.getElementById('wh-modal-date').value;
     const authorName = document.getElementById('wh-modal-author').value;
@@ -666,7 +694,6 @@ window.saveWhInputData = async function() {
         const content = tr.querySelector('.row-content').value.trim();
         const isConfirmed = tr.querySelector('.row-conf').checked;
 
-        // 💡 조건 완화: 시간이 0보다 크고, [프로젝트명(텍스트) 이나 내용] 둘 중 하나만 있어도 무조건 저장!
         if (hours > 0 && (projectName || content)) {
             toSave.push({ 
                 id, 
@@ -708,9 +735,7 @@ window.saveWhInputData = async function() {
 };
 
 
-// ==========================================
-// 💡 6. 엑셀 다운로드 (대시보드 요약 시트 추가 적용)
-// ==========================================
+// 💡 6. 엑셀 다운로드 (대시보드 요약 시트 추가 생성)
 window.exportWorkhoursExcel = async function(isDriveUpload = false, driveFolderId = null) {
     if (typeof window.ExcelJS === 'undefined') return window.showToast("ExcelJS 모듈이 필요합니다.", "error");
     
@@ -718,11 +743,11 @@ window.exportWorkhoursExcel = async function(isDriveUpload = false, driveFolderI
         if(!isDriveUpload) window.showToast("엑셀 파일을 생성 중입니다...", "success");
         const wb = new window.ExcelJS.Workbook();
         
-        // 💡 1번 탭: 대시보드 요약 --------------------
+        // 💡 탭 1: 월간 통계 요약 (Dashboard Sheet)
         const ws1 = wb.addWorksheet('월간_통계_요약', { views: [{ showGridLines: false }] });
         ws1.columns = [{width:2}, {width:15}, {width:15}, {width:15}, {width:15}, {width:15}];
         
-        const pDate = document.getElementById('wh-week-picker').value; // e.g., 2026-W15
+        const pDate = document.getElementById('wh-week-picker').value; 
         const yStr = window.getDatesFromWeek(pDate).start.getFullYear();
         const mStr = String(window.getDatesFromWeek(pDate).start.getMonth() + 1).padStart(2, '0');
         const reportTitle = `${yStr}년 ${mStr}월 개인별 투입공수 통계`;
@@ -736,7 +761,6 @@ window.exportWorkhoursExcel = async function(isDriveUpload = false, driveFolderI
         ws1.getCell('B4').value = `출력일시: ${new Date().toLocaleString()}`;
         ws1.getCell('B4').font = { size: 10, color: { argb: 'FF64748B' } };
 
-        // 통계 연산 (해당 월 전체 데이터만 추출)
         let monthlyLogs = window.currentWorkLogs.filter(l => l.date.startsWith(`${yStr}-${mStr}`) && l.isConfirmed);
         let tMd = 0; let pMap = {}; let pjtMap = {};
         
@@ -752,7 +776,6 @@ window.exportWorkhoursExcel = async function(isDriveUpload = false, driveFolderI
         ws1.getCell('C6').value = tMd.toFixed(1) + ' MD';
         ws1.getCell('B6').font = { bold: true }; ws1.getCell('C6').font = { bold: true, color: {argb:'FF4F46E5'} };
 
-        // 인원별 통계 표
         ws1.getCell('B8').value = '[ 작업자별 누적 투입 공수 ]';
         ws1.getCell('B8').font = { bold: true, color: {argb:'FF334155'} };
         let r = 9;
@@ -763,7 +786,6 @@ window.exportWorkhoursExcel = async function(isDriveUpload = false, driveFolderI
             r++;
         });
 
-        // PJT별 통계 표
         r += 1;
         ws1.getCell(`B${r}`).value = '[ 주요 프로젝트별 투입 (Top 10) ]';
         ws1.getCell(`B${r}`).font = { bold: true, color: {argb:'FF334155'} };
@@ -777,7 +799,7 @@ window.exportWorkhoursExcel = async function(isDriveUpload = false, driveFolderI
         });
 
 
-        // 💡 2번 탭: 데이터 Raw -----------------------
+        // 💡 탭 2: 데이터 Raw 시트
         const ws2 = wb.addWorksheet('데이터_Raw');
         ws2.columns = [
             { header: '날짜', key: 'date', width: 12 },
@@ -796,7 +818,6 @@ window.exportWorkhoursExcel = async function(isDriveUpload = false, driveFolderI
         hr.fill = { type: 'pattern', pattern: 'solid', fgColor: {argb: 'FF4F46E5'} };
         hr.alignment = { vertical: 'middle', horizontal: 'center' };
 
-        // Raw는 현재 메모리에 있는 해당 월 기준 데이터 전체를 출력
         let sortedLogs = window.currentWorkLogs.slice().sort((a,b) => a.date.localeCompare(b.date) || a.authorName.localeCompare(b.authorName));
         
         sortedLogs.forEach(l => {
@@ -840,7 +861,7 @@ window.exportWorkhoursExcel = async function(isDriveUpload = false, driveFolderI
 };
 
 // ==========================================
-// 💡 9. 구글 드라이브 저장 로직 (동일 월 파일 덮어쓰기)
+// 💡 9. 구글 드라이브 덮어쓰기 저장 로직 완벽 적용
 // ==========================================
 window.saveWorkhoursToDrive = async function() {
     if(!window.googleAccessToken) {
@@ -852,13 +873,11 @@ window.saveWorkhoursToDrive = async function() {
     try {
         window.showToast("구글 드라이브에 저장 중입니다...");
         
-        // 1. 엑셀 파일 Buffer 생성
         const { buffer, name } = await window.exportWorkhoursExcel(true, DRIVE_EXPORT_FOLDER);
         const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
         
-        // 2. 해당 폴더 내에서 '동일한 이름'의 파일이 있는지 검색
-        const query = `name='${name}' and '${DRIVE_EXPORT_FOLDER}' in parents and trashed=false`;
-        const findRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}`, {
+        const queryStr = `name='${name}' and '${DRIVE_EXPORT_FOLDER}' in parents and trashed=false`;
+        const findRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(queryStr)}`, {
             headers: { 'Authorization': 'Bearer ' + window.googleAccessToken }
         });
         const folderData = await findRes.json();
@@ -867,7 +886,6 @@ window.saveWorkhoursToDrive = async function() {
         const form = new FormData();
         
         if (folderData.files && folderData.files.length > 0) {
-            // 💡 파일이 존재하면 덮어쓰기 (PATCH)
             const fileId = folderData.files[0].id;
             form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
             form.append('file', blob);
@@ -879,7 +897,6 @@ window.saveWorkhoursToDrive = async function() {
             });
             window.showToast(`[${name}] 드라이브에 성공적으로 업데이트 되었습니다.`, "success");
         } else {
-            // 💡 파일이 없으면 신규 생성 (POST)
             metadata.parents = [DRIVE_EXPORT_FOLDER];
             form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
             form.append('file', blob);
