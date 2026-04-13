@@ -5,6 +5,7 @@ let worklogsUnsubscribe = null;
 window.currentWorkLogs = [];
 window.whStatMode = 'week';
 window.whViewMode = 'grid';
+window.whMemberMode = 'all'; // 💡 1. 'all' (전체 팀원) or 'me' (나의 현황) 상태 추가
 window.whPjtSearch = '';
 window.whFilters = { text: '', loc: '', type: '', status: '' };
 window.whSelectedCells = new Set();
@@ -25,6 +26,25 @@ function isWhHoliday(d) {
     if (d.getDay() === 0 || d.getDay() === 6) return true;
     return KR_HOLIDAYS.has(window.getLocalDateStr(d));
 }
+
+// 💡 1. 팀원 전체 / 나의 현황 토글 컨트롤러
+window.setWhMemberMode = function(mode) {
+    window.whMemberMode = mode;
+    const btnAll = document.getElementById('wh-btn-member-all');
+    const btnMe = document.getElementById('wh-btn-member-me');
+    
+    if (mode === 'all') {
+        if (btnAll) btnAll.className = 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all whitespace-nowrap';
+        if (btnMe) btnMe.className = 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all bg-transparent whitespace-nowrap';
+    } else {
+        if (btnMe) btnMe.className = 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all whitespace-nowrap';
+        if (btnAll) btnAll.className = 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all bg-transparent whitespace-nowrap';
+    }
+    
+    // 모드 변경 시 차트 및 현황판 리렌더링
+    window.updateWhDashboard();
+    window.renderWhView();
+};
 
 window.updateWhWeekDisplay = function(weekStr) {
     if(!weekStr) return;
@@ -188,14 +208,19 @@ window.updateWhDashboard = function() {
     const tStartStr = window.getLocalDateStr(targetStart);
     const tEndStr = window.getLocalDateStr(targetEnd);
 
+    // 💡 1. 나의 현황 모드일 경우 대시보드도 필터링
     let baseData = window.currentWorkLogs.filter(l => l.isConfirmed && l.date >= tStartStr && l.date <= tEndStr);
     
+    if (window.whMemberMode === 'me' && window.userProfile) {
+        baseData = baseData.filter(l => l.authorName === window.userProfile.name);
+    }
+    
+    // 💡 2. 대시보드 검색 PJT 코드(초성) 전용으로 수정 (명칭 제외)
     if (window.whPjtSearch) {
         baseData = baseData.filter(l => {
-            const pName = (l.projectName || '').toLowerCase();
             const pCode = (l.projectCode || '').toLowerCase();
             const search = window.whPjtSearch;
-            return pName.includes(search) || pCode.includes(search) || (window.matchString && window.matchString(search, pName)) || (window.matchString && window.matchString(search, pCode));
+            return pCode.includes(search) || (window.matchString && window.matchString(search, pCode));
         });
     }
 
@@ -217,7 +242,6 @@ window.updateWhDashboard = function() {
             trendKey = `${d.getDate()}일(${days[d.getDay()]})`;
         } else {
             const d = new Date(log.date);
-            // 💡 1. "W15주차" -> "15주차" 로 W 제거 로직 추가
             let wStr = window.getWeekString ? window.getWeekString(d).split('-')[1] : '';
             if (wStr) {
                 trendKey = wStr.replace('W', '') + '주차';
@@ -231,7 +255,7 @@ window.updateWhDashboard = function() {
         if (!locMap[loc]) locMap[loc] = new Set();
         locMap[loc].add(log.authorName);
 
-        let pName = log.projectName || log.projectCode || '분류 안됨';
+        let pName = log.projectCode || log.projectName || '분류 안됨';
         pjtMap[pName] = (pjtMap[pName] || 0) + h;
         datesSet.add(log.date);
     });
@@ -319,9 +343,7 @@ function renderWhChart(canvasId, type, dataMap, unit, isHorizontal) {
             indexAxis: isHorizontal ? 'y' : 'x',
             responsive: true,
             maintainAspectRatio: false,
-            layout: {
-                padding: { bottom: 10 } 
-            },
+            layout: { padding: { bottom: 10 } },
             plugins: { 
                 legend: { display: false },
                 tooltip: { callbacks: { label: (ctx) => `${ctx.raw} ${unit}` } }
@@ -341,15 +363,22 @@ window.renderWhView = function() {
 
 function getFilteredLogs() {
     return window.currentWorkLogs.filter(log => {
+        // 💡 1. 나의 현황 필터링
+        if (window.whMemberMode === 'me' && log.authorName !== window.userProfile?.name) {
+            return false;
+        }
+
         if (window.whFilters.status) {
             const isConf = String(!!log.isConfirmed) === window.whFilters.status;
             if (!isConf) return false;
         }
         if (window.whFilters.loc && log.location !== window.whFilters.loc) return false;
         if (window.whFilters.type && log.workType !== window.whFilters.type) return false;
+        
+        // 💡 2. PJT 코드 전용 텍스트 필터링 (명칭 제외)
         if (window.whFilters.text) {
             const s = window.whFilters.text;
-            const fullStr = `${log.authorName} ${log.projectName} ${log.projectCode} ${log.content}`.toLowerCase();
+            const fullStr = `${log.projectCode}`.toLowerCase();
             if (!fullStr.includes(s) && !window.matchString(s, fullStr)) return false;
         }
         return true;
@@ -390,7 +419,17 @@ function renderWhGrid() {
     const filteredLogs = getFilteredLogs();
     
     let bodyHtml = '';
-    (window.teamMembers || []).forEach(member => {
+    
+    // 💡 1. 대상 팀원 필터링 ('all' vs 'me')
+    let targetMembers = window.teamMembers || [];
+    if (window.whMemberMode === 'me') {
+        targetMembers = targetMembers.filter(m => m.name === window.userProfile?.name);
+        if (targetMembers.length === 0 && window.userProfile) {
+            targetMembers = [{ name: window.userProfile.name }];
+        }
+    }
+
+    targetMembers.forEach(member => {
         bodyHtml += `<tr class="hover:bg-slate-50/50 transition-colors group">`;
         bodyHtml += `<td class="p-3 text-center font-bold text-slate-700 border-r border-slate-200 sticky left-0 bg-white group-hover:bg-slate-50 z-10 shadow-[2px_0_4px_rgba(0,0,0,0.05)]">${member.name}</td>`;
         
@@ -410,8 +449,9 @@ function renderWhGrid() {
                 let confClass = log.isConfirmed ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-white border-slate-200 text-slate-700 hover:border-indigo-300';
                 let selClass = window.whSelectedCells.has(log.id) ? 'ring-2 ring-indigo-500 shadow-md transform scale-[1.02]' : '';
                 
+                // 💡 UI 표시를 프로젝트 명이 아닌 'PJT 코드' 전용으로 수정
                 bodyHtml += `<div class="p-1.5 rounded-lg border ${confClass} ${opacityClass} ${selClass} text-[10px] mb-1.5 cursor-pointer transition-all duration-200" data-logid="${log.id}" onclick="window.openWhInputModal('${dateStr}', '${member.name}'); event.stopPropagation();">
-                    <div class="font-bold truncate text-[11px]" title="${log.projectName||''}"><span class="text-slate-400 font-medium mr-0.5">[${log.location||'사내'}]</span>${log.projectName||'PJT미지정'}</div>
+                    <div class="font-bold truncate text-[11px]" title="${log.projectName||''}"><span class="text-slate-400 font-medium mr-0.5">[${log.location||'사내'}]</span>${log.projectCode||'PJT미지정'}</div>
                     <div class="flex justify-between items-center mt-1 pt-1 border-t border-slate-100/50"><span class="font-medium text-slate-500">${log.workType}</span><span class="font-black text-indigo-600 bg-white/50 px-1.5 py-0.5 rounded shadow-sm">${log.hours}h</span></div>
                 </div>`;
             });
@@ -420,13 +460,12 @@ function renderWhGrid() {
         bodyHtml += `</tr>`;
     });
     
-    if(!window.teamMembers || window.teamMembers.length === 0) {
-        bodyHtml = `<tr><td colspan="8" class="p-10 text-center text-slate-400 font-bold">등록된 팀원이 없습니다. 팀원 관리에서 추가해주세요.</td></tr>`;
+    if(targetMembers.length === 0) {
+        bodyHtml = `<tr><td colspan="8" class="p-10 text-center text-slate-400 font-bold">등록된 팀원 또는 현황이 없습니다.</td></tr>`;
     }
     tbody.innerHTML = bodyHtml;
 }
 
-// 💡 2. 달력 뷰(Calendar) 개편: 3개 이상이면 +N개 버튼 제공, 높이 제한 적용
 function renderWhCalendar() {
     const grid = document.getElementById('wh-calendar-grid');
     const titleEl = document.getElementById('wh-calendar-title');
@@ -464,12 +503,12 @@ function renderWhCalendar() {
 
         displayLogs.forEach(log => {
             let confClass = log.isConfirmed ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-white text-slate-700 border-slate-200';
+            // 💡 PJT 코드로 수정
             logsHtml += `<div class="text-[10px] ${confClass} border px-1.5 py-1 rounded mb-1 truncate cursor-pointer hover:shadow-md transition-shadow shadow-sm" onclick="window.openWhInputModal('${dateStr}', '${log.authorName}')">
-                <span class="font-black text-indigo-700 bg-indigo-50 px-1 rounded mr-1">${log.authorName}</span>${log.projectName||'미지정'} <span class="font-bold text-slate-500">(${log.hours}h)</span>
+                <span class="font-black text-indigo-700 bg-indigo-50 px-1 rounded mr-1">${log.authorName}</span>${log.projectCode||'미지정'} <span class="font-bold text-slate-500">(${log.hours}h)</span>
             </div>`;
         });
 
-        // 💡 3개 초과일 경우 "+N개 더보기" 텍스트 렌더링
         if (logs.length > MAX_DISPLAY) {
             logsHtml += `<div class="text-[10px] font-bold text-slate-400 text-center hover:text-indigo-500 cursor-pointer mt-1 bg-slate-50 py-1 rounded" onclick="window.openWhInputModal('${dateStr}', '')">+${logs.length - MAX_DISPLAY}개 더보기</div>`;
         }
@@ -621,13 +660,17 @@ function appendWhInputRow(logData = null, index = 1) {
     let confDisabled = isAdmin ? '' : 'disabled';
     
     let idInput = logData ? `<input type="hidden" class="row-id" value="${logData.id}">` : `<input type="hidden" class="row-id" value="">`;
+    
+    // 💡 3. 프로젝트 명칭을 백그라운드로 저장할 숨김 필드 추가
+    let pNameHidden = `<input type="hidden" class="row-pjt-name-hidden" value="${pName}">`;
 
     tr.innerHTML = `
         <td class="p-3 text-center text-slate-400 font-bold text-xs bg-slate-50">${index}${idInput}</td>
         <td class="p-2 relative">
-            <input type="text" id="${uniqueId}" class="row-pjt-name w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-indigo-700 placeholder-slate-400" value="${pName}" placeholder="PJT 코드 검색 또는 직접 입력" oninput="window.whShowPjtAuto(this)">
+            <input type="text" id="${uniqueId}" class="row-pjt-name w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-indigo-700 placeholder-slate-400" value="${pCode}" placeholder="PJT 코드 검색 (초성)" oninput="window.whShowPjtAuto(this)">
             <input type="hidden" class="row-pjt-id" value="${pId}">
             <input type="hidden" class="row-pjt-code" value="${pCode}">
+            ${pNameHidden}
         </td>
         <td class="p-2"><select class="row-type w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-slate-700 cursor-pointer">${typeOptions}</select></td>
         <td class="p-2"><select class="row-loc w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-slate-700 cursor-pointer">${locOptions}</select></td>
@@ -639,6 +682,7 @@ function appendWhInputRow(logData = null, index = 1) {
     tbody.appendChild(tr);
 }
 
+// 💡 3. 명칭 제외, 코드 전용 초성 자동완성
 window.whShowPjtAuto = function(input) {
     const val = input.value.trim().toLowerCase();
     const drop = document.getElementById('wh-pjt-autocomplete');
@@ -652,6 +696,7 @@ window.whShowPjtAuto = function(input) {
     let matches = (window.currentProjectStatusList || []).filter(p => {
         if(p.status === 'completed' || p.status === 'rejected') return false;
         let code = (p.code || '').toLowerCase();
+        // 💡 프로젝트 명칭(name)을 제외하고, 코드(code) 기준으로만 검색(초성 포함) 수행
         return code.includes(val) || (window.matchString && window.matchString(val, p.code));
     });
 
@@ -662,7 +707,8 @@ window.whShowPjtAuto = function(input) {
         drop.style.width = `${rect.width}px`;
         drop.innerHTML = matches.map(m => {
             let sName = m.name.replace(/'/g,"\\'").replace(/"/g,'&quot;');
-            return `<li class="px-3 py-2 hover:bg-indigo-50 cursor-pointer text-xs font-bold text-slate-700 border-b border-slate-50 truncate transition-colors" onmousedown="window.whSelectPjt('${input.id}', '${m.id}', '${m.code||''}', '${sName}')"><span class="text-indigo-600">[${m.code||'-'}]</span> ${m.name}</li>`;
+            // 리스트에도 코드만 표시
+            return `<li class="px-3 py-2 hover:bg-indigo-50 cursor-pointer text-xs font-black text-indigo-600 border-b border-slate-50 truncate transition-colors" onmousedown="window.whSelectPjt('${input.id}', '${m.id}', '${m.code||''}', '${sName}')">${m.code||'-'}</li>`;
         }).join('');
         drop.classList.remove('hidden');
     } else {
@@ -673,10 +719,11 @@ window.whShowPjtAuto = function(input) {
 window.whSelectPjt = function(inputId, pId, pCode, pName) {
     const input = document.getElementById(inputId);
     if(input) {
-        input.value = pName;
+        input.value = pCode; // 💡 선택 시 Input에는 코드를 삽입
         const tr = input.closest('tr');
         tr.querySelector('.row-pjt-id').value = pId;
         tr.querySelector('.row-pjt-code').value = pCode;
+        tr.querySelector('.row-pjt-name-hidden').value = pName; // 💡 명칭은 백그라운드에 저장
     }
     document.getElementById('wh-pjt-autocomplete').classList.add('hidden');
 };
@@ -697,9 +744,10 @@ window.saveWhInputData = async function() {
 
     rows.forEach(tr => {
         const id = tr.querySelector('.row-id').value;
-        const projectName = tr.querySelector('.row-pjt-name').value.trim();
+        const projectCodeInput = tr.querySelector('.row-pjt-name').value.trim(); // 현재 Input에 적혀있는 건 코드
         const projectId = tr.querySelector('.row-pjt-id').value;
-        const projectCode = tr.querySelector('.row-pjt-code').value;
+        const projectCode = tr.querySelector('.row-pjt-code').value || projectCodeInput; 
+        const projectName = tr.querySelector('.row-pjt-name-hidden').value || ''; // 숨겨진 명칭 가져오기
         
         const workType = tr.querySelector('.row-type').value;
         const location = tr.querySelector('.row-loc').value;
@@ -707,7 +755,7 @@ window.saveWhInputData = async function() {
         const content = tr.querySelector('.row-content').value.trim();
         const isConfirmed = tr.querySelector('.row-conf').checked;
 
-        if (hours > 0 && (projectName || content)) {
+        if (hours > 0 && (projectCodeInput || content)) {
             toSave.push({ 
                 id, 
                 date: dateStr, 
@@ -772,13 +820,19 @@ window.exportWorkhoursExcel = async function(isDriveUpload = false, driveFolderI
         ws1.getCell('B4').font = { size: 10, color: { argb: 'FF64748B' } };
 
         let monthlyLogs = window.currentWorkLogs.filter(l => l.date.startsWith(`${yStr}-${mStr}`) && l.isConfirmed);
+        
+        // 💡 1. 엑셀 다운로드 시에도 나의 현황 모드 반영
+        if (window.whMemberMode === 'me' && window.userProfile) {
+            monthlyLogs = monthlyLogs.filter(l => l.authorName === window.userProfile.name);
+        }
+
         let tMd = 0; let pMap = {}; let pjtMap = {};
         
         monthlyLogs.forEach(l => {
             let md = l.hours / 8;
             tMd += md;
             pMap[l.authorName] = (pMap[l.authorName] || 0) + md;
-            let pName = l.projectName || l.projectCode || '미분류';
+            let pName = l.projectCode || l.projectName || '미분류';
             pjtMap[pName] = (pjtMap[pName] || 0) + md;
         });
 
@@ -827,12 +881,15 @@ window.exportWorkhoursExcel = async function(isDriveUpload = false, driveFolderI
         hr.alignment = { vertical: 'middle', horizontal: 'center' };
 
         let sortedLogs = window.currentWorkLogs.slice().sort((a,b) => a.date.localeCompare(b.date) || a.authorName.localeCompare(b.authorName));
+        if (window.whMemberMode === 'me' && window.userProfile) {
+            sortedLogs = sortedLogs.filter(l => l.authorName === window.userProfile.name);
+        }
         
         sortedLogs.forEach(l => {
             let row = ws2.addRow({
                 date: l.date,
                 name: l.authorName,
-                pjt: l.projectCode ? `[${l.projectCode}] ${l.projectName}` : (l.projectName || '프로젝트 미지정'),
+                pjt: l.projectCode ? `[${l.projectCode}] ${l.projectName||''}` : (l.projectName || '프로젝트 미지정'),
                 type: l.workType,
                 loc: l.location || '사내',
                 hrs: l.hours,
@@ -853,7 +910,8 @@ window.exportWorkhoursExcel = async function(isDriveUpload = false, driveFolderI
         });
 
         const buffer = await wb.xlsx.writeBuffer();
-        const fileName = `AXBIS_투입공수보고서_${yStr}년${mStr}월.xlsx`;
+        const modeStr = window.whMemberMode === 'me' ? '_개인' : '';
+        const fileName = `AXBIS_투입공수보고서_${yStr}년${mStr}월${modeStr}.xlsx`;
 
         if (isDriveUpload && driveFolderId) {
             return { buffer: buffer, name: fileName }; 
