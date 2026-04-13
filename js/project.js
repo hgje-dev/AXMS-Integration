@@ -2250,7 +2250,6 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// 💡 3, 4번 해결: CSV 강제 우회 파싱 방식 적용 (에러 완벽 차단)
 window.loadNcrData = async function() {
     try {
         if(window.showToast) window.showToast("부적합(RAWDATA) 데이터를 가져오는 중입니다...", "success");
