@@ -2253,22 +2253,15 @@ window.loadNcrData = async function() {
     try {
         if(window.showToast) window.showToast("부적합(RAWDATA) 데이터를 가져오는 중입니다...", "success");
         
-        // 💡 방금 구글 시트에서 복사한 완벽한 CSV 링크를 아래 따옴표 안에 그대로 붙여넣으세요!
         const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSYwsWjs8ox503LLsRIeVRbbZ4R7eLgoq0C-ZdYIBIUACCwWyt5oYkAAtIpX9j1taqt1MQaEg1Jjom0/pub?gid=0&single=true&output=csv';
-        
-        // 링크 주소 형태에 따라 안전하게 타임스탬프(캐시 방지)를 붙여줍니다.
         const separator = csvUrl.includes('?') ? '&' : '?';
         const res = await fetch(csvUrl + separator + 't=' + Date.now());
         
-        if (!res.ok) {
-            throw new Error("시트 데이터를 가져오지 못했습니다.");
-        }
+        if (!res.ok) throw new Error("시트 데이터를 가져오지 못했습니다.");
 
         const csvText = await res.text();
-        
-        // 실수로 웹페이지(HTML) 링크를 넣었을 경우를 대비한 방어 로직
         if (csvText.includes('<html') || csvText.includes('<body')) {
-            throw new Error("링크 형식이 잘못되었습니다. (웹에 게시에서 .csv 링크를 선택했는지 확인해주세요)");
+            throw new Error("링크 형식이 잘못되었습니다.");
         }
 
         const rows = [];
@@ -2280,9 +2273,7 @@ window.loadNcrData = async function() {
             if (cc === '"') { quote = !quote; continue; }
             if (cc === ',' && !quote) { row.push(col); col = ""; continue; }
             if ((cc === '\r' || cc === '\n') && !quote) {
-                if (row.length > 0 || col !== "") {
-                    row.push(col); rows.push(row); row = []; col = "";
-                }
+                if (row.length > 0 || col !== "") { row.push(col); rows.push(row); row = []; col = ""; }
                 if (cc === '\r' && nc === '\n') i++;
                 continue;
             }
@@ -2290,43 +2281,129 @@ window.loadNcrData = async function() {
         }
         if (col !== "" || row.length > 0) { row.push(col); rows.push(row); }
 
-        if (rows.length < 2) {
-            if(window.showToast) window.showToast("동기화 완료: 시트에 데이터가 없거나 비어있습니다.", "warning");
-            return;
-        }
-
-        window.ncrData = rows.slice(1).map(r => {
-            return {
-                pjtCode: r[0] ? String(r[0]).trim() : '',
-                ncrNo: r[2] ? String(r[2]).trim() : '',
-                date: r[1] ? String(r[1]).trim() : '',
-                drawingNo: r[4] ? String(r[4]).trim() : '',
-                partName: r[3] ? String(r[3]).trim() : '',
-                type: r[8] ? String(r[8]).trim() : '',
-                content: r[11] ? String(r[11]).trim() : '',
-                status: r[13] ? String(r[13]).trim() : ''
-            };
-        }).filter(n => n.pjtCode);
-
-        if (window.ncrData.length === 0) {
-            if(window.showToast) window.showToast("RAWDATA 시트 형식이 맞지 않아 데이터를 불러올 수 없습니다. A열(PJT코드)이 비어있는지 확인하세요.", "warning");
-        } else {
-            if(window.showToast) window.showToast(`부적합(NCR) 데이터 ${window.ncrData.length}건 동기화 완료!`, "success");
-        }
-
-        window.renderProjectStatusList();
-
-        const modal = document.getElementById('ncr-modal');
-        if (modal && !modal.classList.contains('hidden')) {
-            const titleEl = document.getElementById('ncr-project-title');
-            if (titleEl && titleEl.dataset.code) {
-                window.renderNcrList(titleEl.dataset.code);
+        // 헤더 건너뛰기 (NCR No 문구가 있는 행 찾기)
+        let dataStartIndex = 1;
+        for (let i = 0; i < Math.min(5, rows.length); i++) {
+            if (rows[i][0] && rows[i][0].includes('NCR No')) {
+                dataStartIndex = i + 1;
+                break;
             }
         }
 
+        // 💡 수정됨: CSV 열 순서에 맞게 배열 인덱스를 정확히 매핑합니다!
+        window.ncrData = rows.slice(dataStartIndex).map(r => {
+            return {
+                ncrNo: r[0] ? String(r[0]).trim() : '',
+                date: r[1] ? String(r[1]).trim() : '',
+                pjtCode: r[2] ? String(r[2]).trim() : '',
+                partName: r[3] ? String(r[3]).trim() : '',
+                drawingNo: r[4] ? String(r[4]).trim() : '',
+                type: r[12] ? String(r[12]).trim() : '',
+                content: r[13] ? String(r[13]).trim() : '',
+                status: r[15] ? String(r[15]).trim() : ''
+            };
+        }).filter(n => n.pjtCode !== '');
+
+        if (window.ncrData.length === 0) {
+            if(window.showToast) window.showToast("데이터를 찾을 수 없습니다.", "warning");
+        }
+
+        // 현황판 리스트 다시 그리기
+        window.renderProjectStatusList();
+
     } catch(e) {
         console.error("NCR 로드 에러:", e);
-        // 사용자에게 에러 원인을 더 명확히 보여줍니다.
         if(window.showToast) window.showToast(`동기화 실패: ${e.message}`, "error");
     }
+};
+
+// 💡 2. 모달창 열기 및 닫기 기능 추가
+window.openNcrModal = function(pjtCode, pjtName) {
+    const titleEl = document.getElementById('ncr-project-title');
+    if (titleEl) {
+        titleEl.innerText = `[${pjtCode}] ${pjtName}`;
+    }
+    
+    window.renderNcrList(pjtCode);
+    
+    const modal = document.getElementById('ncr-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+};
+
+window.closeNcrModal = function() {
+    const modal = document.getElementById('ncr-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+};
+
+// 💡 3. 모달창 내부에 PJT 기반으로 데이터 렌더링 (취소선 기능 포함)
+window.renderNcrList = function(pjtCode) {
+    const tbody = document.getElementById('ncr-list-tbody');
+    if (!tbody) return;
+
+    // 선택한 프로젝트 코드로 데이터 필터링
+    const safeCode = String(pjtCode || '').replace(/\s/g, '').toUpperCase();
+    const filteredNcr = (window.ncrData || []).filter(n => String(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeCode);
+
+    // 상단 3개 요약 뱃지(총 발생, 진행중, 완료) 집계
+    const totalCnt = filteredNcr.length;
+    let compCnt = 0;
+    let pendingCnt = 0;
+
+    filteredNcr.forEach(n => {
+        let s = String(n.status || '');
+        if (s.includes('완료') || s.includes('종결') || s.includes('완료됨')) {
+            compCnt++;
+        } else {
+            pendingCnt++;
+        }
+    });
+
+    const elTotal = document.getElementById('ncr-total-cnt');
+    const elPending = document.getElementById('ncr-pending-cnt');
+    const elComp = document.getElementById('ncr-comp-cnt');
+    if (elTotal) elTotal.innerText = totalCnt;
+    if (elPending) elPending.innerText = pendingCnt;
+    if (elComp) elComp.innerText = compCnt;
+
+    if (filteredNcr.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-10 text-slate-400 font-bold bg-white">등록된 부적합 내역이 없습니다.</td></tr>';
+        return;
+    }
+
+    // 💡 목록 렌더링 (요청하신 완료 건 취소선 스타일 완벽 적용)
+    tbody.innerHTML = filteredNcr.map(row => {
+        const isCompleted = String(row.status || '').includes('완료') || String(row.status || '').includes('종결');
+
+        const badge = isCompleted 
+            ? `<span class="bg-emerald-50 text-emerald-600 px-2.5 py-1 rounded-md font-bold shadow-sm text-[11px] border border-emerald-100">완료</span>`
+            : `<span class="bg-rose-100 text-rose-700 px-2.5 py-1 rounded-md font-bold shadow-sm text-[11px] border border-rose-200">진행중</span>`;
+
+        const rowClass = isCompleted ? 'bg-slate-50/70' : 'hover:bg-indigo-50/40 transition-colors bg-white';
+        const ncrNoClass = isCompleted ? 'text-slate-400 line-through font-medium' : 'text-indigo-600 font-black';
+        const dateClass = isCompleted ? 'text-slate-400 line-through font-medium' : 'text-rose-500 font-bold';
+        const drawClass = isCompleted ? 'text-slate-400 line-through' : 'text-slate-600 font-medium';
+        const partClass = isCompleted ? 'text-slate-400 line-through font-medium' : 'text-slate-800 font-bold';
+        const typeClass = isCompleted ? 'bg-slate-50 text-slate-400 border-slate-100 line-through opacity-70' : 'bg-slate-100 text-slate-600 border-slate-200';
+        const contentClass = isCompleted ? 'text-slate-400 line-through' : 'text-slate-700 font-medium';
+
+        return `
+            <tr class="${rowClass}">
+                <td class="p-3.5 text-center ${ncrNoClass}">${row.ncrNo || '-'}</td>
+                <td class="p-3.5 text-center ${dateClass}">${row.date || '-'}</td>
+                <td class="p-3.5 text-center ${drawClass}">${row.drawingNo || '-'}</td>
+                <td class="p-3.5 text-center ${partClass}">${row.partName || '-'}</td>
+                <td class="p-3.5 text-center">
+                    <span class="px-2.5 py-1 rounded-md text-[11px] font-bold border ${typeClass}">${row.type || '-'}</span>
+                </td>
+                <td class="p-3.5 leading-relaxed ${contentClass}">${row.content || '-'}</td>
+                <td class="p-3.5 text-center">${badge}</td>
+            </tr>
+        `;
+    }).join('');
 };
