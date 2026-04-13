@@ -3,21 +3,33 @@
     <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-5 flex flex-wrap gap-4 items-center justify-between z-20 sticky top-0">
         <div class="flex items-center gap-3">
             <h2 class="text-lg font-black text-slate-800 flex items-center gap-2">
-                <div class="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shadow-sm"><i class="fa-solid fa-business-time text-xl"></i></div>
+                <div class="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shadow-sm">
+                    <i class="fa-solid fa-business-time text-xl"></i>
+                </div>
                 투입공수 관리 시스템
             </h2>
         </div>
         <div class="flex items-center gap-4">
             <div class="flex bg-slate-100 p-1 rounded-xl">
-                <button id="wh-btn-grid" onclick="window.setWhViewMode('grid')" class="px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-1.5"><i class="fa-solid fa-table"></i> 현황판</button>
-                <button id="wh-btn-calendar" onclick="window.setWhViewMode('calendar')" class="px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-1.5"><i class="fa-regular fa-calendar-days"></i> 달력</button>
+                <button id="wh-btn-grid" onclick="window.setWhViewMode('grid')" class="px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-1.5">
+                    <i class="fa-solid fa-table"></i> 현황판
+                </button>
+                <button id="wh-btn-calendar" onclick="window.setWhViewMode('calendar')" class="px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-1.5">
+                    <i class="fa-regular fa-calendar-days"></i> 달력
+                </button>
             </div>
             <div class="flex items-center bg-slate-50 border border-slate-200 rounded-xl p-1 shadow-sm">
-                <button onclick="window.changeWhMonth(-1)" class="px-3 py-1 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg transition-all"><i class="fa-solid fa-chevron-left"></i></button>
+                <button onclick="window.changeWhMonth(-1)" class="px-3 py-1 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg transition-all">
+                    <i class="fa-solid fa-chevron-left"></i>
+                </button>
                 <input type="month" id="wh-month-picker" class="bg-transparent border-none text-sm font-black text-slate-700 outline-none text-center cursor-pointer w-32" onchange="window.loadWorkhoursData()">
-                <button onclick="window.changeWhMonth(1)" class="px-3 py-1 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg transition-all"><i class="fa-solid fa-chevron-right"></i></button>
+                <button onclick="window.changeWhMonth(1)" class="px-3 py-1 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg transition-all">
+                    <i class="fa-solid fa-chevron-right"></i>
+                </button>
             </div>
-            <button onclick="window.exportWorkhoursExcel()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition-colors flex items-center gap-2"><i class="fa-solid fa-file-excel"></i> 엑셀 다운로드</button>
+            <button onclick="window.exportWorkhoursExcel()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition-colors flex items-center gap-2">
+                <i class="fa-solid fa-file-excel"></i> 엑셀 다운로드
+            </button>
         </div>
     </div>
 
@@ -37,9 +49,15 @@
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <!-- 총 투입 공수 -->
             <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-center relative overflow-hidden">
-                <div class="absolute -right-4 -bottom-4 opacity-5"><i class="fa-solid fa-stopwatch text-8xl text-indigo-500"></i></div>
-                <div class="flex justify-between items-start mb-2 relative z-10"><span class="text-[11px] font-bold text-slate-500">총 투입 공수 <span class="text-[9px] font-normal">(승인완료)</span></span></div>
-                <p class="text-3xl font-black text-indigo-600 relative z-10"><span id="wh-dash-total-md">0.0</span><span class="text-sm ml-1 font-bold text-indigo-400">MD</span></p>
+                <div class="absolute -right-4 -bottom-4 opacity-5">
+                    <i class="fa-solid fa-stopwatch text-8xl text-indigo-500"></i>
+                </div>
+                <div class="flex justify-between items-start mb-2 relative z-10">
+                    <span class="text-[11px] font-bold text-slate-500">총 투입 공수 <span class="text-[9px] font-normal">(승인완료)</span></span>
+                </div>
+                <p class="text-3xl font-black text-indigo-600 relative z-10">
+                    <span id="wh-dash-total-md">0.0</span><span class="text-sm ml-1 font-bold text-indigo-400">MD</span>
+                </p>
                 <div id="wh-dash-pjt-info" class="mt-2 hidden">
                     <p class="text-[10px] text-slate-400 font-bold truncate" id="wh-dash-pjt-date"></p>
                     <p class="text-[10px] text-indigo-500 font-bold mt-0.5 bg-indigo-50 px-2 py-0.5 rounded w-fit" id="wh-dash-pjt-days"></p>
@@ -48,17 +66,23 @@
             <!-- 인원별 투입 공수 -->
             <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm lg:col-span-1 flex flex-col h-[160px]">
                 <span class="text-[10px] font-bold text-slate-600 mb-2">인원별 누적 투입 (Top 5)</span>
-                <div class="flex-1 relative w-full h-full"><canvas id="wh-chart-person"></canvas></div>
+                <div class="flex-1 relative w-full h-full">
+                    <canvas id="wh-chart-person"></canvas>
+                </div>
             </div>
             <!-- 구분별 투입 공수 -->
             <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm lg:col-span-1 flex flex-col h-[160px]">
                 <span class="text-[10px] font-bold text-slate-600 mb-2">작업 구분별 비율</span>
-                <div class="flex-1 relative w-full h-full"><canvas id="wh-chart-type"></canvas></div>
+                <div class="flex-1 relative w-full h-full">
+                    <canvas id="wh-chart-type"></canvas>
+                </div>
             </div>
             <!-- 추이 -->
             <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm lg:col-span-1 flex flex-col h-[160px]">
                 <span id="wh-chart-trend-title" class="text-[10px] font-bold text-slate-600 mb-2">투입 추이</span>
-                <div class="flex-1 relative w-full h-full"><canvas id="wh-chart-trend"></canvas></div>
+                <div class="flex-1 relative w-full h-full">
+                    <canvas id="wh-chart-trend"></canvas>
+                </div>
             </div>
             <!-- 장소별/주요PJT -->
             <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm lg:col-span-1 flex flex-col h-[160px] overflow-y-auto custom-scrollbar">
@@ -70,16 +94,30 @@
 
     <!-- 보기 필터 -->
     <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap gap-3 items-center">
-        <span class="text-[11px] font-black text-slate-700 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200"><i class="fa-solid fa-filter text-slate-400 mr-1"></i> 보기 필터</span>
+        <span class="text-[11px] font-black text-slate-700 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+            <i class="fa-solid fa-filter text-slate-400 mr-1"></i> 보기 필터
+        </span>
         <input type="text" id="wh-filter-text" placeholder="이름, 내용, PJT명 검색" oninput="window.applyWhFilters()" class="border border-slate-200 rounded-lg px-3 py-1.5 text-xs outline-indigo-500 w-48 bg-slate-50 font-bold focus:bg-white">
         <select id="wh-filter-loc" onchange="window.applyWhFilters()" class="border border-slate-200 rounded-lg px-3 py-1.5 text-xs outline-indigo-500 bg-slate-50 cursor-pointer font-bold">
-            <option value="">장소 (전체)</option><option value="사내">사내</option><option value="국내">국내</option><option value="해외">해외</option>
+            <option value="">장소 (전체)</option>
+            <option value="사내">사내</option>
+            <option value="국내">국내</option>
+            <option value="해외">해외</option>
         </select>
         <select id="wh-filter-type" onchange="window.applyWhFilters()" class="border border-slate-200 rounded-lg px-3 py-1.5 text-xs outline-indigo-500 bg-slate-50 cursor-pointer font-bold">
-            <option value="">구분 (전체)</option><option value="조립">조립</option><option value="검수">검수</option><option value="설치">설치</option><option value="Setup">Setup</option><option value="협업">협업</option><option value="공통">공통</option><option value="기타">기타</option>
+            <option value="">구분 (전체)</option>
+            <option value="조립">조립</option>
+            <option value="검수">검수</option>
+            <option value="설치">설치</option>
+            <option value="Setup">Setup</option>
+            <option value="협업">협업</option>
+            <option value="공통">공통</option>
+            <option value="기타">기타</option>
         </select>
         <select id="wh-filter-status" onchange="window.applyWhFilters()" class="border border-slate-200 rounded-lg px-3 py-1.5 text-xs outline-indigo-500 bg-slate-50 cursor-pointer font-bold">
-            <option value="">승인 상태 (전체)</option><option value="true" class="text-emerald-600">승인 완료</option><option value="false" class="text-rose-500">미승인</option>
+            <option value="">승인 상태 (전체)</option>
+            <option value="true" class="text-emerald-600">승인 완료</option>
+            <option value="false" class="text-rose-500">미승인</option>
         </select>
         <button id="wh-btn-reset-filter" onclick="window.resetWhFilters()" class="hidden px-3 py-1.5 bg-slate-700 hover:bg-slate-800 transition-colors text-white rounded-lg text-[10px] font-bold shadow-sm">초기화</button>
     </div>
@@ -104,7 +142,13 @@
     <!-- 뷰 영역: 달력(Calendar) -->
     <div id="wh-view-calendar" class="hidden bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex-1 flex flex-col">
         <div class="grid grid-cols-7 gap-px bg-slate-200 border-b border-slate-200">
-            <div class="p-2 text-center text-xs font-black text-rose-500 bg-slate-50">일</div><div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">월</div><div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">화</div><div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">수</div><div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">목</div><div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">금</div><div class="p-2 text-center text-xs font-black text-blue-500 bg-slate-50">토</div>
+            <div class="p-2 text-center text-xs font-black text-rose-500 bg-slate-50">일</div>
+            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">월</div>
+            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">화</div>
+            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">수</div>
+            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">목</div>
+            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">금</div>
+            <div class="p-2 text-center text-xs font-black text-blue-500 bg-slate-50">토</div>
         </div>
         <div id="wh-calendar-grid" class="grid grid-cols-7 gap-px bg-slate-200 flex-1"></div>
     </div>
@@ -124,10 +168,14 @@
     <div class="bg-white rounded-3xl shadow-2xl w-full max-w-6xl flex flex-col h-[700px] md:h-[85vh] overflow-hidden transform transition-all">
         <div class="px-6 py-4 border-b flex justify-between items-center bg-indigo-50">
             <div>
-                <h2 class="text-lg font-extrabold text-indigo-800 flex items-center gap-2"><i class="fa-solid fa-pen-to-square"></i> 투입공수 기록</h2>
-                <p id="wh-modal-subtitle" class="text-[11px] font-bold text-indigo-500 mt-1 bg-white px-2 py-0.5 rounded shadow-sm w-fit border border-indigo-100">2024-05-15 | 홍길동</p>
+                <h2 class="text-lg font-extrabold text-indigo-800 flex items-center gap-2">
+                    <i class="fa-solid fa-pen-to-square"></i> 투입공수 기록
+                </h2>
+                <p id="wh-modal-subtitle" class="text-[11px] font-bold text-indigo-500 mt-1 bg-white px-2 py-0.5 rounded shadow-sm w-fit border border-indigo-100"></p>
             </div>
-            <button onclick="window.closeWhInputModal()" class="text-slate-400 hover:text-rose-500 transition-colors p-1"><i class="fa-solid fa-xmark text-xl"></i></button>
+            <button onclick="window.closeWhInputModal()" class="text-slate-400 hover:text-rose-500 transition-colors p-1">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
         </div>
         
         <div class="p-6 bg-slate-50/50 flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-4 min-h-0">
@@ -135,8 +183,12 @@
             <input type="hidden" id="wh-modal-author">
             
             <div class="flex justify-between items-end mb-2">
-                <p class="text-[10px] text-slate-500 font-bold"><i class="fa-solid fa-keyboard mr-1"></i> 저장 단축키: <kbd class="bg-white border border-slate-300 px-1 rounded shadow-sm text-slate-700">Ctrl</kbd> + <kbd class="bg-white border border-slate-300 px-1 rounded shadow-sm text-slate-700">Enter</kbd></p>
-                <button onclick="window.whAddInputRow()" class="bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300 px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition-colors flex items-center gap-1.5"><i class="fa-solid fa-plus"></i> 항목 1개 추가</button>
+                <p class="text-[10px] text-slate-500 font-bold">
+                    <i class="fa-solid fa-keyboard mr-1"></i> 저장 단축키: <kbd class="bg-white border border-slate-300 px-1 rounded shadow-sm text-slate-700">Ctrl</kbd> + <kbd class="bg-white border border-slate-300 px-1 rounded shadow-sm text-slate-700">Enter</kbd>
+                </p>
+                <button onclick="window.whAddInputRow()" class="bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300 px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition-colors flex items-center gap-1.5">
+                    <i class="fa-solid fa-plus"></i> 항목 1개 추가
+                </button>
             </div>
 
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -163,7 +215,9 @@
 
         <div class="px-6 py-4 border-t flex justify-end gap-3 bg-white">
             <button onclick="window.closeWhInputModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-6 py-2.5 rounded-xl font-bold transition-colors text-sm shadow-sm">취소</button>
-            <button onclick="window.saveWhInputData()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-2.5 rounded-xl font-bold shadow-md transition-colors text-sm flex items-center gap-2"><i class="fa-regular fa-floppy-disk"></i> 내역 저장하기</button>
+            <button onclick="window.saveWhInputData()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-2.5 rounded-xl font-bold shadow-md transition-colors text-sm flex items-center gap-2">
+                <i class="fa-regular fa-floppy-disk"></i> 내역 저장하기
+            </button>
         </div>
     </div>
 </div>
