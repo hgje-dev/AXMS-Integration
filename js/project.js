@@ -74,58 +74,37 @@ window.loadCounts = function() {
     try {
         onSnapshot(collection(db, "project_comments"), (snap) => { 
             window.projectCommentCounts = {}; 
-            snap.forEach(doc => { 
-                let d = doc.data(); 
-                let pid = d.projectId || d.reqId; 
-                if(pid) window.projectCommentCounts[pid] = (window.projectCommentCounts[pid]||0)+1; 
-            }); 
+            snap.forEach(doc => { let d = doc.data(); let pid = d.projectId || d.reqId; if(pid) window.projectCommentCounts[pid] = (window.projectCommentCounts[pid]||0)+1; }); 
             window.renderProjectStatusList();
         });
         
         onSnapshot(collection(db, "project_issues"), (snap) => { 
             window.projectIssueCounts = {}; 
-            snap.forEach(doc => { 
-                let d = doc.data(); 
-                let pid = d.projectId || d.reqId; 
-                if(pid && !d.isResolved) window.projectIssueCounts[pid] = (window.projectIssueCounts[pid]||0)+1; 
-            }); 
+            snap.forEach(doc => { let d = doc.data(); let pid = d.projectId || d.reqId; if(pid && !d.isResolved) window.projectIssueCounts[pid] = (window.projectIssueCounts[pid]||0)+1; }); 
             window.renderProjectStatusList();
         });
         
         onSnapshot(collection(db, "daily_logs"), (snap) => { 
             window.projectLogCounts = {}; 
-            snap.forEach(doc => { 
-                let d = doc.data(); 
-                let pid = d.projectId || d.reqId; 
-                if(pid) window.projectLogCounts[pid] = (window.projectLogCounts[pid]||0)+1; 
-            }); 
+            snap.forEach(doc => { let d = doc.data(); let pid = d.projectId || d.reqId; if(pid) window.projectLogCounts[pid] = (window.projectLogCounts[pid]||0)+1; }); 
             window.renderProjectStatusList();
         });
         
         onSnapshot(collection(db, "project_purchases"), (snap) => { 
             window.projectPurchaseCounts = {}; 
-            snap.forEach(doc => { 
-                let pid = doc.data().projectId; 
-                if(pid) window.projectPurchaseCounts[pid] = (window.projectPurchaseCounts[pid]||0)+1; 
-            }); 
+            snap.forEach(doc => { let pid = doc.data().projectId; if(pid) window.projectPurchaseCounts[pid] = (window.projectPurchaseCounts[pid]||0)+1; }); 
             window.renderProjectStatusList();
         });
         
         onSnapshot(collection(db, "project_designs"), (snap) => { 
             window.projectDesignCounts = {}; 
-            snap.forEach(doc => { 
-                let pid = doc.data().projectId; 
-                if(pid) window.projectDesignCounts[pid] = (window.projectDesignCounts[pid]||0)+1; 
-            }); 
+            snap.forEach(doc => { let pid = doc.data().projectId; if(pid) window.projectDesignCounts[pid] = (window.projectDesignCounts[pid]||0)+1; }); 
             window.renderProjectStatusList();
         });
         
         onSnapshot(collection(db, "project_schedules"), (snap) => { 
             window.projectScheduleCounts = {}; 
-            snap.forEach(doc => { 
-                let pid = doc.data().projectId; 
-                if(pid) window.projectScheduleCounts[pid] = (window.projectScheduleCounts[pid]||0)+1; 
-            }); 
+            snap.forEach(doc => { let pid = doc.data().projectId; if(pid) window.projectScheduleCounts[pid] = (window.projectScheduleCounts[pid]||0)+1; }); 
             window.renderProjectStatusList();
         });
         
@@ -151,92 +130,37 @@ window.filterProjectStatus = function(status) {
     else window.renderProjectStatusList();
 };
 
-window.filterByCategory = function(category) { 
-    window.currentCategoryFilter = category; 
-    window.filterProjectStatus(window.currentStatusFilter); 
-};
-
-window.filterByYear = function(yearStr) { 
-    window.currentYearFilter = yearStr; 
-    window.updateMiniDashboard(); 
-    window.filterProjectStatus(window.currentStatusFilter); 
-};
-
-window.filterByMonth = function(monthStr) { 
-    window.currentMonthFilter = monthStr; 
-    window.updateMiniDashboard(); 
-    window.filterProjectStatus(window.currentStatusFilter); 
-};
-
+window.filterByCategory = function(category) { window.currentCategoryFilter = category; window.filterProjectStatus(window.currentStatusFilter); };
+window.filterByYear = function(yearStr) { window.currentYearFilter = yearStr; window.updateMiniDashboard(); window.filterProjectStatus(window.currentStatusFilter); };
+window.filterByMonth = function(monthStr) { window.currentMonthFilter = monthStr; window.updateMiniDashboard(); window.filterProjectStatus(window.currentStatusFilter); };
 window.filterByStatusOnly = function(status) {
-    window.currentCategoryFilter = 'all'; 
-    window.currentYearFilter = ''; 
-    window.currentMonthFilter = ''; 
-    window.hideCompletedFilter = false;
-    
-    const cSelect = document.getElementById('filter-category-select'); 
-    if(cSelect) cSelect.value = 'all';
-    
-    const ySelect = document.getElementById('filter-year-select'); 
-    if(ySelect) ySelect.value = '';
-    
-    const mSelect = document.getElementById('filter-month-select'); 
-    if(mSelect) mSelect.value = '';
-    
-    const hCb = document.getElementById('hide-completed-cb'); 
-    if(hCb) hCb.checked = false;
-    
+    window.currentCategoryFilter = 'all'; window.currentYearFilter = ''; window.currentMonthFilter = ''; window.hideCompletedFilter = false;
+    const cSelect = document.getElementById('filter-category-select'); if(cSelect) cSelect.value = 'all';
+    const ySelect = document.getElementById('filter-year-select'); if(ySelect) ySelect.value = '';
+    const mSelect = document.getElementById('filter-month-select'); if(mSelect) mSelect.value = '';
+    const hCb = document.getElementById('hide-completed-cb'); if(hCb) hCb.checked = false;
     window.filterProjectStatus(status);
 };
-
 window.resetAllFilters = function() {
-    window.currentStatusFilter = 'all'; 
-    window.currentCategoryFilter = 'all'; 
-    window.currentYearFilter = ''; 
-    window.currentMonthFilter = ''; 
-    window.hideCompletedFilter = false;
-    
+    window.currentStatusFilter = 'all'; window.currentCategoryFilter = 'all'; window.currentYearFilter = ''; window.currentMonthFilter = ''; window.hideCompletedFilter = false;
     if(document.getElementById('filter-category-select')) document.getElementById('filter-category-select').value = 'all';
     if(document.getElementById('filter-year-select')) document.getElementById('filter-year-select').value = '';
     if(document.getElementById('filter-month-select')) document.getElementById('filter-month-select').value = '';
     if(document.getElementById('hide-completed-cb')) document.getElementById('hide-completed-cb').checked = false;
-    
     window.filterProjectStatus('all');
 };
 
-window.toggleHideCompleted = function(checked) { 
-    window.hideCompletedFilter = checked; 
-    window.filterProjectStatus(window.currentStatusFilter); 
-};
+window.toggleHideCompleted = function(checked) { window.hideCompletedFilter = checked; window.filterProjectStatus(window.currentStatusFilter); };
 
 window.getFilteredProjects = function() {
     let list = window.currentProjectStatusList || [];
-    
-    if(window.currentCategoryFilter && window.currentCategoryFilter !== 'all') {
-        list = list.filter(item => getSafeString(item.category) === window.currentCategoryFilter);
-    }
-    
+    if(window.currentCategoryFilter && window.currentCategoryFilter !== 'all') list = list.filter(item => getSafeString(item.category) === window.currentCategoryFilter);
     if(window.currentStatusFilter && window.currentStatusFilter !== 'all') { 
-        list = list.filter(item => { 
-            if (window.currentStatusFilter === 'progress') {
-                return item.status === 'progress' || item.status === 'inspecting'; 
-            }
-            return item.status === window.currentStatusFilter; 
-        }); 
+        list = list.filter(item => { if (window.currentStatusFilter === 'progress') return item.status === 'progress' || item.status === 'inspecting'; return item.status === window.currentStatusFilter; }); 
     }
-    
-    if(window.hideCompletedFilter) {
-        list = list.filter(item => item.status !== 'completed');
-    }
-    
-    if(window.currentYearFilter) {
-        list = list.filter(item => (item.d_shipEn || '').startsWith(window.currentYearFilter) || (item.d_asmEst || '').startsWith(window.currentYearFilter) || (item.d_asmEn || '').startsWith(window.currentYearFilter));
-    }
-    
-    if(window.currentMonthFilter) {
-        list = list.filter(item => (item.d_shipEn || '').startsWith(window.currentMonthFilter) || (item.d_asmEst || '').startsWith(window.currentMonthFilter) || (item.d_asmEn || '').startsWith(window.currentMonthFilter));
-    }
-    
+    if(window.hideCompletedFilter) list = list.filter(item => item.status !== 'completed');
+    if(window.currentYearFilter) list = list.filter(item => (item.d_shipEn || '').startsWith(window.currentYearFilter) || (item.d_asmEst || '').startsWith(window.currentYearFilter) || (item.d_asmEn || '').startsWith(window.currentYearFilter));
+    if(window.currentMonthFilter) list = list.filter(item => (item.d_shipEn || '').startsWith(window.currentMonthFilter) || (item.d_asmEst || '').startsWith(window.currentMonthFilter) || (item.d_asmEn || '').startsWith(window.currentMonthFilter));
     const priority = { 'pending': 1, 'progress': 2, 'inspecting': 2, 'rejected': 3, 'completed': 4 };
     list.sort((a,b) => (priority[a.status] || 99) - (priority[b.status] || 99) || getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
     return list;
@@ -261,9 +185,7 @@ window.updateMiniDashboard = function() {
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
         const completedLabel = document.getElementById('mini-dash-completed-label');
-        if (completedLabel) {
-            completedLabel.innerHTML = '<i class="fa-solid fa-truck-fast text-emerald-400"></i> 출하 완료 (' + (now.getMonth() + 1) + '월)';
-        }
+        if (completedLabel) completedLabel.innerHTML = '<i class="fa-solid fa-truck-fast text-emerald-400"></i> 출하 완료 (' + (now.getMonth() + 1) + '월)';
 
         (window.currentProjectStatusList || []).forEach(function(item) {
             const status = getSafeString(item.status); 
@@ -292,24 +214,18 @@ window.updateMiniDashboard = function() {
 
         const elUpcoming7 = document.getElementById('mini-dash-upcoming');
         if(elUpcoming7) { 
-            if (upcomingCodes7.length === 0) {
-                elUpcoming7.innerHTML = '<span class="text-[10px] text-rose-400 font-bold w-full text-center mt-1">임박한 프로젝트 없음</span>';
-            } else {
-                elUpcoming7.innerHTML = upcomingCodes7.map(u => {
-                    let dText = u.dDay === 0 ? 'D-Day' : (u.dDay < 0 ? '지연' : 'D-' + u.dDay); 
-                    let bgClass = u.dDay <= 3 ? 'bg-rose-500 text-white border-rose-600' : 'bg-white text-rose-600 border-rose-200'; 
-                    return `<span class="text-[10px] border px-1.5 py-0.5 rounded font-bold shadow-sm flex items-center gap-1 ${bgClass}">${u.code} <span class="opacity-80 text-[8px]">[${dText}]</span></span>`;
-                }).join('');
-            }
+            if (upcomingCodes7.length === 0) elUpcoming7.innerHTML = '<span class="text-[10px] text-rose-400 font-bold w-full text-center mt-1">임박한 프로젝트 없음</span>';
+            else elUpcoming7.innerHTML = upcomingCodes7.map(u => {
+                let dText = u.dDay === 0 ? 'D-Day' : (u.dDay < 0 ? '지연' : 'D-' + u.dDay); 
+                let bgClass = u.dDay <= 3 ? 'bg-rose-500 text-white border-rose-600' : 'bg-white text-rose-600 border-rose-200'; 
+                return `<span class="text-[10px] border px-1.5 py-0.5 rounded font-bold shadow-sm flex items-center gap-1 ${bgClass}">${u.code} <span class="opacity-80 text-[8px]">[${dText}]</span></span>`;
+            }).join('');
         }
         
         const elUpcoming14 = document.getElementById('mini-dash-upcoming-14');
         if(elUpcoming14) { 
-            if (upcomingCodes14.length === 0) {
-                elUpcoming14.innerHTML = '<span class="text-[10px] text-orange-400 font-bold w-full text-center mt-1">임박한 프로젝트 없음</span>';
-            } else {
-                elUpcoming14.innerHTML = upcomingCodes14.map(u => `<span class="text-[10px] border px-1.5 py-0.5 rounded font-bold shadow-sm flex items-center gap-1 bg-white text-orange-600 border-orange-200">${u.code} <span class="opacity-80 text-[8px]">[D-${u.dDay}]</span></span>`).join('');
-            }
+            if (upcomingCodes14.length === 0) elUpcoming14.innerHTML = '<span class="text-[10px] text-orange-400 font-bold w-full text-center mt-1">임박한 프로젝트 없음</span>';
+            else elUpcoming14.innerHTML = upcomingCodes14.map(u => `<span class="text-[10px] border px-1.5 py-0.5 rounded font-bold shadow-sm flex items-center gap-1 bg-white text-orange-600 border-orange-200">${u.code} <span class="opacity-80 text-[8px]">[D-${u.dDay}]</span></span>`).join('');
         }
     } catch(e) {}
 };
@@ -369,9 +285,7 @@ window.renderProjectStatusList = function() {
     
     let htmlStr = '';
     displayList.forEach(item => {
-        const cMd = parseFloat(item.currentMd) || 0; 
-        const oMd = parseFloat(item.outMd) || 0; 
-        const fMd = parseFloat(item.finalMd) || (cMd + oMd);
+        const cMd = parseFloat(item.currentMd) || 0; const oMd = parseFloat(item.outMd) || 0; const fMd = parseFloat(item.finalMd) || (cMd + oMd);
         const safeNameHtml = getSafeString(item.name).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const safeNameJs = getSafeString(item.name).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, ' ').replace(/\r/g, '');
         
@@ -1340,7 +1254,7 @@ window.saveDailyLogItem = async function() {
                 purchaseRate: purchaseRateVal 
             }, { merge: true }); 
             
-            // 💡 생산일지 알림 처리
+            // 💡 생산일지 알림
             let notified = [];
             if(window.processMentions) {
                 notified = await window.processMentions(content, projectId, "생산일지"); 
@@ -1537,7 +1451,7 @@ window.saveCommentItem = async function() {
                 await addDoc(collection(db, "project_comments"), payload); 
                 window.showToast("코멘트가 등록되었습니다."); 
                 
-                // 💡 PJT 담당자 알림 연동
+                // 💡 담당자 알림 연동
                 let notified = [];
                 if(window.processMentions) {
                     notified = await window.processMentions(content, projectId, "코멘트");
