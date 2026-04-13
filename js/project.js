@@ -366,10 +366,44 @@ window.renderProjectStatusList = function() {
 
         const safeItemCode = String(item.code || '').replace(/\s/g, '').toUpperCase();
         const pjtNcrData = (window.ncrData || []).filter(n => String(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeItemCode);
+        
+        const totalNcrCnt = pjtNcrData.length;
         const unresolvedNcrCnt = pjtNcrData.filter(n => {
             let s = String(n.status || '');
             return !(s.includes('완료') || s.includes('종결') || s.includes('완료됨'));
         }).length;
+
+        // 💡 부적합 데이터 상태에 따라 아이콘 색상과 모양을 다르게 렌더링!
+        let ncrIconHtml = '';
+        if (totalNcrCnt === 0) {
+            // 1. 부적합 내역이 아예 없는 경우 (회색)
+            ncrIconHtml = `<button onclick="window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-slate-300 hover:text-indigo-400 transition-colors p-1" title="부적합 내역 없음"><i class="fa-solid fa-file-circle-check text-lg"></i></button>`;
+        } else if (unresolvedNcrCnt === 0) {
+            // 2. 부적합이 있었으나 모두 조치 완료된 경우 (녹색)
+            ncrIconHtml = `<button onclick="window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-emerald-500 hover:text-emerald-600 transition-colors p-1" title="모두 조치 완료"><i class="fa-solid fa-file-circle-check text-lg"></i></button>`;
+        } else {
+            // 3. 조치 중인 미결 부적합이 있는 경우 (빨간색 + 숫자 뱃지)
+            ncrIconHtml = `<button onclick="window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-rose-500 relative transition-transform hover:scale-110 p-1" title="미결 부적합 ${unresolvedNcrCnt}건">
+                <i class="fa-solid fa-file-circle-exclamation text-lg"></i>
+                <span class="absolute -top-1 -right-2 bg-rose-100 text-rose-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-rose-200">${unresolvedNcrCnt}</span>
+            </button>`;
+        }
+
+        let trHtml = `<tr class="group hover:bg-indigo-50/50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.editProjStatus('${item.id}')">`;
+        
+        trHtml += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 0px; min-width: 40px; max-width: 40px;" onclick="event.stopPropagation()"><button onclick="window.deleteProjStatus('${item.id}')" class="text-slate-300 hover:text-rose-500 p-1.5 rounded"><i class="fa-solid fa-trash-can"></i></button></td>`;
+        
+        // ... (중간 생략)
+
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openDailyLogModal('${item.id}', '${safeNameJs}', ${parseFloat(item.progress)||0})" class="text-sky-400 relative"><i class="fa-solid fa-book text-lg"></i>${lCnt ? `<span class="absolute -top-1 -right-2 bg-sky-100 text-sky-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-sky-200">${lCnt}</span>` : ''}</button></td>`;
+        
+        // 💡 기존의 무조건 빨간 아이콘이 나오던 부분을, 위에서 만든 똑똑한 ncrIconHtml로 대체합니다.
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()">
+            ${ncrIconHtml}
+        </td>`;
+
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center text-sky-600">${item.estMd||0}</td>`;
+        // 💡 [수정할 부분 끝]
 
         let trHtml = `<tr class="group hover:bg-indigo-50/50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.editProjStatus('${item.id}')">`;
         
