@@ -217,6 +217,7 @@ window.renderProjectStatusList = function() {
     const tbody = document.getElementById('proj-dash-tbody'); if(!tbody) return;
     let displayList = window.getFilteredProjects();
     
+    // 💡 열 개수가 32개로 늘어났으므로 빈 화면일 때 colspan 32 적용
     if(displayList.length === 0) { 
         tbody.innerHTML = '<tr><td colspan="32" class="text-center p-6 text-slate-400 font-bold border-b border-slate-100 bg-white">프로젝트가 없습니다.</td></tr>'; 
         return; 
@@ -243,6 +244,7 @@ window.renderProjectStatusList = function() {
         const desCnt = (window.projectDesignCounts && window.projectDesignCounts[item.id]) || 0;
         const schCnt = (window.projectScheduleCounts && window.projectScheduleCounts[item.id]) || 0;
 
+        // 💡 띄어쓰기 및 대소문자 무시한 NCR 미결 항목 계산
         const safeItemCode = String(item.code || '').replace(/\s/g, '').toUpperCase();
         const pjtNcrData = (window.ncrData || []).filter(n => String(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeItemCode);
         const unresolvedNcrCnt = pjtNcrData.filter(n => !(n.status.includes('완료') || n.status.includes('종결') || n.status.includes('완료됨'))).length;
@@ -999,7 +1001,7 @@ window.renderDailyLogs = function(logs) {
             
             let btnHtml = '';
             if (log.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin') {
-                btnHtml = '<button onclick="window.editDailyLog(\'' + log.id + '\')" class="text-slate-400 hover:text-sky-50 transition-colors" title="수정"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteDailyLog(\'' + log.id + '\')" class="text-slate-400 hover:text-rose-500 transition-colors" title="삭제"><i class="fa-solid fa-trash-can"></i></button>';
+                btnHtml = '<button onclick="window.editDailyLog(\'' + log.id + '\')" class="text-slate-400 hover:text-sky-500 transition-colors" title="수정"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteDailyLog(\'' + log.id + '\')" class="text-slate-400 hover:text-rose-500 transition-colors" title="삭제"><i class="fa-solid fa-trash-can"></i></button>';
             }
             
             listHtml += '<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1 hover:shadow-md transition-shadow"><div class="flex justify-between items-center"><div class="flex items-center gap-3"><span class="font-bold text-sky-600 text-xs flex items-center gap-1"><i class="fa-regular fa-calendar text-sky-400"></i> ' + log.date + '</span><span class="font-black text-slate-700 text-sm">' + log.authorName + '</span></div><div class="flex gap-2">' + btnHtml + '</div></div><div class="text-slate-700 font-medium text-[13px] pl-1 mt-2 break-words leading-relaxed">' + safeContent + '</div>' + imgHtml + '</div>'; 
@@ -1636,7 +1638,7 @@ window.selectAutocomplete = function(code, name, company, sourceId, targetId1, t
     const t1 = document.getElementById(targetId1);
     const t2 = document.getElementById(targetId2);
 
-    if (sourceId.includes('code')) {
+    if (sourceId === 'ps-code') {
         if (sourceEl) sourceEl.value = code;
         if (t1) t1.value = name;
         if (t2) t2.value = company;
@@ -1754,6 +1756,11 @@ window.loadNcrData = async function() {
 
     } catch(e) {
         console.error("NCR 로드 에러:", e);
+        const authBtn = document.getElementById('btn-pjt-google-auth');
+        if (authBtn) {
+            authBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> 동기화 실패';
+            authBtn.className = 'text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-1.5 rounded-lg shadow-sm whitespace-nowrap ml-2';
+        }
         if(window.showToast) window.showToast("시트 접근 오류: 시트가 '뷰어'로 공개되어 있는지 확인하세요.", "error");
     }
 };
@@ -1776,7 +1783,6 @@ window.renderNcrList = function(pjtCode) {
     const tbody = document.getElementById('ncr-list-tbody');
     if (!tbody) return;
     
-    // 시트의 코드와 현황판의 코드 비교 시, 띄어쓰기 및 대소문자를 무시하도록 강화
     const safeTargetCode = String(pjtCode).replace(/\s/g, '').toUpperCase();
     const list = (window.ncrData || []).filter(n => String(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeTargetCode);
     
