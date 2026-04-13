@@ -1,4 +1,7 @@
-const routes = {
+// js/router.js
+
+// 💡 아예 에러가 날 수 없도록 window 객체에 직접 박아버렸습니다!
+window.axbisRoutes = {
     'dashboard-home': { url: './views/dashboard.html', init: () => { if(window.loadHomeDashboards) window.loadHomeDashboards(); } },
     
     'project-status': { 
@@ -38,7 +41,7 @@ window.openApp = async function(viewId, title) {
     const appContent = document.getElementById('app-content');
     if(document.getElementById('nav-title')) document.getElementById('nav-title').innerText = title || '';
 
-    const route = routes[routeKey] || routes['dashboard-home'];
+    const route = window.axbisRoutes[routeKey] || window.axbisRoutes['dashboard-home'];
 
     try {
         appContent.innerHTML = '<div class="flex items-center justify-center h-[60vh] w-full"><div class="text-center text-slate-400 font-bold"><i class="fa-solid fa-spinner fa-spin text-5xl text-indigo-500 mb-4"></i><br>화면을 불러오는 중입니다...</div></div>';
@@ -50,7 +53,7 @@ window.openApp = async function(viewId, title) {
         if (route.init) setTimeout(route.init, 50);
     } catch (error) {
         console.error('라우팅 에러:', error);
-        appContent.innerHTML = `<div class="text-center p-10 mt-10 bg-white rounded-2xl shadow-sm border border-rose-200 text-rose-500 font-bold"><i class="fa-solid fa-triangle-exclamation text-3xl mb-3"></i><br>화면을 불러오는데 실패했습니다. (${route.url})</div>`;
+        appContent.innerHTML = `<div class="text-center p-10 mt-10 bg-white rounded-2xl shadow-sm border border-rose-200 text-rose-500 font-bold"><i class="fa-solid fa-triangle-exclamation text-3xl mb-3"></i><br>화면을 불러오는데 실패했습니다. (${route?.url})</div>`;
     }
 };
 
