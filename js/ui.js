@@ -1,1087 +1,577 @@
 /* eslint-disable */
 import { db } from './firebase.js';
-import { collection, doc, setDoc, addDoc, deleteDoc, query, onSnapshot, where, getDocs, writeBatch } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { collection, addDoc, query, where, onSnapshot, doc, setDoc, getDocs, writeBatch, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-let unsubscribeRequests = null;
-let currentCommentUnsubscribe = null;
-let unsubscribeEmails = null; 
+// 전역 상태 변수
+window.currentUser = null; 
+window.userProfile = null; 
+window.allSystemUsers = []; 
+window.teamMembers = []; 
+window.allDashProjects = []; 
+window.allDashMdLogs = []; 
+window.currentProjectStatusList = []; 
+window.pjtCodeMasterList = []; 
+window.currentRequestList = []; 
+window.currentWeeklyLogList = []; 
+window.currentProcessData = []; 
+window.projectLogs = []; 
+window.masterPresets = {}; 
+window.projectCommentCounts = {}; 
+window.projectIssueCounts = {}; 
+window.projectLogCounts = {}; 
+window.currentSelectedMembers = [];
+window.currentProjDashView = 'list'; 
+window.currentProjPartTab = '제조'; 
+window.currentCategoryFilter = 'all'; 
+window.currentReqView = 'list'; 
+window.currentAppId = null; 
+window.editingReqId = null; 
+window.latestP50Md = 0; 
+window.originalProjectName = ''; 
+window.pendingSaveData = null; 
+window.isProjectDirty = false; 
+window.pendingAction = null; 
+window.currentTab = 'hist'; 
+window.latestHistData = null; 
+window.latestTorData = null; 
+window.theChart = null; 
+window.dashChartObj = null; 
+window.currentProjectId = null;
 
-window.currentReqEmails = []; 
-
-const getVal = (id) => {
-    const el = document.getElementById(id);
-    return el && el.value ? el.value.trim() : '';
-};
-const getNum = (id) => {
-    const el = document.getElementById(id);
-    return el && el.value ? (parseFloat(el.value) || 0) : 0;
-};
-const setVal = (id, val) => {
-    const el = document.getElementById(id);
-    if(el) el.value = val;
-};
-
-window.reqGetSafeMillis = function(val) {
-    try { 
-        if (!val) return 0; 
-        if (typeof val.toMillis === 'function') return val.toMillis(); 
-        if (typeof val === 'number') return val; 
-        if (typeof val === 'string') return new Date(val).getTime() || 0; 
-        return 0; 
-    } catch(e) { return 0; }
-};
-
-window.currentReqStatusFilter = 'all';
-window.currentReqYearFilter = '';
-window.currentReqMonthFilter = '';
-window.currentReqSearch = '';
-
-window.setReqStatusFilter = function(status) {
-    window.currentReqStatusFilter = status;
-    window.renderRequestList();
-};
-
-window.filterReqByYear = function(year) {
-    window.currentReqYearFilter = year;
-    window.renderRequestList();
-};
-
-window.filterReqByMonth = function(month) {
-    window.currentReqMonthFilter = month;
-    window.renderRequestList();
+// 공통 날짜 및 유틸 함수
+window.getTriangularRandom = function(min, mode, max) { 
+    let u = Math.random(); 
+    let F = (mode - min) / (max - min); 
+    if (u <= F) return min + Math.sqrt(u * (max - min) * (mode - min));
+    else return max - Math.sqrt((1 - u) * (max - min) * (max - mode));
 };
 
-window.filterReqBySearch = function(keyword) {
-    window.currentReqSearch = keyword.toLowerCase();
-    window.renderRequestList();
+window.getNormalRandom = function(mean, stdDev) { 
+    let u1 = Math.random(); 
+    if (u1 === 0) u1 = 0.0001; 
+    return (Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * Math.random())) * stdDev + mean; 
 };
 
-window.resetReqFilters = function() {
-    window.currentReqStatusFilter = 'all';
-    window.currentReqYearFilter = '';
-    window.currentReqMonthFilter = '';
-    window.currentReqSearch = '';
+window.getLocalDateStr = function(d) { 
+    if (!d || isNaN(d.getTime())) return "";
+    let month = String(d.getMonth() + 1).padStart(2, '0');
+    let day = String(d.getDate()).padStart(2, '0');
+    return d.getFullYear() + "-" + month + "-" + day;
+};
+
+window.getDateTimeStr = function(d) { 
+    if (!d || isNaN(d.getTime())) return "";
+    let year = d.getFullYear().toString().slice(2);
+    let month = String(d.getMonth() + 1).padStart(2, '0');
+    let day = String(d.getDate()).padStart(2, '0');
+    let hour = String(d.getHours()).padStart(2, '0');
+    let min = String(d.getMinutes()).padStart(2, '0');
+    return year + "-" + month + "-" + day + " " + hour + ":" + min;
+};
+
+window.getWeekString = function(d) { 
+    const date = new Date(d.getTime()); 
+    date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7)); 
+    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1)); 
+    const weekNo = Math.ceil((((date - yearStart) / 86400000) + 1) / 7); 
+    return date.getUTCFullYear() + "-W" + String(weekNo).padStart(2, '0'); 
+};
+
+window.getDatesFromWeek = function(weekStr) { 
+    const parts = weekStr.split('-W');
+    const year = parseInt(parts[0]);
+    const week = parseInt(parts[1]);
+    const d = new Date(year, 0, 1); 
+    const dayOffset = (d.getDay() <= 4 && d.getDay() !== 0) ? 1 : 8; 
+    const firstMonday = new Date(year, 0, d.getDate() - d.getDay() + dayOffset); 
+    const start = new Date(firstMonday.getTime() + (week - 1) * 7 * 24 * 60 * 60 * 1000); 
+    const end = new Date(start); 
+    end.setDate(end.getDate() + 6); 
+    end.setHours(23, 59, 59, 999); 
+    return { start: start, end: end }; 
+};
+
+const koreaHolidays = new Set(['2024-01-01','2024-03-01','2024-05-06','2024-12-25','2025-01-01','2025-05-05','2025-10-06','2025-12-25']); 
+window.isWorkDay = function(d) { 
+    const el = document.getElementById('apply-holidays'); 
+    if(!el || !el.checked) return true; 
+    if(d.getDay() === 0 || d.getDay() === 6) return false; 
+    return !koreaHolidays.has(window.getLocalDateStr(d)); 
+};
+
+window.calculateWorkDate = function(s, d) { 
+    let dt = new Date(s); 
+    if(isNaN(dt.getTime())) return new Date(); 
+    let a = 0; 
+    while(a < d) { 
+        dt.setDate(dt.getDate() + 1); 
+        if(window.isWorkDay(dt)) a++; 
+    } 
+    return dt; 
+};
+
+window.showToast = function(msg, type) { 
+    if (!type) type = "success";
+    const c = document.getElementById('toast-container'); 
+    if(!c) return; 
+    const t = document.createElement('div'); 
+    let bgClass = type === "success" ? "bg-emerald-600" : "bg-rose-600";
+    t.className = "toast text-white px-6 py-3 rounded-xl shadow-lg text-sm font-bold z-[9999] flex items-center gap-2 " + bgClass; 
+    let iconHtml = type === "success" ? '<i class="fa-solid fa-circle-check"></i> ' : '<i class="fa-solid fa-triangle-exclamation"></i> ';
+    t.innerHTML = iconHtml + msg; 
+    c.appendChild(t); 
+    setTimeout(function() { 
+        t.style.opacity = '0'; 
+        setTimeout(function() { t.remove(); }, 300); 
+    }, 3000); 
+};
+
+window.getChosung = function(str) { 
+    const cho=["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"]; 
+    let res = ""; 
+    for(let i=0; i<str.length; i++) { 
+        let c = str.charCodeAt(i) - 44032; 
+        if(c > -1 && c < 11172) res += cho[Math.floor(c / 588)]; 
+        else res += str.charAt(i); 
+    } 
+    return res; 
+};
+
+window.matchString = function(q, t) { 
+    if(!q) return true; 
+    if(!t) return false; 
+    q = q.toLowerCase(); 
+    t = t.toLowerCase(); 
+    if(t.includes(q)) return true; 
+    if(window.getChosung(t).includes(q)) return true; 
+    return false; 
+};
+
+window.toggleDarkMode = function() { 
+    const h = document.documentElement;
+    const i = document.getElementById('dark-mode-icon'); 
+    if(h.classList.contains('dark')) { 
+        h.classList.remove('dark'); 
+        localStorage.setItem('color-theme', 'light'); 
+        if(i) i.className = 'fa-solid fa-moon'; 
+    } else { 
+        h.classList.add('dark'); 
+        localStorage.setItem('color-theme', 'dark'); 
+        if(i) i.className = 'fa-solid fa-sun text-amber-400'; 
+    } 
+};
+
+window.toggleSidebar = function(forceShow) { 
+    const s = document.getElementById('sidebar'); 
+    const b = document.getElementById('sidebar-backdrop'); 
+    if(!s || !b) return; 
+    const isClosed = s.classList.contains('-translate-x-full');
+    let show = isClosed;
+    if (typeof forceShow === 'boolean') show = forceShow;
     
-    setVal('filter-req-year', '');
-    setVal('filter-req-month', '');
-    setVal('filter-req-search', '');
+    if(show) { 
+        s.classList.remove('-translate-x-full'); 
+        b.classList.remove('hidden'); 
+    } else { 
+        s.classList.add('-translate-x-full'); 
+        b.classList.add('hidden'); 
+    } 
+};
+
+window.toggleAuthMode = function(mode) { 
+    const signupFields = document.getElementById('signup-fields');
+    const btnLogin = document.getElementById('action-buttons-login');
+    const btnSignup = document.getElementById('action-buttons-signup');
+    const loginView = document.getElementById('login-view');
+    const signupView = document.getElementById('signup-view');
+    const authTitle = document.getElementById('auth-title');
+    const loginError = document.getElementById('login-error');
+    const signupError = document.getElementById('signup-error');
+
+    if (mode === 'signup') { 
+        if (signupFields) signupFields.classList.remove('hidden'); 
+        if (btnLogin) btnLogin.classList.add('hidden'); 
+        if (btnSignup) btnSignup.classList.remove('hidden'); 
+        if (loginView) loginView.classList.add('hidden'); 
+        if (signupView) signupView.classList.remove('hidden'); 
+        if (authTitle) authTitle.innerText = 'AXBIS 계정 생성'; 
+        if (loginError) loginError.classList.add('hidden'); 
+    } else { 
+        if (signupFields) signupFields.classList.add('hidden'); 
+        if (btnLogin) btnLogin.classList.remove('hidden'); 
+        if (btnSignup) btnSignup.classList.add('hidden'); 
+        if (loginView) loginView.classList.remove('hidden'); 
+        if (signupView) signupView.classList.add('hidden'); 
+        if (authTitle) authTitle.innerText = 'AXBIS Cloud 접속'; 
+        if (signupError) signupError.classList.add('hidden'); 
+    } 
+};
+
+window.formatMentions = function(text) {
+    if(!text) return '';
+    let formatted = text.replace(/@([가-힣a-zA-Z0-9_]+)/g, '<span class="text-blue-600 font-extrabold bg-blue-50 px-1.5 py-0.5 rounded shadow-sm border border-blue-200">@$1</span>');
+    formatted = formatted.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" class="text-sky-500 hover:text-sky-700 underline break-all font-bold" onclick="event.stopPropagation()">$1</a>');
+    return formatted;
+};
+
+// ==========================================
+// 🔔 알림 및 멘션 시스템 로직
+// ==========================================
+window.toggleNotifications = function(event) { 
+    if(event) event.stopPropagation(); 
+    const dropdown = document.getElementById('notification-dropdown'); 
+    if(dropdown) {
+        if (dropdown.classList.contains('hidden')) dropdown.classList.remove('hidden'); 
+        else dropdown.classList.add('hidden');
+    }
+};
+
+let notiUnsubscribe = null;
+window.loadNotifications = function() {
+    if (!window.currentUser) return;
+    if (notiUnsubscribe) notiUnsubscribe();
     
-    window.renderRequestList();
-};
-
-const GOOGLE_CLIENT_ID = '924354535197-joakn7gpfj4d3oirpd1pu3un9j7689q9.apps.googleusercontent.com';
-const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/gmail.send';
-
-window.googleAccessToken = null;
-
-const DRIVE_FOLDERS = {
-    'collab': '1q4pzChZi_FYFGK7cXuRK6GRbIeSzfkRC', 
-    'purchase': '18SE2vn_OjZKWWOnthyrVA4fPoIcQP490', 
-    'repair': '1YSIVOQhoq2gWnhSze-mmYgyDs0XkaeGj' 
-};
-
-window.handleFileSelect = function(files) {
-    if (files && files.length > 0) {
-        const fileInput = document.getElementById('req-file');
-        const dataTransfer = new DataTransfer();
-        dataTransfer.items.add(files[0]);
-        if(fileInput) fileInput.files = dataTransfer.files;
+    const q = query(collection(db, "notifications"), where("targetUid", "==", window.currentUser.uid));
+    notiUnsubscribe = onSnapshot(q, function(snapshot) {
+        let notis = []; 
+        let unreadCount = 0;
         
-        const nameText = document.getElementById('req-file-name-text');
-        const nameWrap = document.getElementById('req-file-name');
-        if(nameText) nameText.innerText = files[0].name;
-        if(nameWrap) nameWrap.classList.remove('hidden');
-    }
-};
-
-window.clearSelectedFile = function(e) {
-    if(e) e.stopPropagation();
-    setVal('req-file', '');
-    const nameWrap = document.getElementById('req-file-name');
-    if(nameWrap) nameWrap.classList.add('hidden');
-};
-
-window.initGoogleAPI = function() {
-    if (typeof google === 'undefined' || typeof gapi === 'undefined') {
-        setTimeout(window.initGoogleAPI, 500);
-        return;
-    }
-    
-    const storedToken = localStorage.getItem('axmsGoogleToken');
-    const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiry');
-    const authSection = document.getElementById('google-auth-section');
-    const authStatus = document.getElementById('google-auth-status');
-    const pjtAuthBtn = document.getElementById('btn-pjt-google-auth'); 
-    
-    if (storedToken && storedExpiry && Date.now() < parseInt(storedExpiry)) {
-        window.googleAccessToken = storedToken;
-        gapi.load('client', () => {
-            gapi.client.init({}).then(() => {
-                gapi.client.setToken({ access_token: storedToken });
-                gapi.client.load('drive', 'v3');
-                gapi.client.load('gmail', 'v1');
-            });
+        snapshot.forEach(function(docSnap) { 
+            const data = docSnap.data(); 
+            data.id = docSnap.id;
+            notis.push(data); 
+            if (!data.isRead) unreadCount++; 
         });
-        if(authSection) authSection.classList.add('hidden');
-        if(authStatus) { authStatus.classList.remove('hidden'); authStatus.classList.add('flex'); }
-        if(pjtAuthBtn) pjtAuthBtn.classList.add('hidden'); 
-    } else {
-        if(authSection) authSection.classList.remove('hidden');
-        if(authStatus) { authStatus.classList.add('hidden'); authStatus.classList.remove('flex'); }
-        if(pjtAuthBtn) pjtAuthBtn.classList.remove('hidden'); 
-    }
-    
-    window.tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: GOOGLE_CLIENT_ID,
-        scope: GOOGLE_SCOPES,
-        callback: (response) => {
-            if (response.error !== undefined) {
-                window.showToast("구글 인증에 실패했습니다.", "error");
-                return;
+        
+        notis.sort((a, b) => b.createdAt - a.createdAt);
+        
+        const badgeWrap = document.getElementById('notification-badge'); 
+        const countEl = document.getElementById('notification-count');
+        
+        if (badgeWrap && countEl) { 
+            if (unreadCount > 0) { 
+                badgeWrap.classList.remove('hidden'); 
+                countEl.innerText = unreadCount > 99 ? '99+' : unreadCount; 
+            } else {
+                badgeWrap.classList.add('hidden'); 
             }
-            window.googleAccessToken = response.access_token;
-            localStorage.setItem('axmsGoogleToken', response.access_token);
-            localStorage.setItem('axmsGoogleTokenExpiry', Date.now() + 3500 * 1000);
-
-            if(authSection) authSection.classList.add('hidden');
-            if(authStatus) { authStatus.classList.remove('hidden'); authStatus.classList.add('flex'); }
-            if(pjtAuthBtn) pjtAuthBtn.classList.add('hidden'); 
-            
-            window.showToast("구글 계정 연동이 완료되었습니다.");
-            
-            gapi.load('client', () => {
-                gapi.client.init({}).then(() => {
-                    gapi.client.load('drive', 'v3');
-                    gapi.client.load('gmail', 'v1');
+        }
+        
+        const listEl = document.getElementById('notification-list');
+        if (listEl) {
+            if (notis.length === 0) {
+                listEl.innerHTML = '<div class="p-6 text-center text-slate-400 text-xs font-bold">새로운 알림이 없습니다.</div>';
+            } else {
+                let htmlStr = '';
+                notis.forEach(function(n) {
+                    let opacityClass = n.isRead ? 'opacity-50' : 'bg-indigo-50/40';
+                    let typeText = n.type || '알림';
+                    let dateText = window.getDateTimeStr ? window.getDateTimeStr(new Date(n.createdAt)) : new Date(n.createdAt).toLocaleString();
+                    htmlStr += `<div class="p-3 hover:bg-slate-50 cursor-pointer transition-colors ${opacityClass}" onclick="window.readNotification('${n.id}')">`;
+                    htmlStr += `<div class="text-[11px] font-bold text-indigo-600 mb-1">${typeText}</div>`;
+                    htmlStr += `<div class="text-xs text-slate-700 font-bold leading-relaxed break-words">${n.message}</div>`;
+                    htmlStr += `<div class="text-[10px] text-slate-400 mt-1.5">${dateText}</div>`;
+                    htmlStr += `</div>`;
                 });
+                listEl.innerHTML = htmlStr;
+            }
+        }
+    });
+};
+
+window.readNotification = async function(id) { try { await setDoc(doc(db, "notifications", id), { isRead: true }, { merge: true }); } catch(e) { console.error(e); } };
+window.markAllNotificationsRead = async function() { if(!window.currentUser) return; try { const q = query(collection(db, "notifications"), where("targetUid", "==", window.currentUser.uid), where("isRead", "==", false)); const snapshot = await getDocs(q); const batch = writeBatch(db); snapshot.forEach(function(d) { batch.update(d.ref, { isRead: true }); }); await batch.commit(); } catch(e) { console.error(e); } };
+window.deleteAllNotifications = async function() { if(!window.currentUser) return; if(!confirm("모든 알림을 삭제하시겠습니까?")) return; try { const q = query(collection(db, "notifications"), where("targetUid", "==", window.currentUser.uid)); const snapshot = await getDocs(q); const batch = writeBatch(db); snapshot.forEach(function(d) { batch.delete(d.ref); }); await batch.commit(); window.showToast("알림이 모두 삭제되었습니다."); } catch(e) { console.error(e); } };
+
+window.handleMention = function(textarea) {
+    const val = textarea.value; 
+    const cursorInfo = textarea.selectionStart;
+    const textBeforeCursor = val.substring(0, cursorInfo); 
+    const mentionMatch = textBeforeCursor.match(/@([가-힣a-zA-Z0-9_]*)$/);
+    
+    let dropdown = document.getElementById('mention-dropdown'); 
+    if(!dropdown) {
+        dropdown = document.createElement('ul');
+        dropdown.id = 'mention-dropdown';
+        dropdown.className = 'hidden absolute z-[9999] bg-white border border-indigo-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-48 custom-scrollbar py-1';
+        document.body.appendChild(dropdown);
+    }
+
+    if (mentionMatch) {
+        const searchKeyword = mentionMatch[1].toLowerCase();
+        const users = window.allSystemUsers || []; 
+        const filteredUsers = users.filter(u => u.name.toLowerCase().includes(searchKeyword));
+        
+        if (filteredUsers.length > 0) {
+            const rect = textarea.getBoundingClientRect(); 
+            dropdown.style.left = (rect.left + window.scrollX) + 'px'; 
+            dropdown.style.top = (rect.bottom + window.scrollY + 5) + 'px';
+            dropdown.classList.remove('hidden'); 
+            
+            let dropHtml = '';
+            filteredUsers.forEach(function(u) {
+                let safeTeam = u.team || '소속없음';
+                dropHtml += `<li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-slate-700 font-bold text-xs border-b border-slate-50 last:border-0 flex items-center justify-between transition-colors" onmousedown="window.insertMention('${textarea.id}', '${u.name}', ${mentionMatch.index}, ${cursorInfo})"><span>${u.name}</span> <span class="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-normal">${safeTeam}</span></li>`;
             });
-        }
-    });
+            dropdown.innerHTML = dropHtml;
+        } else dropdown.classList.add('hidden');
+    } else dropdown.classList.add('hidden');
 };
 
-window.authenticateGoogle = function() {
-    if (!window.tokenClient) return window.showToast("구글 API를 불러오는 중입니다. 잠시 후 다시 시도해주세요.", "warning");
-    if (!window.googleAccessToken) window.tokenClient.requestAccessToken({prompt: 'consent'});
+window.insertMention = function(textareaId, name, startIndex, endIndex) {
+    const textarea = document.getElementById(textareaId); 
+    if(!textarea) return;
+    const val = textarea.value;
+    textarea.value = val.substring(0, startIndex) + '@' + name + ' ' + val.substring(endIndex);
+    textarea.focus(); 
+    const drop = document.getElementById('mention-dropdown');
+    if (drop) drop.classList.add('hidden');
 };
 
-window.uploadFileToDrive = async function(file, folderId) {
-    if (!window.googleAccessToken) throw new Error("구글 인증이 필요합니다.");
-    const metadata = { name: file.name, parents: [folderId] };
-    const form = new FormData();
-    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-    form.append('file', file);
+// 💡 [핵심] 특정 유저에게 종모양 알림과 이메일을 동시에 쏘는 가장 안정적인 함수
+window.notifyUser = async function(targetName, content, projectId, typeDesc) {
+    if (!targetName) return false;
+    const users = window.allSystemUsers || [];
+    let targetUser = users.find(u => u.name === targetName);
     
-    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + window.googleAccessToken },
-        body: form
-    });
-    
-    if (!res.ok) throw new Error("파일 업로드 실패");
-    const data = await res.json();
-    return data.id; 
-};
+    // 유저가 존재하지 않거나, 내가 작성한 내용을 나에게 알림 보내는 경우 무시
+    if (!targetUser || targetUser.uid === window.currentUser?.uid) return false;
 
-async function getOrCreateSubfolder(parentFolderId, folderName) {
-    if (!window.googleAccessToken) throw new Error("구글 인증이 필요합니다.");
-    const query = `name='${encodeURIComponent(folderName)}' and mimeType='application/vnd.google-apps.folder' and '${parentFolderId}' in parents and trashed=false`;
-    const findRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}`, { headers: { 'Authorization': 'Bearer ' + window.googleAccessToken } });
-    const folderData = await findRes.json();
-    
-    if (folderData.files && folderData.files.length > 0) return folderData.files[0].id;
-    else {
-        const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
-            method: 'POST',
-            headers: { 'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: folderName, mimeType: 'application/vnd.google-apps.folder', parents: [parentFolderId] })
+    try {
+        let sysName = window.userProfile ? window.userProfile.name : '시스템';
+        let msgTitle = `📢 ${sysName}님이 [${typeDesc}] 을(를) 남겼습니다.`;
+        
+        // 1. 내부 종모양 알림 (Firestore) 추가
+        await addDoc(collection(db, "notifications"), {
+            targetUid: targetUser.uid,
+            senderName: sysName,
+            type: typeDesc,
+            message: `${msgTitle}\n내용: ${content}`,
+            projectId: projectId || null,
+            isRead: false,
+            createdAt: Date.now()
         });
-        const newData = await createRes.json();
-        return newData.id;
-    }
-}
 
-window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
-    if (!window.googleAccessToken) throw new Error("구글 인증이 필요합니다.");
-    if (!recipientEmail) return false;
-
-    const logoUrl = "https://raw.githubusercontent.com/hgje-dev/AXMS-Integration/main/assets/%EC%97%91%EC%8A%A4%EB%B9%84%EC%8A%A4CI%20%EC%8A%AC%EB%A1%9C%EA%B1%B4_%ED%8F%AC%EC%A7%80%ED%8B%B0%EB%B8%8C.png";
-    const safeTitle = reqData.reqTitle || reqData.title || '제목 없음';
-    const appTitle = reqData.type === 'collab' ? '협업/조립 요청' : (reqData.type === 'purchase' ? '모듈 구매 의뢰' : '수리/점검 요청');
-
-    let subject = `[AXBIS] ${appTitle} - ${safeTitle}`;
-    let bodyHtml = `
-        <div style="font-family: sans-serif; padding: 20px; background: #f8fafc; border-radius: 10px;">
-            <img src="${logoUrl}" alt="AXBIS" style="height: 28px; margin-bottom: 15px;">
-            <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
-                <h3 style="margin-top:0; color:#1e293b;">${safeTitle}</h3>
-                ${reqData.category ? `<p><strong>구분:</strong> ${reqData.category}</p>` : ''}
-                <p><strong>프로젝트명:</strong> ${reqData.pjtName || '-'}</p>
-                <p><strong>요청자:</strong> ${reqData.authorName} (${reqData.authorTeam})</p>
-                ${reqData.manager ? `<p><strong>담당자:</strong> <span style="color:#4f46e5; font-weight:bold;">${reqData.manager}</span></p>` : ''}
-                <p><strong>발송자(시스템 계정):</strong> ${window.userProfile.name} (${window.userProfile.email})</p>
-                <p><strong>요청 내용:</strong><br>${String(reqData.content || '없음').replace(/\n/g, '<br>')}</p>
-                ${reqData.fileUrl ? `<p style="margin-top:15px;"><strong>첨부파일(원문):</strong> <a href="${reqData.fileUrl}" style="color:#4f46e5; font-weight:bold;">문서 확인하기</a></p>` : ''}
-                ${reqData.excelFileUrl ? `<p style="margin-top:5px;"><strong>✅ 자동생성 엑셀 양식:</strong> <a href="${reqData.excelFileUrl}" style="color:#059669; font-weight:bold;">다운로드/확인하기</a></p>` : ''}
-            </div>
-    `;
-
-    if(type === 'progress') {
-        subject = `[AXBIS 접수완료] 요청하신 내역이 접수되었습니다 - ${safeTitle}`;
-        bodyHtml = `<h2 style="color: #4f46e5; font-size:18px;">요청하신 내역이 정상적으로 접수되어 진행 중입니다.</h2>${bodyHtml}`;
-    } else if (type === 'completed') {
-        subject = `[AXBIS 작업완료] 요청하신 작업이 완료되었습니다 - ${safeTitle}`;
-        bodyHtml = `<h2 style="color: #10b981; font-size:18px;">요청하신 작업이 성공적으로 완료되었습니다.</h2>${bodyHtml}`;
-        if (reqData.resultFileUrl) {
-            bodyHtml += `<div style="background: #ecfdf5; border-left: 4px solid #10b981; padding: 15px; margin-top: 15px; border-radius: 4px;"><p style="margin:0; font-size: 14px;"><strong>✅ 완료 결과물 (검수 리스트 등):</strong> <a href="${reqData.resultFileUrl}" style="color:#059669; font-weight:bold;">결과 확인하기</a></p></div>`;
+        // 2. 이메일 발송 (Gmail API)
+        if (targetUser.email && window.googleAccessToken) {
+            const subject = `[AXBIS 알림] ${msgTitle}`;
+            const bodyHtml = `
+                <div style="font-family: sans-serif; padding: 20px; background: #f8fafc; border-radius: 10px;">
+                    <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                        <h3 style="color: #4f46e5; margin-top:0;">${msgTitle}</h3>
+                        <p><strong>작성자:</strong> ${sysName}</p>
+                        <p><strong>내용:</strong></p>
+                        <div style="background: #f1f5f9; padding: 15px; border-radius: 8px; color: #334155; font-size: 14px;">
+                            ${String(content).replace(/\n/g, '<br>')}
+                        </div>
+                        <p style="margin-top: 20px;"><a href="https://axbis-portal.web.app" style="background: #4f46e5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">포털 바로가기</a></p>
+                    </div>
+                </div>`;
+                
+            const emailRaw = `To: ${targetUser.email}\r\nSubject: =?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=\r\nContent-Type: text/html; charset="UTF-8"\r\n\r\n${bodyHtml}`;
+            const encodedEmail = btoa(unescape(encodeURIComponent(emailRaw))).replace(/\+/g, '-').replace(/\//g, '_');
+            
+            fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ raw: encodedEmail })
+            }).catch(e => console.log("메일 발송 에러(무시가능):", e));
         }
+        return true;
+    } catch(e) { 
+        console.error("알림 생성 에러:", e); 
+        return false;
     }
+};
 
-    bodyHtml += `<p style="font-size: 11px; color: #94a3b8; margin-top: 20px;">본 메일은 AXBIS 클라우드 포털에서 자동 발송되었습니다.</p></div>`;
-
-    const emailRaw = `To: ${recipientEmail}\r\nSubject: =?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=\r\nContent-Type: text/html; charset="UTF-8"\r\n\r\n${bodyHtml}`;
-    const encodedEmail = btoa(unescape(encodeURIComponent(emailRaw))).replace(/\+/g, '-').replace(/\//g, '_');
+// 💡 내용에서 멘션(@이름)을 찾아 알림을 보내는 함수
+window.processMentions = async function(content, projectId, typeDesc) {
+    let notifiedNames = [];
+    if(!content) return notifiedNames;
+    const mentions = content.match(/@([가-힣a-zA-Z0-9_]+)/g); 
+    if(!mentions) return notifiedNames;
     
-    const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ raw: encodedEmail })
+    let targetNames = [];
+    mentions.forEach(m => {
+        let cleanName = m.replace('@', '');
+        if (!targetNames.includes(cleanName)) targetNames.push(cleanName);
     });
     
-    if (!res.ok) throw new Error("메일 발송 실패");
-    return true;
-};
-
-window.openEmailSettingsModal = function() {
-    setVal('new-req-email-user', '');
-    const ac = document.getElementById('req-user-autocomplete');
-    if(ac) ac.classList.add('hidden');
-    window.renderReqEmailList();
-    const modal = document.getElementById('req-email-setting-modal');
-    if(modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
-};
-
-window.closeEmailSettingsModal = function() {
-    const modal = document.getElementById('req-email-setting-modal');
-    if(modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
-};
-
-window.renderReqEmailList = function() {
-    const listEl = document.getElementById('req-email-list');
-    if(!listEl) return;
-    if(window.currentReqEmails.length === 0) {
-        listEl.innerHTML = '<li class="text-center text-xs text-slate-400 font-bold p-4 bg-slate-50 rounded-xl border border-slate-200 border-dashed">등록된 이메일이 없습니다.</li>';
-        return;
+    for (let i = 0; i < targetNames.length; i++) {
+        let success = await window.notifyUser(targetNames[i], content, projectId, typeDesc || '멘션');
+        if (success) notifiedNames.push(targetNames[i]);
     }
-    listEl.innerHTML = window.currentReqEmails.map((email, idx) => `
-        <li class="flex justify-between items-center bg-white border border-slate-200 px-3 py-2 rounded-xl shadow-sm hover:shadow-md transition-shadow">
-            <span class="text-sm font-bold text-slate-700 flex items-center gap-2"><i class="fa-regular fa-envelope text-slate-400"></i> ${email}</span>
-            <button onclick="window.removeReqEmail(${idx})" class="text-slate-400 hover:text-rose-500 transition-colors p-1"><i class="fa-solid fa-trash-can"></i></button>
-        </li>
-    `).join('');
+    return notifiedNames;
 };
 
-window.showReqUserAutocomplete = function(inputEl) {
-    const val = inputEl.value.trim().toLowerCase();
-    const dropdown = document.getElementById('req-user-autocomplete');
-    if(!dropdown) return;
+// ==========================================
+// 🏷️ PJT 코드 마스터 관리 및 자동완성 로직
+// ==========================================
+
+window.openProjCodeMasterModal = function() {
+    const modal = document.getElementById('proj-code-master-modal');
+    if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
+    if(window.pjtCodeMasterList.length === 0) { if(window.loadProjectCodeMaster) window.loadProjectCodeMaster(); } 
+    else { if(window.renderProjectCodeMaster) window.renderProjectCodeMaster(); }
+};
+
+window.closeProjCodeMasterModal = function() {
+    const modal = document.getElementById('proj-code-master-modal');
+    if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+};
+
+let pjtCodeMasterUnsubscribe = null;
+window.loadProjectCodeMaster = function() {
+    if (pjtCodeMasterUnsubscribe) pjtCodeMasterUnsubscribe();
+    pjtCodeMasterUnsubscribe = onSnapshot(collection(db, "pjt_code_master"), function(snapshot) {
+        window.pjtCodeMasterList = [];
+        snapshot.forEach(docSnap => { let data = docSnap.data(); data.id = docSnap.id; window.pjtCodeMasterList.push(data); });
+        window.pjtCodeMasterList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        const modal = document.getElementById('proj-code-master-modal');
+        if(modal && !modal.classList.contains('hidden')) window.renderProjectCodeMaster();
+    });
+};
+
+window.renderProjectCodeMaster = function() {
+    const tbody = document.getElementById('pjt-code-tbody'); if(!tbody) return;
+    if(window.pjtCodeMasterList.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="text-center p-6 text-slate-400 font-bold">등록된 코드가 없습니다.</td></tr>'; return; }
     
+    let htmlStr = '';
+    window.pjtCodeMasterList.forEach(p => {
+        htmlStr += `<tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">
+            <td class="p-3 text-center"><input type="checkbox" value="${p.id}" class="pjt-checkbox accent-indigo-500 w-4 h-4 rounded cursor-pointer" onchange="window.updatePjtSelection()"></td>
+            <td class="p-3 font-bold text-indigo-700 w-32">${p.code || '-'}</td>
+            <td class="p-3 font-bold text-slate-700">${p.name || '-'}</td>
+            <td class="p-3 text-slate-500 w-32">${p.company || '-'}</td>
+            <td class="p-3 text-center w-20"><button onclick="window.deleteProjectCode('${p.id}')" class="text-slate-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-trash-can"></i></button></td>
+        </tr>`;
+    });
+    tbody.innerHTML = htmlStr;
+    const masterCb = document.getElementById('pjt-master-checkbox'); if (masterCb) masterCb.checked = false; window.updatePjtSelection();
+};
+
+window.toggleAllPjtCheckboxes = function(checked) {
+    const checkboxes = document.querySelectorAll('.pjt-checkbox');
+    checkboxes.forEach(cb => cb.checked = checked); window.updatePjtSelection();
+};
+
+window.updatePjtSelection = function() {
+    const checkboxes = document.querySelectorAll('.pjt-checkbox');
+    let checkedCount = 0; checkboxes.forEach(cb => { if(cb.checked) checkedCount++; });
+    const btn = document.getElementById('btn-delete-selected-pjts');
+    if (btn) {
+        if (checkedCount > 0) { btn.classList.remove('hidden'); btn.innerText = `선택 삭제 (${checkedCount})`; } 
+        else btn.classList.add('hidden');
+    }
+    const masterCb = document.getElementById('pjt-master-checkbox');
+    if (masterCb && checkboxes.length > 0) masterCb.checked = (checkedCount === checkboxes.length);
+};
+
+window.deleteSelectedProjectCodes = async function() {
+    const checkedBoxes = document.querySelectorAll('.pjt-checkbox:checked'); if (checkedBoxes.length === 0) return;
+    if (!confirm(`선택한 ${checkedBoxes.length}개의 프로젝트 코드를 삭제하시겠습니까?`)) return;
+    try {
+        const batch = writeBatch(db);
+        checkedBoxes.forEach(cb => batch.delete(doc(db, "pjt_code_master", cb.value)));
+        await batch.commit(); window.showToast('삭제되었습니다.');
+        const masterCb = document.getElementById('pjt-master-checkbox'); if (masterCb) masterCb.checked = false; window.updatePjtSelection();
+    } catch(e) { window.showToast("삭제 중 오류가 발생했습니다.", "error"); }
+};
+
+window.toggleBulkPjtInput = function() {
+    const area = document.getElementById('pjt-bulk-input-area');
+    if (area) {
+        if (area.classList.contains('hidden')) { area.classList.remove('hidden'); area.classList.add('flex'); } 
+        else { area.classList.add('hidden'); area.classList.remove('flex'); }
+    }
+};
+
+window.processBulkPjtInput = async function() {
+    const textarea = document.getElementById('bulk-pjt-data'); if (!textarea) return;
+    const text = textarea.value.trim(); if (!text) return window.showToast("입력된 데이터가 없습니다.", "error");
+    
+    const lines = text.split('\n'); let successCount = 0, duplicateCount = 0;
+    try {
+        const batch = writeBatch(db); let opCount = 0;
+        let currentCodesAndNames = window.pjtCodeMasterList.map(p => `${p.code}|${p.name}`);
+        
+        for(let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim(); if(!line) continue;
+            const parts = line.split('\t'); 
+            const code = (parts[0] || '').trim(), name = (parts[1] || '').trim(), company = (parts[2] || '').trim();
+            if(!code || !name) continue; 
+            
+            const uniqueKey = `${code}|${name}`;
+            if (currentCodesAndNames.includes(uniqueKey)) { duplicateCount++; continue; }
+            
+            const newRef = doc(collection(db, "pjt_code_master"));
+            batch.set(newRef, { code, name, company, authorUid: window.currentUser?.uid || 'unknown', authorName: window.userProfile?.name || 'unknown', createdAt: Date.now() + i });
+            
+            currentCodesAndNames.push(uniqueKey); successCount++; opCount++;
+            if(opCount >= 490) { await batch.commit(); opCount = 0; }
+        }
+        if(opCount > 0) await batch.commit();
+        let msg = `${successCount}건 등록 성공.`; if(duplicateCount > 0) msg += ` (중복 제외 ${duplicateCount}건)`;
+        window.showToast(msg, successCount > 0 ? "success" : "warning"); textarea.value = ''; window.toggleBulkPjtInput();
+    } catch(e) { window.showToast("일괄 등록 중 오류가 발생했습니다.", "error"); }
+};
+
+window.addProjectCode = async function() {
+    const codeEl = document.getElementById('new-pjt-code'), nameEl = document.getElementById('new-pjt-name'), companyEl = document.getElementById('new-pjt-company');
+    if(!codeEl || !nameEl || !companyEl) return;
+    
+    const code = codeEl.value.trim(), name = nameEl.value.trim(), company = companyEl.value.trim();
+    if(!code || !name) return window.showToast("PJT 코드와 프로젝트명을 모두 입력해 주세요.", "error");
+
+    if (window.pjtCodeMasterList.some(p => p.code === code || p.name === name)) {
+        return window.showToast("🚨 이미 동일한 PJT 코드 또는 프로젝트명이 존재합니다!", "error");
+    }
+
+    try {
+        await addDoc(collection(db, "pjt_code_master"), { code, name, company, authorUid: window.currentUser?.uid || 'unknown', authorName: window.userProfile?.name || 'unknown', createdAt: Date.now() });
+        window.showToast("프로젝트 코드가 성공적으로 등록되었습니다."); codeEl.value = ''; nameEl.value = ''; companyEl.value = '';
+    } catch(e) { window.showToast("등록 실패", "error"); }
+};
+
+window.deleteProjectCode = async function(id) {
+    if(!confirm("이 마스터 코드를 삭제하시겠습니까? (기존에 등록된 현황 데이터는 삭제되지 않습니다)")) return;
+    try { await deleteDoc(doc(db, "pjt_code_master", id)); window.showToast("삭제되었습니다."); } catch(e) { window.showToast("삭제 실패", "error"); }
+};
+
+window.showAutocomplete = function(inputEl, targetId1, targetId2, isNameSearch) {
+    const val = inputEl.value.trim().toLowerCase();
+    let dropdown = document.getElementById('pjt-autocomplete-dropdown');
+    
+    if(!dropdown) {
+        dropdown = document.createElement('ul'); dropdown.id = 'pjt-autocomplete-dropdown';
+        dropdown.className = 'absolute z-[9999] bg-white border border-indigo-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-full custom-scrollbar py-1';
+        document.body.appendChild(dropdown);
+    }
     if(val.length < 1) { dropdown.classList.add('hidden'); return; }
-    const matches = (window.allSystemUsers || []).filter(u => window.matchString(val, u.name));
+
+    let matches = window.pjtCodeMasterList.filter(p => isNameSearch ? (p.name.toLowerCase().includes(val) || window.matchString(val, p.name)) : p.code.toLowerCase().includes(val));
 
     if(matches.length > 0) {
+        const rect = inputEl.getBoundingClientRect();
+        dropdown.style.left = `${rect.left + window.scrollX}px`; dropdown.style.top = `${rect.bottom + window.scrollY + 5}px`; dropdown.style.width = `${rect.width}px`;
         dropdown.classList.remove('hidden');
-        dropdown.innerHTML = matches.map(m => `
-            <li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-slate-700 font-bold text-xs border-b border-slate-50 last:border-0 truncate transition-colors flex justify-between items-center" 
-                onmousedown="window.addReqEmailSelected('${m.email}')">
-                <span>${m.name}</span><span class="text-[10px] text-slate-400">${m.email}</span>
-            </li>
-        `).join('');
-    } else { dropdown.classList.add('hidden'); }
+
+        dropdown.innerHTML = matches.map(m => {
+            let safeName = m.name.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+            return `<li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-slate-700 font-bold text-xs border-b border-slate-50 last:border-0 truncate transition-colors" onmousedown="window.selectAutocomplete('${m.code}', '${safeName}', '${m.company || ''}', '${inputEl.id}', '${targetId1}', '${targetId2}')"><span class="text-indigo-600">[${m.code}]</span> ${m.name} <span class="text-[10px] text-slate-400">(${m.company || '업체미상'})</span></li>`;
+        }).join('');
+    } else dropdown.classList.add('hidden');
 };
 
-window.addReqEmailSelected = async function(email) {
-    setVal('new-req-email-user', '');
-    const ac = document.getElementById('req-user-autocomplete');
-    if(ac) ac.classList.add('hidden');
-    
-    if(!email) return;
-    if(window.currentReqEmails.includes(email)) return window.showToast("이미 등록된 담당자입니다.", "warning");
-
-    const newEmails = [...window.currentReqEmails, email];
-    try {
-        await setDoc(doc(db, "settings", "req_emails_" + window.currentAppId), { emails: newEmails }, { merge: true });
-        window.showToast("수신 담당자가 추가되었습니다.");
-    } catch(e) { window.showToast("추가 실패", "error"); }
+window.selectAutocomplete = function(code, name, company, sourceId, targetId1, targetId2) {
+    const sourceEl = document.getElementById(sourceId), t1 = document.getElementById(targetId1), t2 = document.getElementById(targetId2);
+    if (sourceId === 'ps-code') { if (sourceEl) sourceEl.value = code; if (t1) t1.value = name; if (t2) t2.value = company; } 
+    else { if (sourceEl) sourceEl.value = name; if (t1) t1.value = code; if (t2) t2.value = company; }
+    const drop = document.getElementById('pjt-autocomplete-dropdown'); if (drop) drop.classList.add('hidden');
 };
 
-window.removeReqEmail = async function(idx) {
-    if(!confirm("이 담당자를 수신자 목록에서 제외하시겠습니까?")) return;
-    const newEmails = [...window.currentReqEmails];
-    newEmails.splice(idx, 1);
-    try {
-        await setDoc(doc(db, "settings", "req_emails_" + window.currentAppId), { emails: newEmails }, { merge: true });
-        window.showToast("제외되었습니다.");
-    } catch(e) { window.showToast("삭제 실패", "error"); }
-};
-
-window.getReqFormData = function() {
-    let reqTitle = '', pjtName = '', reqValid = false;
-
-    if (window.currentAppId === 'collab') {
-        reqTitle = getVal('req-title');
-        pjtName = getVal('req-pjt-name');
-        const startDate = getVal('req-start-date');
-        const endDate = getVal('req-end-date');
-        const content = getVal('req-content');
-        if(reqTitle && pjtName && startDate && endDate && content) reqValid = true;
-    } else if (window.currentAppId === 'purchase') {
-        reqTitle = getVal('req-pur-title');
-        pjtName = getVal('req-pur-pjt-name');
-        const shipDate = getVal('req-pur-ship-date');
-        if(reqTitle && pjtName && shipDate) reqValid = true;
-    } else {
-        reqValid = true;
-    }
-
-    const currentReq = window.editingReqId ? window.currentRequestList.find(r=>r.id===window.editingReqId) : null;
-    let data = {
-        type: window.currentAppId, 
-        status: currentReq ? currentReq.status : 'pending', 
-        authorUid: window.currentUser.uid, 
-        authorName: window.userProfile.name, 
-        authorEmail: window.userProfile.email,
-        authorTeam: window.userProfile.team || window.userProfile.department || '미소속', 
-        updatedAt: Date.now() 
-    };
-
-    if (window.currentAppId === 'collab') {
-        data.reqTitle = reqTitle;
-        data.title = reqTitle;
-        data.pjtName = pjtName;
-        data.pjtCode = getVal('req-pjt-code');
-        data.company = getVal('req-company');
-        data.location = getVal('req-location');
-        data.startDate = getVal('req-start-date');
-        data.endDate = getVal('req-end-date');
-        data.estMd = getNum('req-est-md');
-        
-        const catEl = document.querySelector('input[name="req-category"]:checked');
-        data.category = catEl ? catEl.value : '';
-        data.content = getVal('req-content');
-    } else if (window.currentAppId === 'purchase') {
-        data.reqTitle = reqTitle;
-        data.title = reqTitle;
-        data.pjtName = pjtName;
-        data.pjtCode = getVal('req-pur-pjt-code');
-        data.shipDate = getVal('req-pur-ship-date');
-        
-        data.spec = {
-            app: getVal('pur-spec-app'), appEtc: getVal('pur-spec-app-etc'),
-            qty: getVal('pur-spec-qty') || '1', unit: getVal('pur-spec-unit') || 'EA',
-            lasWave: getVal('pur-spec-las-wave'), lasWaveEtc: getVal('pur-spec-las-wave-etc'),
-            lasPower: getVal('pur-spec-las-power'), lasPowerEtc: getVal('pur-spec-las-power-etc'),
-            lasMaker: getVal('pur-spec-las-maker'), lasMakerEtc: getVal('pur-spec-las-maker-etc'),
-            lasType: getVal('pur-spec-las-type'), lasTypeEtc: getVal('pur-spec-las-type-etc'),
-            lasCh: getVal('pur-spec-las-ch'), lasChEtc: getVal('pur-spec-las-ch-etc'),
-            lasLen: getVal('pur-spec-las-len'), lasLenEtc: getVal('pur-spec-las-len-etc'),
-            lasCore: getVal('pur-spec-las-core'), lasCoreEtc: getVal('pur-spec-las-core-etc'),
-            lasCool: getVal('pur-spec-las-cool'), lasCoolEtc: getVal('pur-spec-las-cool-etc'),
-            optType: getVal('pur-spec-opt-type'), optTypeEtc: getVal('pur-spec-opt-type-etc'),
-            optMnt: getVal('pur-spec-opt-mnt'), optMntEtc: getVal('pur-spec-opt-mnt-etc'),
-            optCol: getVal('pur-spec-opt-col'), optColEtc: getVal('pur-spec-opt-col-etc'),
-            optSplit: getVal('pur-spec-opt-split'), optSplitEtc: getVal('pur-spec-opt-split-etc'),
-            optLens: getVal('pur-spec-opt-lens'), optLensEtc: getVal('pur-spec-opt-lens-etc'),
-            optScan: getVal('pur-spec-opt-scan'), optScanEtc: getVal('pur-spec-opt-scan-etc'),
-            optCam: getVal('pur-spec-opt-cam'), optCamEtc: getVal('pur-spec-opt-cam-etc'),
-            optLit: getVal('pur-spec-opt-lit'), optLitEtc: getVal('pur-spec-opt-lit-etc'),
-            optOpts: Array.from(document.querySelectorAll('input[name="pur_spec_opt_opts"]:checked')).map(cb => cb.value),
-            optOptsEtc: getVal('pur-spec-opt-opts-etc'),
-            accPc: getVal('pur-spec-acc-pc'), accPcEtc: getVal('pur-spec-acc-pc-etc'),
-            accCtrl: getVal('pur-spec-acc-ctrl'), accCtrlEtc: getVal('pur-spec-acc-ctrl-etc'),
-            accAir: getVal('pur-spec-acc-air'), accAirEtc: getVal('pur-spec-acc-air-etc'),
-            accRtc: getVal('pur-spec-acc-rtc'), accRtcEtc: getVal('pur-spec-acc-rtc-etc'),
-            etcMemo: getVal('pur-spec-etc-memo')
-        };
-        data.content = `[시스템 등록 사양서 확인 요망]\n요청일: ${data.shipDate}\n기타메모: ${data.spec.etcMemo}`;
-    }
-
-    return { data, isValid: reqValid, currentReq };
-};
-
-window.openWriteModal = function(editId = null) { 
-    window.editingReqId = editId; 
-    
-    document.querySelectorAll('#collab-form-fields input, #collab-form-fields select, #collab-form-fields textarea').forEach(el => el.disabled = false);
-    document.querySelectorAll('#purchase-form-fields input, #purchase-form-fields select, #purchase-form-fields textarea').forEach(el => el.disabled = false);
-    
-    const dropzone = document.getElementById('req-dropzone');
-    if(dropzone) dropzone.style.pointerEvents = 'auto';
-    
-    const btnSave = document.getElementById('btn-req-save');
-    if(btnSave) btnSave.classList.remove('hidden');
-    
-    const btnDraft = document.querySelector('button[onclick="window.saveDraftRequest()"]');
-    if(btnDraft) btnDraft.classList.remove('hidden');
-
-    ['req-pjt-code','req-pjt-name','req-title','req-company','req-location','req-start-date','req-end-date','req-est-md','req-content',
-     'req-pur-title','req-pur-pjt-code','req-pur-pjt-name','req-pur-ship-date','pur-spec-etc-memo'].forEach(id => setVal(id, ''));
-
-    ['app','qty','unit','las-wave','las-power','las-maker','las-type','las-ch','las-len','las-core','las-cool','opt-type','opt-mnt','opt-col','opt-split','opt-lens','opt-scan','opt-cam','opt-lit','acc-pc','acc-ctrl','acc-air','acc-rtc'].forEach(k => {
-        setVal(`pur-spec-${k}`, (k==='qty') ? '1' : '');
-        setVal(`pur-spec-${k}-etc`, '');
-    });
-    document.querySelectorAll('input[name="pur_spec_opt_opts"]').forEach(cb => cb.checked = false);
-    setVal('pur-spec-opt-opts-etc', '');
-
-    window.clearSelectedFile();
-    
-    if(document.getElementById('req-file-link-wrap')) document.getElementById('req-file-link-wrap').classList.add('hidden');
-    if(document.getElementById('req-result-link-wrap')) document.getElementById('req-result-link-wrap').classList.add('hidden');
-    if(document.getElementById('admin-actions')) document.getElementById('admin-actions').classList.add('hidden');
-    if(document.getElementById('req-modal-status-badge')) document.getElementById('req-modal-status-badge').classList.add('hidden');
-    
-    const collabRadio = document.querySelector('input[name="req-category"][value="협업"]');
-    if(collabRadio) collabRadio.checked = true;
-
-    const titleMap = { 'collab': '협업/조립 요청서', 'purchase': '모듈 구매 의뢰서', 'repair': '수리/점검 요청서' };
-    if(document.getElementById('req-header-title')) document.getElementById('req-header-title').innerText = titleMap[window.currentAppId] || '요청서 관리';
-    if(document.getElementById('req-modal-title')) document.getElementById('req-modal-title').innerText = (titleMap[window.currentAppId] || '요청서').replace('새 ', '') + ' 작성';
-
-    const modalContent = document.getElementById('write-modal-content');
-    if (window.currentAppId === 'purchase') {
-        if(modalContent) { modalContent.classList.remove('max-w-2xl'); modalContent.classList.add('max-w-4xl'); }
-        if(document.getElementById('collab-form-fields')) document.getElementById('collab-form-fields').classList.add('hidden');
-        if(document.getElementById('purchase-form-fields')) document.getElementById('purchase-form-fields').classList.remove('hidden');
-    } else {
-        if(modalContent) { modalContent.classList.add('max-w-2xl'); modalContent.classList.remove('max-w-4xl'); }
-        if(document.getElementById('collab-form-fields')) document.getElementById('collab-form-fields').classList.remove('hidden');
-        if(document.getElementById('purchase-form-fields')) document.getElementById('purchase-form-fields').classList.add('hidden');
-    }
-
-    if (editId) {
-        const req = window.currentRequestList.find(r => r.id === editId);
-        if (req) {
-            setVal('req-pjt-code', req.pjtCode || '');
-            setVal('req-pjt-name', req.pjtName || '');
-            setVal('req-title', req.reqTitle || req.title || '');
-            setVal('req-company', req.company || '');
-            setVal('req-location', req.location || '');
-            setVal('req-start-date', req.startDate || '');
-            setVal('req-end-date', req.endDate || '');
-            setVal('req-est-md', req.estMd || '');
-            setVal('req-content', req.content || '');
-            
-            if(req.category) {
-                const rEl = document.querySelector(`input[name="req-category"][value="${req.category}"]`);
-                if(rEl) rEl.checked = true;
-            }
-
-            setVal('req-pur-title', req.reqTitle || req.title || '');
-            setVal('req-pur-pjt-code', req.pjtCode || '');
-            setVal('req-pur-pjt-name', req.pjtName || '');
-            setVal('req-pur-ship-date', req.shipDate || '');
-            
-            if (req.spec) {
-                const s = req.spec;
-                ['app','qty','unit','lasWave','lasPower','lasMaker','lasType','lasCh','lasLen','lasCore','lasCool','optType','optMnt','optCol','optSplit','optLens','optScan','optCam','optLit','accPc','accCtrl','accAir','accRtc'].forEach(k => {
-                    const htmlKey = k.replace(/([A-Z])/g, "-$1").toLowerCase();
-                    setVal(`pur-spec-${htmlKey}`, s[k] || '');
-                    setVal(`pur-spec-${htmlKey}-etc`, s[`${k}Etc`] || '');
-                });
-
-                if(s.optOpts && Array.isArray(s.optOpts)) {
-                    s.optOpts.forEach(val => {
-                        const cb = document.querySelector(`input[name="pur_spec_opt_opts"][value="${val}"]`);
-                        if(cb) cb.checked = true;
-                    });
-                }
-                setVal('pur-spec-opt-opts-etc', s.optOptsEtc || '');
-                setVal('pur-spec-etc-memo', s.etcMemo || '');
-            }
-
-            if(req.fileUrl && document.getElementById('req-file-link-wrap')) {
-                document.getElementById('req-file-link-wrap').classList.remove('hidden');
-                document.getElementById('req-file-link').href = req.fileUrl;
-            }
-            if(req.resultFileUrl && document.getElementById('req-result-link-wrap')) {
-                document.getElementById('req-result-link-wrap').classList.remove('hidden');
-                document.getElementById('req-result-link').href = req.resultFileUrl;
-            }
-
-            const badge = document.getElementById('req-modal-status-badge');
-            if(badge) {
-                badge.classList.remove('hidden');
-                if (req.status === 'completed') {
-                    badge.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-600 shadow-sm";
-                    badge.innerText = "작업 완료됨";
-                } else if (req.status === 'progress') {
-                    badge.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-600 shadow-sm";
-                    badge.innerText = "진행 중";
-                } else if (req.status === 'draft') {
-                    badge.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-500 shadow-sm border border-slate-300";
-                    badge.innerText = "임시저장";
-                } else {
-                    badge.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 shadow-sm";
-                    badge.innerText = "접수 대기중";
-                }
-            }
-
-            const isAccepted = (req.status === 'progress' || req.status === 'completed');
-            const isAdmin = window.userProfile && window.userProfile.role === 'admin';
-
-            if (isAccepted && !isAdmin) {
-                document.querySelectorAll('#collab-form-fields input, #collab-form-fields select, #collab-form-fields textarea').forEach(el => el.disabled = true);
-                document.querySelectorAll('#purchase-form-fields input, #purchase-form-fields select, #purchase-form-fields textarea').forEach(el => el.disabled = true);
-                if(dropzone) dropzone.style.pointerEvents = 'none';
-                if(btnSave) btnSave.classList.add('hidden');
-                if(btnDraft) btnDraft.classList.add('hidden');
-            }
-
-            if (isAdmin) {
-                const adminMenu = document.getElementById('admin-actions');
-                const btnAccept = document.getElementById('btn-admin-accept');
-                const btnComplete = document.getElementById('btn-admin-complete');
-                const btnRevert = document.getElementById('btn-admin-revert');
-
-                if(adminMenu) adminMenu.classList.remove('hidden');
-
-                if (req.status === 'completed') {
-                    if(btnAccept) btnAccept.classList.add('hidden');
-                    if(btnComplete) btnComplete.classList.add('hidden');
-                    if(btnRevert) btnRevert.classList.remove('hidden');
-                } else if (req.status === 'progress') {
-                    if(btnAccept) btnAccept.classList.add('hidden');
-                    if(btnComplete) btnComplete.classList.remove('hidden');
-                    if(btnRevert) btnRevert.classList.add('hidden');
-                } else if (req.status === 'draft') {
-                    if(adminMenu) adminMenu.classList.add('hidden');
-                } else {
-                    if(btnAccept) btnAccept.classList.remove('hidden');
-                    if(btnComplete) btnComplete.classList.add('hidden');
-                    if(btnRevert) btnRevert.classList.add('hidden');
-                }
-            }
-        }
-    }
-
-    const m = document.getElementById('write-modal');
-    if(m) { m.classList.remove('hidden'); m.classList.add('flex'); }
-    window.initGoogleAPI();
-};
-
-window.closeWriteModal = function() { 
-    const m = document.getElementById('write-modal');
-    if(m) { m.classList.add('hidden'); m.classList.remove('flex'); }
-};
-
-window.saveDraftRequest = async function() {
-    const { data, currentReq } = window.getReqFormData();
-    data.status = 'draft';
-
-    const fileInput = document.getElementById('req-file');
-    try { 
-        let fileUrl = null;
-        let targetFolderId = DRIVE_FOLDERS[window.currentAppId] || '';
-        
-        if (fileInput && fileInput.files.length > 0 && targetFolderId && window.googleAccessToken) {
-            window.showToast("파일을 업로드 중입니다...");
-            if (window.currentAppId === 'purchase' && data.pjtCode) {
-                targetFolderId = await getOrCreateSubfolder(targetFolderId, data.pjtCode);
-            }
-            const fileId = await window.uploadFileToDrive(fileInput.files[0], targetFolderId);
-            fileUrl = `https://drive.google.com/file/d/${fileId}/view`;
-        }
-        data.fileUrl = fileUrl || (currentReq ? currentReq.fileUrl : null);
-
-        if(window.editingReqId) { 
-            await setDoc(doc(db,"requests",window.editingReqId), data, {merge:true}); 
-        } else { 
-            data.createdAt = Date.now(); 
-            await addDoc(collection(db,"requests"), data); 
-        } 
-
-        window.showToast("임시 저장되었습니다."); 
-        window.closeWriteModal(); 
-    } catch(e) { window.showToast("오류 발생: " + e.message, "error"); }
-};
-
-window.promptSaveRequest = function() {
-    const { isValid } = window.getReqFormData();
-    if(!isValid) return window.showToast("별표(*)가 있는 필수 항목을 모두 입력해주세요.", "error");
-    if (!window.googleAccessToken) return window.showToast("파일 업로드 및 메일 발송을 위해 [구글 계정 연동]을 먼저 진행해주세요.", "warning");
-    if (window.currentReqEmails.length === 0) return window.showToast("상단 [수신 담당자 설정]에서 메일을 받을 사람을 먼저 지정해주세요.", "warning");
-    
-    if(document.getElementById('req-send-email-display')) document.getElementById('req-send-email-display').innerText = window.currentReqEmails.join(', ');
-    
-    const sm = document.getElementById('req-send-modal');
-    if(sm) { sm.classList.remove('hidden'); sm.classList.add('flex'); }
-};
-
-window.executeSaveRequest = async function() {
-    const sm = document.getElementById('req-send-modal');
-    if(sm) { sm.classList.add('hidden'); sm.classList.remove('flex'); }
-    
-    const btn = document.getElementById('btn-req-save-exec');
-    if(btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 전송 중...'; }
-
-    let { data, currentReq } = window.getReqFormData();
-    if (data.status === 'draft') data.status = 'pending';
-
-    const fileInput = document.getElementById('req-file');
-    const recipientEmails = window.currentReqEmails.join(',');
-    data.recipientEmail = recipientEmails;
-
-    try { 
-        let fileUrl = null;
-        let excelFileUrl = null;
-        let targetFolderId = DRIVE_FOLDERS[window.currentAppId] || '';
-
-        if (window.currentAppId === 'purchase' && data.pjtCode) {
-            targetFolderId = await getOrCreateSubfolder(targetFolderId, data.pjtCode);
-        }
-
-        if (fileInput && fileInput.files.length > 0 && targetFolderId) {
-            window.showToast("구글 드라이브에 첨부 파일을 업로드 중입니다...");
-            const fileId = await window.uploadFileToDrive(fileInput.files[0], targetFolderId);
-            fileUrl = `https://drive.google.com/file/d/${fileId}/view`;
-        }
-        data.fileUrl = fileUrl || (currentReq ? currentReq.fileUrl : null);
-
-        if (window.currentAppId === 'purchase' && typeof window.ExcelJS !== 'undefined') {
-            window.showToast("구매 의뢰서 엑셀 양식을 생성 중입니다...");
-            try {
-                const wb = new window.ExcelJS.Workbook();
-                const ws = wb.addWorksheet('모듈구매의뢰서');
-                ws.columns = [ { width: 25 }, { width: 40 }, { width: 25 }, { width: 40 } ];
-                
-                ws.addRow(['요청자', data.authorName + ' (' + data.authorTeam + ')', '작성일', window.getLocalDateStr(new Date())]);
-                ws.addRow(['프로젝트 코드', data.pjtCode, '프로젝트명', data.pjtName]);
-                ws.addRow(['출하 요청일', data.shipDate, '', '']);
-                ws.addRow([]);
-                
-                const s = data.spec;
-                ws.addRow(['[상세 사양 / Specification]', '', '', '']).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-                ws.lastRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } };
-                
-                ws.addRow(['적용분야', s.app + (s.appEtc ? ` (${s.appEtc})` : ''), '수량', s.qty + ' ' + s.unit]);
-                ws.addRow(['LASER Wavelength', s.lasWave + ' ' + s.lasWaveEtc, 'LASER Power', s.lasPower + ' ' + s.lasPowerEtc]);
-                ws.addRow(['LASER Maker', s.lasMaker + ' ' + s.lasMakerEtc, 'LASER Type', s.lasType + ' ' + s.lasTypeEtc]);
-                ws.addRow(['LASER Channel', s.lasCh + ' ' + s.lasChEtc, 'Fiber Length', s.lasLen + ' ' + s.lasLenEtc]);
-                ws.addRow(['Fiber Core', s.lasCore + ' ' + s.lasCoreEtc, 'Cooling Type', s.lasCool + ' ' + s.lasCoolEtc]);
-                ws.addRow(['OPTIC Type', s.optType + ' ' + s.optTypeEtc, 'Fiber Mount', s.optMnt + ' ' + s.optMntEtc]);
-                ws.addRow(['Collimator', s.optCol + ' ' + s.optColEtc, 'Beam Splitter', s.optSplit + ' ' + s.optSplitEtc]);
-                ws.addRow(['F-theta Lens', s.optLens + ' ' + s.optLensEtc, 'Scanner', s.optScan + ' ' + s.optScanEtc]);
-                ws.addRow(['Camera', s.optCam + ' ' + s.optCamEtc, 'Light', s.optLit + ' ' + s.optLitEtc]);
-                ws.addRow(['Options (다중)', s.optOpts.join(', ') + ' ' + s.optOptsEtc, '', '']);
-                ws.addRow(['ACC PC Rack', s.accPc + ' ' + s.accPcEtc, 'ACC Controller', s.accCtrl + ' ' + s.accCtrlEtc]);
-                ws.addRow(['ACC Air Knife', s.accAir + ' ' + s.accAirEtc, 'ACC RTC Card', s.accRtc + ' ' + s.accRtcEtc]);
-                ws.addRow(['기타 메모', s.etcMemo, '', '']);
-                
-                const buffer = await wb.xlsx.writeBuffer();
-                const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-                const excelFile = new File([blob], `모듈구매의뢰서_${data.pjtCode||data.pjtName}_${data.authorName}.xlsx`, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-                
-                window.showToast("생성된 엑셀을 드라이브에 업로드 중입니다...");
-                const excelFileId = await window.uploadFileToDrive(excelFile, targetFolderId); 
-                excelFileUrl = `https://drive.google.com/file/d/${excelFileId}/view`;
-                data.excelFileUrl = excelFileUrl;
-            } catch(excelErr) { console.error(excelErr); }
-        }
-
-        if(window.editingReqId) { await setDoc(doc(db,"requests",window.editingReqId), data, {merge:true}); } 
-        else { data.createdAt = Date.now(); await addDoc(collection(db,"requests"), data); } 
-
-        if(recipientEmails) {
-            window.showToast("지정된 수신자에게 메일을 발송합니다...");
-            await window.sendNotificationEmail('pending', data, recipientEmails);
-        }
-
-        window.showToast("성공적으로 저장 및 메일 발송이 완료되었습니다."); 
-        window.closeWriteModal(); 
-    } catch(e) { window.showToast("오류 발생: " + e.message, "error"); 
-    } finally { 
-        if(btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane mr-1"></i> 발송하기'; }
-    }
-};
-
-window.promptAcceptRequest = function() {
-    if (!window.editingReqId) return;
-    if (!window.googleAccessToken) return window.showToast("구글 연동을 먼저 해주세요.", "error");
-
-    const req = window.currentRequestList.find(r => r.id === window.editingReqId);
-    
-    const managerSel = document.getElementById('req-accept-manager');
-    if(managerSel) {
-        managerSel.innerHTML = '<option value="">선택 안함</option>' + (window.allSystemUsers || []).map(u => `<option value="${u.name}">${u.name} (${u.team||'소속없음'})</option>`).join('');
-    }
-
-    const emailEl = document.getElementById('req-accept-email');
-    if(emailEl) emailEl.value = req ? (req.authorEmail || '') : '';
-
-    const am = document.getElementById('req-accept-modal');
-    if(am) { am.classList.remove('hidden'); am.classList.add('flex'); }
-};
-
-window.executeAcceptRequest = async function() {
-    const am = document.getElementById('req-accept-modal');
-    if(am) { am.classList.add('hidden'); am.classList.remove('flex'); }
-
-    const req = window.currentRequestList.find(r => r.id === window.editingReqId);
-    const managerName = document.getElementById('req-accept-manager')?.value || '';
-    const sendEmail = document.getElementById('req-accept-email')?.value.trim() || '';
-
-    try {
-        const payload = { status: 'progress', manager: managerName, acceptedAt: Date.now(), updatedAt: Date.now() };
-        await setDoc(doc(db, "requests", window.editingReqId), payload, { merge: true });
-        
-        const updatedReq = Object.assign({}, req, payload); 
-        if (sendEmail) {
-            await window.sendNotificationEmail('progress', updatedReq, sendEmail);
-            window.showToast("접수 완료 메일이 발송되었습니다.");
-        } else {
-            window.showToast("접수 처리가 완료되었습니다.");
-        }
-        window.closeWriteModal();
-    } catch(e) { window.showToast("처리 실패", "error"); }
-};
-
-window.promptCompleteRequest = function() {
-    if (!window.editingReqId) return;
-    if (!window.googleAccessToken) return window.showToast("구글 연동을 먼저 해주세요.", "error");
-
-    const req = window.currentRequestList.find(r => r.id === window.editingReqId);
-    
-    const fileSection = document.getElementById('req-complete-file-section');
-    if (fileSection) {
-        if (window.currentAppId === 'purchase') {
-            fileSection.classList.remove('hidden');
-            const fileInput = document.getElementById('req-complete-file');
-            if(fileInput) fileInput.value = '';
-            document.getElementById('req-complete-file-name').innerText = '';
-        } else {
-            fileSection.classList.add('hidden');
-        }
-    }
-
-    const emailEl = document.getElementById('req-complete-email');
-    if(emailEl) emailEl.value = req ? (req.authorEmail || '') : '';
-
-    const cm = document.getElementById('req-complete-modal');
-    if(cm) { cm.classList.remove('hidden'); cm.classList.add('flex'); }
-};
-
-window.executeCompleteRequest = async function() {
-    const cm = document.getElementById('req-complete-modal');
-    if(cm) { cm.classList.add('hidden'); cm.classList.remove('flex'); }
-    const btn = document.getElementById('btn-req-complete-exec');
-    if(btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 처리중...'; }
-
-    const req = window.currentRequestList.find(r => r.id === window.editingReqId);
-    const sendEmail = document.getElementById('req-complete-email')?.value.trim() || '';
-    const fileInput = document.getElementById('req-complete-file');
-
-    if (window.currentAppId === 'purchase' && (!fileInput || fileInput.files.length === 0)) {
-        if(btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-flag-checkered mr-1"></i> 완료 처리 및 발송'; }
-        return window.showToast("모듈 구매 의뢰서는 작업 완료 시 [레이저 검수 리스트] 파일 첨부가 필수입니다.", "error");
-    }
-
-    try {
-        let resultFileUrl = null;
-        let targetFolderId = DRIVE_FOLDERS[window.currentAppId] || '';
-
-        if (window.currentAppId === 'purchase' && req.pjtCode) {
-            targetFolderId = await getOrCreateSubfolder(targetFolderId, req.pjtCode);
-        }
-
-        if (fileInput && fileInput.files.length > 0) {
-            window.showToast("완료 결과물(검수 리스트)을 드라이브에 업로드 중입니다...");
-            const fileId = await window.uploadFileToDrive(fileInput.files[0], targetFolderId);
-            resultFileUrl = `https://drive.google.com/file/d/${fileId}/view`;
-        }
-
-        const payload = { status: 'completed', completedAt: Date.now(), updatedAt: Date.now() };
-        if (resultFileUrl) payload.resultFileUrl = resultFileUrl;
-
-        await setDoc(doc(db, "requests", window.editingReqId), payload, { merge: true });
-        
-        const updatedReq = Object.assign({}, req, payload);
-        if(sendEmail) {
-            await window.sendNotificationEmail('completed', updatedReq, sendEmail);
-            window.showToast("작업 완료 메일이 발송되었습니다.");
-        } else {
-            window.showToast("작업이 완료 처리되었습니다.");
-        }
-        window.closeWriteModal();
-    } catch(e) { window.showToast("처리 실패", "error"); } finally {
-        if(btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-flag-checkered mr-1"></i> 완료 처리 및 발송'; }
-    }
-};
-
-window.revertRequest = async function() {
-    if (!window.editingReqId) return;
-    if(!confirm("이 요청을 다시 '진행 중' 상태로 되돌리시겠습니까?")) return;
-
-    try {
-        await setDoc(doc(db, "requests", window.editingReqId), { status: 'progress', completedAt: null, updatedAt: Date.now() }, { merge: true });
-        window.showToast("진행 중 상태로 성공적으로 되돌렸습니다.");
-        window.closeWriteModal();
-    } catch(e) { window.showToast("처리 실패", "error"); }
-};
-
-window.loadRequestsData = function(appId) { 
-    if(unsubscribeRequests) unsubscribeRequests(); 
-    unsubscribeRequests = onSnapshot(query(collection(db, "requests"), where("type", "==", appId)), (s) => { 
-        window.currentRequestList=[]; 
-        let tTotal=0, tPend=0, tProg=0, tComp=0;
-        const currentYearStr = new Date().getFullYear().toString();
-
-        s.forEach(d => {
-            const data = {id: d.id, ...d.data()};
-            window.currentRequestList.push(data);
-            tTotal++;
-            if(data.status === 'pending') tPend++;
-            else if(data.status === 'progress') tProg++;
-            else if(data.status === 'completed') {
-                const compDateStr = data.completedAt ? window.getLocalDateStr(new Date(window.reqGetSafeMillis(data.completedAt))) : '';
-                if(compDateStr.startsWith(currentYearStr)) {
-                    tComp++;
-                }
-            }
-        }); 
-        
-        window.currentRequestList.sort((a,b)=>{ return window.reqGetSafeMillis(b.createdAt) - window.reqGetSafeMillis(a.createdAt); }); 
-        
-        if(document.getElementById('req-dash-total')) document.getElementById('req-dash-total').innerText = tTotal;
-        if(document.getElementById('req-dash-pending')) document.getElementById('req-dash-pending').innerText = tPend;
-        if(document.getElementById('req-dash-progress')) document.getElementById('req-dash-progress').innerText = tProg;
-        if(document.getElementById('req-dash-completed')) document.getElementById('req-dash-completed').innerText = tComp;
-
-        if(window.renderRequestList) window.renderRequestList(); 
-    }); 
-    
-    if(unsubscribeEmails) unsubscribeEmails();
-    unsubscribeEmails = onSnapshot(doc(db, "settings", "req_emails_" + appId), (docSnap) => {
-        if(docSnap.exists() && docSnap.data().emails) {
-            window.currentReqEmails = docSnap.data().emails;
-        } else {
-            window.currentReqEmails = [];
-        }
-    });
-};
-
-window.renderRequestList = function() { 
-    const tb = document.getElementById('request-tbody'); 
-    const th = document.getElementById('req-thead-tr');
-    if(!tb || !th) return; 
-
-    if (window.currentAppId === 'purchase') {
-        th.innerHTML = `
-            <th class="p-4 font-bold text-center w-20">현재 상태</th>
-            <th class="p-4 font-bold text-center text-amber-300 w-16">코멘트</th>
-            <th class="p-4 font-bold min-w-[200px] max-w-[250px]">프로젝트명</th>
-            <th class="p-4 font-bold text-center">PJT 코드</th>
-            <th class="p-4 font-bold min-w-[200px] max-w-[250px] text-indigo-300">의뢰서 제목</th>
-            <th class="p-4 font-bold text-center text-teal-400 w-16">요청서</th>
-            <th class="p-4 font-bold text-center text-emerald-400 w-16">검수</th>
-            <th class="p-4 font-bold text-center text-rose-400">출하요청일</th>
-            <th class="p-4 font-bold text-center">담당자</th>
-            <th class="p-4 font-bold text-center text-slate-400">등록일</th>
-            <th class="p-4 font-bold text-center text-blue-400">진행시작일</th>
-            <th class="p-4 font-bold text-center text-emerald-400">완료일</th>
-            <th class="p-4 font-bold text-center w-16">기능</th>
-        `;
-    } else {
-        th.innerHTML = `
-            <th class="p-4 font-bold text-center w-20">현재 상태</th>
-            <th class="p-4 font-bold text-center text-amber-300 w-16">코멘트</th>
-            <th class="p-4 font-bold text-center w-20">구분</th>
-            <th class="p-4 font-bold min-w-[200px] max-w-[250px]">프로젝트명</th>
-            <th class="p-4 font-bold text-center">PJT 코드</th>
-            <th class="p-4 font-bold min-w-[200px] max-w-[250px] text-indigo-300">요청서 제목</th>
-            <th class="p-4 font-bold text-center">담당자</th>
-            <th class="p-4 font-bold text-center text-slate-400">등록일</th>
-            <th class="p-4 font-bold text-center text-blue-400">진행시작일</th>
-            <th class="p-4 font-bold text-center text-emerald-400">완료일</th>
-            <th class="p-4 font-bold text-center w-16">기능</th>
-        `;
-    }
-    
-    let displayList = window.currentRequestList.filter(item => {
-        let match = true;
-        if (window.currentReqStatusFilter !== 'all') {
-            if (item.status !== window.currentReqStatusFilter) match = false;
-        }
-        if (window.currentReqYearFilter) {
-            const cDate = item.createdAt ? window.getLocalDateStr(new Date(window.reqGetSafeMillis(item.createdAt))) : '';
-            if (!cDate.startsWith(window.currentReqYearFilter)) match = false;
-        }
-        if (window.currentReqMonthFilter) {
-            const cDate = item.createdAt ? window.getLocalDateStr(new Date(window.reqGetSafeMillis(item.createdAt))) : '';
-            if (!cDate.startsWith(window.currentReqMonthFilter)) match = false;
-        }
-        if (window.currentReqSearch) {
-            const s = window.currentReqSearch;
-            const fullStr = `${item.pjtName||''} ${item.pjtCode||''} ${item.reqTitle||item.title||''}`.toLowerCase();
-            if (!fullStr.includes(s) && !window.matchString(s, fullStr)) match = false;
-        }
-        return match;
-    });
-
-    if(displayList.length === 0) { 
-        tb.innerHTML=`<tr><td colspan="${window.currentAppId === 'purchase' ? 13 : 11}" class="text-center p-8 text-slate-400 font-bold border-b border-slate-100">조건에 맞는 요청서가 없습니다.</td></tr>`; 
-        return; 
-    } 
-
-    const statusMap = {
-        'draft': '<span class="bg-slate-200 text-slate-500 px-2 py-1 rounded-md font-bold shadow-sm border border-slate-300">임시저장</span>',
-        'pending': '<span class="bg-slate-100 text-slate-600 px-2 py-1 rounded-md font-bold shadow-sm border border-slate-200">대기중</span>',
-        'progress': '<span class="bg-blue-100 text-blue-600 px-2 py-1 rounded-md font-bold shadow-sm border border-blue-200">진행중</span>',
-        'completed': '<span class="bg-emerald-100 text-emerald-600 px-2 py-1 rounded-md font-bold shadow-sm border border-emerald-200">완료됨</span>'
-    };
-
-    tb.innerHTML = displayList.map(r=> {
-        try {
-            const safeTitle = String(r.pjtName||r.title||'').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            const safeReqTitle = String(r.reqTitle||r.title||'').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            
-            const safeTitleJs = safeReqTitle.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-            const safeCat = r.category || '-';
-            const badge = statusMap[r.status] || statusMap['pending'];
-            const safeManager = r.manager ? r.manager : '<span class="text-slate-300">-</span>';
-
-            const dCreate = r.createdAt ? window.getLocalDateStr(new Date(window.reqGetSafeMillis(r.createdAt))) : '-';
-            const dAccept = r.acceptedAt ? window.getLocalDateStr(new Date(window.reqGetSafeMillis(r.acceptedAt))) : '-';
-            const dComp = r.completedAt ? window.getLocalDateStr(new Date(window.reqGetSafeMillis(r.completedAt))) : '-';
-
-            const cCount = (window.projectCommentCounts && window.projectCommentCounts[r.id]) || 0; 
-            let commentHtml = `<button onclick="event.stopPropagation(); window.openCommentModal('${r.id}', '${safeTitleJs}')" class="text-amber-400 hover:text-amber-500 relative transition-colors p-2"><i class="fa-regular fa-comment-dots text-lg"></i>`;
-            if (cCount > 0) commentHtml += `<span class="absolute top-0 right-0 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-amber-200">${cCount}</span>`;
-            commentHtml += `</button>`;
-
-            if (window.currentAppId === 'purchase') {
-                const safeShipDate = r.shipDate || '-';
-                const reqDocHtml = r.excelFileUrl ? `<a href="${r.excelFileUrl}" target="_blank" onclick="event.stopPropagation()" class="text-teal-600 hover:text-white hover:bg-teal-500 bg-teal-50 border border-teal-200 px-2 py-1 rounded text-[11px] shadow-sm font-bold transition-colors" title="요청서 엑셀 다운로드"><i class="fa-solid fa-file-excel"></i></a>` : `<span class="text-slate-300">-</span>`;
-                const inspDocHtml = r.resultFileUrl ? `<a href="${r.resultFileUrl}" target="_blank" onclick="event.stopPropagation()" class="text-emerald-600 hover:text-white hover:bg-emerald-500 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded text-[11px] shadow-sm font-bold transition-colors" title="검수 리스트 확인"><i class="fa-solid fa-file-circle-check"></i></a>` : `<span class="text-slate-300">-</span>`;
-
-                return `
-                <tr class="hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.openWriteModal('${r.id}')">
-                    <td class="p-3 text-center">${badge}</td>
-                    <td class="p-3 text-center">${commentHtml}</td>
-                    <td class="p-3 font-bold text-slate-700 truncate max-w-[200px]">${safeTitle}</td>
-                    <td class="p-3 text-center font-bold text-indigo-700">${r.pjtCode||'-'}</td>
-                    <td class="p-3 font-black text-indigo-800 truncate max-w-[250px]">${safeReqTitle}</td>
-                    <td class="p-3 text-center">${reqDocHtml}</td>
-                    <td class="p-3 text-center">${inspDocHtml}</td>
-                    <td class="p-3 text-center font-bold text-rose-500">${safeShipDate}</td>
-                    <td class="p-3 text-center font-bold text-slate-600">${r.authorName} <span class="text-[9px] bg-slate-100 text-slate-400 px-1 py-0.5 rounded block mt-0.5 w-max mx-auto">${r.authorTeam||''}</span></td>
-                    <td class="p-3 text-center text-slate-500 font-medium">${dCreate}</td>
-                    <td class="p-3 text-center text-blue-500 font-bold">${dAccept}</td>
-                    <td class="p-3 text-center text-emerald-500 font-bold">${dComp}</td>
-                    <td class="p-3 text-center" onclick="event.stopPropagation()">
-                        <button onclick="window.deleteRequest('${r.id}')" class="text-slate-300 hover:text-rose-500 transition-colors p-2 flex items-center justify-center mx-auto"><i class="fa-solid fa-trash-can"></i></button>
-                    </td>
-                </tr>`;
-            } else {
-                return `
-                <tr class="hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.openWriteModal('${r.id}')">
-                    <td class="p-3 text-center">${badge}</td>
-                    <td class="p-3 text-center">${commentHtml}</td>
-                    <td class="p-3 text-center font-bold text-slate-500">${safeCat}</td>
-                    <td class="p-3 font-bold text-slate-700 truncate max-w-[200px]">${safeTitle}</td>
-                    <td class="p-3 text-center font-bold text-indigo-700">${r.pjtCode||'-'}</td>
-                    <td class="p-3 font-black text-indigo-800 truncate max-w-[250px]">${safeReqTitle}</td>
-                    <td class="p-3 text-center font-bold text-slate-600">${r.authorName} <span class="text-[9px] bg-slate-100 text-slate-400 px-1 py-0.5 rounded block mt-0.5 w-max mx-auto">${r.authorTeam||''}</span></td>
-                    <td class="p-3 text-center font-bold text-indigo-600">${safeManager}</td>
-                    <td class="p-3 text-center text-slate-500 font-medium">${dCreate}</td>
-                    <td class="p-3 text-center text-blue-500 font-bold">${dAccept}</td>
-                    <td class="p-3 text-center text-emerald-500 font-bold">${dComp}</td>
-                    <td class="p-3 text-center" onclick="event.stopPropagation()">
-                        <button onclick="window.deleteRequest('${r.id}')" class="text-slate-300 hover:text-rose-500 transition-colors p-2 flex items-center justify-center mx-auto"><i class="fa-solid fa-trash-can"></i></button>
-                    </td>
-                </tr>`;
-            }
-        } catch(e) {
-            console.error("List Render Error:", e);
-            return '';
-        }
-    }).join(''); 
-};
-
-window.deleteRequest = async function(id) { 
-    if(confirm("이 요청서를 정말 삭제하시겠습니까?")){ 
-        try {
-            await deleteDoc(doc(db,"requests",id)); 
-            window.showToast("삭제되었습니다."); 
-        } catch(e) {
-            window.showToast("삭제 실패", "error");
-        }
-    } 
-};
-
-// 💡 [핵심 수정] 코멘트 저장 기능 단일화 (ui.js를 안전하게 호출)
-window.saveCommentItem = async function() { 
-    const projectId = document.getElementById('cmt-req-id').value; 
-    const content = document.getElementById('new-cmt-text').value.trim(); 
-    const parentId = document.getElementById('reply-to-id').value || null; 
-    const editId = document.getElementById('editing-cmt-id').value; 
-    const fileInput = document.getElementById('new-cmt-image'); 
-    
-    if(!content && (!fileInput || fileInput.files.length === 0)) return window.showToast("코멘트 내용이나 사진을 첨부하세요.", "error"); 
-    
-    const btnSave = document.getElementById('btn-cmt-save');
-    if(btnSave) { btnSave.innerHTML = '저장중..'; btnSave.disabled = true; }
-    
-    const saveData = async function(base64Img) { 
-        try { 
-            const payload = { content: content, updatedAt: Date.now() }; 
-            if(base64Img) payload.imageUrl = base64Img; 
-            
-            if (editId) { 
-                await setDoc(doc(db, "project_comments", editId), payload, { merge: true }); 
-                window.showToast("코멘트가 수정되었습니다."); 
-            } else { 
-                payload.projectId = projectId; 
-                payload.parentId = parentId; 
-                payload.authorUid = window.currentUser.uid; 
-                payload.authorName = window.userProfile.name; 
-                payload.createdAt = Date.now(); 
-                await addDoc(collection(db, "project_comments"), payload); 
-                window.showToast("코멘트가 등록되었습니다."); 
-                
-                // 💡 [오류 수정 1,2번 완벽 해결]
-                let notified = [];
-                if (window.processMentions) {
-                    notified = await window.processMentions(content, projectId, "코멘트");
-                }
-                
-                // 요청서 작성자 및 담당자 자동 알림
-                if (window.currentRequestList) {
-                    const req = window.currentRequestList.find(r => r.id === projectId);
-                    if (req) {
-                        if(req.authorName && req.authorName !== window.userProfile.name && !notified.includes(req.authorName)) {
-                            if(window.notifyUser) await window.notifyUser(req.authorName, content, projectId, "요청서 코멘트");
-                        }
-                        if(req.manager && req.manager !== window.userProfile.name && !notified.includes(req.manager)) {
-                            if(window.notifyUser) await window.notifyUser(req.manager, content, projectId, "요청서 코멘트");
-                        }
-                    }
-                }
-            } 
-            if(window.cancelCommentAction) window.cancelCommentAction(); 
-        } catch(e) { 
-            window.showToast("저장 중 오류 발생", "error"); 
-        } finally { 
-            if(btnSave) { btnSave.innerHTML = '작성'; btnSave.disabled = false; }
-        } 
-    }; 
-    
-    if(fileInput && fileInput.files.length > 0) { 
-        if(window.resizeAndConvertToBase64) {
-            window.resizeAndConvertToBase64(fileInput.files[0], function(base64) { saveData(base64); }); 
-        } else {
-            saveData(null);
-        }
-    } else { 
-        saveData(null); 
-    } 
-};
+document.addEventListener('click', function(e) {
+    const n = document.getElementById('notification-dropdown'); if (n && !n.classList.contains('hidden') && !e.target.closest('.relative.cursor-pointer')) n.classList.add('hidden');
+    const m = document.getElementById('mention-dropdown'); if (m && !m.classList.contains('hidden') && !e.target.closest('#mention-dropdown')) m.classList.add('hidden');
+    const d = document.getElementById('pjt-autocomplete-dropdown'); if (d && !d.classList.contains('hidden') && !e.target.closest('#pjt-autocomplete-dropdown') && !e.target.closest('input[oninput*="showAutocomplete"]')) d.classList.add('hidden');
+});
