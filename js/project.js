@@ -1672,45 +1672,41 @@ document.addEventListener('click', function(e) {
 });
 
 // ==========================================
-// 💡 부적합(NCR) 구글 시트 연동 (토큰 없는 완벽 우회 방식 - CSV 파싱)
+// 💡 부적합(NCR) 구글 시트 연동 (토큰 없는 완벽 우회 방식 - JSON Parsing)
 // ==========================================
 window.loadNcrData = async function() {
     try {
         // 구글 시트 ID
         const sheetId = '1ZYwSKvT4QXjFxgftunwdRHWzX4KXoelhZSVjauAJg8s';
         
-        // 💡 핵심: 구글 시트를 'CSV' 형태로 바로 다운로드 받아서 읽어버립니다. 
-        // 이 방식은 CORS나 구글 보안 토큰 갱신 이슈에서 완전히 자유롭습니다.
-        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=0`;
+        // 💡 CSV 방식 대신 가장 안정적인 Google Visualization API (JSON 응답) 방식을 사용합니다. CORS 에러 완벽 해결!
+        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=0`;
 
         const res = await fetch(url);
         if (!res.ok) throw new Error("시트 읽기 실패");
 
-        const csvText = await res.text();
+        const text = await res.text();
         
-        // CSV 파싱 로직 (따옴표 안에 있는 콤마는 무시하고 자릅니다)
-        const parseCSV = (str) => {
-            const arr = []; let quote = false; let row = 0, col = 0;
-            for (let c = 0; c < str.length; c++) {
-                let cc = str[c], nc = str[c+1];
-                arr[row] = arr[row] || [];
-                arr[row][col] = arr[row][col] || '';
+        // 응답 텍스트에서 불필요한 함수 래퍼를 제거하고 순수 JSON만 추출
+        const jsonString = text.match(/google\.visualization\.Query\.setResponse\(([\s\S\w]+)\);/);
+        if (!jsonString || !jsonString[1]) throw new Error("데이터 파싱 실패");
+        
+        const data = JSON.parse(jsonString[1]);
+        
+        if (!data || !data.table || !data.table.rows) return;
 
-                if (cc === '"' && quote && nc === '"') { arr[row][col] += cc; ++c; continue; }
-                if (cc === '"') { quote = !quote; continue; }
-                if (cc === ',' && !quote) { ++col; continue; }
-                if (cc === '\r' && nc === '\n' && !quote) { ++row; col = 0; ++c; continue; }
-                if (cc === '\n' && !quote) { ++row; col = 0; continue; }
-                if (cc === '\r' && !quote) { ++row; col = 0; continue; }
-                arr[row][col] += cc;
-            }
-            return arr;
-        };
+        // 헤더 추출
+        let headers = data.table.cols.map(c => c.label || '');
+        let dataRows = data.table.rows;
 
-        const rows = parseCSV(csvText);
-        if (!rows || rows.length < 2) return;
-
-        const headers = rows[0];
+        // 만약 컬럼 라벨이 비어있다면, 첫 번째 데이터를 헤더로 간주
+        if (headers.join('').trim() === '') {
+            headers = dataRows[0].c.map(cell => (cell && cell.v) ? String(cell.v) : '');
+            dataRows = dataRows.slice(1);
+        }
+        
+        // 데이터 행 추출
+        const rows = dataRows.map(r => r.c.map(cell => (cell && cell.v !== null && cell.v !== undefined) ? String(cell.v) : ''));
         
         // 헤더 인덱스 찾기 (띄어쓰기, 대소문자 무시)
         const getIdx = (keywords) => {
@@ -1731,7 +1727,7 @@ window.loadNcrData = async function() {
         const cStat = getIdx(['진행', '현황', '상태', 'status']);
 
         // 데이터 매핑
-        window.ncrData = rows.slice(1).map(row => {
+        window.ncrData = rows.map(row => {
             return {
                 pjtCode: cPjt !== -1 && row[cPjt] ? row[cPjt].trim() : '',
                 ncrNo: cNcr !== -1 && row[cNcr] ? row[cNcr].trim() : '',
@@ -1761,7 +1757,7 @@ window.loadNcrData = async function() {
             authBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> 동기화 실패';
             authBtn.className = 'text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-1.5 rounded-lg shadow-sm whitespace-nowrap ml-2';
         }
-        if(window.showToast) window.showToast("시트 접근 오류: 시트가 '뷰어'로 공개되어 있는지 확인하세요.", "error");
+        if(window.showToast) window.showToast("시트 접근 오류: 시트가 '뷰어(링크가 있는 모든 사용자)'로 공개되어 있는지 확인하세요.", "error");
     }
 };
 
