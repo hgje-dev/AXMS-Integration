@@ -2254,7 +2254,7 @@ window.loadNcrData = async function() {
         if(window.showToast) window.showToast("부적합(RAWDATA) 데이터를 가져오는 중입니다...", "success");
         
         // 💡 주의: 아래 작은따옴표('') 사이에 방금 구글 시트에서 복사한 .csv 링크를 그대로 붙여넣으세요!
-        const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSYwsWjs8ox503LLsRIeVRbbZ4R7eLgoq0C-ZdYIBIUACCwWyt5oYkAAtIpX9j1taqt1MQaEg1Jjom0/pubhtml';
+        const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSYwsWjs8ox503LLsRIeVRbbZ4R7eLgoq0C-ZdYIBIUACCwWyt5oYkAAtIpX9j1taqt1MQaEg1Jjom0/pub?gid=0&single=true&output=csv';
         
         // 캐시 방지를 위해 타임스탬프 추가
         const res = await fetch(csvUrl + '&t=' + Date.now());
