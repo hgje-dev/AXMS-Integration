@@ -1,5 +1,7 @@
 // js/router.js
-const routes = {
+
+// 💡 1. 윈도우 객체에 직접 안전하게 할당 (이름 충돌 방지 및 오타 수정 완료!)
+window.appRoutes = {
     'dashboard-home': { url: './views/dashboard.html', init: () => { if(window.loadHomeDashboards) window.loadHomeDashboards(); } },
     
     'project-status': { 
@@ -14,6 +16,8 @@ const routes = {
                 btnOpt.className = window.currentProjPartTab === '광학' ? "px-3 py-1 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
             }
             if(window.loadProjectStatusData) window.loadProjectStatusData(); 
+            
+            // 💡 PJT 현황판 로딩 시 구글 연동 함수 실행!
             if(window.initGoogleAPI) window.initGoogleAPI(); 
         } 
     },
@@ -39,7 +43,8 @@ window.openApp = async function(viewId, title) {
     const appContent = document.getElementById('app-content');
     if(document.getElementById('nav-title')) document.getElementById('nav-title').innerText = title || '';
 
-    const route = routes[routeKey] || routes['dashboard-home'];
+    // 💡 2. 앞서 윈도우 객체에 담아둔 변수를 올바르게 호출하도록 수정!
+    const route = window.appRoutes[routeKey] || window.appRoutes['dashboard-home'];
 
     try {
         appContent.innerHTML = '<div class="flex items-center justify-center h-[60vh] w-full"><div class="text-center text-slate-400 font-bold"><i class="fa-solid fa-spinner fa-spin text-5xl text-indigo-500 mb-4"></i><br>화면을 불러오는 중입니다...</div></div>';
@@ -51,7 +56,7 @@ window.openApp = async function(viewId, title) {
         if (route.init) setTimeout(route.init, 50);
     } catch (error) {
         console.error('라우팅 에러:', error);
-        appContent.innerHTML = `<div class="text-center p-10 mt-10 bg-white rounded-2xl shadow-sm border border-rose-200 text-rose-500 font-bold"><i class="fa-solid fa-triangle-exclamation text-3xl mb-3"></i><br>화면을 불러오는데 실패했습니다. (${route?.url})</div>`;
+        appContent.innerHTML = `<div class="text-center p-10 mt-10 bg-white rounded-2xl shadow-sm border border-rose-200 text-rose-500 font-bold"><i class="fa-solid fa-triangle-exclamation text-3xl mb-3"></i><br>화면을 불러오는데 실패했습니다.</div>`;
     }
 };
 
