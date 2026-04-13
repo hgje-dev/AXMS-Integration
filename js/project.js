@@ -2265,18 +2265,13 @@ window.loadNcrData = async function() {
     try {
         if(window.showToast) window.showToast("부적합(RAWDATA) 데이터를 가져오는 중입니다...", "success");
         
-        // 💡 주의: 아래 작은따옴표('') 사이에 방금 구글 시트에서 복사한 .csv 링크를 그대로 붙여넣으세요!
         const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSYwsWjs8ox503LLsRIeVRbbZ4R7eLgoq0C-ZdYIBIUACCwWyt5oYkAAtIpX9j1taqt1MQaEg1Jjom0/pub?gid=0&single=true&output=csv';
+        const separator = csvUrl.includes('?') ? '&' : '?';
+        const res = await fetch(csvUrl + separator + 't=' + Date.now());
         
-        // 캐시 방지를 위해 타임스탬프 추가
-        const res = await fetch(csvUrl + '&t=' + Date.now());
-        
-        if (!res.ok) {
-            throw new Error("시트 데이터를 가져오지 못했습니다.");
-        }
+        if (!res.ok) throw new Error("시트 데이터를 가져오지 못했습니다.");
 
         const csvText = await res.text();
-        
         if (csvText.includes('<html') || csvText.includes('<body')) {
             throw new Error("링크 형식이 잘못되었습니다. (웹에 게시에서 .csv 링크인지 확인해주세요)");
         }
@@ -2300,32 +2295,39 @@ window.loadNcrData = async function() {
         }
         if (col !== "" || row.length > 0) { row.push(col); rows.push(row); }
 
-        if (rows.length < 2) {
-            if(window.showToast) window.showToast("동기화 완료: 시트에 데이터가 없거나 비어있습니다.", "warning");
-            return;
+        // 헤더 건너뛰기 (NCR No 문구가 있는 행 찾기)
+        let dataStartIndex = 1;
+        for (let i = 0; i < Math.min(5, rows.length); i++) {
+            if (rows[i][0] && String(rows[i][0]).includes('NCR No')) {
+                dataStartIndex = i + 1;
+                break;
+            }
         }
 
-        window.ncrData = rows.slice(1).map(r => {
+        // 💡 [핵심 수정] CSV 열(Column) 위치 완벽 매칭!
+        window.ncrData = rows.slice(dataStartIndex).map(r => {
             return {
-                pjtCode: r[0] ? String(r[0]).trim() : '',
-                ncrNo: r[2] ? String(r[2]).trim() : '',
-                date: r[1] ? String(r[1]).trim() : '',
-                drawingNo: r[4] ? String(r[4]).trim() : '',
-                partName: r[3] ? String(r[3]).trim() : '',
-                type: r[8] ? String(r[8]).trim() : '',
-                content: r[11] ? String(r[11]).trim() : '',
-                status: r[13] ? String(r[13]).trim() : ''
+                ncrNo: r[0] ? String(r[0]).trim() : '',      // A열 (Index 0)
+                date: r[1] ? String(r[1]).trim() : '',       // B열 (Index 1)
+                pjtCode: r[2] ? String(r[2]).trim() : '',    // C열 (Index 2)
+                partName: r[3] ? String(r[3]).trim() : '',   // D열 (Index 3)
+                drawingNo: r[4] ? String(r[4]).trim() : '',  // E열 (Index 4)
+                type: r[12] ? String(r[12]).trim() : '',     // M열 (Index 12)
+                content: r[13] ? String(r[13]).trim() : '',  // N열 (Index 13)
+                status: r[15] ? String(r[15]).trim() : ''    // P열 (Index 15)
             };
-        }).filter(n => n.pjtCode);
+        }).filter(n => n.pjtCode !== ''); // PJT 코드가 있는 것만 필터링
 
         if (window.ncrData.length === 0) {
-            if(window.showToast) window.showToast("RAWDATA 시트 형식이 맞지 않아 데이터를 불러올 수 없습니다. A열(PJT코드)이 비어있는지 확인하세요.", "warning");
+            if(window.showToast) window.showToast("RAWDATA 시트에서 데이터를 찾을 수 없습니다.", "warning");
         } else {
             if(window.showToast) window.showToast(`부적합(NCR) 데이터 ${window.ncrData.length}건 동기화 완료!`, "success");
         }
 
+        // 1. 현황판 리스트(아이콘) 다시 그리기
         window.renderProjectStatusList();
 
+        // 2. 모달창이 열려있다면 모달창 리스트도 즉시 다시 그리기
         const modal = document.getElementById('ncr-modal');
         if (modal && !modal.classList.contains('hidden')) {
             const titleEl = document.getElementById('ncr-project-title');
