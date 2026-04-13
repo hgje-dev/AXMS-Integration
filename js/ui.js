@@ -2,7 +2,6 @@
 import { db } from './firebase.js';
 import { collection, addDoc, query, where, onSnapshot, doc, setDoc, getDocs, writeBatch, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-// 전역 상태 변수 초기화
 window.currentUser = null; 
 window.userProfile = null; 
 window.allSystemUsers = []; 
@@ -38,12 +37,15 @@ window.theChart = null;
 window.dashChartObj = null; 
 window.currentProjectId = null;
 
-// 공통 유틸리티 함수 (날짜, 랜덤, 다크모드 등)
+// 공통 날짜 및 유틸 함수
 window.getTriangularRandom = function(min, mode, max) { 
     let u = Math.random(); 
     let F = (mode - min) / (max - min); 
-    if (u <= F) return min + Math.sqrt(u * (max - min) * (mode - min));
-    else return max - Math.sqrt((1 - u) * (max - min) * (max - mode));
+    if (u <= F) {
+        return min + Math.sqrt(u * (max - min) * (mode - min));
+    } else {
+        return max - Math.sqrt((1 - u) * (max - min) * (max - mode));
+    }
 };
 
 window.getNormalRandom = function(mean, stdDev) { 
@@ -131,8 +133,11 @@ window.getChosung = function(str) {
     let res = ""; 
     for(let i=0; i<str.length; i++) { 
         let c = str.charCodeAt(i) - 44032; 
-        if(c > -1 && c < 11172) res += cho[Math.floor(c / 588)]; 
-        else res += str.charAt(i); 
+        if(c > -1 && c < 11172) {
+            res += cho[Math.floor(c / 588)]; 
+        } else {
+            res += str.charAt(i); 
+        }
     } 
     return res; 
 };
@@ -167,7 +172,9 @@ window.toggleSidebar = function(forceShow) {
     if(!s || !b) return; 
     const isClosed = s.classList.contains('-translate-x-full');
     let show = isClosed;
-    if (typeof forceShow === 'boolean') show = forceShow;
+    if (typeof forceShow === 'boolean') {
+        show = forceShow;
+    }
     
     if(show) { 
         s.classList.remove('-translate-x-full'); 
@@ -214,13 +221,18 @@ window.formatMentions = function(text) {
     return formatted;
 };
 
-// 알림 시스템 관련
+// ==========================================
+// 🔔 알림 및 멘션 시스템 로직
+// ==========================================
 window.toggleNotifications = function(event) { 
     if(event) event.stopPropagation(); 
     const dropdown = document.getElementById('notification-dropdown'); 
     if(dropdown) {
-        if (dropdown.classList.contains('hidden')) dropdown.classList.remove('hidden');
-        else dropdown.classList.add('hidden');
+        if (dropdown.classList.contains('hidden')) {
+            dropdown.classList.remove('hidden');
+        } else {
+            dropdown.classList.add('hidden');
+        }
     }
 };
 
@@ -241,7 +253,9 @@ window.loadNotifications = function() {
             if (!data.isRead) unreadCount++; 
         });
         
-        notis.sort((a, b) => b.createdAt - a.createdAt);
+        notis.sort(function(a, b) { 
+            return b.createdAt - a.createdAt; 
+        });
         
         const badgeWrap = document.getElementById('notification-badge'); 
         const countEl = document.getElementById('notification-count');
@@ -250,32 +264,79 @@ window.loadNotifications = function() {
             if (unreadCount > 0) { 
                 badgeWrap.classList.remove('hidden'); 
                 countEl.innerText = unreadCount > 99 ? '99+' : unreadCount; 
-            } else badgeWrap.classList.add('hidden'); 
+            } else { 
+                badgeWrap.classList.add('hidden'); 
+            } 
         }
         
         const listEl = document.getElementById('notification-list');
         if (listEl) {
-            if (notis.length === 0) listEl.innerHTML = '<div class="p-6 text-center text-slate-400 text-xs font-bold">새로운 알림이 없습니다.</div>';
-            else {
-                listEl.innerHTML = notis.map(n => {
+            if (notis.length === 0) {
+                listEl.innerHTML = '<div class="p-6 text-center text-slate-400 text-xs font-bold">새로운 알림이 없습니다.</div>';
+            } else {
+                let htmlStr = '';
+                notis.forEach(function(n) {
                     let opacityClass = n.isRead ? 'opacity-50' : 'bg-indigo-50/40';
-                    let dateText = window.getDateTimeStr ? window.getDateTimeStr(new Date(n.createdAt)) : new Date(n.createdAt).toLocaleString();
-                    return `<div class="p-3 hover:bg-slate-50 cursor-pointer transition-colors ${opacityClass}" onclick="window.readNotification('${n.id}')">
-                                <div class="text-[11px] font-bold text-indigo-600 mb-1">${n.type || '알림'}</div>
-                                <div class="text-xs text-slate-700 font-bold leading-relaxed break-words">${n.message}</div>
-                                <div class="text-[10px] text-slate-400 mt-1.5">${dateText}</div>
-                            </div>`;
-                }).join('');
+                    let typeText = n.type || '알림';
+                    let dateText = '';
+                    if (window.getDateTimeStr) {
+                        dateText = window.getDateTimeStr(new Date(n.createdAt));
+                    } else {
+                        dateText = new Date(n.createdAt).toLocaleString();
+                    }
+                    
+                    htmlStr += '<div class="p-3 hover:bg-slate-50 cursor-pointer transition-colors ' + opacityClass + '" onclick="window.readNotification(\'' + n.id + '\')">';
+                    htmlStr += '<div class="text-[11px] font-bold text-indigo-600 mb-1">' + typeText + '</div>';
+                    htmlStr += '<div class="text-xs text-slate-700 font-bold leading-relaxed break-words">' + n.message + '</div>';
+                    htmlStr += '<div class="text-[10px] text-slate-400 mt-1.5">' + dateText + '</div>';
+                    htmlStr += '</div>';
+                });
+                listEl.innerHTML = htmlStr;
             }
         }
     });
 };
 
-window.readNotification = async function(id) { try { await setDoc(doc(db, "notifications", id), { isRead: true }, { merge: true }); } catch(e) { console.error(e); } };
-window.markAllNotificationsRead = async function() { if(!window.currentUser) return; try { const q = query(collection(db, "notifications"), where("targetUid", "==", window.currentUser.uid), where("isRead", "==", false)); const snapshot = await getDocs(q); const batch = writeBatch(db); snapshot.forEach(d => batch.update(d.ref, { isRead: true })); await batch.commit(); } catch(e) { console.error(e); } };
-window.deleteAllNotifications = async function() { if(!window.currentUser) return; if(!confirm("모든 알림을 삭제하시겠습니까?")) return; try { const q = query(collection(db, "notifications"), where("targetUid", "==", window.currentUser.uid)); const snapshot = await getDocs(q); const batch = writeBatch(db); snapshot.forEach(d => batch.delete(d.ref)); await batch.commit(); window.showToast("알림이 모두 삭제되었습니다."); } catch(e) { console.error(e); } };
+window.readNotification = async function(id) { 
+    try { 
+        await setDoc(doc(db, "notifications", id), { isRead: true }, { merge: true }); 
+    } catch(e) {
+        console.error(e);
+    } 
+};
 
-// 멘션 및 자동 메일 발송 로직 (중점 수정 사항)
+window.markAllNotificationsRead = async function() { 
+    if(!window.currentUser) return; 
+    try { 
+        const q = query(collection(db, "notifications"), where("targetUid", "==", window.currentUser.uid), where("isRead", "==", false)); 
+        const snapshot = await getDocs(q); 
+        const batch = writeBatch(db); 
+        snapshot.forEach(function(d) { 
+            batch.update(d.ref, { isRead: true }); 
+        }); 
+        await batch.commit(); 
+    } catch(e) {
+        console.error(e);
+    } 
+};
+
+window.deleteAllNotifications = async function() { 
+    if(!window.currentUser) return;
+    if(!confirm("모든 알림을 삭제하시겠습니까?")) return; 
+    try { 
+        const q = query(collection(db, "notifications"), where("targetUid", "==", window.currentUser.uid)); 
+        const snapshot = await getDocs(q); 
+        const batch = writeBatch(db); 
+        snapshot.forEach(function(d) { 
+            batch.delete(d.ref); 
+        }); 
+        await batch.commit(); 
+        window.showToast("알림이 모두 삭제되었습니다."); 
+    } catch(e) {
+        console.error(e);
+    } 
+};
+
 window.handleMention = function(textarea) {
     const val = textarea.value; 
     const cursorInfo = textarea.selectionStart;
@@ -283,6 +344,7 @@ window.handleMention = function(textarea) {
     const mentionMatch = textBeforeCursor.match(/@([가-힣a-zA-Z0-9_]*)$/);
     
     let dropdown = document.getElementById('mention-dropdown'); 
+    
     if(!dropdown) {
         dropdown = document.createElement('ul');
         dropdown.id = 'mention-dropdown';
@@ -293,7 +355,9 @@ window.handleMention = function(textarea) {
     if (mentionMatch) {
         const searchKeyword = mentionMatch[1].toLowerCase();
         const users = window.allSystemUsers || []; 
-        const filteredUsers = users.filter(u => u.name.toLowerCase().includes(searchKeyword));
+        const filteredUsers = users.filter(function(u) { 
+            return u.name.toLowerCase().includes(searchKeyword); 
+        });
         
         if (filteredUsers.length > 0) {
             const rect = textarea.getBoundingClientRect(); 
@@ -301,178 +365,494 @@ window.handleMention = function(textarea) {
             dropdown.style.top = (rect.bottom + window.scrollY + 5) + 'px';
             dropdown.classList.remove('hidden'); 
             
-            dropdown.innerHTML = filteredUsers.map(u => `
-                <li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-slate-700 font-bold text-xs border-b border-slate-50 last:border-0 flex items-center justify-between transition-colors" 
-                    onmousedown="window.insertMention('${textarea.id}', '${u.name}', ${mentionMatch.index}, ${cursorInfo})">
-                    <span>${u.name}</span> <span class="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-normal">${u.team || '소속없음'}</span>
-                </li>
-            `).join('');
-        } else dropdown.classList.add('hidden');
-    } else dropdown.classList.add('hidden');
+            let dropHtml = '';
+            filteredUsers.forEach(function(u) {
+                let safeTeam = u.team || '소속없음';
+                dropHtml += '<li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-slate-700 font-bold text-xs border-b border-slate-50 last:border-0 flex items-center justify-between transition-colors" ';
+                dropHtml += 'onmousedown="window.insertMention(\'' + textarea.id + '\', \'' + u.name + '\', ' + mentionMatch.index + ', ' + cursorInfo + ')">';
+                dropHtml += '<span>' + u.name + '</span> <span class="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-normal">' + safeTeam + '</span>';
+                dropHtml += '</li>';
+            });
+            dropdown.innerHTML = dropHtml;
+        } else {
+            dropdown.classList.add('hidden');
+        }
+    } else {
+        dropdown.classList.add('hidden');
+    }
 };
 
 window.insertMention = function(textareaId, name, startIndex, endIndex) {
     const textarea = document.getElementById(textareaId); 
     if(!textarea) return;
+    
     const val = textarea.value;
-    textarea.value = val.substring(0, startIndex) + '@' + name + ' ' + val.substring(endIndex);
+    const before = val.substring(0, startIndex);
+    const after = val.substring(endIndex);
+    
+    textarea.value = before + '@' + name + ' ' + after;
     textarea.focus(); 
+    
     const drop = document.getElementById('mention-dropdown');
     if (drop) drop.classList.add('hidden');
 };
 
-/**
- * 💡 핵심 수정: window.processMentions
- * 1. 멘션된 사용자들을 필터링합니다.
- * 2. 시스템 알림 DB에 저장하여 종 모양 알림이 뜨게 합니다.
- * 3. 멘션된 사용자에게 Gmail API를 통해 알림 메일을 발송합니다.
- */
+// 💡 [핵심 추가 로직] 멘션 등록 및 메일 발송 
 window.processMentions = async function(content, projectId, typeDesc) {
     if(!content) return;
     const mentions = content.match(/@([가-힣a-zA-Z0-9_]+)/g); 
     if(!mentions) return;
     
     const users = window.allSystemUsers || [];
-    let targetNames = Array.from(new Set(mentions.map(m => m.replace('@', ''))));
+    let targetNames = [];
     
-    for (const tName of targetNames) {
-        const targetUser = users.find(u => u.name === tName);
+    mentions.forEach(function(m) {
+        let cleanName = m.replace('@', '');
+        if (targetNames.indexOf(cleanName) === -1) {
+            targetNames.push(cleanName);
+        }
+    });
+    
+    for (let i = 0; i < targetNames.length; i++) {
+        let tName = targetNames[i];
+        let targetUser = users.find(function(u) { return u.name === tName; });
         
-        // 본인이 본인을 언급한 경우는 제외
         if (targetUser && targetUser.uid !== window.currentUser?.uid) {
             try {
-                const sysName = window.userProfile ? window.userProfile.name : '시스템';
-                const msgType = typeDesc || '멘션';
-                const msgTitle = `📢 ${sysName}님이 [${msgType}]에서 회원님을 언급했습니다.`;
-
+                let sysName = window.userProfile ? window.userProfile.name : '시스템';
+                let msgType = typeDesc || '멘션';
+                let msgTitle = '📢 ' + sysName + '님이 [' + msgType + ']에서 회원님을 언급했습니다.';
+                
                 // 1. 내부 알림 DB 저장
                 await addDoc(collection(db, "notifications"), {
                     targetUid: targetUser.uid,
                     senderName: sysName,
                     type: msgType,
-                    message: `${msgTitle}\n내용: ${content}`,
+                    message: msgTitle + '\n내용: ' + content,
                     projectId: projectId || null,
                     isRead: false,
                     createdAt: Date.now()
                 });
 
-                // 2. 멘션 메일 발송 (Gmail API 사용)
+                // 2. 이메일 자동 발송 (구글 로그인 상태일 경우)
                 if (targetUser.email && window.googleAccessToken) {
-                    const subject = `[AXBIS 알림] ${msgTitle}`;
-                    const bodyHtml = `
-                        <div style="font-family: sans-serif; padding: 20px; background: #f8fafc; border-radius: 10px;">
-                            <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
-                                <h3 style="color: #4f46e5; margin-top:0;">${msgTitle}</h3>
-                                <p><strong>작성자:</strong> ${sysName}</p>
-                                <p><strong>내용:</strong></p>
-                                <div style="background: #f1f5f9; padding: 15px; border-radius: 8px; color: #334155; font-size: 14px;">
-                                    ${String(content).replace(/\n/g, '<br>')}
-                                </div>
-                                <p style="margin-top: 20px;"><a href="https://axbis-portal.web.app" style="background: #4f46e5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">포털 바로가기</a></p>
-                            </div>
-                        </div>`;
-
-                    const emailRaw = `To: ${targetUser.email}\r\nSubject: =?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=\r\nContent-Type: text/html; charset="UTF-8"\r\n\r\n${bodyHtml}`;
+                    const subject = '[AXBIS 알림] ' + msgTitle;
+                    const bodyHtml = '<div style="font-family: sans-serif; padding: 20px; background: #f8fafc; border-radius: 10px;">' +
+                        '<div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">' +
+                        '<h3 style="color: #4f46e5; margin-top:0;">' + msgTitle + '</h3>' +
+                        '<p><strong>작성자:</strong> ' + sysName + '</p>' +
+                        '<p><strong>내용:</strong></p>' +
+                        '<div style="background: #f1f5f9; padding: 15px; border-radius: 8px; color: #334155; font-size: 14px;">' +
+                        String(content).replace(/\n/g, '<br>') +
+                        '</div>' +
+                        '<p style="margin-top: 20px;"><a href="https://axbis-portal.web.app" style="background: #4f46e5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">포털 바로가기</a></p>' +
+                        '</div></div>';
+                        
+                    const emailRaw = 'To: ' + targetUser.email + '\r\n' +
+                                     'Subject: =?utf-8?B?' + btoa(unescape(encodeURIComponent(subject))) + '?=\r\n' +
+                                     'Content-Type: text/html; charset="UTF-8"\r\n\r\n' +
+                                     bodyHtml;
+                                     
                     const encodedEmail = btoa(unescape(encodeURIComponent(emailRaw))).replace(/\+/g, '-').replace(/\//g, '_');
                     
                     fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
                         method: 'POST',
-                        headers: { 'Authorization': `Bearer ${window.googleAccessToken}`, 'Content-Type': 'application/json' },
+                        headers: {
+                            'Authorization': 'Bearer ' + window.googleAccessToken,
+                            'Content-Type': 'application/json'
+                        },
                         body: JSON.stringify({ raw: encodedEmail })
-                    }).catch(err => console.error("멘션 메일 발송 실패:", err));
+                    }).catch(function(err) { console.error("멘션 메일 발송 실패:", err); });
                 }
-            } catch(e) { console.error("알림 생성 오류:", e); }
+            } catch(e) { 
+                console.error("멘션 발송 에러:", e); 
+            }
         }
     }
 };
 
-// PJT 코드 마스터 관리 및 자동완성 (나머지 코드 유지)
+// ==========================================
+// 🏷️ PJT 코드 마스터 관리 및 자동완성 로직
+// ==========================================
+
 window.openProjCodeMasterModal = function() {
     const modal = document.getElementById('proj-code-master-modal');
-    if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
-    if(window.pjtCodeMasterList.length === 0) { if(window.loadProjectCodeMaster) window.loadProjectCodeMaster(); } 
-    else { if(window.renderProjectCodeMaster) window.renderProjectCodeMaster(); }
+    if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+    
+    if(window.pjtCodeMasterList.length === 0) {
+        if(window.loadProjectCodeMaster) window.loadProjectCodeMaster();
+    } else {
+        if(window.renderProjectCodeMaster) window.renderProjectCodeMaster();
+    }
 };
 
 window.closeProjCodeMasterModal = function() {
     const modal = document.getElementById('proj-code-master-modal');
-    if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
 };
 
 let pjtCodeMasterUnsubscribe = null;
 window.loadProjectCodeMaster = function() {
     if (pjtCodeMasterUnsubscribe) pjtCodeMasterUnsubscribe();
+    
     pjtCodeMasterUnsubscribe = onSnapshot(collection(db, "pjt_code_master"), function(snapshot) {
         window.pjtCodeMasterList = [];
-        snapshot.forEach(docSnap => { let data = docSnap.data(); data.id = docSnap.id; window.pjtCodeMasterList.push(data); });
-        window.pjtCodeMasterList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        snapshot.forEach(function(docSnap) {
+            let data = docSnap.data();
+            data.id = docSnap.id;
+            window.pjtCodeMasterList.push(data);
+        });
+        
+        window.pjtCodeMasterList.sort(function(a, b) {
+            return (b.createdAt || 0) - (a.createdAt || 0);
+        });
+        
         const modal = document.getElementById('proj-code-master-modal');
-        if(modal && !modal.classList.contains('hidden')) window.renderProjectCodeMaster();
+        if(modal && !modal.classList.contains('hidden')) {
+            if(window.renderProjectCodeMaster) window.renderProjectCodeMaster();
+        }
     });
 };
 
 window.renderProjectCodeMaster = function() {
-    const tbody = document.getElementById('pjt-code-tbody'); if(!tbody) return;
-    if(window.pjtCodeMasterList.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="text-center p-6 text-slate-400 font-bold">등록된 코드가 없습니다.</td></tr>'; return; }
+    const tbody = document.getElementById('pjt-code-tbody');
+    if(!tbody) return;
     
-    tbody.innerHTML = window.pjtCodeMasterList.map(p => `
-        <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">
-            <td class="p-3 text-center"><input type="checkbox" value="${p.id}" class="pjt-checkbox accent-indigo-500 w-4 h-4 rounded cursor-pointer" onchange="window.updatePjtSelection()"></td>
-            <td class="p-3 font-bold text-indigo-700 w-32">${p.code || '-'}</td>
-            <td class="p-3 font-bold text-slate-700">${p.name || '-'}</td>
-            <td class="p-3 text-slate-500 w-32">${p.company || '-'}</td>
-            <td class="p-3 text-center w-20"><button onclick="window.deleteProjectCode('${p.id}')" class="text-slate-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-trash-can"></i></button></td>
-        </tr>
-    `).join('');
+    if(window.pjtCodeMasterList.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center p-6 text-slate-400 font-bold">등록된 코드가 없습니다.</td></tr>';
+        return;
+    }
     
-    const masterCb = document.getElementById('pjt-master-checkbox'); if (masterCb) masterCb.checked = false; window.updatePjtSelection();
+    let htmlStr = '';
+    window.pjtCodeMasterList.forEach(function(p) {
+        let safeCode = p.code || '-';
+        let safeName = p.name || '-';
+        let safeCompany = p.company || '-';
+        
+        htmlStr += '<tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">';
+        htmlStr += '<td class="p-3 text-center"><input type="checkbox" value="' + p.id + '" class="pjt-checkbox accent-indigo-500 w-4 h-4 rounded cursor-pointer" onchange="window.updatePjtSelection()"></td>';
+        htmlStr += '<td class="p-3 font-bold text-indigo-700 w-32">' + safeCode + '</td>';
+        htmlStr += '<td class="p-3 font-bold text-slate-700">' + safeName + '</td>';
+        htmlStr += '<td class="p-3 text-slate-500 w-32">' + safeCompany + '</td>';
+        htmlStr += '<td class="p-3 text-center w-20">';
+        htmlStr += '<button onclick="window.deleteProjectCode(\'' + p.id + '\')" class="text-slate-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-trash-can"></i></button>';
+        htmlStr += '</td></tr>';
+    });
+    tbody.innerHTML = htmlStr;
+    
+    const masterCb = document.getElementById('pjt-master-checkbox');
+    if (masterCb) masterCb.checked = false;
+    window.updatePjtSelection();
 };
 
-window.toggleAllPjtCheckboxes = function(checked) { const checkboxes = document.querySelectorAll('.pjt-checkbox'); for (let i = 0; i < checkboxes.length; i++) checkboxes[i].checked = checked; window.updatePjtSelection(); };
+window.toggleAllPjtCheckboxes = function(checked) {
+    const checkboxes = document.querySelectorAll('.pjt-checkbox');
+    for (let i = 0; i < checkboxes.length; i++) {
+        checkboxes[i].checked = checked;
+    }
+    window.updatePjtSelection();
+};
 
 window.updatePjtSelection = function() {
-    const checkboxes = document.querySelectorAll('.pjt-checkbox'); let checkedCount = 0;
-    for (let i = 0; i < checkboxes.length; i++) { if(checkboxes[i].checked) checkedCount++; }
+    const checkboxes = document.querySelectorAll('.pjt-checkbox');
+    let checkedCount = 0;
+    
+    for (let i = 0; i < checkboxes.length; i++) {
+        if(checkboxes[i].checked) {
+            checkedCount++;
+        }
+    }
+    
     const btn = document.getElementById('btn-delete-selected-pjts');
     if (btn) {
-        if (checkedCount > 0) { btn.classList.remove('hidden'); btn.innerText = `선택 삭제 (${checkedCount})`; } 
-        else btn.classList.add('hidden');
+        if (checkedCount > 0) {
+            btn.classList.remove('hidden');
+            btn.innerText = '선택 삭제 (' + checkedCount + ')';
+        } else {
+            btn.classList.add('hidden');
+        }
     }
-    const masterCb = document.getElementById('pjt-master-checkbox'); if (masterCb && checkboxes.length > 0) masterCb.checked = (checkedCount === checkboxes.length);
+    
+    const masterCb = document.getElementById('pjt-master-checkbox');
+    if (masterCb && checkboxes.length > 0) {
+        masterCb.checked = (checkedCount === checkboxes.length);
+    }
 };
 
 window.deleteSelectedProjectCodes = async function() {
-    const checkedBoxes = document.querySelectorAll('.pjt-checkbox:checked'); if (checkedBoxes.length === 0) return;
-    if (!confirm(`선택한 ${checkedBoxes.length}개의 프로젝트 코드를 삭제하시겠습니까?`)) return;
-    try { const batch = writeBatch(db); for (let i = 0; i < checkedBoxes.length; i++) { let docRef = doc(db, "pjt_code_master", checkedBoxes[i].value); batch.delete(docRef); } await batch.commit(); window.showToast("삭제되었습니다."); const masterCb = document.getElementById('pjt-master-checkbox'); if (masterCb) masterCb.checked = false; window.updatePjtSelection(); } catch(e) { window.showToast("오류 발생", "error"); }
+    const checkedBoxes = document.querySelectorAll('.pjt-checkbox:checked');
+    if (checkedBoxes.length === 0) return;
+    
+    if (!confirm('선택한 ' + checkedBoxes.length + '개의 프로젝트 코드를 삭제하시겠습니까? (현황판 데이터는 유지됩니다)')) {
+        return;
+    }
+    
+    try {
+        const batch = writeBatch(db);
+        for (let i = 0; i < checkedBoxes.length; i++) {
+            let docRef = doc(db, "pjt_code_master", checkedBoxes[i].value);
+            batch.delete(docRef);
+        }
+        await batch.commit();
+        window.showToast(checkedBoxes.length + '개의 프로젝트 코드가 삭제되었습니다.');
+        
+        const masterCb = document.getElementById('pjt-master-checkbox');
+        if (masterCb) masterCb.checked = false;
+        window.updatePjtSelection();
+    } catch(e) {
+        window.showToast("삭제 중 오류가 발생했습니다.", "error");
+    }
+};
+
+window.toggleBulkPjtInput = function() {
+    const area = document.getElementById('pjt-bulk-input-area');
+    if (area) {
+        if (area.classList.contains('hidden')) {
+            area.classList.remove('hidden');
+            area.classList.add('flex');
+        } else {
+            area.classList.add('hidden');
+            area.classList.remove('flex');
+        }
+    }
+};
+
+window.processBulkPjtInput = async function() {
+    const textarea = document.getElementById('bulk-pjt-data');
+    if (!textarea) return;
+    
+    const text = textarea.value.trim();
+    if (!text) {
+        return window.showToast("입력된 데이터가 없습니다.", "error");
+    }
+    
+    const lines = text.split('\n');
+    let successCount = 0;
+    let duplicateCount = 0;
+    
+    try {
+        const batch = writeBatch(db);
+        let opCount = 0;
+        
+        let currentCodesAndNames = [];
+        for (let j = 0; j < window.pjtCodeMasterList.length; j++) {
+            let p = window.pjtCodeMasterList[j];
+            currentCodesAndNames.push(p.code + '|' + p.name);
+        }
+        
+        for(let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if(!line) continue;
+            
+            const parts = line.split('\t'); 
+            const code = (parts[0] || '').trim();
+            const name = (parts[1] || '').trim();
+            const company = (parts[2] || '').trim();
+            
+            if(!code || !name) continue; 
+            
+            const uniqueKey = code + '|' + name;
+            
+            if (currentCodesAndNames.indexOf(uniqueKey) !== -1) {
+                duplicateCount++;
+                continue;
+            }
+            
+            const newRef = doc(collection(db, "pjt_code_master"));
+            batch.set(newRef, {
+                code: code,
+                name: name,
+                company: company,
+                authorUid: window.currentUser ? window.currentUser.uid : 'unknown',
+                authorName: window.userProfile ? window.userProfile.name : 'unknown',
+                createdAt: Date.now() + i
+            });
+            
+            currentCodesAndNames.push(uniqueKey);
+            successCount++;
+            opCount++;
+            
+            if(opCount >= 490) { 
+                await batch.commit();
+                opCount = 0;
+            }
+        }
+        
+        if(opCount > 0) {
+            await batch.commit();
+        }
+        
+        let msg = successCount + "건 등록 성공.";
+        if(duplicateCount > 0) {
+            msg += " (중복 제외 " + duplicateCount + "건)";
+        }
+        
+        window.showToast(msg, successCount > 0 ? "success" : "warning");
+        textarea.value = '';
+        window.toggleBulkPjtInput();
+        
+    } catch(e) {
+        console.error(e);
+        window.showToast("일괄 등록 중 오류가 발생했습니다.", "error");
+    }
+};
+
+window.addProjectCode = async function() {
+    const codeEl = document.getElementById('new-pjt-code');
+    const nameEl = document.getElementById('new-pjt-name');
+    const companyEl = document.getElementById('new-pjt-company');
+    
+    if(!codeEl || !nameEl || !companyEl) return;
+    
+    const code = codeEl.value.trim();
+    const name = nameEl.value.trim();
+    const company = companyEl.value.trim();
+
+    if(!code || !name) {
+        return window.showToast("PJT 코드와 프로젝트명을 모두 입력해 주세요.", "error");
+    }
+
+    let isDuplicate = false;
+    for (let i = 0; i < window.pjtCodeMasterList.length; i++) {
+        let p = window.pjtCodeMasterList[i];
+        if (p.code === code || p.name === name) {
+            isDuplicate = true;
+            break;
+        }
+    }
+    
+    if (isDuplicate) {
+        return window.showToast("🚨 이미 동일한 PJT 코드 또는 프로젝트명이 존재합니다!", "error");
+    }
+
+    try {
+        let authorUid = 'unknown';
+        let authorName = 'unknown';
+        
+        if (window.currentUser) authorUid = window.currentUser.uid;
+        if (window.userProfile) authorName = window.userProfile.name;
+        
+        await addDoc(collection(db, "pjt_code_master"), {
+            code: code, 
+            name: name, 
+            company: company,
+            authorUid: authorUid,
+            authorName: authorName,
+            createdAt: Date.now()
+        });
+        
+        window.showToast("프로젝트 코드가 성공적으로 등록되었습니다.");
+        codeEl.value = ''; 
+        nameEl.value = ''; 
+        companyEl.value = '';
+    } catch(e) {
+        window.showToast("등록 실패", "error");
+    }
+};
+
+window.deleteProjectCode = async function(id) {
+    if(!confirm("이 마스터 코드를 삭제하시겠습니까? (기존에 등록된 현황 데이터는 삭제되지 않습니다)")) return;
+    try {
+        await deleteDoc(doc(db, "pjt_code_master", id));
+        window.showToast("삭제되었습니다.");
+    } catch(e) {
+        window.showToast("삭제 실패", "error");
+    }
 };
 
 window.showAutocomplete = function(inputEl, targetId1, targetId2, isNameSearch) {
-    const val = inputEl.value.trim().toLowerCase(); let dropdown = document.getElementById('pjt-autocomplete-dropdown');
-    if(!dropdown) { dropdown = document.createElement('ul'); dropdown.id = 'pjt-autocomplete-dropdown'; dropdown.className = 'absolute z-[9999] bg-white border border-indigo-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-full custom-scrollbar py-1'; document.body.appendChild(dropdown); }
-    if(val.length < 1) { dropdown.classList.add('hidden'); return; }
+    const val = inputEl.value.trim().toLowerCase();
+    let dropdown = document.getElementById('pjt-autocomplete-dropdown');
+    
+    if(!dropdown) {
+        dropdown = document.createElement('ul');
+        dropdown.id = 'pjt-autocomplete-dropdown';
+        dropdown.className = 'absolute z-[9999] bg-white border border-indigo-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-full custom-scrollbar py-1';
+        document.body.appendChild(dropdown);
+    }
 
-    const matches = window.pjtCodeMasterList.filter(p => isNameSearch ? (p.name.toLowerCase().includes(val) || window.matchString(val, p.name)) : p.code.toLowerCase().includes(val));
+    if(val.length < 1) { 
+        dropdown.classList.add('hidden'); 
+        return; 
+    }
+
+    let matches = [];
+    for (let i = 0; i < window.pjtCodeMasterList.length; i++) {
+        let p = window.pjtCodeMasterList[i];
+        if (isNameSearch) {
+            if (p.name.toLowerCase().includes(val) || window.matchString(val, p.name)) {
+                matches.push(p);
+            }
+        } else {
+            if (p.code.toLowerCase().includes(val)) {
+                matches.push(p);
+            }
+        }
+    }
+
     if(matches.length > 0) {
-        const rect = inputEl.getBoundingClientRect(); dropdown.style.left = `${rect.left + window.scrollX}px`; dropdown.style.top = `${rect.bottom + window.scrollY + 5}px`; dropdown.style.width = `${rect.width}px`; dropdown.classList.remove('hidden');
-        dropdown.innerHTML = matches.map(m => `
-            <li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-slate-700 font-bold text-xs border-b border-slate-50 last:border-0 truncate transition-colors" 
-                onmousedown="window.selectAutocomplete('${m.code}', '${m.name.replace(/'/g, "\\'")}', '${m.company}', '${inputEl.id}', '${targetId1}', '${targetId2}')">
-                <span class="text-indigo-600">[${m.code}]</span> ${m.name} <span class="text-[10px] text-slate-400">(${m.company || '업체미상'})</span>
-            </li>
-        `).join('');
-    } else dropdown.classList.add('hidden');
+        const rect = inputEl.getBoundingClientRect();
+        dropdown.style.left = (rect.left + window.scrollX) + 'px';
+        dropdown.style.top = (rect.bottom + window.scrollY + 5) + 'px';
+        dropdown.style.width = rect.width + 'px';
+        dropdown.classList.remove('hidden');
+
+        let dropHtml = '';
+        matches.forEach(function(m) {
+            let safeCompany = m.company || '업체미상';
+            let safeName = m.name.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+            
+            dropHtml += '<li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-slate-700 font-bold text-xs border-b border-slate-50 last:border-0 truncate transition-colors" ';
+            dropHtml += 'onmousedown="window.selectAutocomplete(\'' + m.code + '\', \'' + safeName + '\', \'' + m.company + '\', \'' + inputEl.id + '\', \'' + targetId1 + '\', \'' + targetId2 + '\')">';
+            dropHtml += '<span class="text-indigo-600">[' + m.code + ']</span> ' + m.name + ' <span class="text-[10px] text-slate-400">(' + safeCompany + ')</span>';
+            dropHtml += '</li>';
+        });
+        dropdown.innerHTML = dropHtml;
+    } else {
+        dropdown.classList.add('hidden');
+    }
 };
 
 window.selectAutocomplete = function(code, name, company, sourceId, targetId1, targetId2) {
-    const sourceEl = document.getElementById(sourceId); const t1 = document.getElementById(targetId1); const t2 = document.getElementById(targetId2);
-    if (sourceId === 'ps-code') { if (sourceEl) sourceEl.value = code; if (t1) t1.value = name; if (t2) t2.value = company; } 
-    else { if (sourceEl) sourceEl.value = name; if (t1) t1.value = code; if (t2) t2.value = company; }
-    const drop = document.getElementById('pjt-autocomplete-dropdown'); if (drop) drop.classList.add('hidden');
+    const sourceEl = document.getElementById(sourceId);
+    const t1 = document.getElementById(targetId1);
+    const t2 = document.getElementById(targetId2);
+
+    if (sourceId === 'ps-code') {
+        if (sourceEl) sourceEl.value = code;
+        if (t1) t1.value = name;
+        if (t2) t2.value = company;
+    } else {
+        if (sourceEl) sourceEl.value = name;
+        if (t1) t1.value = code;
+        if (t2) t2.value = company;
+    }
+
+    const drop = document.getElementById('pjt-autocomplete-dropdown');
+    if (drop) {
+        drop.classList.add('hidden');
+    }
 };
 
 document.addEventListener('click', function(e) {
-    const n = document.getElementById('notification-dropdown'); if (n && !n.classList.contains('hidden') && !e.target.closest('.relative.cursor-pointer')) n.classList.add('hidden');
-    const m = document.getElementById('mention-dropdown'); if (m && !m.classList.contains('hidden') && !e.target.closest('#mention-dropdown')) m.classList.add('hidden');
-    const d = document.getElementById('pjt-autocomplete-dropdown'); if (d && !d.classList.contains('hidden') && !e.target.closest('#pjt-autocomplete-dropdown') && !e.target.closest('input[oninput*="showAutocomplete"]')) d.classList.add('hidden');
+    const n = document.getElementById('notification-dropdown');
+    if (n && !n.classList.contains('hidden') && !e.target.closest('.relative.cursor-pointer')) {
+        n.classList.add('hidden');
+    }
+
+    const m = document.getElementById('mention-dropdown');
+    if (m && !m.classList.contains('hidden') && !e.target.closest('#mention-dropdown')) {
+        m.classList.add('hidden');
+    }
+
+    const d = document.getElementById('pjt-autocomplete-dropdown');
+    if (d && !d.classList.contains('hidden') && !e.target.closest('#pjt-autocomplete-dropdown') && !e.target.closest('input[oninput*="showAutocomplete"]')) {
+        d.classList.add('hidden');
+    }
 });
