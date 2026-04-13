@@ -366,44 +366,10 @@ window.renderProjectStatusList = function() {
 
         const safeItemCode = String(item.code || '').replace(/\s/g, '').toUpperCase();
         const pjtNcrData = (window.ncrData || []).filter(n => String(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeItemCode);
-        
-        const totalNcrCnt = pjtNcrData.length;
         const unresolvedNcrCnt = pjtNcrData.filter(n => {
             let s = String(n.status || '');
             return !(s.includes('완료') || s.includes('종결') || s.includes('완료됨'));
         }).length;
-
-        // 💡 부적합 데이터 상태에 따라 아이콘 색상과 모양을 다르게 렌더링!
-        let ncrIconHtml = '';
-        if (totalNcrCnt === 0) {
-            // 1. 부적합 내역이 아예 없는 경우 (회색)
-            ncrIconHtml = `<button onclick="window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-slate-300 hover:text-indigo-400 transition-colors p-1" title="부적합 내역 없음"><i class="fa-solid fa-file-circle-check text-lg"></i></button>`;
-        } else if (unresolvedNcrCnt === 0) {
-            // 2. 부적합이 있었으나 모두 조치 완료된 경우 (녹색)
-            ncrIconHtml = `<button onclick="window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-emerald-500 hover:text-emerald-600 transition-colors p-1" title="모두 조치 완료"><i class="fa-solid fa-file-circle-check text-lg"></i></button>`;
-        } else {
-            // 3. 조치 중인 미결 부적합이 있는 경우 (빨간색 + 숫자 뱃지)
-            ncrIconHtml = `<button onclick="window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-rose-500 relative transition-transform hover:scale-110 p-1" title="미결 부적합 ${unresolvedNcrCnt}건">
-                <i class="fa-solid fa-file-circle-exclamation text-lg"></i>
-                <span class="absolute -top-1 -right-2 bg-rose-100 text-rose-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-rose-200">${unresolvedNcrCnt}</span>
-            </button>`;
-        }
-
-        let trHtml = `<tr class="group hover:bg-indigo-50/50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.editProjStatus('${item.id}')">`;
-        
-        trHtml += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 0px; min-width: 40px; max-width: 40px;" onclick="event.stopPropagation()"><button onclick="window.deleteProjStatus('${item.id}')" class="text-slate-300 hover:text-rose-500 p-1.5 rounded"><i class="fa-solid fa-trash-can"></i></button></td>`;
-        
-        // ... (중간 생략)
-
-        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openDailyLogModal('${item.id}', '${safeNameJs}', ${parseFloat(item.progress)||0})" class="text-sky-400 relative"><i class="fa-solid fa-book text-lg"></i>${lCnt ? `<span class="absolute -top-1 -right-2 bg-sky-100 text-sky-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-sky-200">${lCnt}</span>` : ''}</button></td>`;
-        
-        // 💡 기존의 무조건 빨간 아이콘이 나오던 부분을, 위에서 만든 똑똑한 ncrIconHtml로 대체합니다.
-        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()">
-            ${ncrIconHtml}
-        </td>`;
-
-        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center text-sky-600">${item.estMd||0}</td>`;
-        // 💡 [수정할 부분 끝]
 
         let trHtml = `<tr class="group hover:bg-indigo-50/50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.editProjStatus('${item.id}')">`;
         
@@ -2287,15 +2253,20 @@ window.loadNcrData = async function() {
     try {
         if(window.showToast) window.showToast("부적합(RAWDATA) 데이터를 가져오는 중입니다...", "success");
         
-        const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSYwsWjs8ox503LLsRIeVRbbZ4R7eLgoq0C-ZdYIBIUACCwWyt5oYkAAtIpX9j1taqt1MQaEg1Jjom0/pub?gid=0&single=true&output=csv';
-        const separator = csvUrl.includes('?') ? '&' : '?';
-        const res = await fetch(csvUrl + separator + 't=' + Date.now());
+        // 💡 주의: 아래 작은따옴표('') 사이에 방금 구글 시트에서 복사한 .csv 링크를 그대로 붙여넣으세요!
+        const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSYwsWjs8ox503LLsRIeVRbbZ4R7eLgoq0C-ZdYIBIUACCwWyt5oYkAAtIpX9j1taqt1MQaEg1Jjom0/pubhtml';
         
-        if (!res.ok) throw new Error("시트 데이터를 가져오지 못했습니다.");
+        // 캐시 방지를 위해 타임스탬프 추가
+        const res = await fetch(csvUrl + '&t=' + Date.now());
+        
+        if (!res.ok) {
+            throw new Error("시트 데이터를 가져오지 못했습니다.");
+        }
 
         const csvText = await res.text();
+        
         if (csvText.includes('<html') || csvText.includes('<body')) {
-            throw new Error("링크 형식이 잘못되었습니다.");
+            throw new Error("링크 형식이 잘못되었습니다. (웹에 게시에서 .csv 링크인지 확인해주세요)");
         }
 
         const rows = [];
@@ -2307,7 +2278,9 @@ window.loadNcrData = async function() {
             if (cc === '"') { quote = !quote; continue; }
             if (cc === ',' && !quote) { row.push(col); col = ""; continue; }
             if ((cc === '\r' || cc === '\n') && !quote) {
-                if (row.length > 0 || col !== "") { row.push(col); rows.push(row); row = []; col = ""; }
+                if (row.length > 0 || col !== "") {
+                    row.push(col); rows.push(row); row = []; col = "";
+                }
                 if (cc === '\r' && nc === '\n') i++;
                 continue;
             }
@@ -2315,35 +2288,39 @@ window.loadNcrData = async function() {
         }
         if (col !== "" || row.length > 0) { row.push(col); rows.push(row); }
 
-        // 헤더 건너뛰기 (NCR No 문구가 있는 행 찾기)
-        let dataStartIndex = 1;
-        for (let i = 0; i < Math.min(5, rows.length); i++) {
-            if (rows[i][0] && rows[i][0].includes('NCR No')) {
-                dataStartIndex = i + 1;
-                break;
-            }
+        if (rows.length < 2) {
+            if(window.showToast) window.showToast("동기화 완료: 시트에 데이터가 없거나 비어있습니다.", "warning");
+            return;
         }
 
-        // 💡 수정됨: CSV 열 순서에 맞게 배열 인덱스를 정확히 매핑합니다!
-        window.ncrData = rows.slice(dataStartIndex).map(r => {
+        window.ncrData = rows.slice(1).map(r => {
             return {
-                ncrNo: r[0] ? String(r[0]).trim() : '',
+                pjtCode: r[0] ? String(r[0]).trim() : '',
+                ncrNo: r[2] ? String(r[2]).trim() : '',
                 date: r[1] ? String(r[1]).trim() : '',
-                pjtCode: r[2] ? String(r[2]).trim() : '',
-                partName: r[3] ? String(r[3]).trim() : '',
                 drawingNo: r[4] ? String(r[4]).trim() : '',
-                type: r[12] ? String(r[12]).trim() : '',
-                content: r[13] ? String(r[13]).trim() : '',
-                status: r[15] ? String(r[15]).trim() : ''
+                partName: r[3] ? String(r[3]).trim() : '',
+                type: r[8] ? String(r[8]).trim() : '',
+                content: r[11] ? String(r[11]).trim() : '',
+                status: r[13] ? String(r[13]).trim() : ''
             };
-        }).filter(n => n.pjtCode !== '');
+        }).filter(n => n.pjtCode);
 
         if (window.ncrData.length === 0) {
-            if(window.showToast) window.showToast("데이터를 찾을 수 없습니다.", "warning");
+            if(window.showToast) window.showToast("RAWDATA 시트 형식이 맞지 않아 데이터를 불러올 수 없습니다. A열(PJT코드)이 비어있는지 확인하세요.", "warning");
+        } else {
+            if(window.showToast) window.showToast(`부적합(NCR) 데이터 ${window.ncrData.length}건 동기화 완료!`, "success");
         }
 
-        // 현황판 리스트 다시 그리기
         window.renderProjectStatusList();
+
+        const modal = document.getElementById('ncr-modal');
+        if (modal && !modal.classList.contains('hidden')) {
+            const titleEl = document.getElementById('ncr-project-title');
+            if (titleEl && titleEl.dataset.code) {
+                window.renderNcrList(titleEl.dataset.code);
+            }
+        }
 
     } catch(e) {
         console.error("NCR 로드 에러:", e);
@@ -2351,93 +2328,63 @@ window.loadNcrData = async function() {
     }
 };
 
-// 💡 2. 모달창 열기 및 닫기 기능 추가
 window.openNcrModal = function(pjtCode, pjtName) {
     const titleEl = document.getElementById('ncr-project-title');
     if (titleEl) {
         titleEl.innerText = `[${pjtCode}] ${pjtName}`;
+        titleEl.dataset.code = pjtCode;
     }
-    
+    document.getElementById('ncr-modal').classList.remove('hidden');
+    document.getElementById('ncr-modal').classList.add('flex');
     window.renderNcrList(pjtCode);
-    
-    const modal = document.getElementById('ncr-modal');
-    if (modal) {
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-    }
 };
 
 window.closeNcrModal = function() {
-    const modal = document.getElementById('ncr-modal');
-    if (modal) {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-    }
+    document.getElementById('ncr-modal').classList.add('hidden');
+    document.getElementById('ncr-modal').classList.remove('flex');
 };
 
-// 💡 3. 모달창 내부에 PJT 기반으로 데이터 렌더링 (취소선 기능 포함)
 window.renderNcrList = function(pjtCode) {
     const tbody = document.getElementById('ncr-list-tbody');
     if (!tbody) return;
-
-    // 선택한 프로젝트 코드로 데이터 필터링
-    const safeCode = String(pjtCode || '').replace(/\s/g, '').toUpperCase();
-    const filteredNcr = (window.ncrData || []).filter(n => String(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeCode);
-
-    // 상단 3개 요약 뱃지(총 발생, 진행중, 완료) 집계
-    const totalCnt = filteredNcr.length;
-    let compCnt = 0;
-    let pendingCnt = 0;
-
-    filteredNcr.forEach(n => {
+    
+    const safeTargetCode = String(pjtCode).replace(/\s/g, '').toUpperCase();
+    const list = (window.ncrData || []).filter(n => String(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeTargetCode);
+    
+    let total = list.length;
+    let completed = list.filter(n => {
         let s = String(n.status || '');
-        if (s.includes('완료') || s.includes('종결') || s.includes('완료됨')) {
-            compCnt++;
-        } else {
-            pendingCnt++;
-        }
-    });
-
+        return s.includes('완료') || s.includes('종결');
+    }).length;
+    
     const elTotal = document.getElementById('ncr-total-cnt');
+    if(elTotal) elTotal.innerText = total;
+    
     const elPending = document.getElementById('ncr-pending-cnt');
+    if(elPending) elPending.innerText = total - completed;
+    
     const elComp = document.getElementById('ncr-comp-cnt');
-    if (elTotal) elTotal.innerText = totalCnt;
-    if (elPending) elPending.innerText = pendingCnt;
-    if (elComp) elComp.innerText = compCnt;
-
-    if (filteredNcr.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-10 text-slate-400 font-bold bg-white">등록된 부적합 내역이 없습니다.</td></tr>';
+    if(elComp) elComp.innerText = completed;
+    
+    if (total === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-8 text-slate-400 font-bold bg-white">등록된 부적합 내역이 없습니다.</td></tr>';
         return;
     }
-
-    // 💡 목록 렌더링 (요청하신 완료 건 취소선 스타일 완벽 적용)
-    tbody.innerHTML = filteredNcr.map(row => {
-        const isCompleted = String(row.status || '').includes('완료') || String(row.status || '').includes('종결');
-
-        const badge = isCompleted 
-            ? `<span class="bg-emerald-50 text-emerald-600 px-2.5 py-1 rounded-md font-bold shadow-sm text-[11px] border border-emerald-100">완료</span>`
-            : `<span class="bg-rose-100 text-rose-700 px-2.5 py-1 rounded-md font-bold shadow-sm text-[11px] border border-rose-200">진행중</span>`;
-
-        const rowClass = isCompleted ? 'bg-slate-50/70' : 'hover:bg-indigo-50/40 transition-colors bg-white';
-        const ncrNoClass = isCompleted ? 'text-slate-400 line-through font-medium' : 'text-indigo-600 font-black';
-        const dateClass = isCompleted ? 'text-slate-400 line-through font-medium' : 'text-rose-500 font-bold';
-        const drawClass = isCompleted ? 'text-slate-400 line-through' : 'text-slate-600 font-medium';
-        const partClass = isCompleted ? 'text-slate-400 line-through font-medium' : 'text-slate-800 font-bold';
-        const typeClass = isCompleted ? 'bg-slate-50 text-slate-400 border-slate-100 line-through opacity-70' : 'bg-slate-100 text-slate-600 border-slate-200';
-        const contentClass = isCompleted ? 'text-slate-400 line-through' : 'text-slate-700 font-medium';
-
-        return `
-            <tr class="${rowClass}">
-                <td class="p-3.5 text-center ${ncrNoClass}">${row.ncrNo || '-'}</td>
-                <td class="p-3.5 text-center ${dateClass}">${row.date || '-'}</td>
-                <td class="p-3.5 text-center ${drawClass}">${row.drawingNo || '-'}</td>
-                <td class="p-3.5 text-center ${partClass}">${row.partName || '-'}</td>
-                <td class="p-3.5 text-center">
-                    <span class="px-2.5 py-1 rounded-md text-[11px] font-bold border ${typeClass}">${row.type || '-'}</span>
-                </td>
-                <td class="p-3.5 leading-relaxed ${contentClass}">${row.content || '-'}</td>
-                <td class="p-3.5 text-center">${badge}</td>
-            </tr>
-        `;
+    
+    tbody.innerHTML = list.map(n => {
+        let s = String(n.status || '');
+        const isComp = s.includes('완료') || s.includes('종결');
+        const textClass = isComp ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-700';
+        const badge = isComp ? `<span class="bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">완료</span>` : `<span class="bg-rose-50 text-rose-600 border border-rose-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">진행중</span>`;
+        
+        return `<tr class="hover:bg-slate-50 transition-colors bg-white border-b border-slate-100">
+                    <td class="p-3 text-center font-bold text-slate-500 whitespace-nowrap">${n.ncrNo || '-'}</td>
+                    <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.date || '-'}</td>
+                    <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.drawingNo || '-'}</td>
+                    <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.partName || '-'}</td>
+                    <td class="p-3 text-center whitespace-nowrap"><span class="bg-slate-100 px-2 py-1 border border-slate-200 rounded font-bold">${n.type || '-'}</span></td>
+                    <td class="p-3 font-medium ${textClass} break-all">${n.content || '-'}</td>
+                    <td class="p-3 text-center whitespace-nowrap">${badge}</td>
+                </tr>`;
     }).join('');
 };
