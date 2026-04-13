@@ -9,7 +9,8 @@ import {
 // 1. 전역 변수 및 설정
 // ==========================================
 const SIMULATION_DRIVE_FOLDER_ID = "1qyW-Ym_16tpRUUE0NQuFmwxg3IadF70e";
-const simulationWorker = new Worker('./js/simulationWorker.js'); // 경로 수정
+// 💡 경로 수정 완료: 대문자 W가 포함된 폴더명 적용
+const simulationWorker = new Worker('./js/Worker/simulationWorker.js'); 
 
 window.currentProcessData = window.currentProcessData || [];
 window.latestP50Md = 0;
@@ -218,7 +219,6 @@ window.handleMethodChange = () => {
     window.debouncedRunSimulation();
 };
 
-// 💡 누락되었던 자동 저장 트리거 설정 함수 복구 (router.js 호환)
 window.setupAutoSaveTriggers = () => {
     const triggers = document.querySelectorAll('.calc-trigger');
     triggers.forEach(el => {
