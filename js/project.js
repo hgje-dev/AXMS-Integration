@@ -2253,10 +2253,11 @@ window.loadNcrData = async function() {
     try {
         if(window.showToast) window.showToast("부적합(RAWDATA) 데이터를 가져오는 중입니다...", "success");
         
-        const originalUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSYwsWjs8ox503LLsRIeVRbbZ4R7eLgoq0C-ZdYIBIUACCwWyt5oYkAAtIpX9j1taqt1MQaEg1Jjom0/pubhtml';
-        const dataUrl = originalUrl.replace('/pubhtml', '/pub?output=csv');
+        // 💡 주의: 아래 작은따옴표('') 사이에 방금 구글 시트에서 복사한 .csv 링크를 그대로 붙여넣으세요!
+        const csvUrl = '여기에_복사한_CSV_링크를_붙여넣으세요';
         
-        const res = await fetch(dataUrl + '&t=' + Date.now());
+        // 캐시 방지를 위해 타임스탬프 추가
+        const res = await fetch(csvUrl + '&t=' + Date.now());
         
         if (!res.ok) {
             throw new Error("시트 데이터를 가져오지 못했습니다.");
@@ -2306,7 +2307,7 @@ window.loadNcrData = async function() {
         }).filter(n => n.pjtCode);
 
         if (window.ncrData.length === 0) {
-            if(window.showToast) window.showToast("RAWDATA 시트 형식이 맞지 않아 데이터를 불러올 수 없습니다.", "warning");
+            if(window.showToast) window.showToast("RAWDATA 시트 형식이 맞지 않아 데이터를 불러올 수 없습니다. A열(PJT코드)이 비어있는지 확인하세요.", "warning");
         } else {
             if(window.showToast) window.showToast(`부적합(NCR) 데이터 ${window.ncrData.length}건 동기화 완료!`, "success");
         }
