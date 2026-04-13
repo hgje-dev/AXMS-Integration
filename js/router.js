@@ -14,6 +14,7 @@ const routes = {
                 btnOpt.className = window.currentProjPartTab === '광학' ? "px-3 py-1 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
             }
             if(window.loadProjectStatusData) window.loadProjectStatusData(); 
+            if(window.initGoogleAPI) window.initGoogleAPI(); // 💡 현황판 로드 시 구글 API 연동 체크 추가!
         } 
     },
     
@@ -22,7 +23,6 @@ const routes = {
     'simulation': { url: './views/simulation.html', init: () => { if(window.handleTypeChange) window.handleTypeChange(); if(window.setupAutoSaveTriggers) window.setupAutoSaveTriggers(); } },
     'collab': { url: './views/request.html', init: () => { window.currentAppId = 'collab'; if(window.loadRequestsData) window.loadRequestsData('collab'); } },
     'purchase': { url: './views/request.html', init: () => { window.currentAppId = 'purchase'; if(window.loadRequestsData) window.loadRequestsData('purchase'); } },
-    // 💡 assembly 삭제
     'repair': { url: './views/request.html', init: () => { window.currentAppId = 'repair'; if(window.loadRequestsData) window.loadRequestsData('repair'); } }
 };
 
