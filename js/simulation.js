@@ -5,9 +5,6 @@ import {
     addDoc, deleteDoc, query, where, serverTimestamp 
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-// ==========================================
-// 1. 전역 변수 및 설정
-// ==========================================
 const SIMULATION_DRIVE_FOLDER_ID = "1qyW-Ym_16tpRUUE0NQuFmwxg3IadF70e";
 const simulationWorker = new Worker('./js/Worker/simulationWorker.js'); 
 
@@ -15,7 +12,7 @@ window.currentProcessData = window.currentProcessData || [];
 window.latestP50Md = 0;
 window.masterPresets = {};
 
-// 💡 날아갔던 기본 프리셋 데이터 복구! (DB가 비어있을 때 사용)
+// 💡 1. 화면 처음 그릴 때 쓸 기본 프리셋 강제 주입
 const defaultPresets = {
     dev: { 
         label: "🔬 기본 신규 개발 모델", 
@@ -31,7 +28,7 @@ const defaultPresets = {
 };
 
 // ==========================================
-// 2. Web Worker 이벤트 리스너 (계산 결과 수신)
+// 2. Web Worker 리스너
 // ==========================================
 simulationWorker.onmessage = function(e) {
     const { p10, p50, p90, d10, d50, d90, rArr } = e.data;
@@ -39,18 +36,32 @@ simulationWorker.onmessage = function(e) {
     window.latestP50Md = parseFloat(p50.toFixed(1));
     const lCost = parseFloat(document.getElementById('labor-cost')?.value) || 300000; 
     const pExp = parseFloat(document.getElementById('planned-expense')?.value) || 0; 
-    const stD = document.getElementById('start-date')?.value || window.getLocalDateStr(new Date());
+    
+    // 날짜가 비어있으면 오늘 날짜 삽입
+    let stD = document.getElementById('start-date')?.value;
+    if(!stD) {
+        stD = window.getLocalDateStr(new Date());
+        const sdEl = document.getElementById('start-date');
+        if(sdEl) sdEl.value = stD;
+    }
 
     const results = { p10, p50, p90 };
     const durations = { p10: d10, p50: d50, p90: d90 };
 
+    // 안전하게 UI 업데이트 (옵셔널 체이닝 적용)
     ['p50', 'p10', 'p90'].forEach((k) => { 
         const val = results[k];
         const dur = durations[k];
         const dt = window.calculateWorkDate(stD, dur);
         
-        if(document.getElementById(`out-${k}-md`)) document.getElementById(`out-${k}-md`).innerText = val.toFixed(1); 
-        if(document.getElementById(`out-${k}-date`)) document.getElementById(`out-${k}-date`).innerText = window.getLocalDateStr(dt); 
+        const mdEl = document.getElementById(`out-${k}-md`);
+        if(mdEl) mdEl.innerText = val.toFixed(1); 
+        
+        const dateEl = document.getElementById(`out-${k}-date`);
+        if(dateEl) dateEl.innerText = window.getLocalDateStr(dt); 
+        
+        const durEl = document.getElementById(`out-${k}-dur`);
+        if(durEl) durEl.innerText = dur; 
     });
 
     window.latestHistData = { 
@@ -63,7 +74,7 @@ simulationWorker.onmessage = function(e) {
 };
 
 // ==========================================
-// 3. 시뮬레이션 실행 (Worker 호출)
+// 3. 시뮬레이션 실행
 // ==========================================
 window.runSimulation = () => {
     const method = document.getElementById('sim-method')?.value || 'mc';
@@ -72,17 +83,24 @@ window.runSimulation = () => {
     const iters = 5000;
     const uncert = 0.05;
     const diff = parseFloat(document.getElementById('diff-multiplier')?.value) || 1.0;
-    const rBase = 0.05; // 재작업률 5%
-    const bBase = 0.05; // 버퍼 5%
+    const rBase = (parseFloat(document.getElementById('rework-rate')?.value) || 2) / 100;
+    const bBase = (parseFloat(document.getElementById('buffer-rate')?.value) || 3) / 100;
     
     const sen = parseInt(document.getElementById('p-senior')?.value) || 0;
-    const mid = parseInt(document.getElementById('p-mid')?.value) || 4; // 기본 중급 4명
+    const mid = parseInt(document.getElementById('p-mid')?.value) || 4; 
     const jun = parseInt(document.getElementById('p-junior')?.value) || 0;
     const rP = sen + mid + jun; 
     const pers = rP < 1 ? 1 : rP; 
     const sMult = rP < 1 ? 1.0 : (sen * 0.8 + mid * 1.0 + jun * 1.2) / rP;
 
-    if(document.getElementById('out-iters')) document.getElementById('out-iters').innerText = iters.toLocaleString();
+    const itersEl = document.getElementById('out-iters');
+    if(itersEl) itersEl.innerText = iters.toLocaleString();
+
+    const tPersEl = document.getElementById('out-total-personnel');
+    if(tPersEl) tPersEl.innerText = rP;
+
+    const avgEl = document.getElementById('out-avg-skill');
+    if(avgEl) avgEl.innerText = sMult.toFixed(2);
 
     simulationWorker.postMessage({
         method, qty, curve, iters, uncert, diff, rBase, bBase, pers, sMult,
@@ -96,133 +114,57 @@ window.debouncedRunSimulation = () => {
 };
 
 // ==========================================
-// 4. AI 연동 (백엔드 API 서버 호출)
-// ==========================================
-window.generateGroqInsight = async () => {
-    if (!window.latestP50Md) return window.showToast("먼저 시뮬레이션을 실행해주세요.", "error");
-
-    window.showToast("AI 심층 분석을 요청 중입니다...", "success");
-    const briefingBox = document.getElementById('ai-briefing-text');
-    if(briefingBox) briefingBox.innerHTML = '<div class="text-center p-4"><i class="fa-solid fa-spinner fa-spin mr-2"></i>AI가 데이터를 분석하고 있습니다...</div>';
-
-    try {
-        const response = await fetch('/api/simulation/analyze', { 
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                projectInfo: {
-                    code: document.getElementById('project-code')?.value,
-                    name: document.getElementById('project-name')?.value,
-                    p50Md: window.latestP50Md,
-                    processData: window.currentProcessData
-                }
-            })
-        });
-
-        if (!response.ok) throw new Error("AI 서버 응답 실패");
-        const data = await response.json();
-        
-        if(briefingBox) {
-            briefingBox.innerHTML = `
-                <div class="space-y-3 animate-fade-in">
-                    <div class="flex items-center gap-2 text-indigo-300 font-bold">
-                        <i class="fa-solid fa-wand-magic-sparkles"></i> AI 분석 요약
-                    </div>
-                    <p class="text-sm leading-relaxed">${data.summary || "분석 결과를 불러올 수 없습니다."}</p>
-                    <div class="grid grid-cols-2 gap-2 mt-2">
-                        <div class="bg-white/5 p-2 rounded">
-                            <span class="text-[10px] text-slate-400 block">예상 리스크</span>
-                            <span class="text-xs font-bold text-rose-400">${data.mainRisk || "없음"}</span>
-                        </div>
-                        <div class="bg-white/5 p-2 rounded">
-                            <span class="text-[10px] text-slate-400 block">권장 조치</span>
-                            <span class="text-xs font-bold text-emerald-400">${data.action || "정상 진행"}</span>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-    } catch (e) {
-        window.showToast("AI 분석 모듈이 준비되지 않았습니다.", "error");
-        if(briefingBox) briefingBox.innerText = "AI 서버와 연결할 수 없습니다.";
-    }
-};
-
-// ==========================================
-// 5. 프로젝트 저장 (Firestore)
-// ==========================================
-window.saveToFirestore = async function(isSilent = false) {
-    const pCode = document.getElementById('project-code')?.value;
-    const pName = document.getElementById('project-name')?.value;
-    if (!pName) return window.showToast("프로젝트 이름을 입력하세요.", "error");
-
-    const payload = {
-        projectCode: pCode,
-        projectName: pName,
-        managerName: document.getElementById('manager-name')?.value,
-        qty: parseInt(document.getElementById('equip-qty')?.value) || 1,
-        curve: parseInt(document.getElementById('learning-curve')?.value) || 95,
-        processData: window.currentProcessData,
-        p50Md: window.latestP50Md,
-        authorUid: window.currentUser?.uid || 'guest',
-        updatedAt: serverTimestamp()
-    };
-
-    try {
-        if (window.currentProjectId) {
-            await setDoc(doc(db, "sim_projects", window.currentProjectId), payload, { merge: true });
-        } else {
-            const docRef = await addDoc(collection(db, "sim_projects"), { ...payload, createdAt: serverTimestamp() });
-            window.currentProjectId = docRef.id;
-        }
-        if (!isSilent) window.showToast("클라우드에 저장되었습니다.");
-    } catch (e) {
-        window.showToast("저장 실패", "error");
-    }
-};
-
-// ==========================================
-// 6. 프리셋 및 테이블 동적 렌더링 복구 💡
+// 4. 프리셋 데이터 연동 및 렌더링
 // ==========================================
 window.loadMasterPresets = async () => {
     try {
         const snap = await getDocs(collection(db, "sim_master_presets"));
-        const sel = document.getElementById('eq-type');
-        if (!sel) return;
-        
-        sel.innerHTML = '<option value="">프리셋 선택</option>';
         window.masterPresets = {};
         
         if (!snap.empty) {
-            snap.forEach(d => {
-                window.masterPresets[d.id] = d.data();
-                sel.innerHTML += `<option value="${d.id}">${d.data().label}</option>`;
-            });
+            snap.forEach(d => { window.masterPresets[d.id] = d.data(); });
         } else {
-            // DB에 없으면 기본값(defaultPresets) 강제 로드!
             window.masterPresets = JSON.parse(JSON.stringify(defaultPresets));
+        }
+        
+        // 💡 화면 이동 시 드롭다운 껍데기가 비워지므로 다시 채움
+        const sel = document.getElementById('eq-type');
+        if (sel) {
+            sel.innerHTML = '<option value="">프리셋 선택</option>';
             for (let key in window.masterPresets) {
                 sel.innerHTML += `<option value="${key}">${window.masterPresets[key].label}</option>`;
             }
+            if(sel.options.length > 1) sel.selectedIndex = 1;
         }
         
-        // 첫 번째 프리셋 자동 선택
-        if(sel.options.length > 1) {
-            sel.selectedIndex = 1;
-            window.handleTypeChange();
-        }
+        window.handleTypeChange();
     } catch (e) { console.error("Presets Load Error", e); }
 };
 
 window.handleTypeChange = () => {
-    const id = document.getElementById('eq-type')?.value;
+    const sel = document.getElementById('eq-type');
+    if (!sel) return;
+
+    // 💡 라우터 이동으로 인해 드롭다운이 비워져 있다면 다시 채움
+    if (sel.options.length <= 1 && Object.keys(window.masterPresets).length > 0) {
+        sel.innerHTML = '<option value="">프리셋 선택</option>';
+        for (let key in window.masterPresets) {
+            sel.innerHTML += `<option value="${key}">${window.masterPresets[key].label}</option>`;
+        }
+        if(sel.options.length > 1) sel.selectedIndex = 1;
+    }
+
+    const id = sel.value;
     if (!id || !window.masterPresets[id]) return;
     
     const preset = window.masterPresets[id];
     window.currentProcessData = JSON.parse(JSON.stringify(preset.processData));
     
-    if (preset.curve) document.getElementById('learning-curve').value = preset.curve;
-    if (preset.labor) document.getElementById('labor-cost').value = preset.labor;
+    const cEl = document.getElementById('learning-curve');
+    if (cEl && preset.curve) cEl.value = preset.curve;
+    
+    const lEl = document.getElementById('labor-cost');
+    if (lEl && preset.labor) lEl.value = preset.labor;
     
     window.handleMethodChange();
 };
@@ -231,15 +173,14 @@ window.handleMethodChange = () => {
     const method = document.getElementById('sim-method')?.value || 'mc';
     const pHead = document.getElementById('process-thead');
     
-    // 테이블 헤더 (thead) 동적 생성 복구
     if(pHead) {
         let h = `<tr>
-            <th class="px-4 py-3 text-left w-1/3">공정명</th>
-            <th class="px-2 text-center w-24">유형</th>
-            <th class="px-2 text-center w-16">수량</th>`;
-        if(method === 'mc') h += `<th class="px-2 text-center w-24">기준MD</th>`;
-        else h += `<th class="px-2 text-center w-16">최빈</th><th class="px-2 text-center text-emerald-600 w-16">낙관</th><th class="px-2 text-center text-rose-600 w-16">비관</th>`;
-        h += `<th class="px-2 text-center w-16"><i class="fa-solid fa-gear"></i></th></tr>`;
+            <th class="px-4 py-3 text-left w-1/3 text-[11px] font-bold text-slate-500">공정명</th>
+            <th class="px-2 text-center w-24 text-[11px] font-bold text-slate-500">유형</th>
+            <th class="px-2 text-center w-16 text-[11px] font-bold text-slate-500">수량</th>`;
+        if(method === 'mc') h += `<th class="px-2 text-center w-24 text-[11px] font-bold text-indigo-600">기준MD</th>`;
+        else h += `<th class="px-2 text-center w-16 text-[11px] font-bold text-slate-500">최빈</th><th class="px-2 text-center text-emerald-600 w-16 text-[11px] font-bold">낙관</th><th class="px-2 text-center text-rose-600 w-16 text-[11px] font-bold">비관</th>`;
+        h += `<th class="px-2 text-center w-16 text-slate-400"><i class="fa-solid fa-gear"></i></th></tr>`;
         pHead.innerHTML = h;
     }
 
@@ -267,7 +208,7 @@ window.renderProcessTable = () => {
         
         let mdInputs = "";
         if (m === 'mc') {
-            mdInputs = `<td class="p-2"><input type="number" value="${p.m}" step="0.1" oninput="window.updateProcessData(${i}, 'm', this.value)" class="w-full text-right bg-slate-50 border border-slate-200 focus:bg-white text-sm font-bold text-indigo-600 calc-trigger rounded px-2 py-1.5 outline-indigo-500"></td>`;
+            mdInputs = `<td class="p-1.5"><input type="number" value="${p.m}" step="0.1" oninput="window.updateProcessData(${i}, 'm', this.value)" class="w-full text-right bg-slate-50 border border-slate-200 focus:bg-white text-sm font-bold text-indigo-600 calc-trigger rounded px-2 py-1.5 outline-indigo-500"></td>`;
         } else {
             mdInputs = `<td class="p-1"><input type="number" value="${p.m}" step="0.1" oninput="window.updateProcessData(${i}, 'm', this.value)" class="w-full text-right bg-slate-50 border border-slate-200 focus:bg-white text-sm calc-trigger rounded px-1 py-1.5 outline-indigo-500"></td>
                         <td class="p-1"><input type="number" value="${p.o || (p.m*0.8).toFixed(1)}" step="0.1" oninput="window.updateProcessData(${i}, 'o', this.value)" class="w-full text-right bg-emerald-50 border border-emerald-200 focus:bg-white text-sm font-bold text-emerald-600 calc-trigger rounded px-1 py-1.5 outline-emerald-500"></td>
@@ -275,16 +216,16 @@ window.renderProcessTable = () => {
         }
 
         tr.innerHTML = `
-            <td class="p-2"><input type="text" value="${p.name}" oninput="window.updateProcessData(${i}, 'name', this.value)" class="w-full bg-slate-50 border border-slate-200 focus:bg-white text-sm font-bold rounded px-3 py-1.5 outline-indigo-500"></td>
-            <td class="p-2 text-center">
-                <select onchange="window.updateProcessData(${i}, 'pType', this.value)" class="text-xs border border-slate-200 rounded bg-slate-50 p-1.5 cursor-pointer outline-indigo-500 font-bold text-slate-600">
+            <td class="p-1.5"><input type="text" value="${p.name}" oninput="window.updateProcessData(${i}, 'name', this.value)" class="w-full bg-slate-50 border border-slate-200 focus:bg-white text-xs font-bold rounded px-3 py-2 outline-indigo-500 text-slate-700"></td>
+            <td class="p-1.5 text-center">
+                <select onchange="window.updateProcessData(${i}, 'pType', this.value)" class="text-xs border border-slate-200 rounded bg-slate-50 p-2 cursor-pointer outline-indigo-500 font-bold text-slate-600 w-full">
                     <option value="md" ${p.pType === 'md' ? 'selected' : ''}>🛠 수동</option>
                     <option value="auto" ${p.pType === 'auto' ? 'selected' : ''}>⚙ 유닛</option>
                 </select>
             </td>
-            <td class="p-2"><input type="number" value="${p.q}" min="1" oninput="window.updateProcessData(${i}, 'q', this.value)" class="w-full text-right bg-slate-50 border border-slate-200 focus:bg-white text-sm calc-trigger rounded px-2 py-1.5 outline-indigo-500"></td>
+            <td class="p-1.5"><input type="number" value="${p.q}" min="1" oninput="window.updateProcessData(${i}, 'q', this.value)" class="w-full text-right bg-slate-50 border border-slate-200 focus:bg-white text-sm font-black text-slate-700 calc-trigger rounded px-2 py-1.5 outline-indigo-500"></td>
             ${mdInputs}
-            <td class="p-2 text-center"><button onclick="window.deleteProcessRow(${i})" class="text-slate-300 hover:bg-rose-50 hover:text-rose-500 w-8 h-8 rounded-lg transition-colors"><i class="fa-solid fa-trash-can"></i></button></td>
+            <td class="p-1.5 text-center"><button onclick="window.deleteProcessRow(${i})" class="text-slate-300 hover:text-rose-500 w-8 h-8 rounded-lg transition-colors"><i class="fa-solid fa-trash-can"></i></button></td>
         `;
         tb.appendChild(tr);
     });
@@ -309,7 +250,7 @@ window.deleteProcessRow = (i) => {
 };
 
 // ==========================================
-// 8. 시각화 (ChartJS & Gantt)
+// 7. 시각화 (ChartJS & Gantt)
 // ==========================================
 window.renderChartJS = () => {
     const canvas = document.getElementById('chart-canvas');
@@ -344,7 +285,7 @@ window.renderChartJS = () => {
             responsive: true,
             maintainAspectRatio: false,
             plugins: { legend: { display: false } },
-            scales: { y: { display: false }, x: { grid: { display: false } } }
+            scales: { y: { display: false }, x: { grid: { display: false }, ticks: { color: '#94a3b8', font: {size: 9} } } }
         }
     });
 };
@@ -358,7 +299,7 @@ window.renderGanttChart = () => {
     window.currentProcessData.forEach(p => { totalDays += parseFloat(p.m) || 0; });
     if (totalDays <= 0) totalDays = 1;
 
-    let html = '<div class="flex flex-col gap-3 py-4">';
+    let html = '<div class="flex flex-col gap-3 py-2">';
     let offset = 0;
     window.currentProcessData.forEach(p => {
         const days = parseFloat(p.m) || 0;
@@ -369,8 +310,8 @@ window.renderGanttChart = () => {
         html += `
             <div class="flex items-center text-[11px] group">
                 <div class="w-40 truncate pr-4 text-right font-bold text-slate-600 group-hover:text-indigo-600 transition-colors">${p.name}</div>
-                <div class="flex-1 bg-slate-100 rounded-full h-7 relative overflow-hidden border border-slate-200">
-                    <div class="absolute h-full bg-indigo-500 shadow-md flex items-center justify-center text-white font-bold" 
+                <div class="flex-1 bg-slate-100 rounded-full h-6 relative overflow-hidden border border-slate-200">
+                    <div class="absolute h-full bg-indigo-500 shadow-md flex items-center justify-center text-white font-bold text-[9px]" 
                          style="left: ${left}%; width: ${width}%;">
                         ${days.toFixed(1)}d
                     </div>
@@ -384,36 +325,51 @@ window.renderGanttChart = () => {
 };
 
 // ==========================================
-// 9. 엑셀 다운로드 (ExcelJS)
+// 8. AI 연동
 // ==========================================
-window.exportToExcel = async () => {
-    if (typeof ExcelJS === 'undefined') return window.showToast("라이브러리 로딩 중입니다.", "warning");
-    
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet('공수시뮬레이션_결과');
-    
-    ws.columns = [
-        { header: '공정명', key: 'name', width: 25 },
-        { header: '유형', key: 'type', width: 10 },
-        { header: '수량', key: 'q', width: 10 },
-        { header: '기준MD', key: 'm', width: 10 }
-    ];
-    
-    // 스타일 지정
-    ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } };
-    ws.getRow(1).alignment = { horizontal: 'center' };
+window.generateGroqInsight = async () => {
+    if (!window.latestP50Md) return window.showToast("먼저 시뮬레이션을 실행해주세요.", "error");
+    window.showToast("AI 심층 분석을 요청 중입니다...", "success");
+    const bBox = document.getElementById('ai-briefing-text');
+    if(bBox) bBox.innerHTML = '<div class="text-center p-4"><i class="fa-solid fa-spinner fa-spin mr-2"></i>AI가 분석 중입니다...</div>';
 
-    window.currentProcessData.forEach(p => {
-        const row = ws.addRow({ name: p.name, type: p.pType === 'md' ? '수동' : '유닛', q: p.q, m: p.m });
-        row.eachCell(cell => { cell.alignment = { horizontal: 'center' }; });
-        row.getCell(1).alignment = { horizontal: 'left' };
-    });
-    
-    const buffer = await wb.xlsx.writeBuffer();
-    saveAs(new Blob([buffer]), `AXMS_Simulation_${new Date().toISOString().split('T')[0]}.xlsx`);
-    window.showToast("엑셀 파일이 다운로드되었습니다.");
+    try {
+        const response = await fetch('/api/simulation/analyze', { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ projectInfo: { p50Md: window.latestP50Md, processData: window.currentProcessData } })
+        });
+        if (!response.ok) throw new Error("AI 서버 에러");
+        const data = await response.json();
+        
+        if(bBox) {
+            bBox.innerHTML = `
+                <div class="space-y-3 animate-fade-in">
+                    <p class="text-sm leading-relaxed">${data.summary || "분석 완료"}</p>
+                    <div class="grid grid-cols-2 gap-2 mt-2">
+                        <div class="bg-slate-800 p-2 rounded"><span class="text-[10px] text-slate-400 block">리스크</span><span class="text-xs font-bold text-rose-400">${data.mainRisk||"없음"}</span></div>
+                        <div class="bg-slate-800 p-2 rounded"><span class="text-[10px] text-slate-400 block">조치</span><span class="text-xs font-bold text-emerald-400">${data.action||"정상"}</span></div>
+                    </div>
+                </div>`;
+        }
+    } catch (e) {
+        window.showToast("AI 분석 모듈을 사용할 수 없습니다.", "error");
+        if(bBox) bBox.innerText = "서버 연결 안됨";
+    }
 };
 
-// 초기화 실행
-window.loadMasterPresets();
+// ==========================================
+// 9. 다운로드
+// ==========================================
+window.exportToExcel = async () => {
+    if (typeof ExcelJS === 'undefined') return window.showToast("엑셀 라이브러리 로딩 중", "warning");
+    const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('시뮬레이션');
+    ws.columns = [ { header: '공정명', key: 'name', width: 25 }, { header: '수량', key: 'q', width: 10 }, { header: 'MD', key: 'm', width: 10 } ];
+    ws.getRow(1).font = { bold: true };
+    window.currentProcessData.forEach(p => ws.addRow({ name: p.name, q: p.q, m: p.m }));
+    const buffer = await wb.xlsx.writeBuffer();
+    saveAs(new Blob([buffer]), `Simulation.xlsx`);
+};
+
+// 초기화 강제 실행 (타임아웃으로 DOM 준비 대기)
+setTimeout(window.loadMasterPresets, 300);
