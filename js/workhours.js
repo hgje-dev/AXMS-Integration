@@ -2,61 +2,66 @@ import { db } from './firebase.js';
 import { collection, doc, setDoc, addDoc, deleteDoc, query, onSnapshot, where, getDocs, writeBatch } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 let worklogsUnsubscribe = null;
-window.currentWorkLogs = [];
-window.currentWhDate = new Date();
-window.whPeriodMode = 'month'; // 'month' or 'year'
+window.currentWorkLogs = []; // 안전하게 앞뒤 1달치 데이터를 모두 들고 있음
+window.whStatMode = 'week'; // 'week' or 'month'
 window.whViewMode = 'grid'; // 'grid' or 'calendar'
 window.whPjtSearch = '';
 window.whFilters = { text: '', loc: '', type: '', status: '' };
 window.whSelectedCells = new Set();
 window.isWhDragging = false;
-window.whCharts = {}; // Chart.js instances
+window.whCharts = {};
 
 const WH_TYPES = ['조립', '검수', '설치', 'Setup', '협업', '공통', '기타'];
 const WH_LOCS = ['사내', '국내', '해외'];
 
-// 초기 로드
+// 지정된 구글 드라이브 폴더 ID
+const DRIVE_EXPORT_FOLDER = '1x8atDi95ybFH-YOYkfiaISw7BHdckQX4';
+
+// 1. 초기 로드
 window.loadWorkhoursData = function() {
-    const picker = document.getElementById('wh-month-picker');
+    const picker = document.getElementById('wh-week-picker');
     if (!picker) return;
     
     if (!picker.value) {
-        let y = window.currentWhDate.getFullYear();
-        let m = String(window.currentWhDate.getMonth() + 1).padStart(2, '0');
-        picker.value = `${y}-${m}`;
-    } else {
-        const [y, m] = picker.value.split('-');
-        window.currentWhDate = new Date(y, parseInt(m) - 1, 1);
+        if(window.getWeekString) picker.value = window.getWeekString(new Date());
+        else picker.value = "2026-W15"; // fallback
     }
 
-    fetchWorkLogs();
+    fetchWorkLogsForContext();
 };
 
-window.changeWhMonth = function(offset) {
-    window.currentWhDate.setMonth(window.currentWhDate.getMonth() + offset);
-    let y = window.currentWhDate.getFullYear();
-    let m = String(window.currentWhDate.getMonth() + 1).padStart(2, '0');
-    const picker = document.getElementById('wh-month-picker');
-    if (picker) picker.value = `${y}-${m}`;
-    fetchWorkLogs();
+window.changeWhWeek = function(offset) {
+    const picker = document.getElementById('wh-week-picker');
+    if (!picker) return;
+    
+    const parts = picker.value.split('-W');
+    if (parts.length === 2) {
+        const year = parseInt(parts[0]);
+        const week = parseInt(parts[1]);
+        const d = new Date(year, 0, (week + offset - 1) * 7 + 1);
+        if (window.getWeekString) {
+            picker.value = window.getWeekString(d);
+            window.loadWorkhoursData();
+        }
+    }
 };
 
-function fetchWorkLogs() {
+// 💡 넉넉하게 해당 주차가 포함된 전/후 한달씩 (총 3개월) 데이터를 패치하여 달력/그리드 자유롭게 커버
+function fetchWorkLogsForContext() {
     if (worklogsUnsubscribe) worklogsUnsubscribe();
 
-    let startStr, endStr;
-    const y = window.currentWhDate.getFullYear();
-    const m = window.currentWhDate.getMonth();
+    const picker = document.getElementById('wh-week-picker');
+    const { start } = window.getDatesFromWeek(picker.value);
+    
+    // 타겟 주차의 달을 기준으로 -1달 ~ +1달 범위 조회
+    const y = start.getFullYear();
+    const m = start.getMonth();
+    
+    const fetchStart = new Date(y, m - 1, 1);
+    const fetchEnd = new Date(y, m + 2, 0);
 
-    if (window.whPeriodMode === 'year') {
-        startStr = `${y}-01-01`;
-        endStr = `${y}-12-31`;
-    } else {
-        const start = new Date(y, m, 1);
-        const end = new Date(y, m + 1, 0);
-        startStr = window.getLocalDateStr(start);
-        endStr = window.getLocalDateStr(end);
-    }
+    const startStr = window.getLocalDateStr(fetchStart);
+    const endStr = window.getLocalDateStr(fetchEnd);
 
     const q = query(collection(db, "work_logs"), where("date", ">=", startStr), where("date", "<=", endStr));
     
@@ -68,20 +73,41 @@ function fetchWorkLogs() {
     });
 }
 
-window.setWhPeriodMode = function(mode) {
-    window.whPeriodMode = mode;
-    document.getElementById('wh-btn-period-month').className = mode === 'month' ? 'px-4 py-1.5 text-xs font-bold bg-indigo-600 text-white shadow-sm rounded-full transition-all' : 'px-4 py-1.5 text-xs font-bold bg-white text-slate-600 border border-slate-200 shadow-sm rounded-full transition-all hover:bg-slate-100';
-    document.getElementById('wh-btn-period-year').className = mode === 'year' ? 'px-4 py-1.5 text-xs font-bold bg-indigo-600 text-white shadow-sm rounded-full transition-all' : 'px-4 py-1.5 text-xs font-bold bg-white text-slate-600 border border-slate-200 shadow-sm rounded-full transition-all hover:bg-slate-100';
-    fetchWorkLogs();
+window.setWhStatMode = function(mode) {
+    window.whStatMode = mode;
+    const btnW = document.getElementById('wh-btn-period-week');
+    const btnM = document.getElementById('wh-btn-period-month');
+    
+    if(mode === 'week') {
+        if(btnW) btnW.className = 'px-4 py-1.5 text-xs font-bold bg-indigo-600 text-white shadow-sm rounded-full transition-all';
+        if(btnM) btnM.className = 'px-4 py-1.5 text-xs font-bold text-slate-600 bg-transparent transition-all hover:bg-slate-100 rounded-full';
+        document.getElementById('wh-dash-period-label').innerHTML = '주간 총 투입 <span class="text-[9px] font-normal">(승인완료)</span>';
+        document.getElementById('wh-chart-trend-title').innerText = '일자별 투입 추이 (MD)';
+    } else {
+        if(btnM) btnM.className = 'px-4 py-1.5 text-xs font-bold bg-indigo-600 text-white shadow-sm rounded-full transition-all';
+        if(btnW) btnW.className = 'px-4 py-1.5 text-xs font-bold text-slate-600 bg-transparent transition-all hover:bg-slate-100 rounded-full';
+        document.getElementById('wh-dash-period-label').innerHTML = '월간 총 투입 <span class="text-[9px] font-normal">(승인완료)</span>';
+        document.getElementById('wh-chart-trend-title').innerText = '주차별 투입 추이 (MD)';
+    }
+    window.updateWhDashboard();
 };
 
 window.setWhViewMode = function(mode) {
     window.whViewMode = mode;
-    document.getElementById('wh-btn-grid').className = mode === 'grid' ? 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-1.5' : 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-1.5';
-    document.getElementById('wh-btn-calendar').className = mode === 'calendar' ? 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-1.5' : 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-1.5';
+    const btnG = document.getElementById('wh-btn-grid');
+    const btnC = document.getElementById('wh-btn-calendar');
     
-    document.getElementById('wh-view-grid').classList.toggle('hidden', mode !== 'grid');
-    document.getElementById('wh-view-calendar').classList.toggle('hidden', mode !== 'calendar');
+    if(mode === 'grid') {
+        if(btnG) btnG.className = 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-1.5';
+        if(btnC) btnC.className = 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-1.5 bg-transparent';
+        document.getElementById('wh-view-grid').classList.remove('hidden');
+        document.getElementById('wh-view-calendar').classList.add('hidden');
+    } else {
+        if(btnC) btnC.className = 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-1.5';
+        if(btnG) btnG.className = 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-1.5 bg-transparent';
+        document.getElementById('wh-view-grid').classList.add('hidden');
+        document.getElementById('wh-view-calendar').classList.remove('hidden');
+    }
     window.renderWhView();
 };
 
@@ -104,15 +130,32 @@ window.resetWhFilters = function() {
     window.applyWhFilters();
 };
 
-// 대시보드 업데이트
+// 💡 대시보드 업데이트 (선택된 기간에 맞게 필터링)
 window.updateWhDashboard = function() {
     window.whPjtSearch = document.getElementById('wh-search-pjt')?.value.toLowerCase() || '';
     
-    // 💡 관리자 승인이 완료된(isConfirmed: true) 데이터만 통계에 반영
-    let baseData = window.currentWorkLogs.filter(l => l.isConfirmed);
+    const picker = document.getElementById('wh-week-picker');
+    const { start, end } = window.getDatesFromWeek(picker.value);
+    
+    let targetStart = start;
+    let targetEnd = end;
+
+    // 월간 통계일 경우, start가 포함된 월의 1일~말일로 셋팅
+    if(window.whStatMode === 'month') {
+        const y = start.getFullYear();
+        const m = start.getMonth();
+        targetStart = new Date(y, m, 1);
+        targetEnd = new Date(y, m + 1, 0);
+    }
+
+    const tStartStr = window.getLocalDateStr(targetStart);
+    const tEndStr = window.getLocalDateStr(targetEnd);
+
+    // 💡 관리자 승인이 완료된 데이터만 && 선택된 기간 내의 데이터만 통계에 반영
+    let baseData = window.currentWorkLogs.filter(l => l.isConfirmed && l.date >= tStartStr && l.date <= tEndStr);
     
     if (window.whPjtSearch) {
-        baseData = baseData.filter(l => (l.projectName || '').toLowerCase().includes(window.whPjtSearch) || (l.projectCode || '').toLowerCase().includes(window.whPjtSearch));
+        baseData = baseData.filter(l => (l.projectName || '').toLowerCase().includes(window.whPjtSearch) || (l.projectCode || '').toLowerCase().includes(window.whPjtSearch) || window.matchString(window.whPjtSearch, l.projectName || ''));
     }
 
     let totalHours = 0;
@@ -127,12 +170,15 @@ window.updateWhDashboard = function() {
         typeMap[log.workType] = (typeMap[log.workType] || 0) + h;
         
         let trendKey = '';
-        if (window.whPeriodMode === 'month') {
+        if (window.whStatMode === 'week') {
+            // 주간 모드: 일자별 (예: 11일(월))
             const d = new Date(log.date);
-            const weekNo = Math.ceil(d.getDate() / 7);
-            trendKey = `${weekNo}주차`;
+            const days = ['일','월','화','수','목','금','토'];
+            trendKey = `${d.getDate()}일(${days[d.getDay()]})`;
         } else {
-            trendKey = `${log.date.substring(5,7)}월`;
+            // 월간 모드: 주차별 (예: W15 주차)
+            const d = new Date(log.date);
+            trendKey = window.getWeekString ? window.getWeekString(d).split('-')[1] + '주차' : log.date;
         }
         trendMap[trendKey] = (trendMap[trendKey] || 0) + h;
 
@@ -159,7 +205,7 @@ window.updateWhDashboard = function() {
         let diffDays = Math.ceil((new Date(eD) - new Date(sD)) / (1000 * 60 * 60 * 24)) + 1;
         
         pjtDateEl.innerText = `${sD} ~ ${eD}`;
-        pjtDaysEl.innerText = `총 소요일: ${diffDays}일`;
+        pjtDaysEl.innerText = `총 작업일수: ${datesSet.size}일 (기간: ${diffDays}일)`;
         pjtInfoContainer.classList.remove('hidden');
     } else {
         pjtInfoContainer.classList.add('hidden');
@@ -167,9 +213,7 @@ window.updateWhDashboard = function() {
 
     renderWhChart('wh-chart-person', 'bar', personMap, 'MD', true);
     renderWhChart('wh-chart-type', 'bar', typeMap, 'MD', true);
-    
-    document.getElementById('wh-chart-trend-title').innerText = window.whPeriodMode === 'month' ? '주차별 투입 추이 (MD)' : '월별 투입 추이 (MD)';
-    renderWhChart('wh-chart-trend', window.whPeriodMode === 'month' ? 'bar' : 'line', trendMap, 'MD', false);
+    renderWhChart('wh-chart-trend', window.whStatMode === 'week' ? 'bar' : 'line', trendMap, 'MD', false);
 
     let extraHtml = '';
     for(let l in locMap) {
@@ -183,9 +227,11 @@ window.updateWhDashboard = function() {
     document.getElementById('wh-dash-extra').innerHTML = extraHtml || '<div class="text-center text-slate-400 py-4 font-bold">데이터 없음</div>';
 };
 
+// 💡 차트 렌더링 고급화 (그라데이션 및 부드러운 곡선)
 function renderWhChart(canvasId, type, dataMap, unit, isHorizontal) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     
     if (window.whCharts[canvasId]) {
         window.whCharts[canvasId].destroy();
@@ -193,26 +239,39 @@ function renderWhChart(canvasId, type, dataMap, unit, isHorizontal) {
 
     let sortedData = Object.entries(dataMap);
     if (isHorizontal) sortedData.sort((a,b)=>b[1]-a[1]);
-    else sortedData.sort((a,b)=>a[0].localeCompare(b[0])); // 날짜순 정렬
+    else sortedData.sort((a,b)=>a[0].localeCompare(b[0]));
 
     if (sortedData.length > 5 && isHorizontal) sortedData = sortedData.slice(0, 5);
 
     const labels = sortedData.map(d => d[0]);
-    const data = sortedData.map(d => (d[1]/8).toFixed(1)); // MD 변환
+    const data = sortedData.map(d => (d[1]/8).toFixed(1)); 
 
-    window.whCharts[canvasId] = new window.Chart(canvas.getContext('2d'), {
+    let bgGradient = ctx.createLinearGradient(0, 0, isHorizontal ? 300 : 0, isHorizontal ? 0 : 300);
+    bgGradient.addColorStop(0, 'rgba(99, 102, 241, 0.85)'); // Indigo 500
+    bgGradient.addColorStop(1, 'rgba(168, 85, 247, 0.5)');  // Purple 500
+    
+    let datasetConfig = {
+        data: data,
+        backgroundColor: type === 'line' ? 'rgba(99, 102, 241, 0.1)' : bgGradient,
+        borderColor: 'rgba(99, 102, 241, 1)',
+        borderWidth: type === 'line' ? 3 : 0,
+        borderRadius: isHorizontal ? 6 : 4,
+        barThickness: isHorizontal ? 12 : 'flex',
+    };
+
+    if(type === 'line') {
+        datasetConfig.fill = true;
+        datasetConfig.tension = 0.4; // 부드러운 곡선
+        datasetConfig.pointBackgroundColor = '#ffffff';
+        datasetConfig.pointBorderColor = '#4f46e5';
+        datasetConfig.pointBorderWidth = 2;
+        datasetConfig.pointRadius = 4;
+        datasetConfig.pointHoverRadius = 6;
+    }
+
+    window.whCharts[canvasId] = new window.Chart(ctx, {
         type: type,
-        data: {
-            labels: labels,
-            datasets: [{
-                data: data,
-                backgroundColor: 'rgba(99, 102, 241, 0.8)',
-                borderColor: 'rgba(99, 102, 241, 1)',
-                borderWidth: 1,
-                borderRadius: 6,
-                barThickness: isHorizontal ? 12 : 'flex'
-            }]
-        },
+        data: { labels: labels, datasets: [datasetConfig] },
         options: {
             indexAxis: isHorizontal ? 'y' : 'x',
             responsive: true,
@@ -222,7 +281,7 @@ function renderWhChart(canvasId, type, dataMap, unit, isHorizontal) {
                 tooltip: { callbacks: { label: (ctx) => `${ctx.raw} ${unit}` } }
             },
             scales: {
-                x: { display: !isHorizontal, beginAtZero: true, grid: { display: false } },
+                x: { display: !isHorizontal, beginAtZero: true, grid: { display: false }, border: { dash: [4,4] } },
                 y: { display: isHorizontal, beginAtZero: true, grid: { display: false }, ticks: { font: {size: 10, weight: 'bold'}, color: '#475569' } }
             }
         }
@@ -245,31 +304,42 @@ function getFilteredLogs() {
         if (window.whFilters.type && log.workType !== window.whFilters.type) return false;
         if (window.whFilters.text) {
             const s = window.whFilters.text;
-            const fullStr = `${log.authorName} ${log.projectName} ${log.content}`.toLowerCase();
+            const fullStr = `${log.authorName} ${log.projectName} ${log.projectCode} ${log.content}`.toLowerCase();
             if (!fullStr.includes(s) && !window.matchString(s, fullStr)) return false;
         }
         return true;
     });
 }
 
+// 💡 2. 주간 뷰(Grid) 구현: 선택된 주의 월~일 (7일)만 노출
 function renderWhGrid() {
     const thead = document.getElementById('wh-grid-thead');
     const tbody = document.getElementById('wh-grid-tbody');
     if (!thead || !tbody) return;
 
-    const y = window.currentWhDate.getFullYear();
-    const m = window.currentWhDate.getMonth();
-    const lastDate = new Date(y, m + 1, 0).getDate();
+    const picker = document.getElementById('wh-week-picker');
+    const { start } = window.getDatesFromWeek(picker.value);
+    
     const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
 
     let headerHtml = `<tr><th class="p-3 w-24 text-center border-r border-slate-200 sticky left-0 bg-slate-100 z-30 shadow-[2px_0_4px_rgba(0,0,0,0.05)]">작업자</th>`;
     
-    for (let i = 1; i <= lastDate; i++) {
-        let d = new Date(y, m, i);
-        let isWeekend = d.getDay() === 0 || d.getDay() === 6; // TODO: 공휴일 연동 필요 시 추가
-        let colorClass = isWeekend ? 'text-rose-500' : 'text-slate-700';
-        let bgClass = isWeekend ? 'bg-rose-50' : '';
-        headerHtml += `<th class="p-2 min-w-[140px] text-center border-r border-slate-200 ${bgClass}"><div class="text-sm font-black ${colorClass}">${i}</div><div class="text-[10px] font-bold text-slate-400">${dayNames[d.getDay()]}</div></th>`;
+    // 7일간 루프
+    let weekDates = [];
+    for (let i = 0; i < 7; i++) {
+        let d = new Date(start);
+        d.setDate(d.getDate() + i);
+        let dStr = window.getLocalDateStr(d);
+        weekDates.push(dStr);
+        
+        let isHoliday = !window.isWorkDay(d); // 💡 5. 공휴일/주말 반영
+        let colorClass = isHoliday ? 'text-rose-500' : 'text-slate-700';
+        let bgClass = isHoliday ? 'bg-rose-50' : '';
+        
+        let isToday = dStr === window.getLocalDateStr(new Date());
+        let todayMark = isToday ? '<div class="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full shadow-sm"></div>' : '';
+
+        headerHtml += `<th class="p-2 min-w-[140px] text-center border-r border-slate-200 relative ${bgClass}"><div class="text-sm font-black ${colorClass}">${d.getDate()}</div><div class="text-[10px] font-bold text-slate-400">${dayNames[d.getDay()]}</div>${todayMark}</th>`;
     }
     headerHtml += `</tr>`;
     thead.innerHTML = headerHtml;
@@ -278,14 +348,14 @@ function renderWhGrid() {
     
     let bodyHtml = '';
     (window.teamMembers || []).forEach(member => {
-        bodyHtml += `<tr class="hover:bg-slate-50/50 transition-colors">`;
-        bodyHtml += `<td class="p-3 text-center font-bold text-slate-700 border-r border-slate-200 sticky left-0 bg-white z-10 shadow-[2px_0_4px_rgba(0,0,0,0.05)]">${member.name}</td>`;
+        bodyHtml += `<tr class="hover:bg-slate-50/50 transition-colors group">`;
+        bodyHtml += `<td class="p-3 text-center font-bold text-slate-700 border-r border-slate-200 sticky left-0 bg-white group-hover:bg-slate-50 z-10 shadow-[2px_0_4px_rgba(0,0,0,0.05)]">${member.name}</td>`;
         
-        for (let i = 1; i <= lastDate; i++) {
-            let dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
-            let d = new Date(y, m, i);
-            let isWeekend = d.getDay() === 0 || d.getDay() === 6;
-            let bgClass = isWeekend ? 'bg-rose-50/30' : '';
+        for (let i = 0; i < 7; i++) {
+            let dateStr = weekDates[i];
+            let d = new Date(dateStr);
+            let isHoliday = !window.isWorkDay(d);
+            let bgClass = isHoliday ? 'bg-rose-50/30' : '';
             
             let rawLogs = window.currentWorkLogs.filter(l => l.date === dateStr && l.authorName === member.name); 
             
@@ -308,17 +378,25 @@ function renderWhGrid() {
     });
     
     if(!window.teamMembers || window.teamMembers.length === 0) {
-        bodyHtml = `<tr><td colspan="32" class="p-10 text-center text-slate-400 font-bold">등록된 팀원이 없습니다. 팀원 관리에서 추가해주세요.</td></tr>`;
+        bodyHtml = `<tr><td colspan="8" class="p-10 text-center text-slate-400 font-bold">등록된 팀원이 없습니다. 팀원 관리에서 추가해주세요.</td></tr>`;
     }
     tbody.innerHTML = bodyHtml;
 }
 
+// 💡 달력(월간 뷰)
 function renderWhCalendar() {
     const grid = document.getElementById('wh-calendar-grid');
+    const titleEl = document.getElementById('wh-calendar-title');
     if (!grid) return;
 
-    const y = window.currentWhDate.getFullYear();
-    const m = window.currentWhDate.getMonth();
+    const picker = document.getElementById('wh-week-picker');
+    const { start } = window.getDatesFromWeek(picker.value);
+    
+    const y = start.getFullYear();
+    const m = start.getMonth();
+    
+    if(titleEl) titleEl.innerText = `${y}년 ${m + 1}월`;
+
     const firstDay = new Date(y, m, 1).getDay();
     const lastDate = new Date(y, m + 1, 0).getDate();
 
@@ -329,9 +407,13 @@ function renderWhCalendar() {
 
     for(let i=1; i<=lastDate; i++) {
         let dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+        let d = new Date(y, m, i);
         let logs = filteredLogs.filter(l => l.date === dateStr);
         let isToday = dateStr === window.getLocalDateStr(new Date());
-        let dateClass = isToday ? 'bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center mx-auto shadow-md' : 'text-slate-700';
+        
+        let isHoliday = !window.isWorkDay(d);
+        let txtClass = isHoliday ? 'text-rose-500' : 'text-slate-700';
+        let dateClass = isToday ? 'bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center mx-auto shadow-md' : txtClass;
 
         let logsHtml = '';
         logs.forEach(log => {
@@ -355,7 +437,7 @@ function renderWhCalendar() {
 // ==========================================
 window.whCellMouseDown = function(e, cell) {
     if(e.button !== 0) return; // 좌클릭만 허용
-    if(e.target.tagName === 'I' || e.target.tagName === 'BUTTON') return; // 아이콘/버튼 클릭 무시
+    if(e.target.tagName === 'I' || e.target.tagName === 'BUTTON' || e.target.closest('div[data-logid]')) return; // 내부 요소 클릭 방해 금지
 
     window.isWhDragging = true;
     window.whClearSelection();
@@ -427,10 +509,9 @@ window.whBulkConfirm = async function(isConfirm) {
 };
 
 // ==========================================
-// 입력 모달 로직 (다중 Row)
+// 💡 3, 8. 입력 모달 로직 및 자동완성(초성) 로직
 // ==========================================
 window.openWhInputModal = function(dateStr, authorName) {
-    // 빈 셀 클릭 시 파라미터가 비어있을 수 있으므로 기본값 세팅
     if(!authorName && window.teamMembers && window.teamMembers.length > 0) {
         authorName = window.userProfile?.name || window.teamMembers[0].name;
     }
@@ -442,19 +523,16 @@ window.openWhInputModal = function(dateStr, authorName) {
     const tbody = document.getElementById('wh-input-tbody');
     tbody.innerHTML = '';
 
-    // 해당 날짜/작업자의 기존 데이터 로드
     const logs = window.currentWorkLogs.filter(l => l.date === dateStr && l.authorName === authorName);
     
     if (logs.length > 0) {
         logs.forEach((log, index) => appendWhInputRow(log, index + 1));
     } else {
-        appendWhInputRow(null, 1); // 기본 빈 행 1개
+        appendWhInputRow(null, 1);
     }
 
     document.getElementById('wh-input-modal').classList.remove('hidden');
     document.getElementById('wh-input-modal').classList.add('flex');
-    
-    // 단축키 이벤트 리스너 추가
     document.addEventListener('keydown', handleWhModalKeydown);
 };
 
@@ -462,6 +540,8 @@ window.closeWhInputModal = function() {
     document.getElementById('wh-input-modal').classList.add('hidden');
     document.getElementById('wh-input-modal').classList.remove('flex');
     document.removeEventListener('keydown', handleWhModalKeydown);
+    const drop = document.getElementById('wh-pjt-autocomplete');
+    if(drop) drop.classList.add('hidden');
 };
 
 function handleWhModalKeydown(e) {
@@ -480,15 +560,13 @@ window.whAddInputRow = function() {
 function appendWhInputRow(logData = null, index = 1) {
     const tbody = document.getElementById('wh-input-tbody');
     const tr = document.createElement('tr');
-    tr.className = 'wh-input-row hover:bg-indigo-50/30 transition-colors border-b border-slate-100';
+    tr.className = 'wh-input-row hover:bg-indigo-50/30 transition-colors border-b border-slate-100 relative';
     
-    let pjtOptions = '<option value="">선택 안함</option>';
-    // 현재 진행중인(완료되지 않은) 프로젝트 목록
-    const activeProjects = (window.currentProjectStatusList || []).filter(p => p.status !== 'completed' && p.status !== 'rejected');
-    activeProjects.forEach(p => {
-        let isSel = logData && logData.projectId === p.id ? 'selected' : '';
-        pjtOptions += `<option value="${p.id}" data-code="${p.code||''}" data-name="${p.name||''}" ${isSel}>[${p.code||'-'}] ${p.name||''}</option>`;
-    });
+    // 💡 3. 프로젝트 선택 드롭다운 -> 자동완성 Input으로 대체
+    const uniqueId = 'wh-pjt-input-' + Date.now() + '-' + index;
+    const pName = logData ? (logData.projectName || '') : '';
+    const pCode = logData ? (logData.projectCode || '') : '';
+    const pId = logData ? (logData.projectId || '') : '';
 
     let typeOptions = WH_TYPES.map(t => `<option value="${t}" ${logData && logData.workType === t ? 'selected' : ''}>${t}</option>`).join('');
     let locOptions = WH_LOCS.map(l => `<option value="${l}" ${logData && logData.location === l ? 'selected' : ''}>${l}</option>`).join('');
@@ -501,7 +579,11 @@ function appendWhInputRow(logData = null, index = 1) {
 
     tr.innerHTML = `
         <td class="p-3 text-center text-slate-400 font-bold text-xs bg-slate-50">${index}${idInput}</td>
-        <td class="p-2"><select class="row-pjt w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-slate-700 cursor-pointer">${pjtOptions}</select></td>
+        <td class="p-2 relative">
+            <input type="text" id="${uniqueId}" class="row-pjt-name w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-indigo-700 placeholder-slate-400" value="${pName}" placeholder="프로젝트 초성 검색 또는 직접 입력" oninput="window.whShowPjtAuto(this)">
+            <input type="hidden" class="row-pjt-id" value="${pId}">
+            <input type="hidden" class="row-pjt-code" value="${pCode}">
+        </td>
         <td class="p-2"><select class="row-type w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-slate-700 cursor-pointer">${typeOptions}</select></td>
         <td class="p-2"><select class="row-loc w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-slate-700 cursor-pointer">${locOptions}</select></td>
         <td class="p-2"><input type="number" step="0.5" min="0" class="row-hours w-full border border-indigo-200 bg-indigo-50 rounded-lg px-3 py-2 text-sm font-black text-center outline-indigo-500 text-indigo-700 shadow-inner" value="${logData ? logData.hours : ''}" placeholder="0.0"></td>
@@ -512,7 +594,59 @@ function appendWhInputRow(logData = null, index = 1) {
     tbody.appendChild(tr);
 }
 
-// 일괄 덮어쓰기 방식으로 저장 (기존 해당 날짜/사람의 데이터 모두 지우고 현재 Row들로 재생성)
+// 자동완성 로직
+window.whShowPjtAuto = function(input) {
+    const val = input.value.trim().toLowerCase();
+    const drop = document.getElementById('wh-pjt-autocomplete');
+    
+    // 사용자가 입력값을 지우거나 수정하면 hidden ID는 초기화시킴 (직접 입력 허용)
+    const tr = input.closest('tr');
+    tr.querySelector('.row-pjt-id').value = '';
+    tr.querySelector('.row-pjt-code').value = '';
+
+    if(!val) { drop.classList.add('hidden'); return; }
+
+    let matches = (window.currentProjectStatusList || []).filter(p => {
+        if(p.status === 'completed' || p.status === 'rejected') return false;
+        let name = (p.name || '').toLowerCase();
+        let code = (p.code || '').toLowerCase();
+        return name.includes(val) || code.includes(val) || window.matchString(val, p.name);
+    });
+
+    if(matches.length > 0) {
+        const rect = input.getBoundingClientRect();
+        drop.style.left = `${rect.left + window.scrollX}px`;
+        drop.style.top = `${rect.bottom + window.scrollY + 2}px`;
+        drop.style.width = `${rect.width}px`;
+        drop.innerHTML = matches.map(m => {
+            let sName = m.name.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+            return `<li class="px-3 py-2 hover:bg-indigo-50 cursor-pointer text-xs font-bold text-slate-700 border-b border-slate-50 truncate transition-colors" onmousedown="window.whSelectPjt('${input.id}', '${m.id}', '${m.code||''}', '${sName}')"><span class="text-indigo-600">[${m.code||'-'}]</span> ${m.name}</li>`;
+        }).join('');
+        drop.classList.remove('hidden');
+    } else {
+        drop.classList.add('hidden');
+    }
+};
+
+window.whSelectPjt = function(inputId, pId, pCode, pName) {
+    const input = document.getElementById(inputId);
+    if(input) {
+        input.value = pName;
+        const tr = input.closest('tr');
+        tr.querySelector('.row-pjt-id').value = pId;
+        tr.querySelector('.row-pjt-code').value = pCode;
+    }
+    document.getElementById('wh-pjt-autocomplete').classList.add('hidden');
+};
+
+document.addEventListener('click', function(e) {
+    const d = document.getElementById('wh-pjt-autocomplete');
+    if (d && !d.classList.contains('hidden') && !e.target.closest('#wh-pjt-autocomplete') && !e.target.classList.contains('row-pjt-name')) {
+        d.classList.add('hidden');
+    }
+});
+
+// 💡 8. 저장 안되던 버그 완벽 수정 (프로젝트 미선택시 텍스트값 허용)
 window.saveWhInputData = async function() {
     const dateStr = document.getElementById('wh-modal-date').value;
     const authorName = document.getElementById('wh-modal-author').value;
@@ -522,20 +656,20 @@ window.saveWhInputData = async function() {
 
     rows.forEach(tr => {
         const id = tr.querySelector('.row-id').value;
-        const pjtSel = tr.querySelector('.row-pjt');
-        const projectId = pjtSel.value;
-        const projectCode = pjtSel.options[pjtSel.selectedIndex]?.dataset?.code || '';
-        const projectName = pjtSel.options[pjtSel.selectedIndex]?.dataset?.name || '';
+        const projectName = tr.querySelector('.row-pjt-name').value.trim();
+        const projectId = tr.querySelector('.row-pjt-id').value;
+        const projectCode = tr.querySelector('.row-pjt-code').value;
+        
         const workType = tr.querySelector('.row-type').value;
         const location = tr.querySelector('.row-loc').value;
         const hours = parseFloat(tr.querySelector('.row-hours').value) || 0;
         const content = tr.querySelector('.row-content').value.trim();
         const isConfirmed = tr.querySelector('.row-conf').checked;
 
-        // 유효성 검사: 시간이 0보다 크고, (프로젝트가 지정되어 있거나 내용이 있는 경우) 저장
-        if (hours > 0 && (projectId || content)) {
+        // 💡 조건 완화: 시간이 0보다 크고, [프로젝트명(텍스트) 이나 내용] 둘 중 하나만 있어도 무조건 저장!
+        if (hours > 0 && (projectName || content)) {
             toSave.push({ 
-                id, // 기존 ID가 있다면 유지 (없으면 새로 생성됨)
+                id, 
                 date: dateStr, 
                 authorName, 
                 projectId, 
@@ -554,17 +688,14 @@ window.saveWhInputData = async function() {
     try {
         const batch = writeBatch(db);
         
-        // 1. 기존 데이터 쿼리 후 일괄 삭제
         const q = query(collection(db, "work_logs"), where("date", "==", dateStr), where("authorName", "==", authorName));
         const existingSnap = await getDocs(q);
         existingSnap.forEach(docSnap => batch.delete(docSnap.ref));
         
-        // 2. 새 데이터 일괄 추가
         toSave.forEach(data => {
-            // 기존 id가 있어도 새로 문서를 만드는 덮어쓰기 방식
             const ref = doc(collection(db, "work_logs")); 
             data.createdAt = Date.now();
-            delete data.id; // 신규 생성 시 id 필드 제거
+            delete data.id; 
             batch.set(ref, data);
         });
 
@@ -576,16 +707,79 @@ window.saveWhInputData = async function() {
     }
 };
 
-// 엑셀 리포트 생성 (ExcelJS)
-window.exportWorkhoursExcel = async function() {
+
+// ==========================================
+// 💡 6. 엑셀 다운로드 (대시보드 요약 시트 추가 적용)
+// ==========================================
+window.exportWorkhoursExcel = async function(isDriveUpload = false, driveFolderId = null) {
     if (typeof window.ExcelJS === 'undefined') return window.showToast("ExcelJS 모듈이 필요합니다.", "error");
     
     try {
-        window.showToast("엑셀 파일을 생성 중입니다...", "success");
+        if(!isDriveUpload) window.showToast("엑셀 파일을 생성 중입니다...", "success");
         const wb = new window.ExcelJS.Workbook();
-        const ws = wb.addWorksheet('투입공수_데이터');
         
-        ws.columns = [
+        // 💡 1번 탭: 대시보드 요약 --------------------
+        const ws1 = wb.addWorksheet('월간_통계_요약', { views: [{ showGridLines: false }] });
+        ws1.columns = [{width:2}, {width:15}, {width:15}, {width:15}, {width:15}, {width:15}];
+        
+        const pDate = document.getElementById('wh-week-picker').value; // e.g., 2026-W15
+        const yStr = window.getDatesFromWeek(pDate).start.getFullYear();
+        const mStr = String(window.getDatesFromWeek(pDate).start.getMonth() + 1).padStart(2, '0');
+        const reportTitle = `${yStr}년 ${mStr}월 개인별 투입공수 통계`;
+
+        ws1.mergeCells('B2:E3');
+        const titleCell = ws1.getCell('B2');
+        titleCell.value = reportTitle;
+        titleCell.font = { name: '맑은 고딕', size: 18, bold: true, color: { argb: 'FF1E293B' } };
+        titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
+        
+        ws1.getCell('B4').value = `출력일시: ${new Date().toLocaleString()}`;
+        ws1.getCell('B4').font = { size: 10, color: { argb: 'FF64748B' } };
+
+        // 통계 연산 (해당 월 전체 데이터만 추출)
+        let monthlyLogs = window.currentWorkLogs.filter(l => l.date.startsWith(`${yStr}-${mStr}`) && l.isConfirmed);
+        let tMd = 0; let pMap = {}; let pjtMap = {};
+        
+        monthlyLogs.forEach(l => {
+            let md = l.hours / 8;
+            tMd += md;
+            pMap[l.authorName] = (pMap[l.authorName] || 0) + md;
+            let pName = l.projectName || l.projectCode || '미분류';
+            pjtMap[pName] = (pjtMap[pName] || 0) + md;
+        });
+
+        ws1.getCell('B6').value = '총 투입 (MD)';
+        ws1.getCell('C6').value = tMd.toFixed(1) + ' MD';
+        ws1.getCell('B6').font = { bold: true }; ws1.getCell('C6').font = { bold: true, color: {argb:'FF4F46E5'} };
+
+        // 인원별 통계 표
+        ws1.getCell('B8').value = '[ 작업자별 누적 투입 공수 ]';
+        ws1.getCell('B8').font = { bold: true, color: {argb:'FF334155'} };
+        let r = 9;
+        Object.entries(pMap).sort((a,b)=>b[1]-a[1]).forEach(p => {
+            ws1.getCell(`B${r}`).value = p[0];
+            ws1.getCell(`C${r}`).value = p[1].toFixed(1) + ' MD';
+            ws1.getCell(`C${r}`).font = { bold: true, color: {argb:'FF059669'} };
+            r++;
+        });
+
+        // PJT별 통계 표
+        r += 1;
+        ws1.getCell(`B${r}`).value = '[ 주요 프로젝트별 투입 (Top 10) ]';
+        ws1.getCell(`B${r}`).font = { bold: true, color: {argb:'FF334155'} };
+        r++;
+        Object.entries(pjtMap).sort((a,b)=>b[1]-a[1]).slice(0, 10).forEach(p => {
+            ws1.mergeCells(`B${r}:C${r}`);
+            ws1.getCell(`B${r}`).value = p[0];
+            ws1.getCell(`D${r}`).value = p[1].toFixed(1) + ' MD';
+            ws1.getCell(`D${r}`).font = { bold: true, color: {argb:'FF9333EA'} };
+            r++;
+        });
+
+
+        // 💡 2번 탭: 데이터 Raw -----------------------
+        const ws2 = wb.addWorksheet('데이터_Raw');
+        ws2.columns = [
             { header: '날짜', key: 'date', width: 12 },
             { header: '작업자', key: 'name', width: 12 },
             { header: '프로젝트', key: 'pjt', width: 35 },
@@ -597,23 +791,23 @@ window.exportWorkhoursExcel = async function() {
             { header: '승인여부', key: 'conf', width: 12 }
         ];
 
-        let hr = ws.getRow(1);
+        let hr = ws2.getRow(1);
         hr.font = { bold: true, color: {argb: 'FFFFFFFF'} };
         hr.fill = { type: 'pattern', pattern: 'solid', fgColor: {argb: 'FF4F46E5'} };
         hr.alignment = { vertical: 'middle', horizontal: 'center' };
 
-        // 현재 화면의 필터와 상관없이, 선택된 월(또는 연도)의 전체 데이터를 날짜-이름 순 정렬
+        // Raw는 현재 메모리에 있는 해당 월 기준 데이터 전체를 출력
         let sortedLogs = window.currentWorkLogs.slice().sort((a,b) => a.date.localeCompare(b.date) || a.authorName.localeCompare(b.authorName));
         
         sortedLogs.forEach(l => {
-            let row = ws.addRow({
+            let row = ws2.addRow({
                 date: l.date,
                 name: l.authorName,
                 pjt: l.projectCode ? `[${l.projectCode}] ${l.projectName}` : (l.projectName || '프로젝트 미지정'),
                 type: l.workType,
                 loc: l.location || '사내',
                 hrs: l.hours,
-                md: (l.hours / 8).toFixed(2), // 1MD = 8h 환산
+                md: (l.hours / 8).toFixed(2), 
                 content: l.content || '',
                 conf: l.isConfirmed ? '승인완료' : '미승인'
             });
@@ -621,9 +815,7 @@ window.exportWorkhoursExcel = async function() {
             row.eachCell(function(cell, colNumber) {
                 cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
                 cell.alignment = { vertical: 'middle' };
-                if(colNumber !== 3 && colNumber !== 8) cell.alignment.horizontal = 'center'; // 프로젝트, 내용은 좌측 정렬
-                
-                // 승인 여부 색상 강조
+                if(colNumber !== 3 && colNumber !== 8) cell.alignment.horizontal = 'center';
                 if(colNumber === 9) {
                     if(l.isConfirmed) cell.font = { color: { argb: 'FF059669' }, bold: true };
                     else cell.font = { color: { argb: 'FFE11D48' }, bold: true };
@@ -632,12 +824,76 @@ window.exportWorkhoursExcel = async function() {
         });
 
         const buffer = await wb.xlsx.writeBuffer();
-        const yStr = window.currentWhDate.getFullYear();
-        const mStr = String(window.currentWhDate.getMonth()+1).padStart(2, '0');
-        const fileName = window.whPeriodMode === 'year' ? `AXBIS_투입공수보고서_${yStr}년.xlsx` : `AXBIS_투입공수보고서_${yStr}년${mStr}월.xlsx`;
-        
-        window.saveAs(new Blob([buffer]), fileName);
+        const fileName = `AXBIS_투입공수보고서_${yStr}년${mStr}월.xlsx`;
+
+        // 💡 9. 구글 드라이브 연동 여부에 따라 처리
+        if (isDriveUpload && driveFolderId) {
+            return { buffer: buffer, name: fileName }; // 드라이브용 Blob 반환
+        } else {
+            window.saveAs(new Blob([buffer]), fileName); // 일반 다운로드
+        }
+
     } catch(e) {
-        window.showToast("엑셀 저장 중 오류가 발생했습니다.", "error");
+        window.showToast("엑셀 생성 중 오류가 발생했습니다.", "error");
+        throw e;
+    }
+};
+
+// ==========================================
+// 💡 9. 구글 드라이브 저장 로직 (동일 월 파일 덮어쓰기)
+// ==========================================
+window.saveWorkhoursToDrive = async function() {
+    if(!window.googleAccessToken) {
+        if(window.initGoogleAPI) window.initGoogleAPI();
+        if(window.authenticateGoogle && !window.googleAccessToken) window.authenticateGoogle();
+        if(!window.googleAccessToken) return window.showToast("구글 인증이 필요합니다. [연동하기] 버튼을 눌러주세요.", "error");
+    }
+
+    try {
+        window.showToast("구글 드라이브에 저장 중입니다...");
+        
+        // 1. 엑셀 파일 Buffer 생성
+        const { buffer, name } = await window.exportWorkhoursExcel(true, DRIVE_EXPORT_FOLDER);
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        
+        // 2. 해당 폴더 내에서 '동일한 이름'의 파일이 있는지 검색
+        const query = `name='${name}' and '${DRIVE_EXPORT_FOLDER}' in parents and trashed=false`;
+        const findRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}`, {
+            headers: { 'Authorization': 'Bearer ' + window.googleAccessToken }
+        });
+        const folderData = await findRes.json();
+        
+        const metadata = { name: name, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
+        const form = new FormData();
+        
+        if (folderData.files && folderData.files.length > 0) {
+            // 💡 파일이 존재하면 덮어쓰기 (PATCH)
+            const fileId = folderData.files[0].id;
+            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+            form.append('file', blob);
+            
+            await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`, {
+                method: 'PATCH',
+                headers: { 'Authorization': 'Bearer ' + window.googleAccessToken },
+                body: form
+            });
+            window.showToast(`[${name}] 드라이브에 성공적으로 업데이트 되었습니다.`, "success");
+        } else {
+            // 💡 파일이 없으면 신규 생성 (POST)
+            metadata.parents = [DRIVE_EXPORT_FOLDER];
+            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+            form.append('file', blob);
+            
+            await fetch(`https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`, {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + window.googleAccessToken },
+                body: form
+            });
+            window.showToast(`[${name}] 드라이브에 신규 저장 되었습니다.`, "success");
+        }
+
+    } catch (e) {
+        console.error(e);
+        window.showToast("드라이브 저장에 실패했습니다. (콘솔 확인)", "error");
     }
 };
