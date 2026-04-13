@@ -22,7 +22,7 @@ window.appRoutes = {
         } 
     },
     
-    'workhours': { url: './views/workhours.html', init: () => { const weekInput = document.getElementById('workhours-week-picker'); if(weekInput) weekInput.value = window.getWeekString(new Date()); if(window.loadWorkhoursData) window.loadWorkhoursData(); } },
+    'workhours': { url: './views/workhours.html', init: () => { if(window.loadWorkhoursData) window.loadWorkhoursData(); } },
     'weekly-log': { url: './views/weekly.html', init: () => { document.getElementById('weekly-log-filter-week').value = window.getWeekString(new Date()); if(window.loadWeeklyLogsData) window.loadWeeklyLogsData(); } },
     'simulation': { url: './views/simulation.html', init: () => { if(window.handleTypeChange) window.handleTypeChange(); if(window.setupAutoSaveTriggers) window.setupAutoSaveTriggers(); } },
     'collab': { url: './views/request.html', init: () => { window.currentAppId = 'collab'; if(window.loadRequestsData) window.loadRequestsData('collab'); } },
