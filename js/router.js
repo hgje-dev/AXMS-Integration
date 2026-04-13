@@ -1,7 +1,5 @@
 // js/router.js
-
-// 💡 아예 에러가 날 수 없도록 window 객체에 직접 박아버렸습니다!
-window.axbisRoutes = {
+const routes = {
     'dashboard-home': { url: './views/dashboard.html', init: () => { if(window.loadHomeDashboards) window.loadHomeDashboards(); } },
     
     'project-status': { 
@@ -41,7 +39,7 @@ window.openApp = async function(viewId, title) {
     const appContent = document.getElementById('app-content');
     if(document.getElementById('nav-title')) document.getElementById('nav-title').innerText = title || '';
 
-    const route = window.axbisRoutes[routeKey] || window.axbisRoutes['dashboard-home'];
+    const route = routes[routeKey] || routes['dashboard-home'];
 
     try {
         appContent.innerHTML = '<div class="flex items-center justify-center h-[60vh] w-full"><div class="text-center text-slate-400 font-bold"><i class="fa-solid fa-spinner fa-spin text-5xl text-indigo-500 mb-4"></i><br>화면을 불러오는 중입니다...</div></div>';
