@@ -19,27 +19,44 @@ import {
 
 let allUsersUnsubscribe=null, teamMembersUnsubscribe=null;
 window.isSigningUp = false; 
+
+// 💡 100% 안전한 데이터 전달을 위한 전역 변수
+window.tempUserEmail = "";
+window.tempUserUid = "";
+
 const googleProvider = new GoogleAuthProvider();
 
-// 💡 1. 구글 로그인 실행
+// 💡 1. 구글 로그인 실행 (사내 도메인 제한 적용)
 window.googleLogin = async () => {
     const err = document.getElementById('login-error');
     if(err) err.classList.add('hidden');
 
-    // 🚨 핵심 해결: 구글 팝업이 뜨기 전 '가입 진행 중' 상태로 만들어 강제 로그아웃 방어!
-    window.isSigningUp = true;
+    window.isSigningUp = true; // 가입 중 튕김 방지 락(Lock) 걸기
 
     try {
         const result = await signInWithPopup(auth, googleProvider);
         const user = result.user;
+
+        // 🚨 요청사항 반영: @axbis.ai 이메일이 아니면 깔끔하게 "가입 불가능 합니다" 출력 후 쫓아냄
+        if (!user.email || !user.email.endsWith('@axbis.ai')) {
+            try { await user.delete(); } catch(e) { await signOut(auth); } // 계정 생성 즉시 파기 및 로그아웃
+            window.isSigningUp = false; // 락 해제
+            if (err) {
+                err.innerHTML = "가입 불가능 합니다";
+                err.classList.remove('hidden');
+            }
+            return; // 여기서 로직 종료
+        }
 
         // DB에 기존 유저인지 확인
         const userDocRef = doc(db, "users", user.uid);
         const userDoc = await getDoc(userDocRef);
 
         if (!userDoc.exists()) {
-            // [신규 사용자] 소속/직책 입력 화면으로 전환
-            window.tempGoogleUser = user;
+            // [신규 사용자] 이메일과 UID를 절대 지워지지 않게 전역 변수에 꽉 묶어둠 (undefined 원천 차단)
+            window.tempUserEmail = user.email;
+            window.tempUserUid = user.uid;
+            
             if(document.getElementById('signup-name')) {
                 document.getElementById('signup-name').value = user.displayName || '';
             }
@@ -48,14 +65,14 @@ window.googleLogin = async () => {
             if(document.getElementById('auth-title')) document.getElementById('auth-title').innerText = "추가 정보 입력";
         } else {
             // [기존 사용자] 로그인 성공
-            window.isSigningUp = false; // 기존 유저는 락 해제
+            window.isSigningUp = false; 
             
-            // mfg@axbis.ai 계정이면 최고 관리자 강제 부여 체크
+            // 최고 관리자 강제 부여 체크
             if (user.email === 'mfg@axbis.ai' && userDoc.data().role !== 'admin') {
                 await setDoc(userDocRef, { role: 'admin' }, { merge: true });
             }
             
-            // 새로고침하여 안전하게 메인화면으로 진입
+            // 안전하게 메인화면 진입
             location.reload();
         }
     } catch (er) {
@@ -75,26 +92,28 @@ window.completeGoogleSignup = async () => {
     const pos = document.getElementById('signup-position')?.value || '매니저';
     const err = document.getElementById('signup-error');
     
-    // 강제 로그아웃 튕김을 막기 위해 auth.currentUser도 함께 확인
-    const user = window.tempGoogleUser || auth.currentUser;
+    // 🚨 undefined 방지: 아까 안전하게 묶어둔 이메일과 UID를 가져옵니다.
+    const finalEmail = window.tempUserEmail || auth.currentUser?.email;
+    const finalUid = window.tempUserUid || auth.currentUser?.uid;
 
     if(err) err.classList.add('hidden');
     if(!n) {
         if(err){ err.innerHTML="이름을 입력해주세요."; err.classList.remove('hidden'); }
         return;
     }
-    if(!user) {
-        if(err){ err.innerHTML="인증 정보가 유실되었습니다. 새로고침 후 다시 로그인해주세요."; err.classList.remove('hidden'); }
+    
+    if(!finalEmail || !finalUid) {
+        if(err){ err.innerHTML="인증 정보가 유실되었습니다. 새로고침 후 다시 시도해주세요."; err.classList.remove('hidden'); }
         return;
     }
 
     try {
-        const userEmail = user.email || '';
-        // 💡 최고관리자 지정 (mfg@axbis.ai)
-        let initialRole = (userEmail === 'mfg@axbis.ai') ? 'admin' : 'pending';
+        // 최고관리자 지정 (mfg@axbis.ai)
+        let initialRole = (finalEmail === 'mfg@axbis.ai') ? 'admin' : 'pending';
 
-        await setDoc(doc(db, "users", user.uid), {
-            email: userEmail,
+        // Firestore에 데이터 저장 (이메일이 무조건 들어감)
+        await setDoc(doc(db, "users", finalUid), {
+            email: finalEmail,
             name: n,
             team: t,
             department: t,
@@ -105,7 +124,7 @@ window.completeGoogleSignup = async () => {
 
         if (initialRole === 'pending') {
             if(err){ 
-                err.innerHTML="가입 성공! 관리자 승인 대기 중입니다.<br>잠시 후 로그아웃 됩니다."; 
+                err.innerHTML="가입 완료! 관리자 승인 대기 중입니다.<br>잠시 후 초기화면으로 돌아갑니다."; 
                 err.className="text-emerald-500 text-[11px] font-bold text-center mt-2 bg-emerald-50 p-3 rounded-xl border border-emerald-100 break-words"; 
                 err.classList.remove('hidden'); 
             }
@@ -144,7 +163,7 @@ window.initAuthListeners = () => {
                         await signOut(auth); return; 
                     } 
                     
-                    // 💡 마지막 안전장치: 이메일 체크 후 최고관리자 자동 승격
+                    // 마지막 안전장치: 최고관리자 자동 승격
                     if (u.email === 'mfg@axbis.ai' && window.userProfile.role !== 'admin') {
                         window.userProfile.role = 'admin';
                         await setDoc(doc(db, "users", u.uid), { role: 'admin' }, { merge: true });
@@ -208,7 +227,7 @@ window.initAuthListeners = () => {
     });
 };
 
-// 💡 4. 내 정보 설정 모달 제어 (기존 기능 유지)
+// 💡 4. 내 정보 설정 모달 제어
 window.openSettingsModal = () => {
     if (!window.userProfile) return;
     document.getElementById('set-name').value = window.userProfile.name || '';
@@ -230,26 +249,8 @@ window.saveUserSettings = async () => {
     const newName = document.getElementById('set-name').value.trim();
     const newTeam = document.getElementById('set-dept').value;
     const newPos = document.getElementById('set-position').value;
-    const newPw = document.getElementById('set-new-pw').value.trim();
-    const newPwConf = document.getElementById('set-new-pw-confirm').value.trim();
 
     if (!newName) return window.showToast("이름을 입력해주세요.", "error");
-
-    if (newPw) {
-        if (newPw !== newPwConf) return window.showToast("비밀번호가 일치하지 않습니다.", "error");
-        if (newPw.length < 6) return window.showToast("비밀번호는 6자리 이상이어야 합니다.", "error");
-        
-        try {
-            await updatePassword(auth.currentUser, newPw);
-            window.showToast("비밀번호가 성공적으로 변경되었습니다.");
-        } catch (error) {
-            console.error("비밀번호 변경 에러:", error);
-            if (error.code === 'auth/requires-recent-login') {
-                return window.showToast("보안을 위해 다시 로그인한 후 비밀번호를 변경해주세요.", "error");
-            }
-            return window.showToast("비밀번호 변경 실패", "error");
-        }
-    }
 
     try {
         await setDoc(doc(db, "users", window.currentUser.uid), {
@@ -274,7 +275,7 @@ window.saveUserSettings = async () => {
     }
 };
 
-// 💡 5. 관리자 유저 관리 (기존 기능 유지)
+// 💡 5. 관리자 유저 관리 모달
 window.openAdminModal = () => { document.getElementById('admin-modal').classList.remove('hidden'); document.getElementById('admin-modal').classList.add('flex'); window.renderAdminUsers(); };
 window.closeAdminModal = () => { document.getElementById('admin-modal').classList.add('hidden'); document.getElementById('admin-modal').classList.remove('flex'); };
 
