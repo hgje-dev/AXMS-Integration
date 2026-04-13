@@ -24,19 +24,18 @@
 
     <div id="toast-container" class="fixed top-6 left-1/2 transform -translate-x-1/2 flex flex-col gap-2 pointer-events-none z-[9999]"></div>
 
-    <div id="login-modal" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm transition-opacity duration-300">
-        <div class="bg-white rounded-3xl shadow-2xl p-10 w-full max-w-md border border-slate-200 relative" id="login-box">
+    <!-- 💡 수정됨: 고급스러운 애니메이션 배경(login-bg)과 글래스모피즘 로그인 박스 적용 -->
+    <div id="login-modal" class="fixed inset-0 z-[100] flex items-center justify-center login-bg transition-opacity duration-500">
+        <div class="bg-white/95 backdrop-blur-xl rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.3)] p-10 w-full max-w-md border border-white/40 relative" id="login-box">
             
             <div class="text-center mb-8">
-                <div class="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-3xl border border-indigo-100 shadow-inner">
-                    <i class="fa-solid fa-layer-group"></i>
-                </div>
-                <h2 class="text-3xl font-black text-slate-800 tracking-tight" id="auth-title">AXBIS</h2>
-                <h2 class="text-xl font-bold text-slate-700 tracking-tight mt-2">제조 통합 포털</h2>
+                <!-- 💡 아이콘 대신 로고 이미지 적용 완료 -->
+                <img src="./assets/엑스비스CI 슬로건_포지티브.png" alt="AXBIS" class="h-12 mx-auto mb-4 object-contain">
+                <h2 class="text-lg font-bold text-slate-500 tracking-wide mt-2" id="auth-title">제조 통합 포털</h2>
             </div>
             
             <div id="login-view" class="space-y-4">
-                <button onclick="window.googleLogin()" class="w-full bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-extrabold py-3.5 rounded-xl shadow-sm transition-all flex items-center justify-center gap-3">
+                <button onclick="window.googleLogin()" class="w-full bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-extrabold py-3.5 rounded-xl shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-3">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="20px" height="20px">
                         <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/>
                         <path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/>
@@ -104,6 +103,7 @@
         </div>
     </div>
 
+    <!-- 이하 설정, 관리자 모달 등 기존과 완벽히 동일 -->
     <div id="settings-modal" class="fixed inset-0 z-[200] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 transition-opacity">
         <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden">
             <div class="px-6 py-4 border-b flex justify-between items-center bg-slate-50">
@@ -421,7 +421,7 @@
         </header>
 
         <main id="app-content" class="flex-1 max-w-[1600px] mx-auto w-full px-6 py-8">
-            </main>
+        </main>
     </div>
 
     <ul id="mention-dropdown" class="hidden absolute z-[9999] bg-white border border-slate-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-48 custom-scrollbar"></ul>
