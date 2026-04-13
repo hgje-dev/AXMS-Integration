@@ -77,7 +77,7 @@ input:disabled, select:disabled, textarea:disabled {
 }
 
 /* 💡 모달 블러 및 기타 UI 클래스 */
-#login-modal, #project-list-modal, #dashboard-modal, #admin-users-modal, #history-modal, #save-option-modal, #unsaved-changes-modal { 
+#login-modal, #project-list-modal, #dashboard-modal, #admin-users-modal, #history-modal, #save-option-modal, #unsaved-changes-modal, #wh-input-modal { 
     backdrop-filter: blur(10px); 
 }
 
@@ -102,6 +102,13 @@ input:disabled, select:disabled, textarea:disabled {
 }
 .sidebar-transition { transition: transform 0.3s ease-in-out; }
 
+/* 💡 투입공수 현황 드래그 선택 관련 유틸리티 */
+.wh-cell {
+    user-select: none; /* 드래그 시 텍스트 선택 방지 */
+}
+.wh-drag-container {
+    user-select: none;
+}
 
 /* ========================================================
    💡 AI 시뮬레이션 프리미엄 UI (라이트 모드 전용 톤앤매너)
