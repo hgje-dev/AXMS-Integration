@@ -2,10 +2,8 @@
 // ⚠️ 주의: 이곳은 백그라운드 스레드이므로 window, document 요소에 접근할 수 없습니다.
 
 self.onmessage = function(e) {
-    const data = e.data;
-    const { method, qty, curve, iters, uncert, diff, rBase, bBase, pers, sMult, processData } = data;
+    const { method, qty, curve, iters, uncert, diff, rBase, bBase, pers, sMult, processData } = e.data;
 
-    // 정규분포 및 삼각분포 난수 생성 함수
     const getNormalRandom = (mean, stdDev) => {
         let u1 = Math.random(); if (u1 === 0) u1 = 0.0001;
         return (Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * Math.random())) * stdDev + mean;
@@ -19,6 +17,19 @@ self.onmessage = function(e) {
 
     let lR = Math.max(0.7, Math.pow(curve, Math.log2(qty))); 
     let bArr = new Float32Array(iters), rArr = new Float32Array(iters);
+    let tMd = 0;
+
+    // tMd(기본 투입 시간) 사전 계산
+    processData.forEach(p => {
+        let pt = p.pType || 'md';
+        if(pt === 'auto') {
+            let um = 0;
+            (p.unitData || []).forEach(u => um += (parseFloat(u.q)||0)*(parseFloat(u.m)||0));
+            tMd += um;
+        } else if(pt === 'md') {
+            tMd += (parseFloat(p.q)||0)*(parseFloat(p.m)||0);
+        }
+    });
 
     for(let i = 0; i < iters; i++) {
         let im = 0; 
@@ -39,10 +50,11 @@ self.onmessage = function(e) {
         rArr[i] = bArr[i] * sMult;
     }
     
-    rArr.sort(); 
-    const p10 = rArr[Math.floor(iters * 0.1)] || 0;
-    const p50 = rArr[Math.floor(iters * 0.5)] || 0;
-    const p90 = rArr[Math.floor(iters * 0.9)] || 0; 
+    const sortedRArr = new Float32Array(rArr);
+    sortedRArr.sort(); 
+    const p10 = sortedRArr[Math.floor(iters * 0.1)] || 0;
+    const p50 = sortedRArr[Math.floor(iters * 0.5)] || 0;
+    const p90 = sortedRArr[Math.floor(iters * 0.9)] || 0; 
     
     // 계산 완료 후 메인 스레드로 결과 전송
     self.postMessage({
@@ -50,6 +62,8 @@ self.onmessage = function(e) {
         d10: Math.ceil(p10 / pers),
         d50: Math.ceil(p50 / pers),
         d90: Math.ceil(p90 / pers),
-        rArr: Array.from(rArr) // 차트 렌더링을 위해 일반 배열로 변환
+        rArr: Array.from(sortedRArr),
+        bArr: Array.from(bArr),
+        tMd
     });
 };
