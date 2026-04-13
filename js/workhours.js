@@ -260,7 +260,7 @@ window.updateWhDashboard = function() {
     document.getElementById('wh-dash-extra').innerHTML = extraHtml || '<div class="text-center text-slate-400 py-4 font-bold">데이터 없음</div>';
 };
 
-// 💡 2. 차트 렌더링 - 짤림 현상(Padding) 완벽 보완
+// 💡 차트 렌더링 - 짤림 현상(Padding) 완벽 보완
 function renderWhChart(canvasId, type, dataMap, unit, isHorizontal) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
@@ -310,7 +310,7 @@ function renderWhChart(canvasId, type, dataMap, unit, isHorizontal) {
             responsive: true,
             maintainAspectRatio: false,
             layout: {
-                padding: { bottom: 10 } // 💡 x축 라벨 잘림 방지
+                padding: { bottom: 10 } 
             },
             plugins: { 
                 legend: { display: false },
@@ -338,7 +338,6 @@ function getFilteredLogs() {
         if (window.whFilters.loc && log.location !== window.whFilters.loc) return false;
         if (window.whFilters.type && log.workType !== window.whFilters.type) return false;
         
-        // 💡 5. 화면 내 데이터 필터 초성 검색 완벽 연동
         if (window.whFilters.text) {
             const s = window.whFilters.text;
             const fullStr = `${log.authorName} ${log.projectName} ${log.projectCode} ${log.content}`.toLowerCase();
@@ -348,7 +347,7 @@ function getFilteredLogs() {
     });
 }
 
-// 💡 3. 한국 공휴일 및 주말 확실하게 빨간색 처리 (Grid View)
+// 💡 주간 뷰(Grid) 구현
 function renderWhGrid() {
     const thead = document.getElementById('wh-grid-thead');
     const tbody = document.getElementById('wh-grid-tbody');
@@ -368,7 +367,6 @@ function renderWhGrid() {
         let dStr = window.getLocalDateStr(d);
         weekDates.push(dStr);
         
-        // 💡 토(6), 일(0), 대한민국 공휴일(window.isWorkDay 연동) 전부 빨갛게 표기
         let isHoliday = d.getDay() === 0 || d.getDay() === 6 || !window.isWorkDay(d);
         let colorClass = isHoliday ? 'text-rose-500' : 'text-slate-700';
         let bgClass = isHoliday ? 'bg-rose-50' : '';
@@ -420,7 +418,7 @@ function renderWhGrid() {
     tbody.innerHTML = bodyHtml;
 }
 
-// 💡 3. 한국 공휴일 및 주말 확실하게 빨간색 처리 (Calendar View)
+// 💡 달력(월간 뷰)
 function renderWhCalendar() {
     const grid = document.getElementById('wh-calendar-grid');
     const titleEl = document.getElementById('wh-calendar-title');
@@ -623,7 +621,6 @@ function appendWhInputRow(logData = null, index = 1) {
     tbody.appendChild(tr);
 }
 
-// 💡 5. 초성 검색 완벽 대응 (PJT 코드, 명칭 모두 초성 탐색)
 window.whShowPjtAuto = function(input) {
     const val = input.value.trim().toLowerCase();
     const drop = document.getElementById('wh-pjt-autocomplete');
@@ -638,7 +635,6 @@ window.whShowPjtAuto = function(input) {
         if(p.status === 'completed' || p.status === 'rejected') return false;
         let name = (p.name || '').toLowerCase();
         let code = (p.code || '').toLowerCase();
-        // 💡 초성 매칭 연동: 명칭(name)과 코드(code)에 모두 matchString 실행
         return name.includes(val) || code.includes(val) || window.matchString(val, p.name) || window.matchString(val, p.code);
     });
 
@@ -734,8 +730,6 @@ window.saveWhInputData = async function() {
     }
 };
 
-
-// 💡 6. 엑셀 다운로드 (대시보드 요약 시트 추가 생성)
 window.exportWorkhoursExcel = async function(isDriveUpload = false, driveFolderId = null) {
     if (typeof window.ExcelJS === 'undefined') return window.showToast("ExcelJS 모듈이 필요합니다.", "error");
     
@@ -743,7 +737,6 @@ window.exportWorkhoursExcel = async function(isDriveUpload = false, driveFolderI
         if(!isDriveUpload) window.showToast("엑셀 파일을 생성 중입니다...", "success");
         const wb = new window.ExcelJS.Workbook();
         
-        // 💡 탭 1: 월간 통계 요약 (Dashboard Sheet)
         const ws1 = wb.addWorksheet('월간_통계_요약', { views: [{ showGridLines: false }] });
         ws1.columns = [{width:2}, {width:15}, {width:15}, {width:15}, {width:15}, {width:15}];
         
@@ -798,8 +791,6 @@ window.exportWorkhoursExcel = async function(isDriveUpload = false, driveFolderI
             r++;
         });
 
-
-        // 💡 탭 2: 데이터 Raw 시트
         const ws2 = wb.addWorksheet('데이터_Raw');
         ws2.columns = [
             { header: '날짜', key: 'date', width: 12 },
@@ -847,11 +838,10 @@ window.exportWorkhoursExcel = async function(isDriveUpload = false, driveFolderI
         const buffer = await wb.xlsx.writeBuffer();
         const fileName = `AXBIS_투입공수보고서_${yStr}년${mStr}월.xlsx`;
 
-        // 💡 9. 구글 드라이브 연동 여부에 따라 처리
         if (isDriveUpload && driveFolderId) {
-            return { buffer: buffer, name: fileName }; // 드라이브용 Blob 반환
+            return { buffer: buffer, name: fileName }; 
         } else {
-            window.saveAs(new Blob([buffer]), fileName); // 일반 다운로드
+            window.saveAs(new Blob([buffer]), fileName); 
         }
 
     } catch(e) {
@@ -860,9 +850,6 @@ window.exportWorkhoursExcel = async function(isDriveUpload = false, driveFolderI
     }
 };
 
-// ==========================================
-// 💡 9. 구글 드라이브 덮어쓰기 저장 로직 완벽 적용
-// ==========================================
 window.saveWorkhoursToDrive = async function() {
     if(!window.googleAccessToken) {
         if(window.initGoogleAPI) window.initGoogleAPI();
