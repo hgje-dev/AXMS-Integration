@@ -281,6 +281,93 @@
                 </div>
             </div>
 
+            <div id="repair-form-fields" class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5 hidden">
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="col-span-2">
+                        <label class="text-[11px] font-bold text-slate-500 mb-1.5 block">요청서 제목 <span class="text-rose-500">*</span></label>
+                        <input type="text" id="req-rep-title" placeholder="수리/점검 요청서 제목을 입력하세요" autocomplete="off" class="w-full border border-slate-300 px-4 py-2.5 rounded-xl text-sm outline-indigo-500 bg-indigo-50/50 focus:bg-white transition-colors font-bold text-indigo-900 shadow-sm">
+                    </div>
+                    <div>
+                        <label class="text-[11px] font-bold text-slate-500 mb-1.5 block">프로젝트 코드</label>
+                        <input type="text" id="req-rep-pjt-code" placeholder="예: PRJ-2024-001" oninput="window.showAutocomplete(this,'req-rep-pjt-name','',false)" autocomplete="off" class="w-full border border-slate-300 px-4 py-2.5 rounded-xl text-sm outline-indigo-500 bg-slate-50 focus:bg-white transition-colors font-semibold">
+                    </div>
+                    <div>
+                        <label class="text-[11px] font-bold text-slate-500 mb-1.5 block">프로젝트명 <span class="text-rose-500">*</span></label>
+                        <input type="text" id="req-rep-pjt-name" placeholder="프로젝트명을 입력하세요" oninput="window.showAutocomplete(this,'req-rep-pjt-code','',true)" autocomplete="off" class="w-full border border-slate-300 px-4 py-2.5 rounded-xl text-sm outline-indigo-500 bg-slate-50 focus:bg-white transition-colors font-bold">
+                    </div>
+                </div>
+
+                <div class="mt-4 border border-rose-200 rounded-xl overflow-hidden shadow-sm">
+                    <div class="bg-rose-50 px-4 py-2 border-b border-rose-200 flex justify-between items-center">
+                        <h3 class="text-xs font-black text-rose-800">Part 정보 <span class="text-[10px] font-normal ml-2 text-rose-600">* Model 기입 必 : Parts 교체 시 필요</span></h3>
+                    </div>
+                    <div class="p-4 bg-white grid grid-cols-1 gap-2 text-xs">
+                        <div class="flex items-center gap-2 border-b pb-2"><span class="w-24 font-bold text-slate-600 text-center bg-slate-100 py-1 rounded">Head</span><input type="text" id="rep-part-head-model" placeholder="Model" class="border p-1 flex-1 rounded outline-none"><input type="text" id="rep-part-head-sn" placeholder="S/N" class="border p-1 flex-1 rounded outline-none"></div>
+                        <div class="flex items-center gap-2 border-b pb-2"><span class="w-24 font-bold text-slate-600 text-center bg-slate-100 py-1 rounded">Scanner</span><input type="text" id="rep-part-scan-model" placeholder="Model" class="border p-1 flex-1 rounded outline-none"><input type="text" id="rep-part-scan-sn" placeholder="S/N" class="border p-1 flex-1 rounded outline-none"></div>
+                        <div class="flex items-center gap-2 border-b pb-2"><span class="w-24 font-bold text-slate-600 text-center bg-slate-100 py-1 rounded">F-Theta lens</span><input type="text" id="rep-part-lens-model" placeholder="Model" class="border p-1 flex-1 rounded outline-none"><input type="text" id="rep-part-lens-sn" placeholder="S/N" class="border p-1 flex-1 rounded outline-none"></div>
+                        <div class="flex items-center gap-2 border-b pb-2"><span class="w-24 font-bold text-slate-600 text-center bg-slate-100 py-1 rounded">B/S</span><input type="text" id="rep-part-bs-model" placeholder="Model" class="border p-1 flex-1 rounded outline-none"><input type="text" id="rep-part-bs-sn" placeholder="S/N" class="border p-1 flex-1 rounded outline-none"></div>
+                        <div class="flex items-center gap-2 border-b pb-2"><span class="w-24 font-bold text-slate-600 text-center bg-slate-100 py-1 rounded">Collimator</span><input type="text" id="rep-part-col-model" placeholder="Model" class="border p-1 flex-1 rounded outline-none"><input type="text" id="rep-part-col-sn" placeholder="S/N" class="border p-1 flex-1 rounded outline-none"></div>
+                        <div class="flex items-center gap-2"><span class="w-24 font-bold text-slate-600 text-center bg-slate-100 py-1 rounded">CCD Camera</span><input type="text" id="rep-part-cam-model" placeholder="Model" class="border p-1 flex-1 rounded outline-none"><input type="text" id="rep-part-cam-sn" placeholder="S/N" class="border p-1 flex-1 rounded outline-none"></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-[11px] font-bold text-slate-500 mb-1.5 block">예상 원인 및 문제점</label>
+                        <textarea id="rep-problem" class="w-full border border-slate-300 px-3 py-2 rounded-xl text-sm outline-rose-500 h-20 resize-none custom-scrollbar"></textarea>
+                    </div>
+                    <div>
+                        <label class="text-[11px] font-bold text-slate-500 mb-1.5 block">현장 조치 내용</label>
+                        <textarea id="rep-action" class="w-full border border-slate-300 px-3 py-2 rounded-xl text-sm outline-rose-500 h-20 resize-none custom-scrollbar"></textarea>
+                    </div>
+                </div>
+
+                <div class="border border-slate-200 rounded-xl p-4 bg-slate-50">
+                    <label class="text-[11px] font-bold text-slate-700 mb-2 block">발생 증상 (다중 선택)</label>
+                    <div class="space-y-2 text-xs">
+                        <div class="flex items-center gap-3 bg-white p-2 rounded border border-slate-100">
+                            <span class="font-bold text-slate-600 w-20">Power Loss</span>
+                            <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" name="rep_symp" value="Power Loss(LLK)" class="accent-rose-500"> LLK</label>
+                            <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" name="rep_symp" value="Power Loss(Scanner)" class="accent-rose-500"> Scanner 끝단</label>
+                            <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" name="rep_symp" value="Power Loss(F-Theta)" class="accent-rose-500"> F-Theta Lens 끝단</label>
+                        </div>
+                        <div class="flex items-center gap-3 flex-wrap bg-white p-2 rounded border border-slate-100">
+                            <span class="font-bold text-slate-600 w-20">Part 파손</span>
+                            <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" name="rep_symp" value="Part 파손(Scanner)" class="accent-rose-500"> Scanner</label>
+                            <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" name="rep_symp" value="Part 파손(B/S)" class="accent-rose-500"> B/S</label>
+                            <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" name="rep_symp" value="Part 파손(Collimator)" class="accent-rose-500"> Collimator</label>
+                            <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" name="rep_symp" value="Part 파손(CCD)" class="accent-rose-500"> CCD Camera</label>
+                            <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" name="rep_symp" value="Part 파손(F-Theta)" class="accent-rose-500"> F-Theta lens</label>
+                            <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" name="rep_symp" value="Part 파손(Option)" class="accent-rose-500"> Option</label>
+                        </div>
+                        <div class="flex items-center gap-3 bg-white p-2 rounded border border-slate-100">
+                            <label class="flex items-center gap-1 cursor-pointer font-bold text-slate-600"><input type="checkbox" name="rep_symp" value="Lens 오염" class="accent-rose-500"> Lens 오염</label>
+                            <div class="w-px h-4 bg-slate-300 mx-2"></div>
+                            <label class="flex items-center gap-1 cursor-pointer font-bold text-slate-600"><input type="checkbox" id="rep_symp_etc_chk" value="기타" class="accent-rose-500"> 기타</label>
+                            <input type="text" id="rep-symp-etc-text" placeholder="기타 증상 입력" class="border p-1 rounded outline-none flex-1">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="text-[11px] font-bold text-slate-500 mb-1.5 block">요청 항목 <span class="text-rose-500">*</span></label>
+                        <select id="rep-req-type" class="w-full border border-slate-300 px-3 py-2.5 rounded-xl text-sm font-bold text-indigo-700 bg-white outline-indigo-500">
+                            <option value="점검">점검</option>
+                            <option value="수리">수리</option>
+                            <option value="신규/파트교체">기타 (신규/파트 교체 등)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-[11px] font-bold text-slate-500 mb-1.5 block">희망 완료일 <span class="text-rose-500">*</span></label>
+                        <input type="date" id="req-rep-target-date" class="w-full border border-rose-300 bg-rose-50 px-3 py-2.5 rounded-xl text-sm font-bold text-rose-700 outline-rose-500">
+                    </div>
+                    <div class="col-span-2 md:col-span-3">
+                        <label class="text-[11px] font-bold text-slate-500 mb-1.5 block">요청 사항</label>
+                        <input type="text" id="rep-requests" placeholder="추가 요청 사항을 기재하세요." class="w-full border border-slate-300 px-4 py-2.5 rounded-xl text-sm outline-indigo-500 bg-slate-50 focus:bg-white">
+                    </div>
+                </div>
+            </div>
             <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                 <label class="text-[11px] font-bold text-slate-500 mb-3 flex items-center gap-1.5"><i class="fa-brands fa-google-drive text-emerald-500"></i> 첨부 파일 <span class="text-slate-400 font-normal">(필요 시 양식 파일 등 첨부)</span></label>
                 
@@ -348,6 +435,57 @@
                 <label class="block text-[11px] font-bold text-slate-500 mb-2 mt-4">현재 등록된 수신 담당자 리스트</label>
                 <ul id="req-email-list" class="space-y-2 max-h-60 overflow-y-auto custom-scrollbar p-1"></ul>
             </div>
+        </div>
+    </div>
+</div>
+
+<div id="repair-leadtime-modal" class="fixed inset-0 z-[350] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col overflow-hidden">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-rose-50">
+            <h2 class="text-base font-extrabold text-rose-800"><i class="fa-solid fa-clock text-rose-500 mr-1.5"></i> 수리/점검 부품 소요 예상일 안내</h2>
+            <button onclick="document.getElementById('repair-leadtime-modal').classList.add('hidden'); document.getElementById('repair-leadtime-modal').classList.remove('flex');" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-lg"></i></button>
+        </div>
+        <div class="p-6 bg-white space-y-4">
+            <p class="text-sm font-bold text-slate-600 mb-2">요청하신 항목에 따라 아래와 같이 소요 시일이 발생할 수 있으니 업무에 참고해 주시기 바랍니다.</p>
+            <div class="overflow-x-auto border border-slate-200 rounded-xl">
+                <table class="w-full text-center text-xs whitespace-nowrap">
+                    <thead class="bg-slate-100 text-slate-600 border-b border-slate-200">
+                        <tr>
+                            <th class="p-2 border-r border-slate-200" rowspan="2">항목</th>
+                            <th class="p-2 border-r border-slate-200" rowspan="2">재고 O</th>
+                            <th class="p-2 border-r border-slate-200 text-rose-600 font-black">수리</th>
+                            <th class="p-2 border-r border-slate-200 text-indigo-600 font-black" colspan="3">Part 교체 (신규 구입)</th>
+                            <th class="p-2 border-r border-slate-200" rowspan="2">Lens<br>Cleaning</th>
+                            <th class="p-2 border-r border-slate-200" rowspan="2">기타</th>
+                            <th class="p-2 text-rose-500" rowspan="2">긴급 진행</th>
+                        </tr>
+                        <tr>
+                            <th class="p-2 border-r border-slate-200 bg-slate-50">Scanner</th>
+                            <th class="p-2 border-r border-slate-200 bg-slate-50">Collimator</th>
+                            <th class="p-2 border-r border-slate-200 bg-slate-50">F-Theta Lens</th>
+                            <th class="p-2 border-r border-slate-200 bg-slate-50">보호 Glass</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="font-bold text-slate-700">
+                            <td class="p-3 border-r border-slate-200 bg-slate-50">기간</td>
+                            <td class="p-3 border-r border-slate-200">7일</td>
+                            <td class="p-3 border-r border-slate-200 text-rose-600">16주</td>
+                            <td class="p-3 border-r border-slate-200 text-indigo-600">6주</td>
+                            <td class="p-3 border-r border-slate-200 text-indigo-600">8주</td>
+                            <td class="p-3 border-r border-slate-200 text-indigo-600">7일</td>
+                            <td class="p-3 border-r border-slate-200">3일</td>
+                            <td class="p-3 border-r border-slate-200">변동</td>
+                            <td class="p-3 text-rose-500">협의</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="text-[10px] text-rose-500 font-bold text-right mt-1">* 긴급 진행 시 추가 비용이 발생할 수 있습니다.</p>
+        </div>
+        <div class="px-6 py-4 border-t bg-slate-50 flex justify-end gap-2">
+            <button onclick="document.getElementById('repair-leadtime-modal').classList.add('hidden'); document.getElementById('repair-leadtime-modal').classList.remove('flex');" class="px-5 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-100 transition-colors">취소</button>
+            <button onclick="window.continueRepairSave()" class="px-6 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-sm font-bold shadow-md transition-colors"><i class="fa-solid fa-check mr-1"></i> 확인 및 발송 계속</button>
         </div>
     </div>
 </div>
