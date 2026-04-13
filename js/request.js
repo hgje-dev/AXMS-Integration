@@ -905,7 +905,7 @@ window.renderRequestList = function() {
             <th class="p-4 font-bold min-w-[200px] max-w-[250px]">프로젝트명</th>
             <th class="p-4 font-bold text-center">PJT 코드</th>
             <th class="p-4 font-bold min-w-[200px] max-w-[250px] text-indigo-300">요청서 제목</th>
-            <th class="p-4 font-bold text-center">담당자</th>
+            <th class="p-4 font-bold text-center">요청자</th> <th class="p-4 font-bold text-center">담당자</th>
             <th class="p-4 font-bold text-center text-slate-400">등록일</th>
             <th class="p-4 font-bold text-center text-blue-400">진행시작일</th>
             <th class="p-4 font-bold text-center text-emerald-400">완료일</th>
