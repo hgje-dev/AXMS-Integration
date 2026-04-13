@@ -15,7 +15,16 @@ const WH_TYPES = ['조립', '검수', '설치', 'Setup', '협업', '공통', '�
 const WH_LOCS = ['사내', '국내', '해외'];
 const DRIVE_EXPORT_FOLDER = '1x8atDi95ybFH-YOYkfiaISw7BHdckQX4';
 
-// 💡 1. 2026년 4월 3주 형식으로 표기하는 헬퍼 함수
+const KR_HOLIDAYS = new Set([
+    '2024-01-01', '2024-02-09', '2024-02-12', '2024-03-01', '2024-04-10', '2024-05-06', '2024-05-15', '2024-06-06', '2024-08-15', '2024-09-16', '2024-09-17', '2024-09-18', '2024-10-03', '2024-10-09', '2024-12-25',
+    '2025-01-01', '2025-01-28', '2025-01-29', '2025-01-30', '2025-03-01', '2025-03-03', '2025-05-05', '2025-05-06', '2025-06-06', '2025-08-15', '2025-10-03', '2025-10-06', '2025-10-07', '2025-10-09', '2025-12-25',
+    '2026-01-01', '2026-02-16', '2026-02-17', '2026-02-18', '2026-03-01', '2026-03-02', '2026-05-05', '2026-05-24', '2026-05-25', '2026-06-06', '2026-08-15', '2026-09-24', '2026-09-25', '2026-09-26', '2026-10-03', '2026-10-05', '2026-10-09', '2026-12-25'
+]);
+function isWhHoliday(d) {
+    if (d.getDay() === 0 || d.getDay() === 6) return true;
+    return KR_HOLIDAYS.has(window.getLocalDateStr(d));
+}
+
 window.updateWhWeekDisplay = function(weekStr) {
     if(!weekStr) return;
     const { start } = window.getDatesFromWeek(weekStr);
@@ -33,7 +42,6 @@ window.updateWhWeekDisplay = function(weekStr) {
     if (displayEl) displayEl.innerText = `${year}년 ${month}월 ${weekNum}주`;
 };
 
-// 💡 4. 대시보드 접기/펴기 토글 로직
 window.toggleWhDashboard = function() {
     const content = document.getElementById('wh-dashboard-content');
     const btn = document.getElementById('wh-dash-toggle-btn');
@@ -41,14 +49,10 @@ window.toggleWhDashboard = function() {
     
     if (content.classList.contains('hidden')) {
         content.classList.remove('hidden');
-        btn.innerHTML = '<i class="fa-solid fa-chevron-up"></i> 접기';
-        btn.classList.add('bg-white', 'text-slate-500');
-        btn.classList.remove('bg-indigo-50', 'text-indigo-600', 'border-indigo-200');
+        btn.innerHTML = '대시보드 숨기기 <i class="fa-solid fa-chevron-up"></i>';
     } else {
         content.classList.add('hidden');
-        btn.innerHTML = '<i class="fa-solid fa-chevron-down"></i> 펴기';
-        btn.classList.remove('bg-white', 'text-slate-500');
-        btn.classList.add('bg-indigo-50', 'text-indigo-600', 'border-indigo-200');
+        btn.innerHTML = '대시보드 보이기 <i class="fa-solid fa-chevron-down"></i>';
     }
 };
 
@@ -190,7 +194,7 @@ window.updateWhDashboard = function() {
             const pName = (l.projectName || '').toLowerCase();
             const pCode = (l.projectCode || '').toLowerCase();
             const search = window.whPjtSearch;
-            return pName.includes(search) || pCode.includes(search) || window.matchString(search, pName) || window.matchString(search, pCode);
+            return pName.includes(search) || pCode.includes(search) || (window.matchString && window.matchString(search, pName)) || (window.matchString && window.matchString(search, pCode));
         });
     }
 
@@ -260,7 +264,6 @@ window.updateWhDashboard = function() {
     document.getElementById('wh-dash-extra').innerHTML = extraHtml || '<div class="text-center text-slate-400 py-4 font-bold">데이터 없음</div>';
 };
 
-// 💡 차트 렌더링 - 짤림 현상(Padding) 완벽 보완
 function renderWhChart(canvasId, type, dataMap, unit, isHorizontal) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
@@ -337,7 +340,6 @@ function getFilteredLogs() {
         }
         if (window.whFilters.loc && log.location !== window.whFilters.loc) return false;
         if (window.whFilters.type && log.workType !== window.whFilters.type) return false;
-        
         if (window.whFilters.text) {
             const s = window.whFilters.text;
             const fullStr = `${log.authorName} ${log.projectName} ${log.projectCode} ${log.content}`.toLowerCase();
@@ -347,7 +349,6 @@ function getFilteredLogs() {
     });
 }
 
-// 💡 주간 뷰(Grid) 구현
 function renderWhGrid() {
     const thead = document.getElementById('wh-grid-thead');
     const tbody = document.getElementById('wh-grid-tbody');
@@ -367,7 +368,7 @@ function renderWhGrid() {
         let dStr = window.getLocalDateStr(d);
         weekDates.push(dStr);
         
-        let isHoliday = d.getDay() === 0 || d.getDay() === 6 || !window.isWorkDay(d);
+        let isHoliday = isWhHoliday(d);
         let colorClass = isHoliday ? 'text-rose-500' : 'text-slate-700';
         let bgClass = isHoliday ? 'bg-rose-50' : '';
         
@@ -389,7 +390,7 @@ function renderWhGrid() {
         for (let i = 0; i < 7; i++) {
             let dateStr = weekDates[i];
             let d = new Date(dateStr);
-            let isHoliday = d.getDay() === 0 || d.getDay() === 6 || !window.isWorkDay(d);
+            let isHoliday = isWhHoliday(d);
             let bgClass = isHoliday ? 'bg-rose-50/30' : '';
             
             let rawLogs = window.currentWorkLogs.filter(l => l.date === dateStr && l.authorName === member.name); 
@@ -418,7 +419,6 @@ function renderWhGrid() {
     tbody.innerHTML = bodyHtml;
 }
 
-// 💡 달력(월간 뷰)
 function renderWhCalendar() {
     const grid = document.getElementById('wh-calendar-grid');
     const titleEl = document.getElementById('wh-calendar-title');
@@ -446,7 +446,7 @@ function renderWhCalendar() {
         let logs = filteredLogs.filter(l => l.date === dateStr);
         let isToday = dateStr === window.getLocalDateStr(new Date());
         
-        let isHoliday = d.getDay() === 0 || d.getDay() === 6 || !window.isWorkDay(d);
+        let isHoliday = isWhHoliday(d);
         let txtClass = isHoliday ? 'text-rose-500' : 'text-slate-700';
         let dateClass = isToday ? 'bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center mx-auto shadow-md' : txtClass;
 
@@ -607,7 +607,7 @@ function appendWhInputRow(logData = null, index = 1) {
     tr.innerHTML = `
         <td class="p-3 text-center text-slate-400 font-bold text-xs bg-slate-50">${index}${idInput}</td>
         <td class="p-2 relative">
-            <input type="text" id="${uniqueId}" class="row-pjt-name w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-indigo-700 placeholder-slate-400" value="${pName}" placeholder="프로젝트 초성 검색 또는 직접 입력" oninput="window.whShowPjtAuto(this)">
+            <input type="text" id="${uniqueId}" class="row-pjt-name w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-indigo-700 placeholder-slate-400" value="${pName}" placeholder="PJT 코드 검색 또는 직접 입력" oninput="window.whShowPjtAuto(this)">
             <input type="hidden" class="row-pjt-id" value="${pId}">
             <input type="hidden" class="row-pjt-code" value="${pCode}">
         </td>
@@ -621,6 +621,7 @@ function appendWhInputRow(logData = null, index = 1) {
     tbody.appendChild(tr);
 }
 
+// 💡 5. 초성 검색 완벽 대응 (PJT 코드 매칭만 실행)
 window.whShowPjtAuto = function(input) {
     const val = input.value.trim().toLowerCase();
     const drop = document.getElementById('wh-pjt-autocomplete');
@@ -633,9 +634,9 @@ window.whShowPjtAuto = function(input) {
 
     let matches = (window.currentProjectStatusList || []).filter(p => {
         if(p.status === 'completed' || p.status === 'rejected') return false;
-        let name = (p.name || '').toLowerCase();
         let code = (p.code || '').toLowerCase();
-        return name.includes(val) || code.includes(val) || window.matchString(val, p.name) || window.matchString(val, p.code);
+        // 💡 프로젝트 명칭(name)을 제외하고, 코드(code) 기준으로만 검색(초성 포함) 수행
+        return code.includes(val) || (window.matchString && window.matchString(val, p.code));
     });
 
     if(matches.length > 0) {
