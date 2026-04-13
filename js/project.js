@@ -51,14 +51,10 @@ window.resizeAndConvertToBase64 = function(file, callback) {
             const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
             callback(dataUrl);
         };
-        image.onerror = function() { 
-            callback(null); 
-        };
+        image.onerror = function() { callback(null); };
         image.src = readerEvent.target.result;
     };
-    reader.onerror = function() { 
-        callback(null); 
-    };
+    reader.onerror = function() { callback(null); };
     reader.readAsDataURL(file);
 };
 
@@ -69,9 +65,7 @@ const getSafeMillis = (val) => {
         if (typeof val === 'number') return val; 
         if (typeof val === 'string') return new Date(val).getTime() || 0; 
         return 0; 
-    } catch(e) { 
-        return 0; 
-    } 
+    } catch(e) { return 0; } 
 };
 
 const getSafeString = (val) => {
@@ -82,65 +76,42 @@ window.loadCounts = function() {
     try {
         onSnapshot(collection(db, "project_comments"), (snap) => { 
             window.projectCommentCounts = {}; 
-            snap.forEach(doc => { 
-                let d = doc.data(); 
-                let pid = d.projectId || d.reqId; 
-                if(pid) window.projectCommentCounts[pid] = (window.projectCommentCounts[pid]||0)+1; 
-            }); 
+            snap.forEach(doc => { let d = doc.data(); let pid = d.projectId || d.reqId; if(pid) window.projectCommentCounts[pid] = (window.projectCommentCounts[pid]||0)+1; }); 
             window.renderProjectStatusList();
         });
         
         onSnapshot(collection(db, "project_issues"), (snap) => { 
             window.projectIssueCounts = {}; 
-            snap.forEach(doc => { 
-                let d = doc.data(); 
-                let pid = d.projectId || d.reqId; 
-                if(pid && !d.isResolved) window.projectIssueCounts[pid] = (window.projectIssueCounts[pid]||0)+1; 
-            }); 
+            snap.forEach(doc => { let d = doc.data(); let pid = d.projectId || d.reqId; if(pid && !d.isResolved) window.projectIssueCounts[pid] = (window.projectIssueCounts[pid]||0)+1; }); 
             window.renderProjectStatusList();
         });
         
         onSnapshot(collection(db, "daily_logs"), (snap) => { 
             window.projectLogCounts = {}; 
-            snap.forEach(doc => { 
-                let d = doc.data(); 
-                let pid = d.projectId || d.reqId; 
-                if(pid) window.projectLogCounts[pid] = (window.projectLogCounts[pid]||0)+1; 
-            }); 
+            snap.forEach(doc => { let d = doc.data(); let pid = d.projectId || d.reqId; if(pid) window.projectLogCounts[pid] = (window.projectLogCounts[pid]||0)+1; }); 
             window.renderProjectStatusList();
         });
         
         onSnapshot(collection(db, "project_purchases"), (snap) => { 
             window.projectPurchaseCounts = {}; 
-            snap.forEach(doc => { 
-                let pid = doc.data().projectId; 
-                if(pid) window.projectPurchaseCounts[pid] = (window.projectPurchaseCounts[pid]||0)+1; 
-            }); 
+            snap.forEach(doc => { let pid = doc.data().projectId; if(pid) window.projectPurchaseCounts[pid] = (window.projectPurchaseCounts[pid]||0)+1; }); 
             window.renderProjectStatusList();
         });
         
         onSnapshot(collection(db, "project_designs"), (snap) => { 
             window.projectDesignCounts = {}; 
-            snap.forEach(doc => { 
-                let pid = doc.data().projectId; 
-                if(pid) window.projectDesignCounts[pid] = (window.projectDesignCounts[pid]||0)+1; 
-            }); 
+            snap.forEach(doc => { let pid = doc.data().projectId; if(pid) window.projectDesignCounts[pid] = (window.projectDesignCounts[pid]||0)+1; }); 
             window.renderProjectStatusList();
         });
         
         onSnapshot(collection(db, "project_schedules"), (snap) => { 
             window.projectScheduleCounts = {}; 
-            snap.forEach(doc => { 
-                let pid = doc.data().projectId; 
-                if(pid) window.projectScheduleCounts[pid] = (window.projectScheduleCounts[pid]||0)+1; 
-            }); 
+            snap.forEach(doc => { let pid = doc.data().projectId; if(pid) window.projectScheduleCounts[pid] = (window.projectScheduleCounts[pid]||0)+1; }); 
             window.renderProjectStatusList();
         });
         
         window.loadNcrData();
-    } catch(e) { 
-        console.warn("카운트 로드 실패:", e); 
-    }
+    } catch(e) { console.warn("카운트 로드 실패:", e); }
 };
 
 window.switchProjPartTab = function(part) {
@@ -149,24 +120,16 @@ window.switchProjPartTab = function(part) {
     let btnMfg = document.getElementById('btn-part-mfg');
     let btnOpt = document.getElementById('btn-part-opt');
     
-    if (btnMfg) {
-        btnMfg.className = part === '제조' ? "px-3 py-1 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
-    }
-    if (btnOpt) {
-        btnOpt.className = part === '광학' ? "px-3 py-1 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
-    }
+    if (btnMfg) btnMfg.className = part === '제조' ? "px-3 py-1 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
+    if (btnOpt) btnOpt.className = part === '광학' ? "px-3 py-1 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
     window.loadProjectStatusData();
 };
 
 window.filterProjectStatus = function(status) {
     window.currentStatusFilter = status;
-    if (window.currentProjDashView === 'gantt') {
-        window.renderProjGantt(); 
-    } else if (window.currentProjDashView === 'calendar') {
-        window.renderProjCalendar(); 
-    } else {
-        window.renderProjectStatusList();
-    }
+    if(window.currentProjDashView === 'gantt') window.renderProjGantt(); 
+    else if(window.currentProjDashView === 'calendar') window.renderProjCalendar(); 
+    else window.renderProjectStatusList();
 };
 
 window.filterByCategory = function(category) { 
@@ -289,25 +252,17 @@ window.updateMiniDashboard = function() {
             const shipEst = getSafeString(item.d_shipEst); 
             const code = getSafeString(item.code) || '미지정';
             
-            if (status === 'pending' || status === 'rejected') {
-                pending++;
-            } else if (status === 'progress' || status === 'inspecting') {
-                progress++;
-            } else if (status === 'completed' && shipEn.startsWith(currentMonthStr)) {
-                completedThisMonth++;
-            }
+            if (status === 'pending' || status === 'rejected') pending++;
+            else if (status === 'progress' || status === 'inspecting') progress++;
+            else if (status === 'completed' && shipEn.startsWith(currentMonthStr)) completedThisMonth++;
 
             if (status !== 'completed' && status !== 'rejected' && shipEst) {
                 const shipDate = new Date(shipEst);
                 if(!isNaN(shipDate.getTime())) {
                     const diffDays = Math.ceil((shipDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-                    if (diffDays >= 0 && diffDays <= 7) {
-                        upcomingCodes7.push({ code: code, dDay: diffDays });
-                    } else if (diffDays < 0) {
-                        upcomingCodes7.push({ code: code, dDay: diffDays });
-                    } else if (diffDays > 7 && diffDays <= 14) {
-                        upcomingCodes14.push({ code: code, dDay: diffDays });
-                    }
+                    if (diffDays >= 0 && diffDays <= 7) upcomingCodes7.push({ code: code, dDay: diffDays });
+                    else if (diffDays < 0) upcomingCodes7.push({ code: code, dDay: diffDays });
+                    else if (diffDays > 7 && diffDays <= 14) upcomingCodes14.push({ code: code, dDay: diffDays });
                 }
             }
         });
@@ -341,9 +296,7 @@ window.updateMiniDashboard = function() {
 };
 
 window.loadProjectStatusData = function() {
-    if(projectStatusSnapshotUnsubscribe) {
-        projectStatusSnapshotUnsubscribe();
-    }
+    if(projectStatusSnapshotUnsubscribe) projectStatusSnapshotUnsubscribe();
     
     projectStatusSnapshotUnsubscribe = onSnapshot(query(collection(db, "projects_status")), function(snapshot) {
         window.currentProjectStatusList = []; 
@@ -372,13 +325,9 @@ window.loadProjectStatusData = function() {
         
         window.updateMiniDashboard();
         
-        if(window.currentProjDashView === 'gantt') {
-            window.renderProjGantt(); 
-        } else if(window.currentProjDashView === 'calendar') {
-            window.renderProjCalendar();
-        } else {
-            window.renderProjectStatusList();
-        }
+        if(window.currentProjDashView === 'gantt') window.renderProjGantt(); 
+        else if(window.currentProjDashView === 'calendar') window.renderProjCalendar();
+        else window.renderProjectStatusList();
     });
 };
 
@@ -617,33 +566,24 @@ window.savePurchaseItem = async function() {
     const fileInput = document.getElementById('new-pur-file');
     const btn = document.getElementById('btn-pur-save');
     
-    if(!content && fileInput.files.length === 0) {
-        return window.showToast("내용이나 파일을 첨부하세요.", "error");
-    }
+    if(!content && fileInput.files.length === 0) return window.showToast("내용이나 파일을 첨부하세요.", "error");
     
-    btn.innerHTML = '저장중..'; 
-    btn.disabled = true;
-    
+    btn.innerHTML = '저장중..'; btn.disabled = true;
     try { 
         let fileUrl = null; 
-        if(fileInput.files.length > 0) {
-            fileUrl = await handleDriveUploadWithProgress(fileInput, title);
-        }
+        if(fileInput.files.length > 0) fileUrl = await handleDriveUploadWithProgress(fileInput, title);
         await addDoc(collection(db, "project_purchases"), { projectId: pId, content: content, fileUrl: fileUrl, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
         window.showToast("구매 내역이 등록되었습니다."); 
         window.resetPurchaseForm(); 
     } catch(e) { 
         window.showToast(e.message, "error"); 
     } finally { 
-        btn.innerHTML = '등록'; 
-        btn.disabled = false; 
+        btn.innerHTML = '등록'; btn.disabled = false; 
     }
 };
 
 window.deletePurchase = async function(id) { 
-    if(confirm("삭제하시겠습니까?")) {
-        await deleteDoc(doc(db, "project_purchases", id)); 
-    }
+    if(confirm("삭제하시겠습니까?")) await deleteDoc(doc(db, "project_purchases", id)); 
 };
 
 window.openDesignModal = function(projectId, title) { 
@@ -705,33 +645,24 @@ window.saveDesignItem = async function() {
     const fileInput = document.getElementById('new-des-file');
     const btn = document.getElementById('btn-des-save');
     
-    if(!content && fileInput.files.length === 0) {
-        return window.showToast("내용이나 파일을 첨부하세요.", "error");
-    }
+    if(!content && fileInput.files.length === 0) return window.showToast("내용이나 파일을 첨부하세요.", "error");
     
-    btn.innerHTML = '저장중..'; 
-    btn.disabled = true;
-    
+    btn.innerHTML = '저장중..'; btn.disabled = true;
     try { 
         let fileUrl = null; 
-        if(fileInput.files.length > 0) {
-            fileUrl = await handleDriveUploadWithProgress(fileInput, title);
-        }
+        if(fileInput.files.length > 0) fileUrl = await handleDriveUploadWithProgress(fileInput, title);
         await addDoc(collection(db, "project_designs"), { projectId: pId, content: content, fileUrl: fileUrl, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
         window.showToast("설계 내역이 등록되었습니다."); 
         window.resetDesignForm(); 
     } catch(e) { 
         window.showToast(e.message, "error"); 
     } finally { 
-        btn.innerHTML = '등록'; 
-        btn.disabled = false; 
+        btn.innerHTML = '등록'; btn.disabled = false; 
     }
 };
 
 window.deleteDesign = async function(id) { 
-    if(confirm("삭제하시겠습니까?")) {
-        await deleteDoc(doc(db, "project_designs", id)); 
-    }
+    if(confirm("삭제하시겠습니까?")) await deleteDoc(doc(db, "project_designs", id)); 
 };
 
 window.openPjtScheduleModal = function(projectId, title) { 
@@ -793,33 +724,24 @@ window.savePjtScheduleItem = async function() {
     const fileInput = document.getElementById('new-sch-file');
     const btn = document.getElementById('btn-sch-save');
     
-    if(!content && fileInput.files.length === 0) {
-        return window.showToast("내용이나 파일을 첨부하세요.", "error");
-    }
+    if(!content && fileInput.files.length === 0) return window.showToast("내용이나 파일을 첨부하세요.", "error");
     
-    btn.innerHTML = '저장중..'; 
-    btn.disabled = true;
-    
+    btn.innerHTML = '저장중..'; btn.disabled = true;
     try { 
         let fileUrl = null; 
-        if(fileInput.files.length > 0) {
-            fileUrl = await handleDriveUploadWithProgress(fileInput, title);
-        }
+        if(fileInput.files.length > 0) fileUrl = await handleDriveUploadWithProgress(fileInput, title);
         await addDoc(collection(db, "project_schedules"), { projectId: pId, content: content, fileUrl: fileUrl, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
         window.showToast("PJT 일정 내역이 등록되었습니다."); 
         window.resetPjtScheduleForm(); 
     } catch(e) { 
         window.showToast(e.message, "error"); 
     } finally { 
-        btn.innerHTML = '등록'; 
-        btn.disabled = false; 
+        btn.innerHTML = '등록'; btn.disabled = false; 
     }
 };
 
 window.deletePjtSchedule = async function(id) { 
-    if(confirm("삭제하시겠습니까?")) {
-        await deleteDoc(doc(db, "project_schedules", id)); 
-    }
+    if(confirm("삭제하시겠습니까?")) await deleteDoc(doc(db, "project_schedules", id)); 
 };
 
 window.openProjStatusWriteModal = function() {
@@ -1462,7 +1384,7 @@ window.saveDailyLogItem = async function() {
                 purchaseRate: purchaseRateVal 
             }, { merge: true }); 
             
-            // 🔥 생산일지 알림 처리
+            // 🔥 알림 연동
             let notified = [];
             if(window.processMentions) {
                 notified = await window.processMentions(content, projectId, "생산일지"); 
@@ -2124,9 +2046,7 @@ window.deleteMdLog = async function(id, projectId) {
         await window.updateProjectTotalMd(projectId); 
         window.showToast("삭제되었습니다."); 
         window.resetMdLogForm(); 
-    } catch(e) { 
-        window.showToast("삭제 실패", "error"); 
-    } 
+    } catch(e) { window.showToast("삭제 실패", "error"); } 
 };
 
 window.updateProjectTotalMd = async function(projectId) { 
@@ -2330,11 +2250,12 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// 💡 3, 4번 해결: CSV 우회 파싱 방식 (웹 게시 링크 활용으로 에러 제로)
+// 💡 3, 4번 해결: CSV 강제 우회 파싱 방식 적용 (에러 완벽 차단)
 window.loadNcrData = async function() {
     try {
         const url = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSYwsWjs8ox503LLsRIeVRbbZ4R7eLgoq0C-ZdYIBIUACCwWyt5oYkAAtIpX9j1taqt1MQaEg1Jjom0/pub?output=csv';
-        const res = await fetch(url);
+        // 항상 최신 데이터를 가져오기 위해 캐시 무력화 파라미터 추가
+        const res = await fetch(url + '&t=' + Date.now());
         
         if (!res.ok) {
             throw new Error("데이터를 가져오지 못했습니다.");
@@ -2342,7 +2263,7 @@ window.loadNcrData = async function() {
 
         const csvText = await res.text();
         
-        // 초강력 CSV 파싱 알고리즘
+        // 💡 초강력 CSV 파싱 알고리즘
         const rows = [];
         let row = [], col = "", quote = false;
         
@@ -2383,19 +2304,11 @@ window.loadNcrData = async function() {
             }
         }
 
-        const authBtn = document.getElementById('btn-pjt-google-auth');
-        if (authBtn) {
-            authBtn.classList.add('hidden');
-        }
+        if(window.showToast) window.showToast("부적합(NCR) 데이터 동기화 완료!", "success");
 
     } catch(e) {
         console.error("NCR 시트 로드 에러:", e);
-        const authBtn = document.getElementById('btn-pjt-google-auth');
-        if (authBtn) {
-            authBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> 동기화 실패';
-            authBtn.className = 'text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-1.5 rounded-lg shadow-sm whitespace-nowrap ml-2';
-            authBtn.classList.remove('hidden');
-        }
+        if(window.showToast) window.showToast("동기화 실패: 데이터를 불러올 수 없습니다.", "error");
     }
 };
 
