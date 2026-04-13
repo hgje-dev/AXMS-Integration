@@ -130,7 +130,7 @@ window.resetWhFilters = function() {
     window.applyWhFilters();
 };
 
-// 💡 대시보드 업데이트 (선택된 기간에 맞게 필터링)
+// 대시보드 업데이트
 window.updateWhDashboard = function() {
     window.whPjtSearch = document.getElementById('wh-search-pjt')?.value.toLowerCase() || '';
     
