@@ -200,3 +200,38 @@ input:disabled, select:disabled, textarea:disabled {
 @keyframes aiShimmer { 
     100% { transform: translateX(100%); } 
 }
+
+/* ========================================================
+   💡 로그인 창 고급 다크 배경 애니메이션 추가
+======================================================== */
+.login-bg {
+    background: linear-gradient(-45deg, #020617, #0f172a, #1e1b4b, #172554);
+    background-size: 400% 400%;
+    animation: gradientBG 15s ease infinite;
+    position: relative;
+    overflow: hidden;
+}
+
+/* 빛나는 효과, 은은한 원형 그라데이션 오버레이 */
+.login-bg::before {
+    content: '';
+    position: absolute;
+    width: 200%;
+    height: 200%;
+    top: -50%;
+    left: -50%;
+    background: radial-gradient(circle, rgba(99,102,241,0.05) 0%, transparent 50%);
+    animation: rotateGlow 30s linear infinite;
+    pointer-events: none;
+}
+
+@keyframes gradientBG {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+@keyframes rotateGlow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
