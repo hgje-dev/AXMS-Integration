@@ -2,105 +2,189 @@
 import { db } from './firebase.js';
 import { 
     collection, doc, setDoc, getDoc, getDocs, 
-    addDoc, deleteDoc, query, where, serverTimestamp 
+    addDoc, deleteDoc, query, where, serverTimestamp, orderBy 
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+// ==========================================
+// 1. 전역 변수 및 초기화
+// ==========================================
 const SIMULATION_DRIVE_FOLDER_ID = "1qyW-Ym_16tpRUUE0NQuFmwxg3IadF70e";
 const simulationWorker = new Worker('./js/Worker/simulationWorker.js'); 
 
 window.currentProcessData = window.currentProcessData || [];
 window.latestP50Md = 0;
+window.latestReqP90 = 0;
 window.masterPresets = {};
+window.currentTab = 'hist'; 
 
-// 💡 1. 화면 처음 그릴 때 쓸 기본 프리셋 강제 주입
+// 기본 프리셋 (DB가 비었을 때 fallback 용)
 const defaultPresets = {
     dev: { 
-        label: "🔬 기본 신규 개발 모델", 
+        label: "🔬 기본 신규 개발", 
         processData: [
-            { name: "자재 입고 및 검수", q: 1, m: 2.0, pType: 'md' }, 
-            { name: "베이스 프레임 조립", q: 2, m: 3.0, pType: 'md' }, 
-            { name: "상부 유닛 조립", q: 3, m: 5.0, pType: 'md' }, 
-            { name: "전장 배선", q: 2, m: 4.0, pType: 'md' }, 
-            { name: "I/O 체크 및 제어", q: 1, m: 3.0, pType: 'md' }
+            { name: "개발 설계 및 리뷰", q: 2, m: 5.0, pType: 'md' }, 
+            { name: "자재 발주 및 대기", q: 1, m: 2.0, pType: 'md' }, 
+            { name: "신규 부품 조립 (유닛 합산)", q: 3, m: 0.3, pType: 'auto', unitData: [{name: "신규", q:1, m:1.0, o:0.9, p:1.4}] }, 
+            { name: "전장 배선 작업", q: 2, m: 5.0, pType: 'schedule_elec' }, 
+            { name: "제어 프로그램 디버깅", q: 1, m: 7.0, pType: 'schedule_ctrl' },
+            { name: "최종 비전 검사 및 출하", q: 1, m: 3.0, pType: 'schedule_insp' }
         ], 
-        curve: 95, labor: 300000, hex: '#4f46e5' 
+        curve: 98, diff: 1.0, buffer: 5, pSenior: 1, pMid: 2, pJunior: 0, 
+        internal: 3, labor: 300000, plannedExpense: 0, hex: '#8b5cf6', colorClass: 'bg-gradient-to-r from-indigo-500 to-purple-500' 
     }
 };
 
 // ==========================================
-// 2. Web Worker 리스너
+// 2. Web Worker 결과 수신 (UI 업데이트)
 // ==========================================
 simulationWorker.onmessage = function(e) {
-    const { p10, p50, p90, d10, d50, d90, rArr } = e.data;
+    const { p10, p50, p90, d10, d50, d90, rArr, bArr, tMd } = e.data;
     
     window.latestP50Md = parseFloat(p50.toFixed(1));
+    const method = document.getElementById('sim-method')?.value || 'mc';
     const lCost = parseFloat(document.getElementById('labor-cost')?.value) || 300000; 
     const pExp = parseFloat(document.getElementById('planned-expense')?.value) || 0; 
-    
-    // 날짜가 비어있으면 오늘 날짜 삽입
-    let stD = document.getElementById('start-date')?.value;
-    if(!stD) {
-        stD = window.getLocalDateStr(new Date());
-        const sdEl = document.getElementById('start-date');
-        if(sdEl) sdEl.value = stD;
-    }
+    const stD = document.getElementById('start-date')?.value || window.getLocalDateStr(new Date());
 
-    const results = { p10, p50, p90 };
-    const durations = { p10: d10, p50: d50, p90: d90 };
-
-    // 안전하게 UI 업데이트 (옵셔널 체이닝 적용)
+    // 1) 기본 결과 카드 업데이트
     ['p50', 'p10', 'p90'].forEach((k) => { 
-        const val = results[k];
-        const dur = durations[k];
+        const val = {p50, p10, p90}[k];
+        const dur = {p50: d50, p10: d10, p90: d90}[k];
         const dt = window.calculateWorkDate(stD, dur);
         
-        const mdEl = document.getElementById(`out-${k}-md`);
-        if(mdEl) mdEl.innerText = val.toFixed(1); 
-        
-        const dateEl = document.getElementById(`out-${k}-date`);
-        if(dateEl) dateEl.innerText = window.getLocalDateStr(dt); 
-        
-        const durEl = document.getElementById(`out-${k}-dur`);
-        if(durEl) durEl.innerText = dur; 
+        if(document.getElementById(`out-${k}-md`)) document.getElementById(`out-${k}-md`).innerText = val.toFixed(1); 
+        if(document.getElementById(`out-${k}-date`)) document.getElementById(`out-${k}-date`).innerText = window.getLocalDateStr(dt); 
+        if(document.getElementById(`out-${k}-dur`)) document.getElementById(`out-${k}-dur`).innerText = dur; 
+        if(document.getElementById(`out-${k}-cost`)) document.getElementById(`out-${k}-cost`).innerText = Math.round(val * lCost + pExp).toLocaleString(); 
     });
 
-    window.latestHistData = { 
-        results: rArr, 
-        hex: window.masterPresets[document.getElementById('eq-type')?.value]?.hex || '#4f46e5' 
-    };
+    if(document.getElementById('out-p50-calc-md')) document.getElementById('out-p50-calc-md').innerText = p50.toFixed(1); 
+    if(document.getElementById('out-calc-labor')) document.getElementById('out-calc-labor').innerText = lCost.toLocaleString(); 
+    if(pExp > 0){ 
+        if(document.getElementById('out-expense-display')) document.getElementById('out-expense-display').classList.remove('hidden');
+        if(document.getElementById('out-calc-expense')) document.getElementById('out-calc-expense').innerText = pExp.toLocaleString(); 
+    } else { 
+        if(document.getElementById('out-expense-display')) document.getElementById('out-expense-display').classList.add('hidden');
+    }
+    
+    if(document.getElementById('out-ccpm-buffer')) document.getElementById('out-ccpm-buffer').innerText = Math.max(0, d90 - d50);
+
+    // 2) 목표일 달성 확률 및 필요 인원 분석 (원본 로직 완벽 복구)
+    const tgD = document.getElementById('target-date')?.value;
+    const tEl = document.getElementById('target-date-result');
+    const inP = parseInt(document.getElementById('internal-personnel')?.value) || 0;
+    
+    const sen = parseInt(document.getElementById('p-senior')?.value) || 0;
+    const mid = parseInt(document.getElementById('p-mid')?.value) || 0;
+    const jun = parseInt(document.getElementById('p-junior')?.value) || 0;
+    const rP = sen + mid + jun;
+    const pers = rP < 1 ? 1 : rP;
+    const sMult = rP < 1 ? 1.0 : (sen*0.8 + mid*1.0 + jun*1.2) / rP;
+    const iters = bArr.length;
+
+    if(tgD) {
+        let wD = window.getWorkingDays(stD, tgD);
+        if(wD > 0) {
+            if(tEl) tEl.classList.remove('hidden');
+            if(document.getElementById('out-target-days')) document.getElementById('out-target-days').innerText = wD;
+            
+            let r50 = Math.ceil(p50 / wD), r90 = Math.ceil(p90 / wD); 
+            window.latestReqP90 = r90; 
+            
+            if(document.getElementById('out-req-p50')) document.getElementById('out-req-p50').innerText = r50; 
+            if(document.getElementById('out-req-p90')) document.getElementById('out-req-p90').innerText = r90;
+            if(document.getElementById('out-int-p50')) document.getElementById('out-int-p50').innerText = Math.min(r50, inP); 
+            if(document.getElementById('out-ext-p50')) document.getElementById('out-ext-p50').innerText = Math.max(0, r50 - inP);
+            if(document.getElementById('out-int-p90')) document.getElementById('out-int-p90').innerText = Math.min(r90, inP); 
+            if(document.getElementById('out-ext-p90')) document.getElementById('out-ext-p90').innerText = Math.max(0, r90 - inP);
+            
+            let sC = 0;
+            for(let i=0; i<iters; i++){ if(Math.ceil((bArr[i] * sMult) / pers) <= wD) sC++; }
+            let tP = ((sC / iters) * 100).toFixed(1);
+            
+            if(document.getElementById('out-target-prob')) document.getElementById('out-target-prob').innerText = tP + '%';
+            const pb = document.getElementById('out-target-prob-bar'); 
+            if(pb){ 
+                pb.style.width = tP + '%';
+                pb.className = `h-full rounded-full transition-all duration-700 ease-out bg-gradient-to-r ${tP >= 80 ? 'from-emerald-400 to-emerald-600' : (tP >= 40 ? 'from-amber-400 to-amber-500' : 'from-rose-400 to-rose-600')}`;
+            }
+        } else {
+            if(tEl) tEl.classList.add('hidden');
+        }
+    } else {
+        if(tEl) tEl.classList.add('hidden');
+    }
+
+    // 3) 리스크 민감도(Tornado Chart) 데이터 세팅 (원본 완벽 복구)
+    let s = [];
+    const qty = Math.max(1, parseFloat(document.getElementById('equip-qty')?.value)||1);
+    const uncert = method === 'mc' ? (parseFloat(document.getElementById('mc-uncertainty')?.value)||5)/100 : 0.05;
+    const diff = parseFloat(document.getElementById('diff-multiplier')?.value)||1.0;
+    const rBase = (parseFloat(document.getElementById('rework-rate')?.value)||0)/100;
+    const bBase = (parseFloat(document.getElementById('buffer-rate')?.value)||0)/100;
+    const curve = (parseFloat(document.getElementById('learning-curve')?.value)||95)/100;
+    const lR = Math.max(0.7, Math.pow(curve, Math.log2(qty))); 
+    const bM = diff * lR * sMult * (1 + rBase) * (1 + bBase);
+    
+    window.currentProcessData.forEach(p => { 
+        let pt = p.pType || 'md'; 
+        if(pt === 'auto'){ 
+            (p.unitData || []).forEach(u => { 
+                let m = parseFloat(u.m)||0, q = parseFloat(u.q)||0; 
+                if(q>0 && m>0){ 
+                    let o = tMd - (q*m), lo = method==='mc' ? m*(1-uncert) : parseFloat(u.o)||0, hi = method==='mc' ? m*(1+uncert) : parseFloat(u.p)||0; 
+                    s.push({name: `[유닛] ${u.name}`, low: ((o + q*lo)*qty)*bM, high: ((o + q*hi)*qty)*bM}); 
+                } 
+            }); 
+        } else if(pt === 'md'){ 
+            let m = parseFloat(p.m)||0, q = parseFloat(p.q)||0; 
+            if(q>0 && m>0){ 
+                let o = tMd - (q*m), lo = method==='mc' ? m*(1-uncert) : parseFloat(p.o)||0, hi = method==='mc' ? m*(1+uncert) : parseFloat(p.p)||0; 
+                s.push({name: `[공정] ${p.name}`, low: ((o + q*lo)*qty)*bM, high: ((o + q*hi)*qty)*bM});
+            } 
+        } 
+    });
+
+    const hs = tMd * qty * diff * sMult * lR;
+    const rl = Math.max(0, rBase*(1-uncert)), rh = rBase*(1+uncert);
+    const bl = Math.max(0, bBase*(1-uncert)), bh = bBase*(1+uncert);
+    s.push({name: "재작업 리스크", low: hs*(1+rl)*(1+bBase), high: hs*(1+rh)*(1+bBase)}); 
+    s.push({name: "예비 버퍼", low: hs*(1+rBase)*(1+bl), high: hs*(1+rBase)*(1+bh)});
+    
+    s.forEach(x => x.spread = x.high - x.low); 
+    s.sort((a,b) => a.spread - b.spread); 
+
+    window.latestTorData = { swings: s, base: tMd * qty * bM }; 
+    window.latestHistData = { results: rArr, hex: window.masterPresets[document.getElementById('eq-type')?.value]?.hex || '#8b5cf6' };
     
     if(window.renderChartJS) window.renderChartJS(); 
     if(window.renderGanttChart) window.renderGanttChart();
 };
 
+
 // ==========================================
-// 3. 시뮬레이션 실행
+// 3. 시뮬레이션 실행 트리거
 // ==========================================
 window.runSimulation = () => {
     const method = document.getElementById('sim-method')?.value || 'mc';
     const qty = Math.max(1, parseFloat(document.getElementById('equip-qty')?.value) || 1);
     const curve = (parseFloat(document.getElementById('learning-curve')?.value) || 95) / 100;
-    const iters = 5000;
-    const uncert = 0.05;
+    const iters = method === 'mc' ? (parseInt(document.getElementById('mc-iterations')?.value) || 5000) : 5000;
+    const uncert = method === 'mc' ? (parseFloat(document.getElementById('mc-uncertainty')?.value) || 5) / 100 : 0.05;
     const diff = parseFloat(document.getElementById('diff-multiplier')?.value) || 1.0;
     const rBase = (parseFloat(document.getElementById('rework-rate')?.value) || 2) / 100;
-    const bBase = (parseFloat(document.getElementById('buffer-rate')?.value) || 3) / 100;
+    const bBase = (parseFloat(document.getElementById('buffer-rate')?.value) || 5) / 100;
     
     const sen = parseInt(document.getElementById('p-senior')?.value) || 0;
-    const mid = parseInt(document.getElementById('p-mid')?.value) || 4; 
+    const mid = parseInt(document.getElementById('p-mid')?.value) || 0; 
     const jun = parseInt(document.getElementById('p-junior')?.value) || 0;
     const rP = sen + mid + jun; 
     const pers = rP < 1 ? 1 : rP; 
     const sMult = rP < 1 ? 1.0 : (sen * 0.8 + mid * 1.0 + jun * 1.2) / rP;
 
-    const itersEl = document.getElementById('out-iters');
-    if(itersEl) itersEl.innerText = iters.toLocaleString();
-
-    const tPersEl = document.getElementById('out-total-personnel');
-    if(tPersEl) tPersEl.innerText = rP;
-
-    const avgEl = document.getElementById('out-avg-skill');
-    if(avgEl) avgEl.innerText = sMult.toFixed(2);
+    if(document.getElementById('out-total-personnel')) document.getElementById('out-total-personnel').innerText = rP; 
+    if(document.getElementById('out-avg-skill')) document.getElementById('out-avg-skill').innerText = sMult.toFixed(2);
+    if(document.getElementById('out-iters')) document.getElementById('out-iters').innerText = iters.toLocaleString();
 
     simulationWorker.postMessage({
         method, qty, curve, iters, uncert, diff, rBase, bBase, pers, sMult,
@@ -114,57 +198,41 @@ window.debouncedRunSimulation = () => {
 };
 
 // ==========================================
-// 4. 프리셋 데이터 연동 및 렌더링
+// 4. 프리셋 데이터 연동 및 테이블 렌더링 로직 (완벽 복구)
 // ==========================================
 window.loadMasterPresets = async () => {
     try {
         const snap = await getDocs(collection(db, "sim_master_presets"));
+        const sel = document.getElementById('eq-type');
+        if (!sel) return;
+        
+        sel.innerHTML = '';
         window.masterPresets = {};
         
         if (!snap.empty) {
-            snap.forEach(d => { window.masterPresets[d.id] = d.data(); });
+            snap.forEach(d => {
+                window.masterPresets[d.id] = d.data();
+                sel.innerHTML += `<option value="${d.id}">${d.data().label}</option>`;
+            });
         } else {
             window.masterPresets = JSON.parse(JSON.stringify(defaultPresets));
-        }
-        
-        // 💡 화면 이동 시 드롭다운 껍데기가 비워지므로 다시 채움
-        const sel = document.getElementById('eq-type');
-        if (sel) {
-            sel.innerHTML = '<option value="">프리셋 선택</option>';
             for (let key in window.masterPresets) {
                 sel.innerHTML += `<option value="${key}">${window.masterPresets[key].label}</option>`;
             }
-            if(sel.options.length > 1) sel.selectedIndex = 1;
         }
-        
         window.handleTypeChange();
     } catch (e) { console.error("Presets Load Error", e); }
 };
 
 window.handleTypeChange = () => {
-    const sel = document.getElementById('eq-type');
-    if (!sel) return;
-
-    // 💡 라우터 이동으로 인해 드롭다운이 비워져 있다면 다시 채움
-    if (sel.options.length <= 1 && Object.keys(window.masterPresets).length > 0) {
-        sel.innerHTML = '<option value="">프리셋 선택</option>';
-        for (let key in window.masterPresets) {
-            sel.innerHTML += `<option value="${key}">${window.masterPresets[key].label}</option>`;
-        }
-        if(sel.options.length > 1) sel.selectedIndex = 1;
-    }
-
-    const id = sel.value;
+    const id = document.getElementById('eq-type')?.value;
     if (!id || !window.masterPresets[id]) return;
     
     const preset = window.masterPresets[id];
     window.currentProcessData = JSON.parse(JSON.stringify(preset.processData));
     
-    const cEl = document.getElementById('learning-curve');
-    if (cEl && preset.curve) cEl.value = preset.curve;
-    
-    const lEl = document.getElementById('labor-cost');
-    if (lEl && preset.labor) lEl.value = preset.labor;
+    if (preset.curve) document.getElementById('learning-curve').value = preset.curve;
+    if (preset.labor) document.getElementById('labor-cost').value = preset.labor;
     
     window.handleMethodChange();
 };
@@ -175,16 +243,17 @@ window.handleMethodChange = () => {
     
     if(pHead) {
         let h = `<tr>
-            <th class="px-4 py-3 text-left w-1/3 text-[11px] font-bold text-slate-500">공정명</th>
-            <th class="px-2 text-center w-24 text-[11px] font-bold text-slate-500">유형</th>
-            <th class="px-2 text-center w-16 text-[11px] font-bold text-slate-500">수량</th>`;
-        if(method === 'mc') h += `<th class="px-2 text-center w-24 text-[11px] font-bold text-indigo-600">기준MD</th>`;
-        else h += `<th class="px-2 text-center w-16 text-[11px] font-bold text-slate-500">최빈</th><th class="px-2 text-center text-emerald-600 w-16 text-[11px] font-bold">낙관</th><th class="px-2 text-center text-rose-600 w-16 text-[11px] font-bold">비관</th>`;
-        h += `<th class="px-2 text-center w-16 text-slate-400"><i class="fa-solid fa-gear"></i></th></tr>`;
+            <th class="px-4 py-3 text-left w-1/3 text-slate-500 font-bold text-xs">공정명</th>
+            <th class="px-2 text-center w-32 text-slate-500 font-bold text-xs">유형</th>
+            <th class="px-2 text-center w-16 text-slate-500 font-bold text-xs">수량</th>`;
+        if(method === 'mc') h += `<th class="px-2 text-center w-20 text-slate-500 font-bold text-xs">단위MD</th><th class="px-4 text-right w-24 text-slate-500 font-bold text-xs">소계</th>`;
+        else h += `<th class="px-2 text-center w-16 text-slate-500 font-bold text-xs">최빈</th><th class="px-2 text-center text-emerald-600 w-16 text-xs">낙관</th><th class="px-2 text-center text-rose-600 w-16 text-xs">비관</th>`;
+        h += `<th class="px-2 text-center w-24 text-slate-400"><i class="fa-solid fa-gear"></i></th></tr>`;
         pHead.innerHTML = h;
     }
 
     window.renderProcessTable();
+    window.renderUnitTables();
     window.debouncedRunSimulation();
 };
 
@@ -196,6 +265,7 @@ window.setupAutoSaveTriggers = () => {
     });
 };
 
+// 원본의 테이블 렌더링(아이콘, UI) 100% 복구
 window.renderProcessTable = () => {
     const m = document.getElementById('sim-method')?.value || 'mc';
     const tb = document.getElementById('process-tbody');
@@ -203,91 +273,182 @@ window.renderProcessTable = () => {
     tb.innerHTML = '';
 
     window.currentProcessData.forEach((p, i) => {
+        let pt = p.pType || 'md';
         const tr = document.createElement('tr');
-        tr.className = "hover:bg-slate-50 transition-colors";
+        tr.className = pt === 'auto' ? "bg-indigo-50/30 hover:bg-indigo-50/50 transition-colors" : "hover:bg-slate-50 transition-colors";
         
-        let mdInputs = "";
-        if (m === 'mc') {
-            mdInputs = `<td class="p-1.5"><input type="number" value="${p.m}" step="0.1" oninput="window.updateProcessData(${i}, 'm', this.value)" class="w-full text-right bg-slate-50 border border-slate-200 focus:bg-white text-sm font-bold text-indigo-600 calc-trigger rounded px-2 py-1.5 outline-indigo-500"></td>`;
-        } else {
-            mdInputs = `<td class="p-1"><input type="number" value="${p.m}" step="0.1" oninput="window.updateProcessData(${i}, 'm', this.value)" class="w-full text-right bg-slate-50 border border-slate-200 focus:bg-white text-sm calc-trigger rounded px-1 py-1.5 outline-indigo-500"></td>
-                        <td class="p-1"><input type="number" value="${p.o || (p.m*0.8).toFixed(1)}" step="0.1" oninput="window.updateProcessData(${i}, 'o', this.value)" class="w-full text-right bg-emerald-50 border border-emerald-200 focus:bg-white text-sm font-bold text-emerald-600 calc-trigger rounded px-1 py-1.5 outline-emerald-500"></td>
-                        <td class="p-1"><input type="number" value="${p.p || (p.m*1.2).toFixed(1)}" step="0.1" oninput="window.updateProcessData(${i}, 'p', this.value)" class="w-full text-right bg-rose-50 border border-rose-200 focus:bg-white text-sm font-bold text-rose-600 calc-trigger rounded px-1 py-1.5 outline-rose-500"></td>`;
-        }
+        let sel = `<select onchange="window.updateProcessData(${i},'pType',this.value)" class="table-input w-full text-[11px] font-bold">
+            <option value="auto" ${pt==='auto'?'selected':''}>⚙️ 유닛</option>
+            <option value="md" ${pt==='md'?'selected':''}>🛠️ 수동</option>
+            <option value="schedule_elec" ${pt==='schedule_elec'?'selected':''}>⚡ 전장(일정)</option>
+            <option value="schedule_ctrl" ${pt==='schedule_ctrl'?'selected':''}>💻 제어(일정)</option>
+            <option value="schedule_insp" ${pt==='schedule_insp'?'selected':''}>🔍 검사(일정)</option>
+            <option value="schedule_test" ${pt==='schedule_test'?'selected':''}>🚗 시운전</option>
+        </select>`;
+        
+        let act = `<div class="flex justify-center gap-2"><div class="cursor-grab text-slate-400 p-1"><i class="fa-solid fa-grip-vertical"></i></div>`;
+        if(pt === 'auto') act += `<div class="text-slate-300 p-1"><i class="fa-solid fa-lock"></i></div></div>`;
+        else act += `<button onclick="window.deleteProcessRow(${i})" class="text-slate-400 hover:text-rose-500 p-1"><i class="fa-solid fa-trash-can"></i></button></div>`;
 
-        tr.innerHTML = `
-            <td class="p-1.5"><input type="text" value="${p.name}" oninput="window.updateProcessData(${i}, 'name', this.value)" class="w-full bg-slate-50 border border-slate-200 focus:bg-white text-xs font-bold rounded px-3 py-2 outline-indigo-500 text-slate-700"></td>
-            <td class="p-1.5 text-center">
-                <select onchange="window.updateProcessData(${i}, 'pType', this.value)" class="text-xs border border-slate-200 rounded bg-slate-50 p-2 cursor-pointer outline-indigo-500 font-bold text-slate-600 w-full">
-                    <option value="md" ${p.pType === 'md' ? 'selected' : ''}>🛠 수동</option>
-                    <option value="auto" ${p.pType === 'auto' ? 'selected' : ''}>⚙ 유닛</option>
-                </select>
-            </td>
-            <td class="p-1.5"><input type="number" value="${p.q}" min="1" oninput="window.updateProcessData(${i}, 'q', this.value)" class="w-full text-right bg-slate-50 border border-slate-200 focus:bg-white text-sm font-black text-slate-700 calc-trigger rounded px-2 py-1.5 outline-indigo-500"></td>
-            ${mdInputs}
-            <td class="p-1.5 text-center"><button onclick="window.deleteProcessRow(${i})" class="text-slate-300 hover:text-rose-500 w-8 h-8 rounded-lg transition-colors"><i class="fa-solid fa-trash-can"></i></button></td>
-        `;
+        let h = '';
+        if(pt === 'auto') {
+            let um = 0;
+            (p.unitData || []).forEach(u => um += (parseFloat(u.q)||0)*(parseFloat(u.m)||0));
+            let ed = (um / (parseFloat(p.q)||1)).toFixed(1);
+            
+            h = `<td class="px-3 py-2"><input value="${p.name}" oninput="window.updateProcessData(${i},'name',this.value)" class="w-full text-xs font-bold text-indigo-700 bg-transparent outline-none"></td>
+                 <td class="px-1 py-2">${sel}</td>
+                 <td class="px-1 py-2"><input type="number" value="${p.q}" min="1" oninput="window.updateProcessData(${i},'q',Number(this.value))" class="table-input w-full text-right text-sm font-black text-indigo-700 calc-trigger"></td>`;
+            
+            if(m === 'mc') h += `<td class="px-2 py-2 text-right font-bold text-indigo-600"><span id="p-days-${i}">${ed}</span> 일</td><td class="px-4 py-2 text-right font-bold text-indigo-900"><span id="p-sub-${i}">${um.toFixed(1)}</span> MD</td>`;
+            else h += `<td colspan="3" class="px-4 py-2 text-center text-[11px] text-indigo-500">(자동계산)</td>`;
+            h += `<td class="px-2 text-center">${act}</td>`;
+        } else {
+            let iL = pt.startsWith('schedule') ? "일" : "MD";
+            let sV = pt.startsWith('schedule') ? "-" : (parseFloat(p.q)*parseFloat(p.m)).toFixed(1);
+            let qI = pt.startsWith('schedule') ? `<div class="text-center text-slate-400">-</div>` : `<input type="number" value="${p.q}" min="0" oninput="window.updateProcessData(${i},'q',Number(this.value))" class="table-input w-full text-right text-sm font-semibold calc-trigger">`;
+            
+            let sH = "";
+            if(m === 'mc') sH = `<td class="px-4 py-1.5 text-right font-bold text-slate-700" id="p-sub-${i}">${sV}</td>`;
+            else sH = `<td class="px-1 py-1.5"><input type="number" value="${p.o}" step="0.1" oninput="window.updateProcessData(${i},'o',Number(this.value))" class="table-input w-full text-right text-sm font-bold text-emerald-700 calc-trigger"></td><td class="px-1 py-1.5"><input type="number" value="${p.p}" step="0.1" oninput="window.updateProcessData(${i},'p',Number(this.value))" class="table-input w-full text-right text-sm font-bold text-rose-700 calc-trigger"></td>`;
+            
+            h = `<td class="px-3 py-1.5"><input value="${p.name}" oninput="window.updateProcessData(${i},'name',this.value)" class="table-input w-full text-xs font-bold"></td>
+                 <td class="px-1 py-1.5">${sel}</td>
+                 <td class="px-1 py-1.5">${qI}</td>
+                 <td class="px-1 py-1.5 relative"><input type="number" value="${p.m}" step="0.1" oninput="window.updateProcessData(${i},'m',Number(this.value))" class="table-input w-full text-right text-sm calc-trigger pr-6"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">${iL}</span></td>
+                 ${sH}<td class="px-2 text-center">${act}</td>`;
+        }
+        tr.innerHTML = h;
         tb.appendChild(tr);
     });
     window.setupAutoSaveTriggers();
 };
 
-window.updateProcessData = (i, field, val) => {
-    window.currentProcessData[i][field] = field === 'name' ? val : parseFloat(val);
-    window.debouncedRunSimulation();
+window.renderUnitTables = () => {
+    const cont = document.getElementById('dynamic-unit-sections');
+    if(!cont) return; 
+    let h = ''; 
+    const m = document.getElementById('sim-method')?.value || 'mc';
+
+    window.currentProcessData.forEach((p, pi) => {
+        if(p.pType !== 'auto') return; 
+        if(!p.unitData || p.unitData.length === 0) p.unitData = [{name:"신규", q:1, m:1, o:0.9, p:1.4}];
+        
+        let pM = 0, tb = '';
+        p.unitData.forEach((u, ui) => {
+            pM += (parseFloat(u.q)||0)*(parseFloat(u.m)||0); 
+            
+            let rH = `<td class="px-3 py-1.5"><input value="${u.name}" oninput="window.updateUnitData(${pi},${ui},'name',this.value)" class="table-input w-full text-xs font-bold"></td>
+                      <td class="px-1 py-1.5"><input type="number" value="${u.q}" oninput="window.updateUnitData(${pi},${ui},'q',Number(this.value))" class="table-input w-full text-right text-sm font-semibold calc-trigger"></td>`;
+            if(m === 'mc') {
+                rH += `<td class="px-1 py-1.5"><input type="number" value="${u.m}" step="0.1" oninput="window.updateUnitData(${pi},${ui},'m',Number(this.value))" class="table-input w-full text-right text-sm font-semibold calc-trigger"></td>
+                       <td class="px-4 py-1.5 text-right font-bold text-blue-900 bg-blue-50/30">${(parseFloat(u.q)*parseFloat(u.m)).toFixed(1)}</td>`;
+            } else {
+                rH += `<td class="px-1 py-1.5"><input type="number" value="${u.m}" step="0.1" oninput="window.updateUnitData(${pi},${ui},'m',Number(this.value))" class="table-input w-full text-right text-sm calc-trigger"></td>
+                       <td class="px-1 py-1.5 bg-emerald-50/30"><input type="number" value="${u.o}" step="0.1" oninput="window.updateUnitData(${pi},${ui},'o',Number(this.value))" class="table-input w-full text-right text-sm text-emerald-700 calc-trigger"></td>
+                       <td class="px-1 py-1.5 bg-rose-50/30"><input type="number" value="${u.p}" step="0.1" oninput="window.updateUnitData(${pi},${ui},'p',Number(this.value))" class="table-input w-full text-right text-sm text-rose-700 calc-trigger"></td>`;
+            }
+            rH += `<td class="px-2 text-center"><div class="flex items-center justify-center gap-2"><div class="cursor-grab text-slate-400 p-1"><i class="fa-solid fa-grip-vertical"></i></div><button onclick="window.deleteUnitRow(${pi},${ui})" class="text-slate-400 hover:text-rose-500 p-1"><i class="fa-solid fa-trash-can"></i></button></div></td>`;
+            tb += `<tr class="hover:bg-blue-50/30 transition-colors">${rH}</tr>`;
+        });
+
+        let uh = `<tr><th class="px-5 py-3 text-left text-blue-500">유닛명</th><th class="px-2 text-center text-blue-500 w-24">수량</th>`;
+        if(m === 'mc') uh += `<th class="px-2 text-center text-blue-500 w-24">단위MD</th><th class="px-4 text-right text-blue-500 w-24">소계</th>`; 
+        else uh += `<th class="px-2 text-center text-slate-500 w-16">최빈</th><th class="px-2 text-center text-emerald-600 bg-emerald-50/50 w-16">낙관</th><th class="px-2 text-center text-rose-600 bg-rose-50/50 w-16">비관</th>`;
+        uh += `<th class="px-3 text-center text-slate-400 w-16"><i class="fa-solid fa-gear"></i></th></tr>`;
+        
+        h += `<section class="bg-white rounded-3xl border border-blue-200 border-l-8 border-l-blue-500 mb-6 overflow-hidden">
+                <div class="px-8 py-5 border-b border-slate-100 flex justify-between">
+                    <h2 class="text-sm font-bold flex items-center gap-2 text-slate-800"><i class="fa-solid fa-cubes text-blue-500"></i> 유닛 - ${p.name}</h2>
+                    <button onclick="window.addUnitRow(${pi})" class="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-xs font-bold">+ 추가</button>
+                </div>
+                <div class="overflow-x-auto"><table class="w-full text-xs"><thead class="bg-slate-50 border-b">${uh}</thead><tbody class="divide-y">${tb}</tbody></table></div>
+                <div class="bg-blue-50/30 p-4 text-right border-t"><span class="text-[11px] font-bold text-slate-500">유닛 합계</span><span class="ml-3 text-lg font-black text-blue-700">${pM.toFixed(1)} <span class="text-sm">MD</span></span></div>
+              </section>`;
+    });
+    cont.innerHTML = h;
+    window.setupAutoSaveTriggers();
 };
 
-window.addProcessRow = () => {
-    window.currentProcessData.push({ name: "신규 공정", q: 1, m: 1.0, pType: 'md' });
-    window.renderProcessTable();
-    window.debouncedRunSimulation();
+window.updateProcessData = (i, f, v) => { 
+    window.currentProcessData[i][f] = f==='name'||f==='pType' ? v : parseFloat(v);
+    if(f === 'pType' && v === 'auto' && !window.currentProcessData[i].unitData) {
+        window.currentProcessData[i].unitData = [{name:"신규", q:1, m:1.0, o:0.9, p:1.4}]; 
+    }
+    window.renderProcessTable(); window.renderUnitTables(); 
+    window.debouncedRunSimulation(); 
+};
+window.addProcessRow = () => { window.currentProcessData.push({name:"신규 공정", q:1, m:1.0, pType:'md'}); window.renderProcessTable(); window.debouncedRunSimulation(); };
+window.deleteProcessRow = (i) => { window.currentProcessData.splice(i,1); window.renderProcessTable(); window.renderUnitTables(); window.debouncedRunSimulation(); };
+
+window.updateUnitData = (pI, uI, f, v) => { window.currentProcessData[pI].unitData[uI][f] = v; window.debouncedRunSimulation(); window.renderUnitTables(); window.renderProcessTable(); };
+window.addUnitRow = (pI) => { window.currentProcessData[pI].unitData.push({name:"신규 유닛", q:1, m:1.0, o:0.9, p:1.4}); window.renderUnitTables(); window.renderProcessTable(); window.debouncedRunSimulation(); };
+window.deleteUnitRow = (pI, uI) => { if(window.currentProcessData[pI].unitData.length <= 1) return; window.currentProcessData[pI].unitData.splice(uI,1); window.renderUnitTables(); window.renderProcessTable(); window.debouncedRunSimulation(); };
+
+window.applyP90Personnel = () => {
+    if(window.latestReqP90 && window.latestReqP90 > 0) {
+        document.getElementById('p-senior').value = 0;
+        document.getElementById('p-mid').value = window.latestReqP90;
+        document.getElementById('p-junior').value = 0;
+        window.showToast(`P90 기준 안전 인원(${window.latestReqP90}명)이 중급 숙련도로 자동 세팅되었습니다.`);
+        window.debouncedRunSimulation();
+    } else {
+        window.showToast('목표 완료일이 설정되지 않았거나 계산이 필요하지 않습니다.', 'error');
+    }
 };
 
-window.deleteProcessRow = (i) => {
-    window.currentProcessData.splice(i, 1);
-    window.renderProcessTable();
-    window.debouncedRunSimulation();
+window.switchTab = (tab) => {
+    window.currentTab = tab;
+    document.getElementById('tab-hist').className = tab === 'hist' ? "flex-1 py-2.5 text-xs font-extrabold rounded-xl bg-white text-indigo-600 shadow-sm border border-slate-200 transition-all uppercase tracking-wider" : "flex-1 py-2.5 text-xs font-bold rounded-xl text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-all border border-transparent uppercase tracking-wider";
+    document.getElementById('tab-tor').className = tab === 'tor' ? "flex-1 py-2.5 text-xs font-extrabold rounded-xl bg-white text-indigo-600 shadow-sm border border-slate-200 transition-all uppercase tracking-wider" : "flex-1 py-2.5 text-xs font-bold rounded-xl text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-all border border-transparent uppercase tracking-wider";
+    window.renderChartJS();
 };
 
 // ==========================================
-// 7. 시각화 (ChartJS & Gantt)
+// 5. 차트 (ChartJS) 및 간트 (Gantt)
 // ==========================================
 window.renderChartJS = () => {
     const canvas = document.getElementById('chart-canvas');
-    if (!canvas || !window.latestHistData) return;
+    if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (window.theChart) window.theChart.destroy();
-
-    const res = window.latestHistData.results;
-    if(!res || res.length === 0) return;
     
-    const min = res[0], max = res[res.length-1];
-    const bins = new Array(30).fill(0);
-    const bs = (max - min) / 30 || 1;
-    
-    res.forEach(v => {
-        let idx = Math.floor((v - min) / bs);
-        if (idx >= 30) idx = 29;
-        bins[idx]++;
-    });
+    Chart.defaults.font.family = "'Pretendard', sans-serif";
 
-    window.theChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: bins.map((_, i) => (min + i * bs).toFixed(0)),
-            datasets: [{
-                data: bins,
-                backgroundColor: window.latestHistData.hex,
-                borderRadius: 4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: { y: { display: false }, x: { grid: { display: false }, ticks: { color: '#94a3b8', font: {size: 9} } } }
-        }
-    });
+    if (window.currentTab === 'hist' && window.latestHistData) {
+        const res = window.latestHistData.results;
+        if(!res || res.length === 0) return;
+        
+        const min = res[0], max = res[res.length-1];
+        const bins = new Array(30).fill(0), lbls = new Array(30).fill('');
+        const bs = (max - min) / 30 || 1;
+        
+        res.forEach(v => { let idx = Math.floor((v - min) / bs); if(idx >= 30) idx = 29; bins[idx]++; });
+        for(let i=0; i<30; i++) lbls[i] = (min + i * bs).toFixed(0);
+
+        window.theChart = new Chart(ctx, {
+            type: 'bar',
+            data: { labels: lbls, datasets: [{ data: bins, backgroundColor: window.latestHistData.hex, borderRadius: 4 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { display: false }, x: { grid: { display: false } } } }
+        });
+    } else if (window.currentTab === 'tor' && window.latestTorData) {
+        const {swings, base} = window.latestTorData;
+        const lbls = swings.map(s => s.name);
+        const dH = swings.map(s => [base, s.high]);
+        const dL = swings.map(s => [s.low, base]);
+
+        window.theChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: lbls,
+                datasets: [
+                    { label: '지연 리스크', data: dH, backgroundColor: '#f43f5e', borderRadius: 3 },
+                    { label: '단축 기회', data: dL, backgroundColor: '#10b981', borderRadius: 3 }
+                ]
+            },
+            options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', align: 'end' } }, scales: { x: { min: Math.min(...swings.map(s=>s.low))*0.95 }, y: { grid: { display: false } } } }
+        });
+    }
 };
 
 window.renderGanttChart = () => {
@@ -296,26 +457,41 @@ window.renderGanttChart = () => {
     const startStr = document.getElementById('start-date')?.value || window.getLocalDateStr(new Date());
     
     let totalDays = 0;
-    window.currentProcessData.forEach(p => { totalDays += parseFloat(p.m) || 0; });
+    window.currentProcessData.forEach(p => {
+        let pt = p.pType || 'md';
+        if(pt === 'auto') { let um = 0; (p.unitData || []).forEach(u => um += (parseFloat(u.q)||0)*(parseFloat(u.m)||0)); totalDays += um / (parseFloat(p.q)||1); } 
+        else { totalDays += parseFloat(p.m) || 0; }
+    });
     if (totalDays <= 0) totalDays = 1;
 
     let html = '<div class="flex flex-col gap-3 py-2">';
     let offset = 0;
     window.currentProcessData.forEach(p => {
-        const days = parseFloat(p.m) || 0;
+        let pt = p.pType || 'md'; let days = 0;
+        if(pt === 'auto') { let um = 0; (p.unitData || []).forEach(u => um += (parseFloat(u.q)||0)*(parseFloat(u.m)||0)); days = um / (parseFloat(p.q)||1); } 
+        else { days = parseFloat(p.m) || 0; }
         if (days <= 0) return;
+        
+        let startD = window.calculateWorkDate(startStr, Math.floor(offset));
+        let endD = window.calculateWorkDate(startStr, Math.floor(offset + days - 0.0001));
         const width = (days / totalDays) * 100;
         const left = (offset / totalDays) * 100;
         
+        let sStr = window.getLocalDateStr(startD).substring(5).replace('-','/'); 
+        let eStr = window.getLocalDateStr(endD).substring(5).replace('-','/');
+        let isAutoBadge = pt === 'auto' ? '<i class="fa-solid fa-gears text-indigo-400 mr-1"></i>' : (pt === 'schedule_test' ? '<i class="fa-solid fa-car text-emerald-400 mr-1"></i>' : (pt.startsWith('schedule') ? '<i class="fa-regular fa-calendar text-emerald-400 mr-1"></i>' : ''));
+        let curColorCls = pt.startsWith('schedule') ? 'bg-gradient-to-r from-emerald-400 to-teal-500' : 'bg-gradient-to-r from-indigo-400 to-purple-500';
+
         html += `
-            <div class="flex items-center text-[11px] group">
-                <div class="w-40 truncate pr-4 text-right font-bold text-slate-600 group-hover:text-indigo-600 transition-colors">${p.name}</div>
-                <div class="flex-1 bg-slate-100 rounded-full h-6 relative overflow-hidden border border-slate-200">
-                    <div class="absolute h-full bg-indigo-500 shadow-md flex items-center justify-center text-white font-bold text-[9px]" 
-                         style="left: ${left}%; width: ${width}%;">
-                        ${days.toFixed(1)}d
+            <div class="flex items-center text-xs group z-10">
+                <div class="w-56 font-bold truncate pr-4 text-right text-slate-700 group-hover:text-indigo-600 transition-colors">${isAutoBadge}${p.name}</div>
+                <div class="flex-1 relative h-7 bg-slate-100 rounded-full overflow-visible border border-slate-200">
+                    <div class="absolute top-0 h-full rounded-full ${curColorCls} flex items-center justify-center px-2 shadow-md shadow-indigo-500/20 gantt-bar" 
+                         style="left: ${left}%; width: ${width}%; min-width: 70px;">
+                        <span class="text-white text-[10px] font-bold truncate leading-none pt-0.5 tracking-wider">${days.toFixed(1)}일 (${p.q}명)</span>
                     </div>
                 </div>
+                <div class="w-[100px] text-left text-slate-400 font-mono tracking-tight text-[11px] pl-4 font-semibold">${sStr} ~ ${eStr}</div>
             </div>
         `;
         offset += days;
@@ -325,51 +501,128 @@ window.renderGanttChart = () => {
 };
 
 // ==========================================
-// 8. AI 연동
+// 6. 백엔드 연동 AI 분석
 // ==========================================
 window.generateGroqInsight = async () => {
     if (!window.latestP50Md) return window.showToast("먼저 시뮬레이션을 실행해주세요.", "error");
+
     window.showToast("AI 심층 분석을 요청 중입니다...", "success");
-    const bBox = document.getElementById('ai-briefing-text');
-    if(bBox) bBox.innerHTML = '<div class="text-center p-4"><i class="fa-solid fa-spinner fa-spin mr-2"></i>AI가 분석 중입니다...</div>';
+    const briefingBox = document.getElementById('ai-briefing-text');
+    if(briefingBox) briefingBox.innerHTML = '<div class="text-center p-4"><i class="fa-solid fa-spinner fa-spin mr-2"></i>AI가 데이터를 분석하고 있습니다...</div>';
 
     try {
         const response = await fetch('/api/simulation/analyze', { 
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ projectInfo: { p50Md: window.latestP50Md, processData: window.currentProcessData } })
+            body: JSON.stringify({
+                projectInfo: {
+                    code: document.getElementById('project-code')?.value,
+                    name: document.getElementById('project-name')?.value,
+                    p50Md: window.latestP50Md,
+                    processData: window.currentProcessData
+                }
+            })
         });
-        if (!response.ok) throw new Error("AI 서버 에러");
+
+        if (!response.ok) throw new Error("AI 서버 응답 실패");
         const data = await response.json();
         
-        if(bBox) {
-            bBox.innerHTML = `
+        if(briefingBox) {
+            briefingBox.innerHTML = `
                 <div class="space-y-3 animate-fade-in">
                     <p class="text-sm leading-relaxed">${data.summary || "분석 완료"}</p>
                     <div class="grid grid-cols-2 gap-2 mt-2">
-                        <div class="bg-slate-800 p-2 rounded"><span class="text-[10px] text-slate-400 block">리스크</span><span class="text-xs font-bold text-rose-400">${data.mainRisk||"없음"}</span></div>
-                        <div class="bg-slate-800 p-2 rounded"><span class="text-[10px] text-slate-400 block">조치</span><span class="text-xs font-bold text-emerald-400">${data.action||"정상"}</span></div>
+                        <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-700">
+                            <span class="text-[10px] text-slate-400 block mb-1">예상 리스크</span>
+                            <span class="text-xs font-bold text-rose-400">${data.mainRisk || "없음"}</span>
+                        </div>
+                        <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-700">
+                            <span class="text-[10px] text-slate-400 block mb-1">권장 조치</span>
+                            <span class="text-xs font-bold text-emerald-400">${data.action || "정상 진행"}</span>
+                        </div>
                     </div>
-                </div>`;
+                </div>
+            `;
         }
     } catch (e) {
-        window.showToast("AI 분석 모듈을 사용할 수 없습니다.", "error");
-        if(bBox) bBox.innerText = "서버 연결 안됨";
+        window.showToast("AI 분석 모듈이 준비되지 않았습니다.", "error");
+        if(briefingBox) briefingBox.innerText = "AI 서버와 연결할 수 없습니다.";
     }
 };
 
-// ==========================================
-// 9. 다운로드
-// ==========================================
-window.exportToExcel = async () => {
-    if (typeof ExcelJS === 'undefined') return window.showToast("엑셀 라이브러리 로딩 중", "warning");
-    const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('시뮬레이션');
-    ws.columns = [ { header: '공정명', key: 'name', width: 25 }, { header: '수량', key: 'q', width: 10 }, { header: 'MD', key: 'm', width: 10 } ];
-    ws.getRow(1).font = { bold: true };
-    window.currentProcessData.forEach(p => ws.addRow({ name: p.name, q: p.q, m: p.m }));
-    const buffer = await wb.xlsx.writeBuffer();
-    saveAs(new Blob([buffer]), `Simulation.xlsx`);
+window.generateAiComparison = async () => {
+    window.showToast("유사 프로젝트 AI 비교 분석은 백엔드 기능 준비중입니다.", "warning");
 };
 
-// 초기화 강제 실행 (타임아웃으로 DOM 준비 대기)
-setTimeout(window.loadMasterPresets, 300);
+// ==========================================
+// 7. 데이터 내보내기 (Firestore & Excel)
+// ==========================================
+window.saveToFirestore = async function(isSilent = false) {
+    const pCode = document.getElementById('project-code')?.value;
+    const pName = document.getElementById('project-name')?.value;
+    if (!pName) return window.showToast("프로젝트 이름을 입력하세요.", "error");
+
+    const payload = {
+        projectCode: pCode,
+        projectName: pName,
+        managerName: document.getElementById('manager-name')?.value,
+        qty: parseInt(document.getElementById('equip-qty')?.value) || 1,
+        curve: parseInt(document.getElementById('learning-curve')?.value) || 95,
+        processData: window.currentProcessData,
+        p50Md: window.latestP50Md,
+        authorUid: window.currentUser?.uid || 'guest',
+        updatedAt: serverTimestamp()
+    };
+
+    try {
+        if (window.currentProjectId) {
+            await setDoc(doc(db, "sim_projects", window.currentProjectId), payload, { merge: true });
+        } else {
+            const docRef = await addDoc(collection(db, "sim_projects"), { ...payload, createdAt: serverTimestamp() });
+            window.currentProjectId = docRef.id;
+        }
+        if (!isSilent) window.showToast("클라우드에 저장되었습니다.");
+    } catch (e) {
+        window.showToast("저장 실패", "error");
+    }
+};
+
+window.exportToExcel = async () => {
+    if (typeof ExcelJS === 'undefined') return window.showToast("라이브러리 로딩 중입니다.", "warning");
+    
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('공수시뮬레이션_결과');
+    
+    ws.columns = [
+        { header: '공정명', key: 'name', width: 25 },
+        { header: '유형', key: 'type', width: 10 },
+        { header: '수량', key: 'q', width: 10 },
+        { header: '기준MD', key: 'm', width: 10 }
+    ];
+    
+    ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } };
+    ws.getRow(1).alignment = { horizontal: 'center' };
+
+    window.currentProcessData.forEach(p => {
+        const row = ws.addRow({ name: p.name, type: p.pType === 'md' ? '수동' : (p.pType === 'auto' ? '유닛' : '일정'), q: p.q, m: p.m });
+        row.eachCell(cell => { cell.alignment = { horizontal: 'center' }; });
+        row.getCell(1).alignment = { horizontal: 'left' };
+    });
+    
+    const buffer = await wb.xlsx.writeBuffer();
+    saveAs(new Blob([buffer]), `AXMS_Simulation_${new Date().toISOString().split('T')[0]}.xlsx`);
+    window.showToast("엑셀 파일이 다운로드되었습니다.");
+};
+
+window.loadSimilarProjectsList = () => {
+    const list = document.getElementById('similar-projects-list');
+    if(list) list.innerHTML = '<div class="text-slate-400 text-xs p-2">과거 프로젝트 데이터를 불러오는 중...</div>';
+    setTimeout(() => {
+        if(list) list.innerHTML = '<div class="text-slate-400 text-xs p-2">불러올 수 있는 프로젝트가 없습니다.</div>';
+    }, 1000);
+}
+
+// 초기화 실행
+window.loadMasterPresets();
+window.loadSimilarProjectsList();
