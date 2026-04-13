@@ -70,6 +70,9 @@
                     <i class="fa-solid fa-search absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]"></i>
                     <input type="text" id="proj-search" placeholder="검색..." oninput="window.searchProjectBoard(this.value)" class="pl-6 pr-2 py-1.5 text-[11px] border border-slate-300 rounded-lg outline-none w-24 sm:w-32 font-bold focus:border-indigo-500 bg-white">
                 </div>
+                <button id="btn-pjt-google-auth" onclick="window.authenticateGoogle()" class="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-1.5 rounded-lg shadow-sm hover:bg-amber-100 transition-colors whitespace-nowrap ml-2">
+                    <i class="fa-brands fa-google"></i> 구글 연동 필요
+                </button>
             </div>
             
             <div class="flex items-center gap-1.5 flex-wrap">
