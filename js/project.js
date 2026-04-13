@@ -21,7 +21,7 @@ window.hideCompletedFilter = false;
 window.ganttTodayOffset = 0;
 window.ncrData = [];
 
-// 💡 유틸리티: 이미지 첨부 시 용량 최적화 및 Base64 변환
+// 💡 유틸리티: 이미지 첨부 시 용량 최적화 및 Base64 변환 (에러 완전 차단)
 window.resizeAndConvertToBase64 = function(file, callback) {
     if (!file || !file.type.match(/image.*/)) {
         callback(null);
@@ -130,37 +130,92 @@ window.filterProjectStatus = function(status) {
     else window.renderProjectStatusList();
 };
 
-window.filterByCategory = function(category) { window.currentCategoryFilter = category; window.filterProjectStatus(window.currentStatusFilter); };
-window.filterByYear = function(yearStr) { window.currentYearFilter = yearStr; window.updateMiniDashboard(); window.filterProjectStatus(window.currentStatusFilter); };
-window.filterByMonth = function(monthStr) { window.currentMonthFilter = monthStr; window.updateMiniDashboard(); window.filterProjectStatus(window.currentStatusFilter); };
+window.filterByCategory = function(category) { 
+    window.currentCategoryFilter = category; 
+    window.filterProjectStatus(window.currentStatusFilter); 
+};
+
+window.filterByYear = function(yearStr) { 
+    window.currentYearFilter = yearStr; 
+    window.updateMiniDashboard(); 
+    window.filterProjectStatus(window.currentStatusFilter); 
+};
+
+window.filterByMonth = function(monthStr) { 
+    window.currentMonthFilter = monthStr; 
+    window.updateMiniDashboard(); 
+    window.filterProjectStatus(window.currentStatusFilter); 
+};
+
 window.filterByStatusOnly = function(status) {
-    window.currentCategoryFilter = 'all'; window.currentYearFilter = ''; window.currentMonthFilter = ''; window.hideCompletedFilter = false;
-    const cSelect = document.getElementById('filter-category-select'); if(cSelect) cSelect.value = 'all';
-    const ySelect = document.getElementById('filter-year-select'); if(ySelect) ySelect.value = '';
-    const mSelect = document.getElementById('filter-month-select'); if(mSelect) mSelect.value = '';
-    const hCb = document.getElementById('hide-completed-cb'); if(hCb) hCb.checked = false;
+    window.currentCategoryFilter = 'all'; 
+    window.currentYearFilter = ''; 
+    window.currentMonthFilter = ''; 
+    window.hideCompletedFilter = false;
+    
+    const cSelect = document.getElementById('filter-category-select'); 
+    if(cSelect) cSelect.value = 'all';
+    
+    const ySelect = document.getElementById('filter-year-select'); 
+    if(ySelect) ySelect.value = '';
+    
+    const mSelect = document.getElementById('filter-month-select'); 
+    if(mSelect) mSelect.value = '';
+    
+    const hCb = document.getElementById('hide-completed-cb'); 
+    if(hCb) hCb.checked = false;
+    
     window.filterProjectStatus(status);
 };
+
 window.resetAllFilters = function() {
-    window.currentStatusFilter = 'all'; window.currentCategoryFilter = 'all'; window.currentYearFilter = ''; window.currentMonthFilter = ''; window.hideCompletedFilter = false;
+    window.currentStatusFilter = 'all'; 
+    window.currentCategoryFilter = 'all'; 
+    window.currentYearFilter = ''; 
+    window.currentMonthFilter = ''; 
+    window.hideCompletedFilter = false;
+    
     if(document.getElementById('filter-category-select')) document.getElementById('filter-category-select').value = 'all';
     if(document.getElementById('filter-year-select')) document.getElementById('filter-year-select').value = '';
     if(document.getElementById('filter-month-select')) document.getElementById('filter-month-select').value = '';
     if(document.getElementById('hide-completed-cb')) document.getElementById('hide-completed-cb').checked = false;
+    
     window.filterProjectStatus('all');
 };
 
-window.toggleHideCompleted = function(checked) { window.hideCompletedFilter = checked; window.filterProjectStatus(window.currentStatusFilter); };
+window.toggleHideCompleted = function(checked) { 
+    window.hideCompletedFilter = checked; 
+    window.filterProjectStatus(window.currentStatusFilter); 
+};
 
 window.getFilteredProjects = function() {
     let list = window.currentProjectStatusList || [];
-    if(window.currentCategoryFilter && window.currentCategoryFilter !== 'all') list = list.filter(item => getSafeString(item.category) === window.currentCategoryFilter);
-    if(window.currentStatusFilter && window.currentStatusFilter !== 'all') { 
-        list = list.filter(item => { if (window.currentStatusFilter === 'progress') return item.status === 'progress' || item.status === 'inspecting'; return item.status === window.currentStatusFilter; }); 
+    
+    if(window.currentCategoryFilter && window.currentCategoryFilter !== 'all') {
+        list = list.filter(item => getSafeString(item.category) === window.currentCategoryFilter);
     }
-    if(window.hideCompletedFilter) list = list.filter(item => item.status !== 'completed');
-    if(window.currentYearFilter) list = list.filter(item => (item.d_shipEn || '').startsWith(window.currentYearFilter) || (item.d_asmEst || '').startsWith(window.currentYearFilter) || (item.d_asmEn || '').startsWith(window.currentYearFilter));
-    if(window.currentMonthFilter) list = list.filter(item => (item.d_shipEn || '').startsWith(window.currentMonthFilter) || (item.d_asmEst || '').startsWith(window.currentMonthFilter) || (item.d_asmEn || '').startsWith(window.currentMonthFilter));
+    
+    if(window.currentStatusFilter && window.currentStatusFilter !== 'all') { 
+        list = list.filter(item => { 
+            if (window.currentStatusFilter === 'progress') {
+                return item.status === 'progress' || item.status === 'inspecting'; 
+            }
+            return item.status === window.currentStatusFilter; 
+        }); 
+    }
+    
+    if(window.hideCompletedFilter) {
+        list = list.filter(item => item.status !== 'completed');
+    }
+    
+    if(window.currentYearFilter) {
+        list = list.filter(item => (item.d_shipEn || '').startsWith(window.currentYearFilter) || (item.d_asmEst || '').startsWith(window.currentYearFilter) || (item.d_asmEn || '').startsWith(window.currentYearFilter));
+    }
+    
+    if(window.currentMonthFilter) {
+        list = list.filter(item => (item.d_shipEn || '').startsWith(window.currentMonthFilter) || (item.d_asmEst || '').startsWith(window.currentMonthFilter) || (item.d_asmEn || '').startsWith(window.currentMonthFilter));
+    }
+    
     const priority = { 'pending': 1, 'progress': 2, 'inspecting': 2, 'rejected': 3, 'completed': 4 };
     list.sort((a,b) => (priority[a.status] || 99) - (priority[b.status] || 99) || getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
     return list;
@@ -185,7 +240,9 @@ window.updateMiniDashboard = function() {
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
         const completedLabel = document.getElementById('mini-dash-completed-label');
-        if (completedLabel) completedLabel.innerHTML = '<i class="fa-solid fa-truck-fast text-emerald-400"></i> 출하 완료 (' + (now.getMonth() + 1) + '월)';
+        if (completedLabel) {
+            completedLabel.innerHTML = '<i class="fa-solid fa-truck-fast text-emerald-400"></i> 출하 완료 (' + (now.getMonth() + 1) + '월)';
+        }
 
         (window.currentProjectStatusList || []).forEach(function(item) {
             const status = getSafeString(item.status); 
@@ -214,18 +271,24 @@ window.updateMiniDashboard = function() {
 
         const elUpcoming7 = document.getElementById('mini-dash-upcoming');
         if(elUpcoming7) { 
-            if (upcomingCodes7.length === 0) elUpcoming7.innerHTML = '<span class="text-[10px] text-rose-400 font-bold w-full text-center mt-1">임박한 프로젝트 없음</span>';
-            else elUpcoming7.innerHTML = upcomingCodes7.map(u => {
-                let dText = u.dDay === 0 ? 'D-Day' : (u.dDay < 0 ? '지연' : 'D-' + u.dDay); 
-                let bgClass = u.dDay <= 3 ? 'bg-rose-500 text-white border-rose-600' : 'bg-white text-rose-600 border-rose-200'; 
-                return `<span class="text-[10px] border px-1.5 py-0.5 rounded font-bold shadow-sm flex items-center gap-1 ${bgClass}">${u.code} <span class="opacity-80 text-[8px]">[${dText}]</span></span>`;
-            }).join('');
+            if (upcomingCodes7.length === 0) {
+                elUpcoming7.innerHTML = '<span class="text-[10px] text-rose-400 font-bold w-full text-center mt-1">임박한 프로젝트 없음</span>';
+            } else {
+                elUpcoming7.innerHTML = upcomingCodes7.map(u => {
+                    let dText = u.dDay === 0 ? 'D-Day' : (u.dDay < 0 ? '지연' : 'D-' + u.dDay); 
+                    let bgClass = u.dDay <= 3 ? 'bg-rose-500 text-white border-rose-600' : 'bg-white text-rose-600 border-rose-200'; 
+                    return `<span class="text-[10px] border px-1.5 py-0.5 rounded font-bold shadow-sm flex items-center gap-1 ${bgClass}">${u.code} <span class="opacity-80 text-[8px]">[${dText}]</span></span>`;
+                }).join('');
+            }
         }
         
         const elUpcoming14 = document.getElementById('mini-dash-upcoming-14');
         if(elUpcoming14) { 
-            if (upcomingCodes14.length === 0) elUpcoming14.innerHTML = '<span class="text-[10px] text-orange-400 font-bold w-full text-center mt-1">임박한 프로젝트 없음</span>';
-            else elUpcoming14.innerHTML = upcomingCodes14.map(u => `<span class="text-[10px] border px-1.5 py-0.5 rounded font-bold shadow-sm flex items-center gap-1 bg-white text-orange-600 border-orange-200">${u.code} <span class="opacity-80 text-[8px]">[D-${u.dDay}]</span></span>`).join('');
+            if (upcomingCodes14.length === 0) {
+                elUpcoming14.innerHTML = '<span class="text-[10px] text-orange-400 font-bold w-full text-center mt-1">임박한 프로젝트 없음</span>';
+            } else {
+                elUpcoming14.innerHTML = upcomingCodes14.map(u => `<span class="text-[10px] border px-1.5 py-0.5 rounded font-bold shadow-sm flex items-center gap-1 bg-white text-orange-600 border-orange-200">${u.code} <span class="opacity-80 text-[8px]">[D-${u.dDay}]</span></span>`).join('');
+            }
         }
     } catch(e) {}
 };
@@ -285,7 +348,9 @@ window.renderProjectStatusList = function() {
     
     let htmlStr = '';
     displayList.forEach(item => {
-        const cMd = parseFloat(item.currentMd) || 0; const oMd = parseFloat(item.outMd) || 0; const fMd = parseFloat(item.finalMd) || (cMd + oMd);
+        const cMd = parseFloat(item.currentMd) || 0; 
+        const oMd = parseFloat(item.outMd) || 0; 
+        const fMd = parseFloat(item.finalMd) || (cMd + oMd);
         const safeNameHtml = getSafeString(item.name).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const safeNameJs = getSafeString(item.name).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, ' ').replace(/\r/g, '');
         
@@ -1254,11 +1319,12 @@ window.saveDailyLogItem = async function() {
                 purchaseRate: purchaseRateVal 
             }, { merge: true }); 
             
-            // 💡 생산일지 알림
+            // 💡 생산일지 멘션 알림 연동
             let notified = [];
             if(window.processMentions) {
                 notified = await window.processMentions(content, projectId, "생산일지"); 
             }
+            
             const proj = window.currentProjectStatusList.find(p => p.id === projectId);
             if (proj && proj.manager && proj.manager !== window.userProfile.name && (!notified || !notified.includes(proj.manager))) {
                 if(window.notifyUser) {
@@ -1451,7 +1517,7 @@ window.saveCommentItem = async function() {
                 await addDoc(collection(db, "project_comments"), payload); 
                 window.showToast("코멘트가 등록되었습니다."); 
                 
-                // 💡 담당자 알림 연동
+                // 💡 PJT 현황판 코멘트 알림 연동
                 let notified = [];
                 if(window.processMentions) {
                     notified = await window.processMentions(content, projectId, "코멘트");
@@ -1614,7 +1680,7 @@ window.saveIssueItem = async function() {
             }); 
             window.showToast("이슈가 등록되었습니다."); 
             
-            // 🔥 이슈 작성 시 담당자에게 알림 전송
+            // 🔥 이슈 담당자 자동 알림
             let notified = [];
             if(window.processMentions) {
                 notified = await window.processMentions(content, projectId, "이슈");
@@ -1822,41 +1888,50 @@ document.addEventListener('click', function(e) {
     const d = document.getElementById('pjt-autocomplete-dropdown'); if (d && !d.classList.contains('hidden') && !e.target.closest('#pjt-autocomplete-dropdown') && !e.target.closest('input[oninput*="showAutocomplete"]')) d.classList.add('hidden');
 });
 
-// 💡 3, 4번 오류 해결: 완전히 새롭고 안정적인 CSV 파싱 동기화
+// 💡 완전히 새로워진 강력한 "Google 시트 (JSON/JSONP) 데이터 연동 모듈"
 window.loadNcrData = async function() {
     try {
         const sheetId = '1ZYwSKvT4QXjFxgftunwdRHWzX4KXoelhZSVjauAJg8s';
-        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=0`;
+        
+        // CSV 방식은 CORS 에러가 나므로, 구글이 허용하는 유일한 경로인 JSONP 방식(/gviz/tq)을 사용합니다!
+        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=0`;
 
         const res = await fetch(url);
-        if (!res.ok) throw new Error("시트 읽기 실패");
+        if (!res.ok) throw new Error("구글 시트를 읽을 수 없습니다.");
 
-        const csvText = await res.text();
-        if (csvText.includes('<html')) throw new Error("시트가 비공개 상태입니다. 공유 권한을 링크가 있는 모든 사용자에게 뷰어로 허용하세요.");
-
-        const rows = [];
-        let row = [], col = "", quote = false;
+        const text = await res.text();
         
-        for (let i = 0; i < csvText.length; i++) {
-            let cc = csvText[i], nc = csvText[i+1];
-            if (cc === '"' && quote && nc === '"') { col += cc; ++i; continue; }
-            if (cc === '"') { quote = !quote; continue; }
-            if (cc === ',' && !quote) { row.push(col); col = ""; continue; }
-            if (cc === '\r' && nc === '\n' && !quote) { row.push(col); rows.push(row); row = []; col = ""; ++i; continue; }
-            if (cc === '\n' && !quote) { row.push(col); rows.push(row); row = []; col = ""; continue; }
-            if (cc === '\r' && !quote) { row.push(col); rows.push(row); row = []; col = ""; continue; }
-            col += cc;
+        // 💡 에러 원인 해결: 정규식을 버리고 가장 안전한 텍스트 자르기(substring) 방식 적용!
+        const startIndex = text.indexOf('{');
+        const endIndex = text.lastIndexOf('}');
+        
+        if (startIndex === -1 || endIndex === -1) {
+            throw new Error("데이터를 해석할 수 없습니다.");
         }
-        if (col || row.length > 0) { row.push(col); rows.push(row); }
+        
+        const jsonString = text.substring(startIndex, endIndex + 1);
+        const data = JSON.parse(jsonString);
+        
+        if (!data || !data.table || !data.table.rows) return;
 
-        if (rows.length < 2) return;
+        let headers = data.table.cols.map(c => c.label || '');
+        let dataRows = data.table.rows;
 
-        const headers = rows[0];
-        const getIdx = (keywords) => headers.findIndex(h => {
-            if (!h) return false;
-            const norm = String(h).toLowerCase().replace(/[\s\(\)\[\]_]/g, '');
-            return keywords.some(k => norm.includes(k.toLowerCase().replace(/[\s\(\)\[\]_]/g, '')));
-        });
+        // 헤더(첫 줄)가 비어있으면 데이터의 첫 줄을 헤더로 삼습니다.
+        if (headers.join('').trim() === '') {
+            headers = dataRows[0].c.map(cell => (cell && cell.v) ? String(cell.v) : '');
+            dataRows = dataRows.slice(1);
+        }
+        
+        const rows = dataRows.map(r => r.c.map(cell => (cell && cell.v !== null && cell.v !== undefined) ? String(cell.v) : ''));
+        
+        const getIdx = (keywords) => {
+            return headers.findIndex(h => {
+                if (!h) return false;
+                const normalized = String(h).toLowerCase().replace(/[\s\(\)\[\]_]/g, '');
+                return keywords.some(k => normalized.includes(k.toLowerCase().replace(/[\s\(\)\[\]_]/g, '')));
+            });
+        };
 
         const cPjt = getIdx(['project', 'pjt', '프로젝트']);
         const cNcr = getIdx(['ncrno', 'ncr']);
@@ -1867,16 +1942,16 @@ window.loadNcrData = async function() {
         const cDesc = getIdx(['내용', '부적합내용', 'content', 'desc']);
         const cStat = getIdx(['진행', '현황', '상태', 'status']);
 
-        window.ncrData = rows.slice(1).map(r => {
+        window.ncrData = rows.map(row => {
             return {
-                pjtCode: cPjt !== -1 && r[cPjt] ? r[cPjt].trim() : '',
-                ncrNo: cNcr !== -1 && r[cNcr] ? r[cNcr].trim() : '',
-                date: cDate !== -1 && r[cDate] ? r[cDate].trim() : '',
-                drawingNo: cDraw !== -1 && r[cDraw] ? r[cDraw].trim() : '',
-                partName: cPart !== -1 && r[cPart] ? r[cPart].trim() : '',
-                type: cType !== -1 && r[cType] ? r[cType].trim() : '',
-                content: cDesc !== -1 && r[cDesc] ? r[cDesc].trim() : '',
-                status: cStat !== -1 && r[cStat] ? r[cStat].trim() : ''
+                pjtCode: cPjt !== -1 && row[cPjt] ? row[cPjt].trim() : '',
+                ncrNo: cNcr !== -1 && row[cNcr] ? row[cNcr].trim() : '',
+                date: cDate !== -1 && row[cDate] ? row[cDate].trim() : '',
+                drawingNo: cDraw !== -1 && row[cDraw] ? row[cDraw].trim() : '',
+                partName: cPart !== -1 && row[cPart] ? row[cPart].trim() : '',
+                type: cType !== -1 && row[cType] ? row[cType].trim() : '',
+                content: cDesc !== -1 && row[cDesc] ? row[cDesc].trim() : '',
+                status: cStat !== -1 && row[cStat] ? row[cStat].trim() : ''
             };
         }).filter(n => n.pjtCode);
 
@@ -1888,20 +1963,16 @@ window.loadNcrData = async function() {
             if (pjtCode) window.renderNcrList(pjtCode);
         }
 
-        if(window.showToast) window.showToast("부적합(NCR) 데이터 동기화 완료!", "success");
-
+        // 성공하면 에러 표시 버튼을 아예 지워버립니다.
         const authBtn = document.getElementById('btn-pjt-google-auth');
-        if (authBtn && !window.googleAccessToken) {
-            authBtn.innerHTML = '<i class="fa-brands fa-google"></i> 구글 연동 필요';
-            authBtn.className = 'text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-1.5 rounded-lg shadow-sm hover:bg-amber-100 transition-colors whitespace-nowrap ml-2';
-        } else if (authBtn && window.googleAccessToken) {
+        if (authBtn) {
             authBtn.classList.add('hidden');
         }
 
     } catch(e) {
-        console.error("NCR 로드 에러:", e);
-        if(window.showToast) window.showToast("NCR 동기화 실패: " + e.message, "error");
+        console.error("NCR 시트 로드 에러:", e);
         
+        // 에러가 났을 때만 빨간색 동기화 실패 버튼을 띄웁니다.
         const authBtn = document.getElementById('btn-pjt-google-auth');
         if (authBtn) {
             authBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> 동기화 실패';
