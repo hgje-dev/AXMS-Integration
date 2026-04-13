@@ -1,96 +1,122 @@
 /* eslint-disable */
 import { auth, db } from './firebase.js';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { doc, getDoc, setDoc, collection, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { 
+    GoogleAuthProvider, 
+    signInWithPopup, 
+    signOut, 
+    onAuthStateChanged, 
+    updatePassword 
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { 
+    doc, 
+    getDoc, 
+    setDoc, 
+    collection, 
+    onSnapshot, 
+    deleteDoc,
+    writeBatch
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 let allUsersUnsubscribe=null, teamMembersUnsubscribe=null;
 window.isSigningUp = false; 
+const googleProvider = new GoogleAuthProvider();
 
-window.checkLogin = async () => { 
-    const e = document.getElementById('login-id')?.value.trim(); 
-    const p = document.getElementById('login-pw')?.value.trim(); 
-    const err = document.getElementById('login-error'); 
-    
-    const btn = document.querySelector('button[onclick="window.checkLogin()"]');
+// 💡 1. 구글 로그인 실행
+window.googleLogin = async () => {
+    const err = document.getElementById('login-error');
+    if(err) err.classList.add('hidden');
 
-    if(err) err.classList.add('hidden'); 
+    try {
+        const result = await signInWithPopup(auth, googleProvider);
+        const user = result.user;
 
-    if(!e || !p) { 
-        if(err) { err.innerText="이메일과 비밀번호를 입력하세요."; err.classList.remove('hidden'); } 
-        return; 
-    } 
+        // DB에 기존 유저인지 확인
+        const userDocRef = doc(db, "users", user.uid);
+        const userDoc = await getDoc(userDocRef);
 
-    if(btn) { btn.innerText = "서버와 통신 중..."; btn.disabled = true; }
-
-    try { 
-        await signInWithEmailAndPassword(auth, e, p); 
-        console.log("✅ 로그인 성공");
-    } catch(er) { 
-        console.error("❌ 로그인 실패:", er);
-        if(err) { 
-            err.innerText = "계정 정보가 일치하지 않습니다. (아래 신규 계정 생성을 먼저 진행해주세요!)"; 
-            err.classList.remove('hidden'); 
-        } 
-    } finally {
-        if(btn) { btn.innerText = "접속하기"; btn.disabled = false; }
+        if (!userDoc.exists()) {
+            // [신규 사용자] 소속/직책 입력 화면으로 전환
+            window.tempGoogleUser = user;
+            if(document.getElementById('signup-name')) {
+                document.getElementById('signup-name').value = user.displayName || '';
+            }
+            document.getElementById('login-view').classList.add('hidden');
+            document.getElementById('signup-view').classList.remove('hidden');
+            if(document.getElementById('auth-title')) document.getElementById('auth-title').innerText = "추가 정보 입력";
+        } else {
+            // [기존 사용자] 로그인 성공 -> 리스너가 화면 전환 처리
+            console.log("✅ 구글 로그인 성공");
+            // mfg@axbis.ai 계정이면 최고 관리자 강제 부여 체크
+            if (user.email === 'mfg@axbis.ai' && userDoc.data().role !== 'admin') {
+                await setDoc(userDocRef, { role: 'admin' }, { merge: true });
+                console.log("최고 관리자 권한 자동 부여 완료");
+            }
+        }
+    } catch (er) {
+        console.error("❌ 구글 로그인 실패:", er);
+        if(err) {
+            err.innerText = "로그인에 실패했습니다: " + er.message;
+            err.classList.remove('hidden');
+        }
     }
 };
 
-window.signUp = async () => { 
-    const n = document.getElementById('signup-name')?.value.trim(); 
-    const t = document.getElementById('signup-dept')?.value; 
-    const pos = document.getElementById('signup-position')?.value || '매니저'; 
-    const e = document.getElementById('signup-id')?.value.trim(); 
-    const p = document.getElementById('signup-pw')?.value.trim(); 
-    const err = document.getElementById('signup-error'); 
-    
-    const btn = document.querySelector('button[onclick="window.signUp()"]');
-    
+// 💡 2. 신규 사용자 추가 정보 저장 및 가입 처리
+window.completeGoogleSignup = async () => {
+    const n = document.getElementById('signup-name')?.value.trim();
+    const t = document.getElementById('signup-dept')?.value;
+    const pos = document.getElementById('signup-position')?.value || '매니저';
+    const err = document.getElementById('signup-error');
+    const user = window.tempGoogleUser;
+
     if(err) err.classList.add('hidden');
+    if(!n) {
+        if(err){ err.innerHTML="이름을 입력해주세요."; err.classList.remove('hidden'); }
+        return;
+    }
 
-    if(!n || !e || !p) { 
-        if(err){ err.innerHTML="모든 정보를 입력하세요."; err.className="text-rose-500 text-[11px] font-bold text-center mt-2 bg-rose-50 p-3 rounded-xl border border-rose-100"; err.classList.remove('hidden'); } 
-        return; 
-    } 
-    if(p.length < 6) { 
-        if(err){ err.innerHTML="비밀번호는 6자리 이상이어야 합니다."; err.className="text-rose-500 text-[11px] font-bold text-center mt-2 bg-rose-50 p-3 rounded-xl border border-rose-100"; err.classList.remove('hidden'); } 
-        return; 
-    } 
-    
-    window.isSigningUp = true; 
-    if(btn) { btn.innerText = "가입 처리 중..."; btn.disabled = true; }
+    window.isSigningUp = true;
 
-    try { 
-        const uC = await createUserWithEmailAndPassword(auth, e, p); 
-        await setDoc(doc(db, "users", uC.user.uid), { 
-            email:e, name:n, team:t, department:t, position:pos, role:'pending', 
-            permissions:{ collab:true, purchase:true, assembly:true, repair:true, 'project-status':true, 'weekly-log':true } 
-        }); 
-        
-        if(err){ 
-            err.innerHTML="가입 성공! 관리자 승인 대기 중입니다.<br>3초 후 로그인 화면으로 이동합니다."; 
-            err.className="text-emerald-500 text-[11px] font-bold text-center mt-2 bg-emerald-50 p-3 rounded-xl border border-emerald-100 break-words"; 
-            err.classList.remove('hidden'); 
-        } 
-        
-        setTimeout(() => {
+    try {
+        // mfg@axbis.ai 계정만 자동 최고 관리자 승인, 나머지는 대기 상태
+        let initialRole = 'pending';
+        if (user.email === 'mfg@axbis.ai') {
+            initialRole = 'admin';
+        }
+
+        await setDoc(doc(db, "users", user.uid), {
+            email: user.email,
+            name: n,
+            team: t,
+            department: t,
+            position: pos,
+            role: initialRole,
+            permissions: { collab:true, purchase:true, assembly:true, repair:true, 'project-status':true, 'weekly-log':true }
+        });
+
+        if (initialRole === 'pending') {
+            if(err){ 
+                err.innerHTML="가입 성공! 관리자 승인 대기 중입니다.<br>잠시 후 로그아웃 됩니다."; 
+                err.className="text-emerald-500 text-[11px] font-bold text-center mt-2 bg-emerald-50 p-3 rounded-xl border border-emerald-100 break-words"; 
+                err.classList.remove('hidden'); 
+            }
+            setTimeout(() => { 
+                window.isSigningUp = false; 
+                window.logout(); 
+            }, 3000);
+        } else {
             window.isSigningUp = false; 
-            window.logout();
-        }, 3000); 
-    } catch(er) { 
-        window.isSigningUp = false; 
-        if(err){ 
-            err.innerHTML=er.code==='auth/email-already-in-use' ? "이미 가입된 이메일입니다." : "에러: " + er.message; 
-            err.className="text-rose-500 text-[11px] font-bold text-center mt-2 bg-rose-50 p-3 rounded-xl border border-rose-100 break-words"; 
-            err.classList.remove('hidden'); 
-        } 
-    } finally {
-        if(btn) { btn.innerText = "가입 완료"; btn.disabled = false; }
+            location.reload(); // 관리자는 즉시 접속
+        }
+    } catch(er) {
+        window.isSigningUp = false;
+        if(err){ err.innerHTML="가입 처리 오류: " + er.message; err.classList.remove('hidden'); }
     }
 };
 
 window.logout = async () => { await signOut(auth); location.reload(); };
 
+// 💡 3. 로그인 상태 감지 및 UI 렌더링
 window.initAuthListeners = () => {
     console.log("📡 로그인 상태 감지기 실행됨");
     onAuthStateChanged(auth, async (u) => {
@@ -98,22 +124,30 @@ window.initAuthListeners = () => {
 
         if (u) {
             try {
+                // 로그인마다 mfg@axbis.ai 계정 체크해서 관리자 부여
+                if (u.email === 'mfg@axbis.ai') {
+                    await setDoc(doc(db, "users", u.uid), { role: 'admin' }, { merge: true });
+                }
+
                 const uS = await getDoc(doc(db, "users", u.uid));
                 if (uS.exists()) { 
                     window.userProfile = uS.data(); 
+                    
+                    // 신규 가입자 승인 대기 처리
                     if(window.userProfile.role === 'pending') { 
                         const e = document.getElementById('login-error'); 
                         if(e) { e.innerHTML="가입은 완료되었으나, 관리자 승인 대기 중입니다."; e.classList.remove('hidden'); } 
                         await signOut(auth); return; 
                     } 
-                } 
-                else { 
+                } else { 
+                    // DB에 정보가 없는 경우 차단된 계정으로 간주
                     const e = document.getElementById('login-error'); 
-                    if(e) { e.innerHTML="관리자에 의해 영구 삭제되거나 차단된 계정입니다."; e.classList.remove('hidden'); } 
+                    if(e) { e.innerHTML="관리자에 의해 삭제되거나 존재하지 않는 계정입니다."; e.classList.remove('hidden'); } 
                     await signOut(auth); 
                     return; 
                 }
                 
+                // 권한 객체 초기화 보장
                 if (!window.userProfile.permissions) window.userProfile.permissions = {}; 
                 const dP = { collab:true, purchase:true, assembly:true, repair:true, 'project-status':true, 'weekly-log':true }; 
                 for (let p in dP) { if (window.userProfile.permissions[p] === undefined) window.userProfile.permissions[p] = true; }
@@ -122,15 +156,27 @@ window.initAuthListeners = () => {
                 document.getElementById('login-modal')?.classList.add('hidden'); 
                 const pt = document.getElementById('portal-container'); if(pt) { pt.classList.remove('hidden'); pt.classList.add('flex'); }
                 
+                // 사이드바 유저 정보 업데이트
                 if(document.getElementById('sidebar-user-name')) document.getElementById('sidebar-user-name').innerText = window.userProfile.name; 
                 if(document.getElementById('sidebar-user-position')) document.getElementById('sidebar-user-position').innerText = window.userProfile.position || '직책 미지정'; 
                 if(document.getElementById('sidebar-team-badge')) document.getElementById('sidebar-team-badge').innerText = window.userProfile.team || window.userProfile.department;
                 
+                // 역할 뱃지 렌더링
                 const rB=document.getElementById('nav-role-badge'), bA=document.getElementById('btn-admin');
-                if (window.userProfile.role==='admin') { if(rB){ rB.className='bg-purple-500 text-white px-2 py-0.5 rounded text-[10px] hidden sm:block'; rB.innerText='👑 관리자';} if(bA){ bA.classList.remove('hidden'); bA.classList.add('flex'); } } 
-                else if (window.userProfile.role==='master') { if(rB){ rB.className='bg-indigo-500 text-white px-2 py-0.5 rounded text-[10px] hidden sm:block'; rB.innerText='🛠️ 마스터';} if(bA){ bA.classList.add('hidden'); } } 
-                else { if(rB){ rB.className='bg-emerald-500 text-white px-2 py-0.5 rounded text-[10px] hidden sm:block'; rB.innerText="👤 일반(" + window.userProfile.name + ")";} if(bA){ bA.classList.add('hidden'); } }
+                if (window.userProfile.role === 'admin') { 
+                    if(rB){ rB.className='bg-purple-500 text-white px-2 py-0.5 rounded text-[10px] hidden sm:block'; rB.innerText='👑 최고 관리자';} 
+                    if(bA){ bA.classList.remove('hidden'); bA.classList.add('flex'); } 
+                } 
+                else if (window.userProfile.role === 'master') { 
+                    if(rB){ rB.className='bg-indigo-500 text-white px-2 py-0.5 rounded text-[10px] hidden sm:block'; rB.innerText='🛠️ 마스터';} 
+                    if(bA){ bA.classList.add('hidden'); } 
+                } 
+                else { 
+                    if(rB){ rB.className='bg-emerald-500 text-white px-2 py-0.5 rounded text-[10px] hidden sm:block'; rB.innerText="👤 사용자 (" + window.userProfile.name + ")";} 
+                    if(bA){ bA.classList.add('hidden'); } 
+                }
                 
+                // 실시간 구독 리스너 연결
                 if(allUsersUnsubscribe) allUsersUnsubscribe(); allUsersUnsubscribe=onSnapshot(collection(db,"users"), s=>{ window.allSystemUsers=[]; s.forEach(d=>window.allSystemUsers.push({uid:d.id,...d.data()})); if(document.getElementById('admin-modal')&&!document.getElementById('admin-modal').classList.contains('hidden') && window.renderAdminUsers) window.renderAdminUsers(); });
                 if(teamMembersUnsubscribe) teamMembersUnsubscribe(); teamMembersUnsubscribe=onSnapshot(collection(db,"team_members"), s=>{ window.teamMembers=[]; s.forEach(d=>window.teamMembers.push({id:d.id,...d.data()})); if(window.populateUserDropdowns) window.populateUserDropdowns(); if(window.renderTeamMembers) window.renderTeamMembers(); if(!document.getElementById('view-dashboard-home')?.classList.contains('hidden') && window.processDashboardData) window.processDashboardData(); });
                 
@@ -144,13 +190,14 @@ window.initAuthListeners = () => {
                 console.error("데이터베이스 읽기 에러:", firestoreError);
             }
         } else { 
+            // 로그아웃 상태
             window.currentUser=null; document.getElementById('login-modal')?.classList.remove('hidden'); 
             const pt=document.getElementById('portal-container'); if(pt) { pt.classList.add('hidden'); pt.classList.remove('flex'); } 
         }
     });
 };
 
-// 💡 내 정보 설정 모달 제어
+// 💡 4. 내 정보 설정 모달 제어 (기존 기능 100% 유지)
 window.openSettingsModal = () => {
     if (!window.userProfile) return;
     document.getElementById('set-name').value = window.userProfile.name || '';
@@ -216,6 +263,7 @@ window.saveUserSettings = async () => {
     }
 };
 
+// 💡 5. 관리자 유저 관리 (기존 기능 100% 유지)
 window.openAdminModal = () => { document.getElementById('admin-modal').classList.remove('hidden'); document.getElementById('admin-modal').classList.add('flex'); window.renderAdminUsers(); };
 window.closeAdminModal = () => { document.getElementById('admin-modal').classList.add('hidden'); document.getElementById('admin-modal').classList.remove('flex'); };
 
@@ -235,7 +283,6 @@ window.renderAdminUsers = () => {
         const isP = u.role === 'pending';
         const trClass = isP ? 'bg-rose-50/40 border-l-4 border-rose-500' : 'hover:bg-slate-50 transition-colors border-b border-slate-100';
         
-        // 💡 관리자가 직책을 변경할 수 있도록 텍스트 대신 select 드롭다운 사용
         const posOptions = ['대표','본부장','그룹장','팀장','책임매니저','선임매니저','매니저'].map(pos => `<option value="${pos}" ${u.position === pos ? 'selected' : ''}>${pos}</option>`).join('');
         const safePos = `<select class="block mt-1 border border-slate-200 rounded px-1 py-0.5 text-[10px] text-indigo-600 bg-indigo-50 font-bold focus:outline-none" onchange="window.updateUserPosition('${u.uid}', this.value)">
                             ${u.position ? '' : '<option value="" disabled selected>직책 미지정</option>'}
@@ -275,7 +322,6 @@ window.renderAdminUsers = () => {
     tb.innerHTML = html;
 };
 
-// 💡 관리자: 유저 직책 수정
 window.updateUserPosition = async (uid, pos) => { 
     try { await setDoc(doc(db, "users", uid), { position: pos }, { merge: true }); if(window.showToast) window.showToast("직책이 변경되었습니다."); } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } 
 };
