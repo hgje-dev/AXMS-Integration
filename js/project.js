@@ -22,6 +22,43 @@ window.hideCompletedFilter = false;
 window.ganttTodayOffset = 0;
 window.ncrData = [];
 
+// 💡 유틸리티 함수: 이미지 크기 조절 및 Base64 변환 (생산일지 이미지 업로드용 - 오류 방지)
+window.resizeAndConvertToBase64 = function(file, callback) {
+    if (!file || !file.type.match(/image.*/)) {
+        callback(null);
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(readerEvent) {
+        const image = new Image();
+        image.onload = function() {
+            const canvas = document.createElement('canvas');
+            const maxSize = 1200;
+            let width = image.width;
+            let height = image.height;
+            
+            if (width > height && width > maxSize) {
+                height *= maxSize / width;
+                width = maxSize;
+            } else if (height > maxSize) {
+                width *= maxSize / height;
+                height = maxSize;
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            canvas.getContext('2d').drawImage(image, 0, 0, width, height);
+            
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            callback(dataUrl);
+        };
+        image.onerror = function() { callback(null); };
+        image.src = readerEvent.target.result;
+    };
+    reader.onerror = function() { callback(null); };
+    reader.readAsDataURL(file);
+};
+
 const getSafeMillis = (val) => { 
     try { 
         if (!val) return 0; 
@@ -1660,7 +1697,7 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// 💡 부적합(NCR) 구글 시트 연동 (JSON Parsing)
+// 💡 부적합(NCR) 구글 시트 연동 (안정적인 JSON 문자열 파싱으로 교체 완료)
 window.loadNcrData = async function() {
     try {
         const sheetId = '1ZYwSKvT4QXjFxgftunwdRHWzX4KXoelhZSVjauAJg8s';
@@ -1670,10 +1707,16 @@ window.loadNcrData = async function() {
         if (!res.ok) throw new Error("시트 읽기 실패");
 
         const text = await res.text();
-        const jsonString = text.match(/google\.visualization\.Query\.setResponse\(([\s\S\w]+)\);/);
-        if (!jsonString || !jsonString[1]) throw new Error("데이터 파싱 실패");
         
-        const data = JSON.parse(jsonString[1]);
+        // 💡 에러 원인 해결: 정규식 대신 가장 안정적인 방식(substring)으로 JSON 추출
+        const startIndex = text.indexOf('{');
+        const endIndex = text.lastIndexOf('}');
+        
+        if (startIndex === -1 || endIndex === -1) throw new Error("데이터 파싱 실패 (JSON 시작/끝을 찾을 수 없음)");
+        
+        const jsonString = text.substring(startIndex, endIndex + 1);
+        const data = JSON.parse(jsonString);
+        
         if (!data || !data.table || !data.table.rows) return;
 
         let headers = data.table.cols.map(c => c.label || '');
@@ -1733,7 +1776,7 @@ window.loadNcrData = async function() {
             authBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> 동기화 실패';
             authBtn.className = 'text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-1.5 rounded-lg shadow-sm whitespace-nowrap ml-2';
         }
-        if(window.showToast) window.showToast("시트 접근 오류: 시트가 '뷰어(링크가 있는 모든 사용자)'로 공개되어 있는지 확인하세요.", "error");
+        // 에러 알림은 콘솔에만 띄우고 UI 방해 최소화
     }
 };
 
