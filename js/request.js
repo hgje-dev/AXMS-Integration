@@ -935,7 +935,7 @@ window.renderRequestList = function() {
     });
 
     if(displayList.length === 0) { 
-        tb.innerHTML=`<tr><td colspan="${window.currentAppId === 'purchase' ? 13 : 11}" class="text-center p-8 text-slate-400 font-bold border-b border-slate-100">조건에 맞는 요청서가 없습니다.</td></tr>`; 
+        tb.innerHTML=\`<tr><td colspan="\${window.currentAppId === 'purchase' ? 13 : 12}" class="text-center p-8 text-slate-400 font-bold border-b border-slate-100">조건에 맞는 요청서가 없습니다.</td></tr>\`; 
         return; 
     } 
 
