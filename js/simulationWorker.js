@@ -1,4 +1,6 @@
 // Web Worker for Monte Carlo & PERT Simulation
+// ⚠️ 주의: 이곳은 백그라운드 스레드이므로 window, document 요소에 접근할 수 없습니다.
+
 self.onmessage = function(e) {
     const data = e.data;
     const { method, qty, curve, iters, uncert, diff, rBase, bBase, pers, sMult, processData } = data;
@@ -8,6 +10,7 @@ self.onmessage = function(e) {
         let u1 = Math.random(); if (u1 === 0) u1 = 0.0001;
         return (Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * Math.random())) * stdDev + mean;
     };
+    
     const getTriangularRandom = (min, mode, max) => {
         let u = Math.random(); let F = (mode - min) / (max - min);
         if (u <= F) return min + Math.sqrt(u * (max - min) * (mode - min));
@@ -17,8 +20,8 @@ self.onmessage = function(e) {
     let lR = Math.max(0.7, Math.pow(curve, Math.log2(qty))); 
     let bArr = new Float32Array(iters), rArr = new Float32Array(iters);
 
-    for(let i=0; i<iters; i++) {
-        let im=0; 
+    for(let i = 0; i < iters; i++) {
+        let im = 0; 
         processData.forEach(p => {
             let pt = p.pType || 'md';
             if(pt === 'auto') {
@@ -31,6 +34,7 @@ self.onmessage = function(e) {
                 if(m > 0 && q > 0) im += q * Math.max(0, method === 'mc' ? getNormalRandom(m, (m*uncert)/3) : getTriangularRandom(m*0.85, m, m*1.3));
             }
         });
+        
         bArr[i] = (im * qty) * diff * lR * (1 + Math.max(0, getNormalRandom(rBase, (rBase*0.1)/3))) * (1 + Math.max(0, getNormalRandom(bBase, (bBase*0.1)/3))); 
         rArr[i] = bArr[i] * sMult;
     }
@@ -46,6 +50,6 @@ self.onmessage = function(e) {
         d10: Math.ceil(p10 / pers),
         d50: Math.ceil(p50 / pers),
         d90: Math.ceil(p90 / pers),
-        rArr: Array.from(rArr) // 차트 렌더링용 데이터
+        rArr: Array.from(rArr) // 차트 렌더링을 위해 일반 배열로 변환
     });
 };
