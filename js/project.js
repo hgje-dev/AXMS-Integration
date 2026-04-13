@@ -364,12 +364,28 @@ window.renderProjectStatusList = function() {
         const desCnt = (window.projectDesignCounts && window.projectDesignCounts[item.id]) || 0;
         const schCnt = (window.projectScheduleCounts && window.projectScheduleCounts[item.id]) || 0;
 
+        // 💡 부적합(NCR) 데이터 상태 확인 로직
         const safeItemCode = String(item.code || '').replace(/\s/g, '').toUpperCase();
         const pjtNcrData = (window.ncrData || []).filter(n => String(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeItemCode);
+        
+        const totalNcrCnt = pjtNcrData.length;
         const unresolvedNcrCnt = pjtNcrData.filter(n => {
             let s = String(n.status || '');
             return !(s.includes('완료') || s.includes('종결') || s.includes('완료됨'));
         }).length;
+
+        // 💡 상태별 아이콘 생성 (회색 / 녹색 / 빨간색)
+        let ncrIconHtml = '';
+        if (totalNcrCnt === 0) {
+            ncrIconHtml = `<button onclick="window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-slate-300 hover:text-indigo-400 transition-colors p-1" title="부적합 내역 없음"><i class="fa-solid fa-file-circle-check text-lg"></i></button>`;
+        } else if (unresolvedNcrCnt === 0) {
+            ncrIconHtml = `<button onclick="window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-emerald-500 hover:text-emerald-600 transition-colors p-1" title="모두 조치 완료"><i class="fa-solid fa-file-circle-check text-lg"></i></button>`;
+        } else {
+            ncrIconHtml = `<button onclick="window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-rose-500 relative transition-transform hover:scale-110 p-1" title="미결 부적합 ${unresolvedNcrCnt}건">
+                <i class="fa-solid fa-file-circle-exclamation text-lg"></i>
+                <span class="absolute -top-1 -right-2 bg-rose-100 text-rose-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-rose-200">${unresolvedNcrCnt}</span>
+            </button>`;
+        }
 
         let trHtml = `<tr class="group hover:bg-indigo-50/50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.editProjStatus('${item.id}')">`;
         
@@ -389,12 +405,8 @@ window.renderProjectStatusList = function() {
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openPjtScheduleModal('${item.id}', '${safeNameJs}')" class="text-fuchsia-400 relative"><i class="fa-regular fa-calendar-check text-lg"></i>${schCnt ? `<span class="absolute -top-1 -right-2 bg-fuchsia-100 text-fuchsia-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-fuchsia-200">${schCnt}</span>` : ''}</button></td>`;
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openDailyLogModal('${item.id}', '${safeNameJs}', ${parseFloat(item.progress)||0})" class="text-sky-400 relative"><i class="fa-solid fa-book text-lg"></i>${lCnt ? `<span class="absolute -top-1 -right-2 bg-sky-100 text-sky-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-sky-200">${lCnt}</span>` : ''}</button></td>`;
         
-        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()">
-            <button onclick="window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-rose-500 relative transition-transform hover:scale-110">
-                <i class="fa-solid fa-file-circle-exclamation text-lg"></i>
-                ${unresolvedNcrCnt > 0 ? `<span class="absolute -top-1 -right-2 bg-rose-100 text-rose-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-rose-200">${unresolvedNcrCnt}</span>` : ''}
-            </button>
-        </td>`;
+        // 💡 부적합 아이콘을 정확히 렌더링
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()">${ncrIconHtml}</td>`;
 
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center text-sky-600">${item.estMd||0}</td>`;
         trHtml += `<td class="border border-slate-200 px-1 py-1 text-center font-bold" onclick="event.stopPropagation()"><button onclick="window.openMdLogModal('${item.id}', '${safeNameJs}', ${cMd})" class="text-purple-600 underline">${cMd}</button></td>`;
