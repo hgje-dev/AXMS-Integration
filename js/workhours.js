@@ -215,9 +215,12 @@ window.updateWhDashboard = function() {
     if (window.whPjtSearch) {
         baseData = baseData.filter(l => {
             const pCode = (l.projectCode || '').toLowerCase();
+            const pName = (l.projectName || '').toLowerCase();
             const search = window.whPjtSearch;
-            // 대시보드 검색창: 명칭 빼고 PJT 코드 + 초성 매칭만 허용
-            return pCode.includes(search) || (window.matchString && window.matchString(search, pCode));
+            // 💡 2. 대시보드 검색: PJT 코드 + '명칭(초성포함)' 모두 매칭.
+            return pCode.includes(search) || pName.includes(search) || 
+                   (window.matchString && window.matchString(search, pCode)) || 
+                   (window.matchString && window.matchString(search, pName));
         });
     }
 
@@ -252,6 +255,7 @@ window.updateWhDashboard = function() {
         if (!locMap[loc]) locMap[loc] = new Set();
         locMap[loc].add(log.authorName);
 
+        // 💡 3. 프로젝트별 투입 공수를 위한 맵핑
         let pName = log.projectCode || '미분류';
         pjtMap[pName] = (pjtMap[pName] || 0) + h;
         datesSet.add(log.date);
@@ -260,20 +264,24 @@ window.updateWhDashboard = function() {
     const totalMD = (totalHours / 8).toFixed(1);
     document.getElementById('wh-dash-total-md').innerText = totalMD;
 
-    const pjtInfoContainer = document.getElementById('wh-dash-pjt-info');
-    const pjtDateEl = document.getElementById('wh-dash-pjt-date');
-    const pjtDaysEl = document.getElementById('wh-dash-pjt-days');
-
-    if (window.whPjtSearch && datesSet.size > 0) {
-        let sortedDates = Array.from(datesSet).sort();
-        let sD = sortedDates[0], eD = sortedDates[sortedDates.length-1];
-        let diffDays = Math.ceil((new Date(eD) - new Date(sD)) / (1000 * 60 * 60 * 24)) + 1;
+    // 💡 3. 대시보드 내 PJT별 MD 리스트 렌더링
+    const breakdownEl = document.getElementById('wh-dash-pjt-breakdown');
+    if (breakdownEl) {
+        let breakdownHtml = '';
+        let sortedPjts = Object.entries(pjtMap).sort((a,b)=>b[1]-a[1]);
         
-        pjtDateEl.innerText = `${sD} ~ ${eD}`;
-        pjtDaysEl.innerText = `총 작업일수: ${datesSet.size}일 (기간: ${diffDays}일)`;
-        pjtInfoContainer.classList.remove('hidden');
-    } else {
-        pjtInfoContainer.classList.add('hidden');
+        sortedPjts.forEach(p => {
+            breakdownHtml += `
+                <div class="flex justify-between items-center text-[11px] mb-1">
+                    <span class="text-slate-500 font-bold truncate pr-2"><i class="fa-solid fa-folder-open text-indigo-300 mr-1"></i>${p[0]}</span>
+                    <span class="text-indigo-600 font-black shrink-0 bg-indigo-50 px-1.5 py-0.5 rounded shadow-sm">${(p[1]/8).toFixed(1)}</span>
+                </div>
+            `;
+        });
+        if(sortedPjts.length === 0) {
+            breakdownHtml = '<div class="text-[10px] text-slate-400 text-center py-2 font-bold">집계된 데이터 없음</div>';
+        }
+        breakdownEl.innerHTML = breakdownHtml;
     }
 
     renderWhChart('wh-chart-person', 'bar', personMap, 'MD', true);
@@ -616,8 +624,9 @@ window.closeWhInputModal = function() {
     document.getElementById('wh-input-modal').classList.add('hidden');
     document.getElementById('wh-input-modal').classList.remove('flex');
     document.removeEventListener('keydown', handleWhModalKeydown);
-    const drop = document.getElementById('wh-pjt-autocomplete');
-    if(drop) drop.classList.add('hidden');
+    
+    // 모달을 닫을 때 임시 생성되었던 모든 드롭다운 삭제
+    document.querySelectorAll('.pjt-auto-drop').forEach(el => el.remove());
 };
 
 function handleWhModalKeydown(e) {
@@ -671,9 +680,18 @@ function appendWhInputRow(logData = null, index = 1) {
     tbody.appendChild(tr);
 }
 
+// 💡 2. PJT 코드 검색 시 명칭+코드(초성)로 찾고 UI에는 코드만 보여주는 로직
 window.whShowPjtAuto = function(input) {
     const val = input.value.trim().toLowerCase();
-    const drop = document.getElementById('wh-pjt-autocomplete');
+    
+    // 현재 입력창(td) 하위에 생성될 드롭다운
+    let drop = document.getElementById(`drop-${input.id}`);
+    if (!drop) {
+        drop = document.createElement('ul');
+        drop.id = `drop-${input.id}`;
+        drop.className = 'pjt-auto-drop absolute left-0 z-[50] bg-white border border-indigo-300 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-[250px] custom-scrollbar py-1 hidden';
+        input.parentNode.appendChild(drop);
+    }
     
     const tr = input.closest('tr');
     tr.querySelector('.row-pjt-id').value = '';
@@ -681,20 +699,21 @@ window.whShowPjtAuto = function(input) {
 
     if(!val) { drop.classList.add('hidden'); return; }
 
+    // 명칭과 코드 양쪽 모두 검색
     let matches = (window.pjtCodeMasterList || []).filter(p => {
         let code = (p.code || '').toLowerCase();
-        // 💡 오직 코드명(code)으로만 초성 검색 
-        return code.includes(val) || (window.matchString && window.matchString(val, p.code));
+        let name = (p.name || '').toLowerCase();
+        return code.includes(val) || name.includes(val) || 
+               (window.matchString && window.matchString(val, p.code)) || 
+               (window.matchString && window.matchString(val, p.name));
     });
 
     if(matches.length > 0) {
-        const rect = input.getBoundingClientRect();
-        drop.style.left = `${rect.left + window.scrollX}px`;
-        drop.style.top = `${rect.bottom + window.scrollY + 2}px`;
-        drop.style.width = `${rect.width}px`;
+        drop.style.top = (input.offsetTop + input.offsetHeight + 2) + 'px';
         drop.innerHTML = matches.map(m => {
             let sName = m.name.replace(/'/g,"\\'").replace(/"/g,'&quot;');
-            return `<li class="px-3 py-2 hover:bg-indigo-50 cursor-pointer text-xs font-black text-indigo-600 border-b border-slate-50 truncate transition-colors" onmousedown="window.whSelectPjt('${input.id}', '${m.id}', '${m.code||''}', '${sName}')">${m.code||'-'}</li>`;
+            // 리스트에 코드만 출력!
+            return `<li class="px-3 py-2 hover:bg-indigo-50 cursor-pointer text-xs font-black text-indigo-700 border-b border-slate-50 truncate transition-colors" onmousedown="window.whSelectPjt('${input.id}', '${m.id}', '${m.code||''}', '${sName}')">${m.code||'-'}</li>`;
         }).join('');
         drop.classList.remove('hidden');
     } else {
@@ -711,13 +730,13 @@ window.whSelectPjt = function(inputId, pId, pCode, pName) {
         tr.querySelector('.row-pjt-code').value = pCode;
         tr.querySelector('.row-pjt-name-hidden').value = pName; 
     }
-    document.getElementById('wh-pjt-autocomplete').classList.add('hidden');
+    
+    document.querySelectorAll('.pjt-auto-drop').forEach(el => el.classList.add('hidden'));
 };
 
 document.addEventListener('click', function(e) {
-    const d = document.getElementById('wh-pjt-autocomplete');
-    if (d && !d.classList.contains('hidden') && !e.target.closest('#wh-pjt-autocomplete') && !e.target.classList.contains('row-pjt-name')) {
-        d.classList.add('hidden');
+    if (!e.target.closest('.row-pjt-name')) {
+        document.querySelectorAll('.pjt-auto-drop').forEach(el => el.classList.add('hidden'));
     }
 });
 
