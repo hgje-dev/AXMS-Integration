@@ -7,7 +7,6 @@ let currentMdLogUnsubscribe = null;
 let currentLogUnsubscribe = null;
 let currentCommentUnsubscribe = null;
 let currentIssueUnsubscribe = null;
-
 let currentPurchaseUnsubscribe = null;
 let currentDesignUnsubscribe = null;
 let currentPjtScheduleUnsubscribe = null;
@@ -22,7 +21,7 @@ window.hideCompletedFilter = false;
 window.ganttTodayOffset = 0;
 window.ncrData = [];
 
-// 💡 유틸리티 함수: 이미지 크기 조절 및 Base64 변환 (생산일지 이미지 업로드용 - 오류 방지)
+// 💡 유틸리티: 이미지 첨부 시 용량 최적화 및 Base64 변환 (생산일지 에러 방지)
 window.resizeAndConvertToBase64 = function(file, callback) {
     if (!file || !file.type.match(/image.*/)) {
         callback(null);
@@ -282,7 +281,10 @@ window.renderProjectStatusList = function() {
 
         const safeItemCode = String(item.code || '').replace(/\s/g, '').toUpperCase();
         const pjtNcrData = (window.ncrData || []).filter(n => String(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeItemCode);
-        const unresolvedNcrCnt = pjtNcrData.filter(n => !(n.status.includes('완료') || n.status.includes('종결') || n.status.includes('완료됨'))).length;
+        const unresolvedNcrCnt = pjtNcrData.filter(n => {
+            let s = String(n.status || '');
+            return !(s.includes('완료') || s.includes('종결') || s.includes('완료됨'));
+        }).length;
 
         let trHtml = `<tr class="group hover:bg-indigo-50/50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.editProjStatus('${item.id}')">`;
         
@@ -1056,10 +1058,10 @@ window.saveDailyLogItem = async function() {
     const progressVal = parseInt(document.getElementById('log-project-progress').value) || 0; 
     const purchaseRateVal = parseInt(document.getElementById('log-project-purchase-rate').value) || 0; 
     
-    if(!date || (!content && fileInput.files.length === 0)) return window.showToast("날짜와 내용을 입력하거나 사진을 첨부하세요.", "error"); 
+    if(!date || (!content && (!fileInput || fileInput.files.length === 0))) return window.showToast("날짜와 내용을 입력하거나 사진을 첨부하세요.", "error"); 
     
-    document.getElementById('btn-log-save').innerHTML = '저장중..'; 
-    document.getElementById('btn-log-save').disabled = true; 
+    const btnSave = document.getElementById('btn-log-save');
+    if(btnSave) { btnSave.innerHTML = '저장중..'; btnSave.disabled = true; }
     
     const saveData = async function(base64Img) { 
         try { 
@@ -1079,18 +1081,27 @@ window.saveDailyLogItem = async function() {
             } 
             
             await setDoc(doc(db, "projects_status", projectId), { progress: progressVal, purchaseRate: purchaseRateVal }, { merge: true }); 
-            if(window.processMentions) await window.processMentions(content, projectId, "생산일지"); 
+            
+            // 💡 생산일지 멘션 알림
+            let notified = [];
+            if(window.processMentions) notified = await window.processMentions(content, projectId, "생산일지"); 
+            const proj = window.currentProjectStatusList.find(p => p.id === projectId);
+            if (proj && proj.manager && proj.manager !== window.userProfile.name && (!notified || !notified.includes(proj.manager))) {
+                if(window.notifyUser) await window.notifyUser(proj.manager, content, projectId, "새 생산일지");
+            }
+
             window.resetDailyLogForm(); 
         } catch(e) { 
             window.showToast("저장 중 오류 발생", "error"); 
         } finally { 
-            document.getElementById('btn-log-save').innerHTML = '등록'; 
-            document.getElementById('btn-log-save').disabled = false; 
+            if(btnSave) { btnSave.innerHTML = '등록'; btnSave.disabled = false; }
         } 
     }; 
     
-    if(fileInput.files.length > 0) { 
-        window.resizeAndConvertToBase64(fileInput.files[0], function(base64) { saveData(base64); }); 
+    if(fileInput && fileInput.files.length > 0) { 
+        if(window.resizeAndConvertToBase64) {
+            window.resizeAndConvertToBase64(fileInput.files[0], function(base64) { saveData(base64); }); 
+        } else { saveData(null); }
     } else { 
         saveData(null); 
     } 
@@ -1196,6 +1207,7 @@ window.renderComments = function(topLevelComments) {
     } catch(e) { list.innerHTML = '<div class="text-center p-8 text-rose-500 font-bold">렌더링 오류 발생</div>'; }
 };
 
+// 💡 PJT 현황판 내의 코멘트 저장 함수
 window.saveCommentItem = async function() { 
     const projectId = document.getElementById('cmt-req-id').value; 
     const content = document.getElementById('new-cmt-text').value.trim(); 
@@ -1203,10 +1215,10 @@ window.saveCommentItem = async function() {
     const editId = document.getElementById('editing-cmt-id').value; 
     const fileInput = document.getElementById('new-cmt-image'); 
     
-    if(!content && fileInput.files.length === 0) return window.showToast("코멘트 내용이나 사진을 첨부하세요.", "error"); 
+    if(!content && (!fileInput || fileInput.files.length === 0)) return window.showToast("코멘트 내용이나 사진을 첨부하세요.", "error"); 
     
-    document.getElementById('btn-cmt-save').innerHTML = '저장중..'; 
-    document.getElementById('btn-cmt-save').disabled = true; 
+    const btnSave = document.getElementById('btn-cmt-save');
+    if(btnSave) { btnSave.innerHTML = '저장중..'; btnSave.disabled = true; }
     
     const saveData = async function(base64Img) { 
         try { 
@@ -1224,18 +1236,28 @@ window.saveCommentItem = async function() {
                 payload.createdAt = Date.now(); 
                 await addDoc(collection(db, "project_comments"), payload); 
                 window.showToast("코멘트가 등록되었습니다."); 
+                
+                // 💡 PJT 현황판 코멘트 남길 시 멘션 및 매니저 알림
+                let notified = [];
+                if(window.processMentions) notified = await window.processMentions(content, projectId, "코멘트");
+                
+                const proj = window.currentProjectStatusList.find(p => p.id === projectId);
+                if (proj && proj.manager && proj.manager !== window.userProfile.name && (!notified || !notified.includes(proj.manager))) {
+                    if(window.notifyUser) await window.notifyUser(proj.manager, content, projectId, "PJT 코멘트");
+                }
             } 
-            if(window.processMentions) await window.processMentions(content, projectId, "코멘트");
-            window.cancelCommentAction(); 
+            if(window.cancelCommentAction) window.cancelCommentAction(); 
         } catch(e) { 
             window.showToast("저장 중 오류 발생", "error"); 
         } finally { 
-            document.getElementById('btn-cmt-save').innerHTML = '작성'; 
-            document.getElementById('btn-cmt-save').disabled = false; 
+            if(btnSave) { btnSave.innerHTML = '작성'; btnSave.disabled = false; }
         } 
     }; 
-    if(fileInput.files.length > 0) { 
-        window.resizeAndConvertToBase64(fileInput.files[0], function(base64) { saveData(base64); }); 
+    
+    if(fileInput && fileInput.files.length > 0) { 
+        if(window.resizeAndConvertToBase64) {
+            window.resizeAndConvertToBase64(fileInput.files[0], function(base64) { saveData(base64); }); 
+        } else { saveData(null); }
     } else { 
         saveData(null); 
     } 
@@ -1265,7 +1287,8 @@ window.cancelCommentAction = function() {
     document.getElementById('reply-to-id').value = ''; 
     document.getElementById('editing-cmt-id').value = ''; 
     document.getElementById('new-cmt-text').value = ''; 
-    document.getElementById('new-cmt-image').value = ''; 
+    const fileInput = document.getElementById('new-cmt-image');
+    if (fileInput) fileInput.value = ''; 
     document.getElementById('btn-cmt-save').innerText = '작성'; 
     document.getElementById('reply-indicator').classList.add('hidden'); 
 };
@@ -1363,42 +1386,25 @@ window.saveIssueItem = async function() {
         } else { 
             await addDoc(collection(db, "project_issues"), { projectId: projectId, content: content, isResolved: false, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() }); 
             window.showToast("이슈가 등록되었습니다."); 
+            
+            // 💡 이슈 작성 시 멘션 없어도 담당자에게 알림 전송
+            let notified = [];
+            if(window.processMentions) notified = await window.processMentions(content, projectId, "이슈");
+            const proj = window.currentProjectStatusList.find(p => p.id === projectId);
+            if (proj && proj.manager && proj.manager !== window.userProfile.name && (!notified || !notified.includes(proj.manager))) {
+                if(window.notifyUser) await window.notifyUser(proj.manager, content, projectId, "PJT 이슈");
+            }
         } 
-        if(window.processMentions) await window.processMentions(content, projectId, "이슈");
         document.getElementById('editing-issue-id').value = ''; 
         document.getElementById('new-issue-text').value = ''; 
         document.getElementById('btn-issue-save').innerText = '등록'; 
     } catch(e) { window.showToast("저장 중 오류 발생", "error"); } 
 };
 
-window.toggleIssueStatus = async function(id, isResolved) { 
-    try { 
-        await setDoc(doc(db, "project_issues", id), { isResolved: isResolved }, { merge: true }); 
-    } catch(e) { window.showToast("상태 변경 오류", "error"); } 
-};
-
-window.editIssue = function(id) { 
-    const iss = window.currentIssues.find(function(i) { return i.id === id; }); 
-    if(!iss) return; 
-    document.getElementById('editing-issue-id').value = id; 
-    document.getElementById('new-issue-text').value = iss.content || ''; 
-    document.getElementById('btn-issue-save').innerText = '수정'; 
-    document.getElementById('new-issue-text').focus(); 
-};
-
-window.deleteIssue = async function(id) { 
-    if(!confirm("이 이슈를 삭제하시겠습니까?")) return; 
-    try { 
-        await deleteDoc(doc(db, "project_issues", id)); 
-        window.showToast("삭제되었습니다."); 
-    } catch(e) { window.showToast("삭제 실패", "error"); } 
-};
-
-window.closeIssueModal = function() { 
-    document.getElementById('issue-modal').classList.add('hidden'); 
-    document.getElementById('issue-modal').classList.remove('flex'); 
-    if (currentIssueUnsubscribe) { currentIssueUnsubscribe(); currentIssueUnsubscribe = null; } 
-};
+window.toggleIssueStatus = async function(id, isResolved) { try { await setDoc(doc(db, "project_issues", id), { isResolved: isResolved }, { merge: true }); } catch(e) { window.showToast("상태 변경 오류", "error"); } };
+window.editIssue = function(id) { const iss = window.currentIssues.find(function(i) { return i.id === id; }); if(!iss) return; document.getElementById('editing-issue-id').value = id; document.getElementById('new-issue-text').value = iss.content || ''; document.getElementById('btn-issue-save').innerText = '수정'; document.getElementById('new-issue-text').focus(); };
+window.deleteIssue = async function(id) { if(!confirm("이 이슈를 삭제하시겠습니까?")) return; try { await deleteDoc(doc(db, "project_issues", id)); window.showToast("삭제되었습니다."); } catch(e) { window.showToast("삭제 실패", "error"); } };
+window.closeIssueModal = function() { document.getElementById('issue-modal').classList.add('hidden'); document.getElementById('issue-modal').classList.remove('flex'); if (currentIssueUnsubscribe) { currentIssueUnsubscribe(); currentIssueUnsubscribe = null; } };
 
 window.openMdLogModal = function(projectId, title, curMd) { 
     const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
@@ -1516,226 +1522,85 @@ window.updateProjectTotalMd = async function(projectId) {
     } 
 };
 
-window.closeMdLogModal = function() { 
-    document.getElementById('md-log-modal').classList.add('hidden'); 
-    document.getElementById('md-log-modal').classList.remove('flex'); 
-    if (currentMdLogUnsubscribe) { currentMdLogUnsubscribe(); currentMdLogUnsubscribe = null; } 
-};
+window.closeMdLogModal = function() { document.getElementById('md-log-modal').classList.add('hidden'); document.getElementById('md-log-modal').classList.remove('flex'); if (currentMdLogUnsubscribe) { currentMdLogUnsubscribe(); currentMdLogUnsubscribe = null; } };
+window.resetMdLogForm = function() { document.getElementById('editing-md-id').value = ''; document.getElementById('new-md-date').value = window.getLocalDateStr(new Date()); document.getElementById('new-md-val').value = ''; document.getElementById('new-md-desc').value = ''; document.getElementById('btn-md-save').innerText = '등록'; document.getElementById('btn-md-cancel').classList.add('hidden'); };
 
-window.resetMdLogForm = function() { 
-    document.getElementById('editing-md-id').value = ''; 
-    document.getElementById('new-md-date').value = window.getLocalDateStr(new Date()); 
-    document.getElementById('new-md-val').value = ''; 
-    document.getElementById('new-md-desc').value = ''; 
-    document.getElementById('btn-md-save').innerText = '등록'; 
-    document.getElementById('btn-md-cancel').classList.add('hidden'); 
-};
-
-window.openLinkModal = function(projectId, title) { 
-    const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
-    if(!proj) return; 
-    document.getElementById('link-req-id').value = projectId; 
-    const titleEl = document.getElementById('link-project-title'); 
-    if(titleEl) titleEl.innerText = title || proj.name || ''; 
-    document.getElementById('new-link-name').value = ''; 
-    document.getElementById('new-link-url').value = ''; 
-    document.getElementById('link-modal').classList.remove('hidden'); 
-    document.getElementById('link-modal').classList.add('flex'); 
-    window.renderLinksList(projectId); 
-};
-
+window.openLinkModal = function(projectId, title) { const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); if(!proj) return; document.getElementById('link-req-id').value = projectId; const titleEl = document.getElementById('link-project-title'); if(titleEl) titleEl.innerText = title || proj.name || ''; document.getElementById('new-link-name').value = ''; document.getElementById('new-link-url').value = ''; document.getElementById('link-modal').classList.remove('hidden'); document.getElementById('link-modal').classList.add('flex'); window.renderLinksList(projectId); };
 window.renderLinksList = function(projectId) { 
     try {
-        const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
-        const list = document.getElementById('link-list'); 
-        if(!list) return;
-        if(!proj || !proj.links || proj.links.length === 0) { 
-            list.innerHTML = '<li class="p-8 text-center text-slate-400 font-bold text-xs bg-white rounded-xl border border-slate-200 border-dashed">등록된 문서/링크가 없습니다.</li>'; 
-            return; 
-        } 
-        
-        let htmlStr = '';
-        proj.links.forEach(function(lnk, idx) {
-            htmlStr += '<li class="flex justify-between items-center p-4 bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow group"><div class="flex flex-col truncate"><span class="font-extrabold text-slate-700 text-sm mb-1">' + getSafeString(lnk.name) + '</span><a href="' + getSafeString(lnk.url) + '" target="_blank" class="text-[11px] font-bold text-teal-600 hover:text-teal-800 hover:underline truncate flex items-center gap-1"><i class="fa-solid fa-link"></i> ' + getSafeString(lnk.url) + '</a></div><button onclick="window.deleteLinkItem(\'' + projectId + '\', ' + idx + ')" class="text-slate-300 hover:bg-rose-50 hover:text-rose-500 rounded-lg transition-all p-2.5"><i class="fa-solid fa-trash-can"></i></button></li>';
-        });
-        list.innerHTML = htmlStr;
-    } catch(e) { console.error(e); }
+        const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); const list = document.getElementById('link-list'); if(!list) return;
+        if(!proj || !proj.links || proj.links.length === 0) { list.innerHTML = '<li class="p-8 text-center text-slate-400 font-bold text-xs bg-white rounded-xl border border-slate-200 border-dashed">등록된 문서/링크가 없습니다.</li>'; return; } 
+        let htmlStr = ''; proj.links.forEach(function(lnk, idx) { htmlStr += '<li class="flex justify-between items-center p-4 bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow group"><div class="flex flex-col truncate"><span class="font-extrabold text-slate-700 text-sm mb-1">' + getSafeString(lnk.name) + '</span><a href="' + getSafeString(lnk.url) + '" target="_blank" class="text-[11px] font-bold text-teal-600 hover:text-teal-800 hover:underline truncate flex items-center gap-1"><i class="fa-solid fa-link"></i> ' + getSafeString(lnk.url) + '</a></div><button onclick="window.deleteLinkItem(\'' + projectId + '\', ' + idx + ')" class="text-slate-300 hover:bg-rose-50 hover:text-rose-500 rounded-lg transition-all p-2.5"><i class="fa-solid fa-trash-can"></i></button></li>'; }); list.innerHTML = htmlStr;
+    } catch(e) {}
 };
-
-window.closeLinkModal = function() { 
-    document.getElementById('link-modal').classList.add('hidden'); 
-    document.getElementById('link-modal').classList.remove('flex'); 
-};
-
-window.saveLinkItem = async function() { 
-    const projectId = document.getElementById('link-req-id').value; 
-    const name = document.getElementById('new-link-name').value.trim() || '참고 링크'; 
-    let url = document.getElementById('new-link-url').value.trim(); 
-    
-    if(!url) return window.showToast("링크 URL을 입력하세요.", "error"); 
-    
-    const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
-    let links = proj && proj.links ? proj.links.slice() : []; 
-    
-    if(!url.startsWith('http')) url = 'https://' + url;
-    links.push({ name: name, url: url }); 
-    
-    try { 
-        await setDoc(doc(db, "projects_status", projectId), { links: links }, { merge: true }); 
-        window.showToast("링크가 추가되었습니다."); 
-        document.getElementById('new-link-name').value = ''; 
-        document.getElementById('new-link-url').value = ''; 
-        if(proj) proj.links = links;
-        window.renderLinksList(projectId); 
-    } catch(e) { window.showToast("추가 실패", "error"); } 
-};
-
-window.deleteLinkItem = async function(projectId, index) { 
-    if(!confirm("이 링크를 삭제하시겠습니까?")) return; 
-    const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
-    if(!proj || !proj.links) return; 
-    
-    let links = proj.links.slice(); 
-    links.splice(index, 1); 
-    
-    try { 
-        await setDoc(doc(db, "projects_status", projectId), { links: links }, { merge: true }); 
-        window.showToast("링크가 삭제되었습니다."); 
-        if(proj) proj.links = links; 
-        window.renderLinksList(projectId); 
-    } catch(e) { window.showToast("삭제 실패", "error"); } 
-};
+window.closeLinkModal = function() { document.getElementById('link-modal').classList.add('hidden'); document.getElementById('link-modal').classList.remove('flex'); };
+window.saveLinkItem = async function() { const projectId = document.getElementById('link-req-id').value; const name = document.getElementById('new-link-name').value.trim() || '참고 링크'; let url = document.getElementById('new-link-url').value.trim(); if(!url) return window.showToast("링크 URL을 입력하세요.", "error"); const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); let links = proj && proj.links ? proj.links.slice() : []; if(!url.startsWith('http')) url = 'https://' + url; links.push({ name: name, url: url }); try { await setDoc(doc(db, "projects_status", projectId), { links: links }, { merge: true }); window.showToast("링크가 추가되었습니다."); document.getElementById('new-link-name').value = ''; document.getElementById('new-link-url').value = ''; if(proj) proj.links = links; window.renderLinksList(projectId); } catch(e) { window.showToast("추가 실패", "error"); } };
+window.deleteLinkItem = async function(projectId, index) { if(!confirm("이 링크를 삭제하시겠습니까?")) return; const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); if(!proj || !proj.links) return; let links = proj.links.slice(); links.splice(index, 1); try { await setDoc(doc(db, "projects_status", projectId), { links: links }, { merge: true }); window.showToast("링크가 삭제되었습니다."); if(proj) proj.links = links; window.renderLinksList(projectId); } catch(e) { window.showToast("삭제 실패", "error"); } };
 
 window.showAutocomplete = function(inputEl, targetId1, targetId2, isNameSearch) {
-    const val = inputEl.value.trim().toLowerCase();
-    let dropdown = document.getElementById('pjt-autocomplete-dropdown');
-    
-    if(!dropdown) {
-        dropdown = document.createElement('ul');
-        dropdown.id = 'pjt-autocomplete-dropdown';
-        dropdown.className = 'absolute z-[9999] bg-white border border-indigo-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-full custom-scrollbar py-1';
-        document.body.appendChild(dropdown);
-    }
-
-    if(val.length < 1) { 
-        dropdown.classList.add('hidden'); 
-        return; 
-    }
-
+    const val = inputEl.value.trim().toLowerCase(); let dropdown = document.getElementById('pjt-autocomplete-dropdown');
+    if(!dropdown) { dropdown = document.createElement('ul'); dropdown.id = 'pjt-autocomplete-dropdown'; dropdown.className = 'absolute z-[9999] bg-white border border-indigo-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-full custom-scrollbar py-1'; document.body.appendChild(dropdown); }
+    if(val.length < 1) { dropdown.classList.add('hidden'); return; }
     let matches = [];
     for (let i = 0; i < window.pjtCodeMasterList.length; i++) {
         let p = window.pjtCodeMasterList[i];
-        if (isNameSearch) {
-            if (p.name.toLowerCase().includes(val) || window.matchString(val, p.name)) {
-                matches.push(p);
-            }
-        } else {
-            if (p.code.toLowerCase().includes(val)) {
-                matches.push(p);
-            }
-        }
+        if (isNameSearch) { if (p.name.toLowerCase().includes(val) || window.matchString(val, p.name)) matches.push(p); } 
+        else { if (p.code.toLowerCase().includes(val)) matches.push(p); }
     }
-
     if(matches.length > 0) {
-        const rect = inputEl.getBoundingClientRect();
-        dropdown.style.left = (rect.left + window.scrollX) + 'px';
-        dropdown.style.top = (rect.bottom + window.scrollY + 5) + 'px';
-        dropdown.style.width = rect.width + 'px';
-        dropdown.classList.remove('hidden');
-
+        const rect = inputEl.getBoundingClientRect(); dropdown.style.left = (rect.left + window.scrollX) + 'px'; dropdown.style.top = (rect.bottom + window.scrollY + 5) + 'px'; dropdown.style.width = rect.width + 'px'; dropdown.classList.remove('hidden');
         let dropHtml = '';
         matches.forEach(function(m) {
-            let safeCompany = m.company || '업체미상';
-            let safeName = m.name.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
-            
-            dropHtml += '<li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-slate-700 font-bold text-xs border-b border-slate-50 last:border-0 truncate transition-colors" ';
-            dropHtml += 'onmousedown="window.selectAutocomplete(\'' + m.code + '\', \'' + safeName + '\', \'' + m.company + '\', \'' + inputEl.id + '\', \'' + targetId1 + '\', \'' + targetId2 + '\')">';
-            dropHtml += '<span class="text-indigo-600">[' + m.code + ']</span> ' + m.name + ' <span class="text-[10px] text-slate-400">(' + safeCompany + ')</span>';
-            dropHtml += '</li>';
-        });
-        dropdown.innerHTML = dropHtml;
-    } else {
-        dropdown.classList.add('hidden');
-    }
+            let safeCompany = m.company || '업체미상'; let safeName = m.name.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+            dropHtml += '<li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-slate-700 font-bold text-xs border-b border-slate-50 last:border-0 truncate transition-colors" onmousedown="window.selectAutocomplete(\'' + m.code + '\', \'' + safeName + '\', \'' + m.company + '\', \'' + inputEl.id + '\', \'' + targetId1 + '\', \'' + targetId2 + '\')"><span class="text-indigo-600">[' + m.code + ']</span> ' + m.name + ' <span class="text-[10px] text-slate-400">(' + safeCompany + ')</span></li>';
+        }); dropdown.innerHTML = dropHtml;
+    } else dropdown.classList.add('hidden');
 };
-
-window.selectAutocomplete = function(code, name, company, sourceId, targetId1, targetId2) {
-    const sourceEl = document.getElementById(sourceId);
-    const t1 = document.getElementById(targetId1);
-    const t2 = document.getElementById(targetId2);
-
-    if (sourceId === 'ps-code') {
-        if (sourceEl) sourceEl.value = code;
-        if (t1) t1.value = name;
-        if (t2) t2.value = company;
-    } else {
-        if (sourceEl) sourceEl.value = name;
-        if (t1) t1.value = code;
-        if (t2) t2.value = company;
-    }
-
-    const drop = document.getElementById('pjt-autocomplete-dropdown');
-    if (drop) {
-        drop.classList.add('hidden');
-    }
-};
+window.selectAutocomplete = function(code, name, company, sourceId, targetId1, targetId2) { const sourceEl = document.getElementById(sourceId); const t1 = document.getElementById(targetId1); const t2 = document.getElementById(targetId2); if (sourceId === 'ps-code') { if (sourceEl) sourceEl.value = code; if (t1) t1.value = name; if (t2) t2.value = company; } else { if (sourceEl) sourceEl.value = name; if (t1) t1.value = code; if (t2) t2.value = company; } const drop = document.getElementById('pjt-autocomplete-dropdown'); if (drop) drop.classList.add('hidden'); };
 
 document.addEventListener('click', function(e) {
-    const n = document.getElementById('notification-dropdown');
-    if (n && !n.classList.contains('hidden') && !e.target.closest('.relative.cursor-pointer')) {
-        n.classList.add('hidden');
-    }
-
-    const m = document.getElementById('mention-dropdown');
-    if (m && !m.classList.contains('hidden') && !e.target.closest('#mention-dropdown')) {
-        m.classList.add('hidden');
-    }
-
-    const d = document.getElementById('pjt-autocomplete-dropdown');
-    if (d && !d.classList.contains('hidden') && !e.target.closest('#pjt-autocomplete-dropdown') && !e.target.closest('input[oninput*="showAutocomplete"]')) {
-        d.classList.add('hidden');
-    }
+    const n = document.getElementById('notification-dropdown'); if (n && !n.classList.contains('hidden') && !e.target.closest('.relative.cursor-pointer')) n.classList.add('hidden');
+    const m = document.getElementById('mention-dropdown'); if (m && !m.classList.contains('hidden') && !e.target.closest('#mention-dropdown')) m.classList.add('hidden');
+    const d = document.getElementById('pjt-autocomplete-dropdown'); if (d && !d.classList.contains('hidden') && !e.target.closest('#pjt-autocomplete-dropdown') && !e.target.closest('input[oninput*="showAutocomplete"]')) d.classList.add('hidden');
 });
 
-// 💡 부적합(NCR) 구글 시트 연동 (안정적인 JSON 문자열 파싱으로 교체 완료)
+// 💡 3, 4번 오류 해결: 완전히 새롭고 안정적인 CSV 파싱 동기화 (HTML 태그 오류 회피)
 window.loadNcrData = async function() {
     try {
+        // 기존 JSON 방식이 아닌 CSV 다운로드 방식으로 강제 파싱하여 구글 권한/포맷 오류 원천 차단!
         const sheetId = '1ZYwSKvT4QXjFxgftunwdRHWzX4KXoelhZSVjauAJg8s';
-        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=0`;
+        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=0`;
 
         const res = await fetch(url);
         if (!res.ok) throw new Error("시트 읽기 실패");
 
-        const text = await res.text();
-        
-        // 💡 에러 원인 해결: 정규식 대신 가장 안정적인 방식(substring)으로 JSON 추출
-        const startIndex = text.indexOf('{');
-        const endIndex = text.lastIndexOf('}');
-        
-        if (startIndex === -1 || endIndex === -1) throw new Error("데이터 파싱 실패 (JSON 시작/끝을 찾을 수 없음)");
-        
-        const jsonString = text.substring(startIndex, endIndex + 1);
-        const data = JSON.parse(jsonString);
-        
-        if (!data || !data.table || !data.table.rows) return;
+        const csvText = await res.text();
+        if (csvText.includes('<html')) throw new Error("시트가 비공개 상태입니다. 공유 권한을 확인하세요.");
 
-        let headers = data.table.cols.map(c => c.label || '');
-        let dataRows = data.table.rows;
-
-        if (headers.join('').trim() === '') {
-            headers = dataRows[0].c.map(cell => (cell && cell.v) ? String(cell.v) : '');
-            dataRows = dataRows.slice(1);
+        // CSV 수동 파싱 알고리즘 (어떤 따옴표와 쉼표 예외도 모두 처리)
+        const rows = [];
+        let row = [], col = "", quote = false;
+        
+        for (let i = 0; i < csvText.length; i++) {
+            let cc = csvText[i], nc = csvText[i+1];
+            if (cc === '"' && quote && nc === '"') { col += cc; ++i; continue; }
+            if (cc === '"') { quote = !quote; continue; }
+            if (cc === ',' && !quote) { row.push(col); col = ""; continue; }
+            if (cc === '\r' && nc === '\n' && !quote) { row.push(col); rows.push(row); row = []; col = ""; ++i; continue; }
+            if (cc === '\n' && !quote) { row.push(col); rows.push(row); row = []; col = ""; continue; }
+            if (cc === '\r' && !quote) { row.push(col); rows.push(row); row = []; col = ""; continue; }
+            col += cc;
         }
-        
-        const rows = dataRows.map(r => r.c.map(cell => (cell && cell.v !== null && cell.v !== undefined) ? String(cell.v) : ''));
-        
-        const getIdx = (keywords) => {
-            return headers.findIndex(h => {
-                if (!h) return false;
-                const normalized = String(h).toLowerCase().replace(/[\s\(\)\[\]_]/g, '');
-                return keywords.some(k => normalized.includes(k.toLowerCase().replace(/[\s\(\)\[\]_]/g, '')));
-            });
-        };
+        if (col || row.length > 0) { row.push(col); rows.push(row); }
+
+        if (rows.length < 2) return;
+
+        const headers = rows[0];
+        const getIdx = (keywords) => headers.findIndex(h => {
+            if (!h) return false;
+            const norm = String(h).toLowerCase().replace(/[\s\(\)\[\]_]/g, '');
+            return keywords.some(k => norm.includes(k.toLowerCase().replace(/[\s\(\)\[\]_]/g, '')));
+        });
 
         const cPjt = getIdx(['project', 'pjt', '프로젝트']);
         const cNcr = getIdx(['ncrno', 'ncr']);
@@ -1746,16 +1611,16 @@ window.loadNcrData = async function() {
         const cDesc = getIdx(['내용', '부적합내용', 'content', 'desc']);
         const cStat = getIdx(['진행', '현황', '상태', 'status']);
 
-        window.ncrData = rows.map(row => {
+        window.ncrData = rows.slice(1).map(r => {
             return {
-                pjtCode: cPjt !== -1 && row[cPjt] ? row[cPjt].trim() : '',
-                ncrNo: cNcr !== -1 && row[cNcr] ? row[cNcr].trim() : '',
-                date: cDate !== -1 && row[cDate] ? row[cDate].trim() : '',
-                drawingNo: cDraw !== -1 && row[cDraw] ? row[cDraw].trim() : '',
-                partName: cPart !== -1 && row[cPart] ? row[cPart].trim() : '',
-                type: cType !== -1 && row[cType] ? row[cType].trim() : '',
-                content: cDesc !== -1 && row[cDesc] ? row[cDesc].trim() : '',
-                status: cStat !== -1 && row[cStat] ? row[cStat].trim() : ''
+                pjtCode: cPjt !== -1 && r[cPjt] ? r[cPjt].trim() : '',
+                ncrNo: cNcr !== -1 && r[cNcr] ? r[cNcr].trim() : '',
+                date: cDate !== -1 && r[cDate] ? r[cDate].trim() : '',
+                drawingNo: cDraw !== -1 && r[cDraw] ? r[cDraw].trim() : '',
+                partName: cPart !== -1 && r[cPart] ? r[cPart].trim() : '',
+                type: cType !== -1 && r[cType] ? r[cType].trim() : '',
+                content: cDesc !== -1 && r[cDesc] ? r[cDesc].trim() : '',
+                status: cStat !== -1 && r[cStat] ? r[cStat].trim() : ''
             };
         }).filter(n => n.pjtCode);
 
@@ -1768,15 +1633,27 @@ window.loadNcrData = async function() {
         }
 
         if(window.showToast) window.showToast("부적합(NCR) 데이터 동기화 완료!", "success");
+        
+        // 성공 시 에러 문구 삭제
+        const authBtn = document.getElementById('btn-pjt-google-auth');
+        if (authBtn && !window.googleAccessToken) {
+            authBtn.innerHTML = '<i class="fa-brands fa-google"></i> 구글 연동 필요';
+            authBtn.className = 'text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-1.5 rounded-lg shadow-sm hover:bg-amber-100 transition-colors whitespace-nowrap ml-2';
+        } else if (authBtn && window.googleAccessToken) {
+            authBtn.classList.add('hidden');
+        }
 
     } catch(e) {
         console.error("NCR 로드 에러:", e);
+        if(window.showToast) window.showToast("동기화 실패: " + e.message, "error");
+        
+        // 실패 시 에러 표시
         const authBtn = document.getElementById('btn-pjt-google-auth');
         if (authBtn) {
             authBtn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> 동기화 실패';
             authBtn.className = 'text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-1.5 rounded-lg shadow-sm whitespace-nowrap ml-2';
+            authBtn.classList.remove('hidden');
         }
-        // 에러 알림은 콘솔에만 띄우고 UI 방해 최소화
     }
 };
 
@@ -1801,7 +1678,10 @@ window.renderNcrList = function(pjtCode) {
     const safeTargetCode = String(pjtCode).replace(/\s/g, '').toUpperCase();
     const list = (window.ncrData || []).filter(n => String(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeTargetCode);
     
-    let total = list.length, completed = list.filter(n => n.status.includes('완료') || n.status.includes('종결')).length;
+    let total = list.length, completed = list.filter(n => {
+        let s = String(n.status || '');
+        return s.includes('완료') || s.includes('종결');
+    }).length;
     
     document.getElementById('ncr-total-cnt').innerText = total;
     document.getElementById('ncr-pending-cnt').innerText = total - completed;
@@ -1813,7 +1693,8 @@ window.renderNcrList = function(pjtCode) {
     }
     
     tbody.innerHTML = list.map(n => {
-        const isComp = n.status.includes('완료') || n.status.includes('종결');
+        let s = String(n.status || '');
+        const isComp = s.includes('완료') || s.includes('종결');
         const textClass = isComp ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-700';
         const badge = isComp ? `<span class="bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">완료</span>` : `<span class="bg-rose-50 text-rose-600 border border-rose-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">진행중</span>`;
         
@@ -1827,32 +1708,4 @@ window.renderNcrList = function(pjtCode) {
             <td class="p-3 text-center whitespace-nowrap">${badge}</td>
         </tr>`;
     }).join('');
-};
-
-// 💡 생산일지 드래그 앤 드롭 기능을 위한 추가
-window.updateDailyLogFileName = function() {
-    const input = document.getElementById('new-log-image');
-    const wrap = document.getElementById('new-log-filename-wrap');
-    const nameEl = document.getElementById('new-log-filename');
-    if(input && input.files.length > 0) {
-        if(nameEl) nameEl.innerText = input.files[0].name;
-        if(wrap) wrap.classList.remove('hidden');
-    }
-};
-
-window.clearDailyLogFile = function(e) {
-    if(e) e.stopPropagation();
-    const input = document.getElementById('new-log-image');
-    const wrap = document.getElementById('new-log-filename-wrap');
-    if(input) input.value = '';
-    if(wrap) wrap.classList.add('hidden');
-};
-
-window.resetDailyLogForm = function() { 
-    document.getElementById('editing-log-id').value = ''; 
-    document.getElementById('new-log-date').value = window.getLocalDateStr(new Date()); 
-    document.getElementById('new-log-text').value = ''; 
-    window.clearDailyLogFile(); // 💡 파일명 및 input 초기화
-    document.getElementById('btn-log-save').innerText = '등록'; 
-    document.getElementById('btn-log-cancel').classList.add('hidden'); 
 };
