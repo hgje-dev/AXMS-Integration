@@ -20,6 +20,7 @@ const KR_HOLIDAYS = new Set([
     '2025-01-01', '2025-01-28', '2025-01-29', '2025-01-30', '2025-03-01', '2025-03-03', '2025-05-05', '2025-05-06', '2025-06-06', '2025-08-15', '2025-10-03', '2025-10-06', '2025-10-07', '2025-10-09', '2025-12-25',
     '2026-01-01', '2026-02-16', '2026-02-17', '2026-02-18', '2026-03-01', '2026-03-02', '2026-05-05', '2026-05-24', '2026-05-25', '2026-06-06', '2026-08-15', '2026-09-24', '2026-09-25', '2026-09-26', '2026-10-03', '2026-10-05', '2026-10-09', '2026-12-25'
 ]);
+
 function isWhHoliday(d) {
     if (d.getDay() === 0 || d.getDay() === 6) return true;
     return KR_HOLIDAYS.has(window.getLocalDateStr(d));
@@ -216,7 +217,13 @@ window.updateWhDashboard = function() {
             trendKey = `${d.getDate()}일(${days[d.getDay()]})`;
         } else {
             const d = new Date(log.date);
-            trendKey = window.getWeekString ? window.getWeekString(d).split('-')[1] + '주차' : log.date;
+            // 💡 1. "W15주차" -> "15주차" 로 W 제거 로직 추가
+            let wStr = window.getWeekString ? window.getWeekString(d).split('-')[1] : '';
+            if (wStr) {
+                trendKey = wStr.replace('W', '') + '주차';
+            } else {
+                trendKey = log.date;
+            }
         }
         trendMap[trendKey] = (trendMap[trendKey] || 0) + h;
 
@@ -419,6 +426,7 @@ function renderWhGrid() {
     tbody.innerHTML = bodyHtml;
 }
 
+// 💡 2. 달력 뷰(Calendar) 개편: 3개 이상이면 +N개 버튼 제공, 높이 제한 적용
 function renderWhCalendar() {
     const grid = document.getElementById('wh-calendar-grid');
     const titleEl = document.getElementById('wh-calendar-title');
@@ -436,7 +444,7 @@ function renderWhCalendar() {
     const lastDate = new Date(y, m + 1, 0).getDate();
 
     let html = '';
-    for(let i=0; i<firstDay; i++) html += `<div class="bg-slate-50 min-h-[120px]"></div>`;
+    for(let i=0; i<firstDay; i++) html += `<div class="bg-slate-50 min-h-[140px]"></div>`;
 
     const filteredLogs = getFilteredLogs();
 
@@ -451,17 +459,27 @@ function renderWhCalendar() {
         let dateClass = isToday ? 'bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center mx-auto shadow-md' : txtClass;
 
         let logsHtml = '';
-        logs.forEach(log => {
+        const MAX_DISPLAY = 3;
+        let displayLogs = logs.slice(0, MAX_DISPLAY);
+
+        displayLogs.forEach(log => {
             let confClass = log.isConfirmed ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-white text-slate-700 border-slate-200';
-            logsHtml += `<div class="text-[10px] ${confClass} border px-1.5 py-1 rounded-md mb-1 truncate cursor-pointer hover:shadow-md transition-shadow" onclick="window.openWhInputModal('${dateStr}', '${log.authorName}')">
+            logsHtml += `<div class="text-[10px] ${confClass} border px-1.5 py-1 rounded mb-1 truncate cursor-pointer hover:shadow-md transition-shadow shadow-sm" onclick="window.openWhInputModal('${dateStr}', '${log.authorName}')">
                 <span class="font-black text-indigo-700 bg-indigo-50 px-1 rounded mr-1">${log.authorName}</span>${log.projectName||'미지정'} <span class="font-bold text-slate-500">(${log.hours}h)</span>
             </div>`;
         });
 
-        html += `<div class="bg-white p-2 min-h-[120px] hover:bg-slate-50 transition-colors relative group border-t-2 ${isToday ? 'border-t-indigo-500' : 'border-t-transparent'}">
-            <div class="text-xs font-black text-center mb-2 ${dateClass}">${i}</div>
-            <div class="flex flex-col gap-px h-[80px] overflow-y-auto custom-scrollbar">${logsHtml}</div>
-            <button onclick="window.openWhInputModal('${dateStr}', '')" class="absolute bottom-2 right-2 w-6 h-6 bg-white border border-slate-200 shadow-sm rounded-md flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-300 opacity-0 group-hover:opacity-100 transition-all"><i class="fa-solid fa-plus text-[10px]"></i></button>
+        // 💡 3개 초과일 경우 "+N개 더보기" 텍스트 렌더링
+        if (logs.length > MAX_DISPLAY) {
+            logsHtml += `<div class="text-[10px] font-bold text-slate-400 text-center hover:text-indigo-500 cursor-pointer mt-1 bg-slate-50 py-1 rounded" onclick="window.openWhInputModal('${dateStr}', '')">+${logs.length - MAX_DISPLAY}개 더보기</div>`;
+        }
+
+        html += `<div class="bg-white p-2 min-h-[140px] hover:bg-slate-50 transition-colors relative group border-t-2 ${isToday ? 'border-t-indigo-500' : 'border-t-transparent'} flex flex-col">
+            <div class="text-xs font-black text-center mb-2 ${dateClass} shrink-0">${i}</div>
+            <div class="flex-1 flex flex-col">${logsHtml}</div>
+            <button onclick="window.openWhInputModal('${dateStr}', '')" class="absolute top-1 right-1 w-5 h-5 bg-white border border-slate-200 shadow-sm rounded flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-300 opacity-0 group-hover:opacity-100 transition-all z-10">
+                <i class="fa-solid fa-plus text-[8px]"></i>
+            </button>
         </div>`;
     }
     grid.innerHTML = html;
@@ -621,7 +639,6 @@ function appendWhInputRow(logData = null, index = 1) {
     tbody.appendChild(tr);
 }
 
-// 💡 5. 초성 검색 완벽 대응 (PJT 코드 매칭만 실행)
 window.whShowPjtAuto = function(input) {
     const val = input.value.trim().toLowerCase();
     const drop = document.getElementById('wh-pjt-autocomplete');
@@ -635,7 +652,6 @@ window.whShowPjtAuto = function(input) {
     let matches = (window.currentProjectStatusList || []).filter(p => {
         if(p.status === 'completed' || p.status === 'rejected') return false;
         let code = (p.code || '').toLowerCase();
-        // 💡 프로젝트 명칭(name)을 제외하고, 코드(code) 기준으로만 검색(초성 포함) 수행
         return code.includes(val) || (window.matchString && window.matchString(val, p.code));
     });
 
