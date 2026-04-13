@@ -573,6 +573,11 @@ window.resetPurchaseForm = function() {
 window.savePurchaseItem = async function() { 
     const pId = document.getElementById('pur-req-id').value;
     const title = document.getElementById('pur-project-title').innerText;
+    
+    // 💡 [추가된 부분] PJT 코드를 찾아 폴더명으로 설정
+    const proj = window.currentProjectStatusList.find(p => p.id === pId);
+    const folderName = proj && proj.code ? proj.code : title;
+
     const content = document.getElementById('new-pur-text').value.trim();
     const fileInput = document.getElementById('new-pur-file');
     const btn = document.getElementById('btn-pur-save');
@@ -582,7 +587,8 @@ window.savePurchaseItem = async function() {
     btn.innerHTML = '저장중..'; btn.disabled = true;
     try { 
         let fileUrl = null; 
-        if(fileInput.files.length > 0) fileUrl = await handleDriveUploadWithProgress(fileInput, title);
+        // 💡 [수정된 부분] title 대신 folderName(PJT 코드) 전달
+        if(fileInput.files.length > 0) fileUrl = await handleDriveUploadWithProgress(fileInput, folderName);
         await addDoc(collection(db, "project_purchases"), { projectId: pId, content: content, fileUrl: fileUrl, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
         window.showToast("구매 내역이 등록되었습니다."); 
         window.resetPurchaseForm(); 
@@ -652,6 +658,11 @@ window.resetDesignForm = function() {
 window.saveDesignItem = async function() { 
     const pId = document.getElementById('des-req-id').value;
     const title = document.getElementById('des-project-title').innerText;
+    
+    // 💡 [추가된 부분] PJT 코드를 찾아 폴더명으로 설정
+    const proj = window.currentProjectStatusList.find(p => p.id === pId);
+    const folderName = proj && proj.code ? proj.code : title;
+
     const content = document.getElementById('new-des-text').value.trim();
     const fileInput = document.getElementById('new-des-file');
     const btn = document.getElementById('btn-des-save');
@@ -661,7 +672,8 @@ window.saveDesignItem = async function() {
     btn.innerHTML = '저장중..'; btn.disabled = true;
     try { 
         let fileUrl = null; 
-        if(fileInput.files.length > 0) fileUrl = await handleDriveUploadWithProgress(fileInput, title);
+        // 💡 [수정된 부분] title 대신 folderName(PJT 코드) 전달
+        if(fileInput.files.length > 0) fileUrl = await handleDriveUploadWithProgress(fileInput, folderName);
         await addDoc(collection(db, "project_designs"), { projectId: pId, content: content, fileUrl: fileUrl, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
         window.showToast("설계 내역이 등록되었습니다."); 
         window.resetDesignForm(); 
@@ -731,6 +743,11 @@ window.resetPjtScheduleForm = function() {
 window.savePjtScheduleItem = async function() { 
     const pId = document.getElementById('sch-req-id').value;
     const title = document.getElementById('sch-project-title').innerText;
+    
+    // 💡 [추가된 부분] PJT 코드를 찾아 폴더명으로 설정
+    const proj = window.currentProjectStatusList.find(p => p.id === pId);
+    const folderName = proj && proj.code ? proj.code : title;
+
     const content = document.getElementById('new-sch-text').value.trim();
     const fileInput = document.getElementById('new-sch-file');
     const btn = document.getElementById('btn-sch-save');
@@ -740,7 +757,8 @@ window.savePjtScheduleItem = async function() {
     btn.innerHTML = '저장중..'; btn.disabled = true;
     try { 
         let fileUrl = null; 
-        if(fileInput.files.length > 0) fileUrl = await handleDriveUploadWithProgress(fileInput, title);
+        // 💡 [수정된 부분] title 대신 folderName(PJT 코드) 전달
+        if(fileInput.files.length > 0) fileUrl = await handleDriveUploadWithProgress(fileInput, folderName);
         await addDoc(collection(db, "project_schedules"), { projectId: pId, content: content, fileUrl: fileUrl, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
         window.showToast("PJT 일정 내역이 등록되었습니다."); 
         window.resetPjtScheduleForm(); 
@@ -750,7 +768,6 @@ window.savePjtScheduleItem = async function() {
         btn.innerHTML = '등록'; btn.disabled = false; 
     }
 };
-
 window.deletePjtSchedule = async function(id) { 
     if(confirm("삭제하시겠습니까?")) await deleteDoc(doc(db, "project_schedules", id)); 
 };
