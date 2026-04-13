@@ -217,7 +217,6 @@ window.renderProjectStatusList = function() {
     const tbody = document.getElementById('proj-dash-tbody'); if(!tbody) return;
     let displayList = window.getFilteredProjects();
     
-    // 💡 열 개수가 32개로 늘어났으므로 빈 화면일 때 colspan 32 적용
     if(displayList.length === 0) { 
         tbody.innerHTML = '<tr><td colspan="32" class="text-center p-6 text-slate-400 font-bold border-b border-slate-100 bg-white">프로젝트가 없습니다.</td></tr>'; 
         return; 
@@ -244,7 +243,6 @@ window.renderProjectStatusList = function() {
         const desCnt = (window.projectDesignCounts && window.projectDesignCounts[item.id]) || 0;
         const schCnt = (window.projectScheduleCounts && window.projectScheduleCounts[item.id]) || 0;
 
-        // 💡 띄어쓰기 및 대소문자 무시한 NCR 미결 항목 계산
         const safeItemCode = String(item.code || '').replace(/\s/g, '').toUpperCase();
         const pjtNcrData = (window.ncrData || []).filter(n => String(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeItemCode);
         const unresolvedNcrCnt = pjtNcrData.filter(n => !(n.status.includes('완료') || n.status.includes('종결') || n.status.includes('완료됨'))).length;
@@ -1089,15 +1087,6 @@ window.closeDailyLogModal = function() {
     if (currentLogUnsubscribe) { currentLogUnsubscribe(); currentLogUnsubscribe = null; } 
 };
 
-window.resetDailyLogForm = function() { 
-    document.getElementById('editing-log-id').value = ''; 
-    document.getElementById('new-log-date').value = window.getLocalDateStr(new Date()); 
-    document.getElementById('new-log-text').value = ''; 
-    document.getElementById('new-log-image').value = ''; 
-    document.getElementById('btn-log-save').innerText = '등록'; 
-    document.getElementById('btn-log-cancel').classList.add('hidden'); 
-};
-
 window.openCommentModal = function(projectId, title) { 
     const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
     if(!proj) return; 
@@ -1671,44 +1660,32 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// ==========================================
-// 💡 부적합(NCR) 구글 시트 연동 (토큰 없는 완벽 우회 방식 - JSON Parsing)
-// ==========================================
+// 💡 부적합(NCR) 구글 시트 연동 (JSON Parsing)
 window.loadNcrData = async function() {
     try {
-        // 구글 시트 ID
         const sheetId = '1ZYwSKvT4QXjFxgftunwdRHWzX4KXoelhZSVjauAJg8s';
-        
-        // 💡 CSV 방식 대신 가장 안정적인 Google Visualization API (JSON 응답) 방식을 사용합니다. CORS 에러 완벽 해결!
         const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=0`;
 
         const res = await fetch(url);
         if (!res.ok) throw new Error("시트 읽기 실패");
 
         const text = await res.text();
-        
-        // 응답 텍스트에서 불필요한 함수 래퍼를 제거하고 순수 JSON만 추출
         const jsonString = text.match(/google\.visualization\.Query\.setResponse\(([\s\S\w]+)\);/);
         if (!jsonString || !jsonString[1]) throw new Error("데이터 파싱 실패");
         
         const data = JSON.parse(jsonString[1]);
-        
         if (!data || !data.table || !data.table.rows) return;
 
-        // 헤더 추출
         let headers = data.table.cols.map(c => c.label || '');
         let dataRows = data.table.rows;
 
-        // 만약 컬럼 라벨이 비어있다면, 첫 번째 데이터를 헤더로 간주
         if (headers.join('').trim() === '') {
             headers = dataRows[0].c.map(cell => (cell && cell.v) ? String(cell.v) : '');
             dataRows = dataRows.slice(1);
         }
         
-        // 데이터 행 추출
         const rows = dataRows.map(r => r.c.map(cell => (cell && cell.v !== null && cell.v !== undefined) ? String(cell.v) : ''));
         
-        // 헤더 인덱스 찾기 (띄어쓰기, 대소문자 무시)
         const getIdx = (keywords) => {
             return headers.findIndex(h => {
                 if (!h) return false;
@@ -1726,7 +1703,6 @@ window.loadNcrData = async function() {
         const cDesc = getIdx(['내용', '부적합내용', 'content', 'desc']);
         const cStat = getIdx(['진행', '현황', '상태', 'status']);
 
-        // 데이터 매핑
         window.ncrData = rows.map(row => {
             return {
                 pjtCode: cPjt !== -1 && row[cPjt] ? row[cPjt].trim() : '',
@@ -1738,7 +1714,7 @@ window.loadNcrData = async function() {
                 content: cDesc !== -1 && row[cDesc] ? row[cDesc].trim() : '',
                 status: cStat !== -1 && row[cStat] ? row[cStat].trim() : ''
             };
-        }).filter(n => n.pjtCode); // PJT 코드가 있는 행만 킵
+        }).filter(n => n.pjtCode);
 
         window.renderProjectStatusList();
 
@@ -1808,4 +1784,32 @@ window.renderNcrList = function(pjtCode) {
             <td class="p-3 text-center whitespace-nowrap">${badge}</td>
         </tr>`;
     }).join('');
+};
+
+// 💡 생산일지 드래그 앤 드롭 기능을 위한 추가
+window.updateDailyLogFileName = function() {
+    const input = document.getElementById('new-log-image');
+    const wrap = document.getElementById('new-log-filename-wrap');
+    const nameEl = document.getElementById('new-log-filename');
+    if(input && input.files.length > 0) {
+        if(nameEl) nameEl.innerText = input.files[0].name;
+        if(wrap) wrap.classList.remove('hidden');
+    }
+};
+
+window.clearDailyLogFile = function(e) {
+    if(e) e.stopPropagation();
+    const input = document.getElementById('new-log-image');
+    const wrap = document.getElementById('new-log-filename-wrap');
+    if(input) input.value = '';
+    if(wrap) wrap.classList.add('hidden');
+};
+
+window.resetDailyLogForm = function() { 
+    document.getElementById('editing-log-id').value = ''; 
+    document.getElementById('new-log-date').value = window.getLocalDateStr(new Date()); 
+    document.getElementById('new-log-text').value = ''; 
+    window.clearDailyLogFile(); // 💡 파일명 및 input 초기화
+    document.getElementById('btn-log-save').innerText = '등록'; 
+    document.getElementById('btn-log-cancel').classList.add('hidden'); 
 };
