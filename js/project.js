@@ -21,7 +21,6 @@ window.hideCompletedFilter = false;
 window.ganttTodayOffset = 0;
 window.ncrData = [];
 
-// 💡 유틸리티: 이미지 첨부 시 용량 최적화 및 Base64 변환
 window.resizeAndConvertToBase64 = function(file, callback) {
     if (!file || !file.type.match(/image.*/)) {
         callback(null);
@@ -2254,20 +2253,24 @@ window.loadNcrData = async function() {
     try {
         if(window.showToast) window.showToast("부적합(RAWDATA) 데이터를 가져오는 중입니다...", "success");
         
-        // 💡 주신 pubhtml 주소를 데이터 통신용(CSV)으로 자동 변환합니다.
         const originalUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSYwsWjs8ox503LLsRIeVRbbZ4R7eLgoq0C-ZdYIBIUACCwWyt5oYkAAtIpX9j1taqt1MQaEg1Jjom0/pubhtml';
         const dataUrl = originalUrl.replace('/pubhtml', '/pub?output=csv');
         
-        // 캐시 방지를 위해 타임스탬프를 추가하여 새로고침 버튼 클릭 시 항상 최신 정보를 가져옵니다.
         const res = await fetch(dataUrl + '&t=' + Date.now());
         
-        if (!res.ok) throw new Error("시트 데이터를 가져오지 못했습니다.");
+        if (!res.ok) {
+            throw new Error("시트 데이터를 가져오지 못했습니다.");
+        }
 
         const csvText = await res.text();
         
-        // CSV 파싱 (큰따옴표 처리 포함)
+        if (csvText.includes('<html') || csvText.includes('<body')) {
+            throw new Error("링크 형식이 잘못되었습니다. (웹에 게시에서 .csv 링크인지 확인해주세요)");
+        }
+
         const rows = [];
         let row = [], col = "", quote = false;
+        
         for (let i = 0; i < csvText.length; i++) {
             let cc = csvText[i], nc = csvText[i+1];
             if (cc === '"' && quote && nc === '"') { col += cc; ++i; continue; }
@@ -2285,26 +2288,31 @@ window.loadNcrData = async function() {
         if (col !== "" || row.length > 0) { row.push(col); rows.push(row); }
 
         if (rows.length < 2) {
-            if(window.showToast) window.showToast("동기화 완료: 시트에 데이터가 없습니다.", "warning");
+            if(window.showToast) window.showToast("동기화 완료: 시트에 데이터가 없거나 비어있습니다.", "warning");
             return;
         }
 
-        // RAWDATA 시트 열 구조 매핑 (기존 인덱스 유지)
-        window.ncrData = rows.slice(1).map(r => ({
-            pjtCode: r[0] ? String(r[0]).trim() : '',
-            ncrNo: r[2] ? String(r[2]).trim() : '',
-            date: r[1] ? String(r[1]).trim() : '',
-            drawingNo: r[4] ? String(r[4]).trim() : '',
-            partName: r[3] ? String(r[3]).trim() : '',
-            type: r[8] ? String(r[8]).trim() : '',
-            content: r[11] ? String(r[11]).trim() : '',
-            status: r[13] ? String(r[13]).trim() : ''
-        })).filter(n => n.pjtCode);
+        window.ncrData = rows.slice(1).map(r => {
+            return {
+                pjtCode: r[0] ? String(r[0]).trim() : '',
+                ncrNo: r[2] ? String(r[2]).trim() : '',
+                date: r[1] ? String(r[1]).trim() : '',
+                drawingNo: r[4] ? String(r[4]).trim() : '',
+                partName: r[3] ? String(r[3]).trim() : '',
+                type: r[8] ? String(r[8]).trim() : '',
+                content: r[11] ? String(r[11]).trim() : '',
+                status: r[13] ? String(r[13]).trim() : ''
+            };
+        }).filter(n => n.pjtCode);
 
-        // UI 업데이트
+        if (window.ncrData.length === 0) {
+            if(window.showToast) window.showToast("RAWDATA 시트 형식이 맞지 않아 데이터를 불러올 수 없습니다.", "warning");
+        } else {
+            if(window.showToast) window.showToast(`부적합(NCR) 데이터 ${window.ncrData.length}건 동기화 완료!`, "success");
+        }
+
         window.renderProjectStatusList();
 
-        // 현재 NCR 모달이 열려있다면 즉시 갱신
         const modal = document.getElementById('ncr-modal');
         if (modal && !modal.classList.contains('hidden')) {
             const titleEl = document.getElementById('ncr-project-title');
@@ -2313,11 +2321,9 @@ window.loadNcrData = async function() {
             }
         }
 
-        if(window.showToast) window.showToast(`부적합 데이터 ${window.ncrData.length}건 동기화 완료!`, "success");
-
     } catch(e) {
         console.error("NCR 로드 에러:", e);
-        if(window.showToast) window.showToast("시트 동기화 실패: 링크 설정을 확인하세요.", "error");
+        if(window.showToast) window.showToast(`동기화 실패: ${e.message}`, "error");
     }
 };
 
