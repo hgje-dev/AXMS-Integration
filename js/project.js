@@ -2253,62 +2253,72 @@ document.addEventListener('click', function(e) {
 // 💡 3, 4번 해결: CSV 강제 우회 파싱 방식 적용 (에러 완벽 차단)
 window.loadNcrData = async function() {
     try {
-        const url = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSYwsWjs8ox503LLsRIeVRbbZ4R7eLgoq0C-ZdYIBIUACCwWyt5oYkAAtIpX9j1taqt1MQaEg1Jjom0/pub?output=csv';
-        // 항상 최신 데이터를 가져오기 위해 캐시 무력화 파라미터 추가
-        const res = await fetch(url + '&t=' + Date.now());
+        if(window.showToast) window.showToast("부적합(RAWDATA) 데이터를 가져오는 중입니다...", "success");
         
-        if (!res.ok) {
-            throw new Error("데이터를 가져오지 못했습니다.");
-        }
+        // 💡 주신 pubhtml 주소를 데이터 통신용(CSV)으로 자동 변환합니다.
+        const originalUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSYwsWjs8ox503LLsRIeVRbbZ4R7eLgoq0C-ZdYIBIUACCwWyt5oYkAAtIpX9j1taqt1MQaEg1Jjom0/pubhtml';
+        const dataUrl = originalUrl.replace('/pubhtml', '/pub?output=csv');
+        
+        // 캐시 방지를 위해 타임스탬프를 추가하여 새로고침 버튼 클릭 시 항상 최신 정보를 가져옵니다.
+        const res = await fetch(dataUrl + '&t=' + Date.now());
+        
+        if (!res.ok) throw new Error("시트 데이터를 가져오지 못했습니다.");
 
         const csvText = await res.text();
         
-        // 💡 초강력 CSV 파싱 알고리즘
+        // CSV 파싱 (큰따옴표 처리 포함)
         const rows = [];
         let row = [], col = "", quote = false;
-        
         for (let i = 0; i < csvText.length; i++) {
             let cc = csvText[i], nc = csvText[i+1];
             if (cc === '"' && quote && nc === '"') { col += cc; ++i; continue; }
             if (cc === '"') { quote = !quote; continue; }
             if (cc === ',' && !quote) { row.push(col); col = ""; continue; }
-            if (cc === '\r' && nc === '\n' && !quote) { row.push(col); rows.push(row); row = []; col = ""; ++i; continue; }
-            if (cc === '\n' && !quote) { row.push(col); rows.push(row); row = []; col = ""; continue; }
-            if (cc === '\r' && !quote) { row.push(col); rows.push(row); row = []; col = ""; continue; }
+            if ((cc === '\r' || cc === '\n') && !quote) {
+                if (row.length > 0 || col !== "") {
+                    row.push(col); rows.push(row); row = []; col = "";
+                }
+                if (cc === '\r' && nc === '\n') i++;
+                continue;
+            }
             col += cc;
         }
-        if (col || row.length > 0) { row.push(col); rows.push(row); }
+        if (col !== "" || row.length > 0) { row.push(col); rows.push(row); }
 
-        if (rows.length < 2) return;
+        if (rows.length < 2) {
+            if(window.showToast) window.showToast("동기화 완료: 시트에 데이터가 없습니다.", "warning");
+            return;
+        }
 
-        window.ncrData = rows.slice(1).map(r => {
-            return {
-                pjtCode: r[0] ? String(r[0]).trim() : '',
-                ncrNo: r[2] ? String(r[2]).trim() : '',
-                date: r[1] ? String(r[1]).trim() : '',
-                drawingNo: r[4] ? String(r[4]).trim() : '',
-                partName: r[3] ? String(r[3]).trim() : '',
-                type: r[8] ? String(r[8]).trim() : '',
-                content: r[11] ? String(r[11]).trim() : '',
-                status: r[13] ? String(r[13]).trim() : ''
-            };
-        }).filter(n => n.pjtCode);
+        // RAWDATA 시트 열 구조 매핑 (기존 인덱스 유지)
+        window.ncrData = rows.slice(1).map(r => ({
+            pjtCode: r[0] ? String(r[0]).trim() : '',
+            ncrNo: r[2] ? String(r[2]).trim() : '',
+            date: r[1] ? String(r[1]).trim() : '',
+            drawingNo: r[4] ? String(r[4]).trim() : '',
+            partName: r[3] ? String(r[3]).trim() : '',
+            type: r[8] ? String(r[8]).trim() : '',
+            content: r[11] ? String(r[11]).trim() : '',
+            status: r[13] ? String(r[13]).trim() : ''
+        })).filter(n => n.pjtCode);
 
+        // UI 업데이트
         window.renderProjectStatusList();
 
+        // 현재 NCR 모달이 열려있다면 즉시 갱신
         const modal = document.getElementById('ncr-modal');
         if (modal && !modal.classList.contains('hidden')) {
-            const pjtCode = document.getElementById('ncr-project-title').dataset.code;
-            if (pjtCode) {
-                window.renderNcrList(pjtCode);
+            const titleEl = document.getElementById('ncr-project-title');
+            if (titleEl && titleEl.dataset.code) {
+                window.renderNcrList(titleEl.dataset.code);
             }
         }
 
-        if(window.showToast) window.showToast("부적합(NCR) 데이터 동기화 완료!", "success");
+        if(window.showToast) window.showToast(`부적합 데이터 ${window.ncrData.length}건 동기화 완료!`, "success");
 
     } catch(e) {
-        console.error("NCR 시트 로드 에러:", e);
-        if(window.showToast) window.showToast("동기화 실패: 데이터를 불러올 수 없습니다.", "error");
+        console.error("NCR 로드 에러:", e);
+        if(window.showToast) window.showToast("시트 동기화 실패: 링크 설정을 확인하세요.", "error");
     }
 };
 
