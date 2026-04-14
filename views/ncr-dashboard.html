@@ -37,9 +37,9 @@
     .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
 </style>
 
-<div class="max-w-[1600px] mx-auto pb-20 space-y-6 antialiased">
+<div class="relative z-10 max-w-[1600px] mx-auto pb-20 space-y-6 antialiased">
     
-    <div class="flex flex-col gap-4 mb-2 relative z-20">
+    <div class="flex flex-col gap-4 sticky top-16 z-30 pt-2 bg-[#f8fafc]/95 backdrop-blur-md pb-4 -mx-6 px-6 border-b border-slate-200/60 shadow-sm">
         
         <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
             <div>
@@ -56,7 +56,7 @@
             </button>
         </div>
 
-        <div class="filter-bar p-3 px-4 flex flex-col md:flex-row items-center justify-between gap-4 mt-2">
+        <div class="filter-bar p-3 px-4 flex flex-col md:flex-row items-center justify-between gap-4">
             <div class="flex items-center gap-3 w-full overflow-x-auto custom-scrollbar pb-2 md:pb-0">
                 <div class="flex items-center gap-2 bg-slate-100/80 px-4 py-2.5 rounded-lg border border-slate-200/60 shrink-0 hover:bg-white transition-colors focus-within:ring-2 focus-within:ring-indigo-100">
                     <i class="fa-regular fa-calendar-check text-indigo-400"></i>
@@ -160,14 +160,14 @@
             <div class="text-xs font-bold text-slate-500 mb-1 relative z-10">조치 완료율</div>
             <div class="text-3xl font-black text-teal-500 relative z-10 mt-auto pt-1" id="kpi-resolution-rate">0.0%</div>
         </div>
-        <div class="ultra-card p-5 relative overflow-hidden group border-l-4 border-l-indigo-500">
-            <div class="absolute right-0 top-0 w-24 h-24 bg-indigo-50 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
+        <div class="ultra-card p-5 relative overflow-hidden group border-b-4 border-b-indigo-200">
+            <div class="absolute right-0 top-0 w-20 h-20 bg-indigo-50 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
             <div class="flex justify-between items-start mb-2 relative z-10">
                 <span class="text-[10px] font-black text-indigo-400 uppercase tracking-wider">Quality Cost</span>
                 <span class="bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded text-[9px] font-bold border border-indigo-100">총 불량률 <span id="kpi-total-rate">3.1%</span></span>
             </div>
             <div class="text-xs font-bold text-slate-500 mb-1 relative z-10">Q-COST (품질 비용)</div>
-            <div class="text-2xl lg:text-3xl font-black text-slate-800 relative z-10 mt-auto pt-1 truncate" id="kpi-qcost">₩0</div>
+            <div class="text-3xl font-black text-slate-800 relative z-10 mt-auto pt-1 truncate" id="kpi-qcost">₩0</div>
         </div>
     </div>
 
