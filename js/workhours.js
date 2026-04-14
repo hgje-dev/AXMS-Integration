@@ -15,7 +15,6 @@ window.whIsDirty = false;
 window.todayBadgeInitialized = false;
 let myTodayLogUnsubscribe = null;
 
-// 💡 2. 드래그와 클릭을 정확히 구분하기 위한 전역 변수 추가
 window.whDragDist = 0;
 window.whDragStartX = 0;
 window.whDragStartY = 0;
@@ -210,12 +209,12 @@ window.setWhStatMode = function(mode) {
         if(btnW) btnW.className = 'px-4 py-1.5 text-xs font-bold bg-indigo-600 text-white shadow-sm rounded-full transition-all';
         if(btnM) btnM.className = 'px-4 py-1.5 text-xs font-bold text-slate-600 bg-transparent transition-all hover:bg-slate-100 rounded-full';
         document.getElementById('wh-dash-period-label').innerHTML = '주간 총 투입 <span class="text-[9px] font-normal">(승인완료)</span>';
-        document.getElementById('wh-chart-trend-title').innerText = '일자별 투입 추이 (MD)';
+        document.getElementById('wh-chart-trend-title').innerText = '일자별 투입 추이';
     } else {
         if(btnM) btnM.className = 'px-4 py-1.5 text-xs font-bold bg-indigo-600 text-white shadow-sm rounded-full transition-all';
         if(btnW) btnW.className = 'px-4 py-1.5 text-xs font-bold text-slate-600 bg-transparent transition-all hover:bg-slate-100 rounded-full';
         document.getElementById('wh-dash-period-label').innerHTML = '월간 총 투입 <span class="text-[9px] font-normal">(승인완료)</span>';
-        document.getElementById('wh-chart-trend-title').innerText = '주차별 투입 추이 (MD)';
+        document.getElementById('wh-chart-trend-title').innerText = '주차별 투입 추이';
     }
     window.updateWhDashboard();
 };
@@ -257,6 +256,92 @@ window.resetWhFilters = function() {
     document.getElementById('wh-filter-status').value = '';
     window.applyWhFilters();
 };
+
+// 💡 스크롤 리스트 UI 렌더링 함수 추가
+function renderCustomPersonUI(personMap) {
+    const container = document.getElementById('wh-ui-person');
+    const titleEl = document.getElementById('wh-ui-person-title');
+    if (!container) return;
+
+    let sortedData = Object.entries(personMap).map(([name, hours]) => ({ name, md: hours / 8 })).sort((a, b) => b.md - a.md);
+    if (titleEl) titleEl.innerText = `인원별 누적 투입 (전체 ${sortedData.length}명)`;
+
+    if (sortedData.length === 0) {
+        container.innerHTML = '<div class="text-[10px] text-slate-400 text-center py-4 font-bold">데이터 없음</div>';
+        return;
+    }
+
+    const maxMd = Math.max(...sortedData.map(d => d.md), 0.1); 
+    let html = '<div class="flex flex-col gap-3">';
+    sortedData.forEach(d => {
+        const pct = (d.md / maxMd) * 100;
+        // background-image로 점선(분절형) 느낌 구현
+        html += `
+        <div class="flex flex-col gap-1">
+            <div class="flex justify-between items-end text-[11px] font-bold text-slate-700">
+                <span>${d.name}</span>
+                <span class="text-indigo-600">${d.md.toFixed(1)} MD</span>
+            </div>
+            <div class="w-full h-2.5 bg-slate-100 rounded-sm overflow-hidden flex">
+                <div class="h-full bg-indigo-400 rounded-sm transition-all duration-500" style="width: ${pct}%; background-image: repeating-linear-gradient(to right, transparent, transparent 4px, rgba(255,255,255,0.7) 4px, rgba(255,255,255,0.7) 6px);"></div>
+            </div>
+        </div>`;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+// 💡 비율/스택 바 UI 렌더링 함수 추가
+function renderCustomTypeUI(typeMap, totalMDStr) {
+    const container = document.getElementById('wh-ui-type');
+    const titleEl = document.getElementById('wh-ui-type-title');
+    if (!container) return;
+
+    let sortedData = Object.entries(typeMap).map(([type, hours]) => ({ type, md: hours / 8 })).sort((a, b) => b.md - a.md);
+    let totalMD = parseFloat(totalMDStr) || 1;
+
+    if (titleEl) titleEl.innerText = `작업 구분별 비율 (${sortedData.length}개 항목)`;
+
+    if (sortedData.length === 0) {
+        container.innerHTML = '<div class="text-[10px] text-slate-400 text-center py-4 font-bold">데이터 없음</div>';
+        return;
+    }
+
+    const colors = ['bg-indigo-500', 'bg-purple-500', 'bg-sky-500', 'bg-teal-500', 'bg-blue-500', 'bg-rose-500', 'bg-amber-500', 'bg-slate-500'];
+    const textColors = ['text-indigo-600', 'text-purple-600', 'text-sky-600', 'text-teal-600', 'text-blue-600', 'text-rose-600', 'text-amber-600', 'text-slate-600'];
+
+    // 1. Stacked Bar
+    let stackedBarHtml = '<div class="w-full h-3 rounded-full flex overflow-hidden mb-5 shadow-sm mt-2">';
+    sortedData.forEach((d, i) => {
+        const pct = (d.md / totalMD) * 100;
+        const color = colors[i % colors.length];
+        stackedBarHtml += `<div class="h-full ${color} transition-all duration-500" style="width: ${pct}%; border-right: 1px solid white;"></div>`;
+    });
+    stackedBarHtml += '</div>';
+
+    // 2. Grid Legend
+    let gridHtml = '<div class="grid grid-cols-2 gap-y-3 gap-x-2">';
+    sortedData.forEach((d, i) => {
+        const pct = ((d.md / totalMD) * 100).toFixed(0);
+        const bgColor = colors[i % colors.length];
+        const textColor = textColors[i % textColors.length];
+        
+        gridHtml += `
+        <div class="flex items-start gap-1.5">
+            <div class="w-2 h-2 rounded-full ${bgColor} mt-[3px] shrink-0"></div>
+            <div class="flex flex-col">
+                <span class="text-[10px] font-bold text-slate-600 leading-tight">${d.type}</span>
+                <div class="flex items-baseline gap-1 mt-0.5">
+                    <span class="text-xs font-black ${textColor}">${pct}%</span>
+                    <span class="text-[9px] font-medium text-slate-400">(${d.md.toFixed(1)})</span>
+                </div>
+            </div>
+        </div>`;
+    });
+    gridHtml += '</div>';
+
+    container.innerHTML = stackedBarHtml + gridHtml;
+}
 
 window.updateWhDashboard = function() {
     window.whPjtSearch = document.getElementById('wh-search-pjt')?.value.toLowerCase() || '';
@@ -334,6 +419,7 @@ window.updateWhDashboard = function() {
     const totalMD = (totalHours / 8).toFixed(1);
     document.getElementById('wh-dash-total-md').innerText = totalMD;
 
+    // 💡 3. 대시보드 내 PJT별 MD 리스트 렌더링
     const breakdownEl = document.getElementById('wh-dash-pjt-breakdown');
     if (breakdownEl) {
         let breakdownHtml = '';
@@ -356,8 +442,11 @@ window.updateWhDashboard = function() {
     const pjtInfoContainer = document.getElementById('wh-dash-pjt-info');
     if (pjtInfoContainer) pjtInfoContainer.classList.add('hidden');
 
-    renderWhChart('wh-chart-person', 'bar', personMap, 'MD', true);
-    renderWhChart('wh-chart-type', 'bar', typeMap, 'MD', true);
+    // 💡 Chart.js 대신 커스텀 UI 렌더링 함수 호출!
+    renderCustomPersonUI(personMap);
+    renderCustomTypeUI(typeMap, totalMD);
+
+    // 추이는 Chart.js 유지
     renderWhChart('wh-chart-trend', window.whStatMode === 'week' ? 'bar' : 'line', trendMap, 'MD', false);
 
     let extraHtml = '';
@@ -459,7 +548,6 @@ function getFilteredLogs() {
     });
 }
 
-// 💡 2. 드래그와 클릭을 정확히 구분하는 일괄 승인 연동 그리드
 function renderWhGrid() {
     const thead = document.getElementById('wh-grid-thead');
     const tbody = document.getElementById('wh-grid-tbody');
@@ -596,7 +684,6 @@ function renderWhCalendar() {
     grid.innerHTML = html;
 }
 
-// 💡 2. 다중 선택 및 드래그 로직 강화
 window.whCellMouseDown = function(e, cell) {
     if(e.button !== 0) return; 
     
@@ -695,7 +782,6 @@ window.openWhInputModal = function(dateStr, authorName) {
     document.addEventListener('keydown', handleWhModalKeydown);
 };
 
-// 💡 1. 모달 강제 닫기 감지
 window.attemptCloseWhModal = function() {
     if (window.whIsDirty) {
         if (!confirm("작성/수정 중인 내용이 있습니다. 저장하지 않고 창을 닫으시겠습니까?")) {
@@ -737,7 +823,6 @@ function appendWhInputRow(logData = null, index = 1) {
     tr.className = 'wh-input-row hover:bg-indigo-50/30 transition-colors border-b border-slate-100 relative';
     
     const uniqueId = 'wh-pjt-input-' + Date.now() + '-' + index;
-    // 💡 데이터 소실 방지를 위해 projectName을 우선 획득하여 유지 (PJT코드가 없는 과거 데이터용)
     const pName = logData ? (logData.projectName || '') : '';
     const pCode = logData ? (logData.projectCode || pName || '') : ''; 
     const pId = logData ? (logData.projectId || '') : '';
@@ -770,7 +855,6 @@ function appendWhInputRow(logData = null, index = 1) {
     tbody.appendChild(tr);
 }
 
-// 💡 3. 절대좌표 (fixed) 기반 모달용 PJT 코드 자동완성 검색 
 window.whShowPjtAuto = function(input) {
     const val = input.value.trim().toLowerCase();
     
@@ -783,7 +867,6 @@ window.whShowPjtAuto = function(input) {
 
     if(!val) { drop.classList.add('hidden'); return; }
 
-    // 명칭 제외! 코드(p.code) 기준으로만 초성 매치
     let matches = (window.pjtCodeMasterList || []).filter(p => {
         let code = (p.code || '').toLowerCase();
         return code.includes(val) || (window.matchString && window.matchString(val, p.code));
@@ -828,7 +911,6 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// 💡 1. 승인 해제 버그 완벽 수정 (저장 시 조건 체크 로직 변경)
 window.saveWhInputData = async function() {
     const dateStr = document.getElementById('wh-modal-date').value;
     const authorName = document.getElementById('wh-modal-author').value;
@@ -849,8 +931,7 @@ window.saveWhInputData = async function() {
         const content = tr.querySelector('.row-content').value.trim();
         const isConfirmed = tr.querySelector('.row-conf').checked;
 
-        // 💡 [핵심] projectName 도 유효성 검사에 포함시켜서 코드가 없는 옛날 데이터가 날아가는 것을 방지
-        if (hours > 0 && (projectCodeInput || projectName || content)) {
+        if (hours > 0 && (projectCodeInput || content)) {
             toSave.push({ 
                 id, 
                 date: dateStr, 
@@ -1071,3 +1152,9 @@ window.saveWorkhoursToDrive = async function() {
         window.showToast("드라이브 저장에 실패했습니다. (콘솔 확인)", "error");
     }
 };
+
+}
+
+{
+type: uploaded file
+fileName: image_d86dd3.png
