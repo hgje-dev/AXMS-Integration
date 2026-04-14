@@ -624,7 +624,7 @@ window.selectAutocomplete = function(code, name, company, sourceId, targetId1, t
 window.availableApps = {
     'dashboard-home': { title: '대시보드', icon: 'fa-solid fa-chart-pie', color: 'text-indigo-600' },
     'project-status': { title: 'PJT현황', icon: 'fa-solid fa-table-list', color: 'text-slate-600' },
-    'workhours': { title: '투입공수', icon: 'fa-solid fa-user-clock', color: 'text-slate-600' },
+    'workhours': { title: '투입 현황', icon: 'fa-solid fa-user-clock', color: 'text-slate-600' },
     'weekly-log': { title: '주간일지', icon: 'fa-solid fa-calendar-week', color: 'text-slate-600' },
     'collab': { title: '협업/조립', icon: 'fa-regular fa-handshake', color: 'text-blue-600' },
     'purchase': { title: '구매의뢰', icon: 'fa-solid fa-cart-flatbed', color: 'text-emerald-600' },
