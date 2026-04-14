@@ -95,32 +95,29 @@
                     <p class="text-[10px] text-slate-500 font-bold truncate" id="wh-dash-pjt-date"></p>
                     <p class="text-[11px] text-indigo-600 font-bold mt-1 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100 w-fit" id="wh-dash-pjt-days"></p>
                 </div>
-                <div id="wh-dash-pjt-breakdown" class="z-10 flex-1 overflow-y-auto custom-scrollbar border-t border-slate-100 pt-3 space-y-1.5 pr-2"></div>
-            </div>
-            
-            <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm lg:col-span-1 flex flex-col h-[260px]">
-                <span class="text-[10px] font-bold text-slate-600 mb-3 shrink-0">인원별 누적 투입 (Top 5)</span>
-                <div class="relative w-full flex-1 min-h-0">
-                    <canvas id="wh-chart-person"></canvas>
+                <div id="wh-dash-pjt-breakdown" class="z-10 flex-1 overflow-y-auto custom-scrollbar border-t border-slate-100 pt-3 space-y-1.5 pr-2">
                 </div>
             </div>
             
             <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm lg:col-span-1 flex flex-col h-[260px]">
-                <span class="text-[10px] font-bold text-slate-600 mb-3 shrink-0">작업 구분별 비율</span>
-                <div class="relative w-full flex-1 min-h-0">
-                    <canvas id="wh-chart-type"></canvas>
-                </div>
+                <span id="wh-ui-person-title" class="text-[11px] font-bold text-slate-600 mb-3 shrink-0 border-b border-slate-100 pb-2">인원별 누적 투입</span>
+                <div id="wh-ui-person" class="relative w-full flex-1 overflow-y-auto custom-scrollbar pr-2 mt-1"></div>
             </div>
             
             <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm lg:col-span-1 flex flex-col h-[260px]">
-                <span id="wh-chart-trend-title" class="text-[10px] font-bold text-slate-600 mb-3 shrink-0">일자별 투입 추이</span>
+                <span id="wh-ui-type-title" class="text-[11px] font-bold text-slate-600 mb-3 shrink-0 border-b border-slate-100 pb-2">작업 구분별 비율</span>
+                <div id="wh-ui-type" class="relative w-full flex-1 overflow-y-auto custom-scrollbar pr-2 mt-1 flex flex-col"></div>
+            </div>
+            
+            <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm lg:col-span-1 flex flex-col h-[260px]">
+                <span id="wh-chart-trend-title" class="text-[11px] font-bold text-slate-600 mb-3 shrink-0 border-b border-slate-100 pb-2">일자별 투입 추이</span>
                 <div class="relative w-full flex-1 min-h-0">
                     <canvas id="wh-chart-trend"></canvas>
                 </div>
             </div>
             
             <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm lg:col-span-1 flex flex-col h-[260px] overflow-y-auto custom-scrollbar">
-                <span class="text-[10px] font-bold text-slate-600 mb-2 border-b border-slate-100 pb-2 sticky top-0 bg-white z-10">현황 요약</span>
+                <span class="text-[11px] font-bold text-slate-600 mb-2 border-b border-slate-100 pb-2 sticky top-0 bg-white z-10">현황 요약</span>
                 <div id="wh-dash-extra" class="text-[11px] space-y-3 font-medium text-slate-600 pb-2 mt-1"></div>
             </div>
             
