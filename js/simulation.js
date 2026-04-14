@@ -226,7 +226,7 @@ window.debouncedRunSimulation = () => {
 };
 
 // ==========================================
-// 4. 프리셋 데이터 연동 및 렌더링
+// 4. 프리셋 데이터 연동 및 테이블 렌더링 로직
 // ==========================================
 window.loadMasterPresets = async () => {
     try {
@@ -1181,6 +1181,105 @@ document.addEventListener('click', function(e) {
         d.classList.add('hidden');
     }
 });
+
+// 💡 새로 만들기 기능 추가
+window.createNewProject = () => {
+    if (window.isProjectDirty && !confirm("저장하지 않은 변경사항이 있습니다. 무시하고 새 프로젝트를 생성하시겠습니까?")) return;
+    
+    window.currentProjectId = null;
+    document.getElementById('project-code').value = '';
+    document.getElementById('project-name').value = '';
+    document.getElementById('manager-name').value = '';
+    document.getElementById('equip-qty').value = '1';
+    
+    window.currentProcessData = [];
+    window.isProjectDirty = false;
+    window.latestAiResult = null;
+    
+    const bBox = document.getElementById('ai-briefing-text');
+    if(bBox) bBox.innerHTML = '<div class="text-center p-4 text-slate-500">AI 분석을 실행해주세요.</div>';
+    
+    window.handleTypeChange(); // 기본 프리셋 로드
+    window.showToast("새 프로젝트가 생성되었습니다.", "success");
+};
+
+// 💡 프리셋 설정 등록, 삭제, 기본 지정 기능 완벽 복구
+window.saveCurrentAsPreset = async () => {
+    const id = window.prompt("등록할 프리셋 ID (영문/숫자, 예: custom_type_1):");
+    if(!id) return;
+    const label = window.prompt("목록에 표시할 프리셋 이름 (예: 신규 A타입 설비):");
+    if(!label) return;
+
+    const pData = {
+        label: label,
+        processData: window.currentProcessData,
+        curve: Number(document.getElementById('learning-curve')?.value) || 95,
+        labor: Number(document.getElementById('labor-cost')?.value) || 300000,
+        hex: '#6366f1' // Default color for custom preset
+    };
+    try {
+        await setDoc(doc(db, "sim_master_presets", id), pData);
+        window.showToast("프리셋이 성공적으로 등록되었습니다.", "success");
+        window.loadMasterPresets();
+    } catch(e) { window.showToast("프리셋 등록 실패", "error"); }
+};
+
+window.deleteCurrentPreset = async () => {
+    const id = document.getElementById('eq-type')?.value;
+    if(!id) return;
+    if(id === 'dev') return window.showToast("기본 개발 모델(dev)은 삭제할 수 없습니다.", "error");
+    if(!confirm("현재 선택된 프리셋을 완전히 삭제하시겠습니까?")) return;
+    
+    try {
+        await deleteDoc(doc(db, "sim_master_presets", id));
+        window.showToast("프리셋이 삭제되었습니다.", "success");
+        window.loadMasterPresets();
+    } catch(e) { window.showToast("프리셋 삭제 실패", "error"); }
+};
+
+window.setDefaultPreset = async () => {
+    const id = document.getElementById('eq-type')?.value;
+    if(!id) return;
+    try {
+        // You can save this to user settings or global settings
+        // For now, local save for the user's browser is faster and better UX
+        localStorage.setItem('axms_sim_default_preset', id);
+        window.showToast(`[${window.masterPresets[id].label}] 이(가) 기본 프리셋으로 지정되었습니다.`, "success");
+    } catch(e) { window.showToast("지정 실패", "error"); }
+};
+
+// 프리셋 로드 시 localStorage 우선 확인
+window.loadMasterPresets = async () => {
+    try {
+        const snap = await getDocs(collection(db, "sim_master_presets"));
+        const sel = document.getElementById('eq-type');
+        if (!sel) return;
+        
+        sel.innerHTML = '';
+        window.masterPresets = {};
+        
+        if (!snap.empty) {
+            snap.forEach(d => {
+                window.masterPresets[d.id] = d.data();
+                sel.innerHTML += `<option value="${d.id}">${d.data().label}</option>`;
+            });
+        } else {
+            window.masterPresets = JSON.parse(JSON.stringify(defaultPresets));
+            for (let key in window.masterPresets) {
+                sel.innerHTML += `<option value="${key}">${window.masterPresets[key].label}</option>`;
+            }
+        }
+        
+        const defaultPresetId = localStorage.getItem('axms_sim_default_preset');
+        if (defaultPresetId && window.masterPresets[defaultPresetId]) {
+            sel.value = defaultPresetId;
+        } else if (sel.options.length > 1) {
+            sel.selectedIndex = 1;
+        }
+
+        window.handleTypeChange();
+    } catch (e) { console.error("Presets Load Error", e); }
+};
 
 // 초기화 실행
 window.loadMasterPresets();
