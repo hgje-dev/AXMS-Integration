@@ -11,6 +11,7 @@ window.whFilters = { text: '', loc: '', type: '', status: '' };
 window.whSelectedCells = new Set();
 window.isWhDragging = false;
 window.whCharts = {};
+window.whIsDirty = false; // 💡 입력 모달 수정 감지용 플래그
 
 const WH_TYPES = ['조립', '검수', '설치', 'Setup', '협업', '공통', '기타'];
 const WH_LOCS = ['사내', '국내', '해외'];
@@ -27,7 +28,6 @@ function isWhHoliday(d) {
     return KR_HOLIDAYS.has(window.getLocalDateStr(d));
 }
 
-// 💡 1. 나의 현황 클릭 시 토글 연동 (단일 필터 UI 적용됨)
 window.setWhMemberMode = function(mode) {
     window.whMemberMode = mode;
     const btnAll = document.getElementById('wh-btn-member-all');
@@ -97,7 +97,7 @@ window.changeWhWeek = function(offset) {
     if (parts.length === 2) {
         const year = parseInt(parts[0]);
         const week = parseInt(parts[1]);
-        const d = new Date(year, 0, (week + offset - 1) * 7 + 1);
+        const d = new Date(year, 0, (parseInt(week) + offset - 1) * 7 + 1);
         if (window.getWeekString) {
             picker.value = window.getWeekString(d);
             window.updateWhWeekDisplay(picker.value);
@@ -213,12 +213,13 @@ window.updateWhDashboard = function() {
         baseData = baseData.filter(l => l.authorName === window.userProfile.name);
     }
     
+    // 💡 2. 대시보드 검색창 완벽 연동
     if (window.whPjtSearch) {
         baseData = baseData.filter(l => {
             const pCode = (l.projectCode || '').toLowerCase();
             const pName = (l.projectName || '').toLowerCase();
-            const search = window.whPjtSearch;
-            // 💡 2. 대시보드 검색: 명칭+초성 모두 매칭되도록 업데이트
+            const search = window.whPjtSearch.trim();
+            
             return pCode.includes(search) || pName.includes(search) || 
                    (window.matchString && window.matchString(search, pCode)) || 
                    (window.matchString && window.matchString(search, pName));
@@ -256,15 +257,15 @@ window.updateWhDashboard = function() {
         if (!locMap[loc]) locMap[loc] = new Set();
         locMap[loc].add(log.authorName);
 
-        let pName = log.projectCode || '미분류';
-        pjtMap[pName] = (pjtMap[pName] || 0) + h;
+        // 💡 2. 옛날 데이터에 코드가 없을 경우 명칭으로 묶기 (미분류 버그 해결)
+        let pNameKey = log.projectCode ? `[${log.projectCode}] ${log.projectName||''}` : (log.projectName || '미분류');
+        pjtMap[pNameKey] = (pjtMap[pNameKey] || 0) + h;
         datesSet.add(log.date);
     });
 
     const totalMD = (totalHours / 8).toFixed(1);
     document.getElementById('wh-dash-total-md').innerText = totalMD;
 
-    // 💡 3. 대시보드 내 PJT별 MD 리스트 렌더링
     const breakdownEl = document.getElementById('wh-dash-pjt-breakdown');
     if (breakdownEl) {
         let breakdownHtml = '';
@@ -272,8 +273,8 @@ window.updateWhDashboard = function() {
         
         sortedPjts.forEach(p => {
             breakdownHtml += `
-                <div class="flex justify-between items-center text-[11px] mb-1">
-                    <span class="text-slate-500 font-bold truncate pr-2"><i class="fa-solid fa-folder-open text-indigo-300 mr-1"></i>${p[0]}</span>
+                <div class="flex justify-between items-center text-[11px] mb-1 group">
+                    <span class="text-slate-500 font-bold truncate pr-2 group-hover:text-indigo-600 transition-colors" title="${p[0]}"><i class="fa-solid fa-folder-open text-indigo-300 mr-1 group-hover:text-indigo-500"></i>${p[0]}</span>
                     <span class="text-indigo-600 font-black shrink-0 bg-indigo-50 px-1.5 py-0.5 rounded shadow-sm">${(p[1]/8).toFixed(1)}</span>
                 </div>
             `;
@@ -284,7 +285,6 @@ window.updateWhDashboard = function() {
         breakdownEl.innerHTML = breakdownHtml;
     }
 
-    // info 컨테이너는 이제 리스트로 대체하므로 숨김
     const pjtInfoContainer = document.getElementById('wh-dash-pjt-info');
     if (pjtInfoContainer) pjtInfoContainer.classList.add('hidden');
 
@@ -383,7 +383,7 @@ function getFilteredLogs() {
         if (window.whFilters.type && log.workType !== window.whFilters.type) return false;
         
         if (window.whFilters.text) {
-            const s = window.whFilters.text;
+            const s = window.whFilters.text.trim();
             const fullStr = `${log.authorName} ${log.projectCode} ${log.projectName} ${log.content}`.toLowerCase();
             if (!fullStr.includes(s) && !window.matchString(s, fullStr)) return false;
         }
@@ -610,6 +610,7 @@ window.openWhInputModal = function(dateStr, authorName) {
 
     const tbody = document.getElementById('wh-input-tbody');
     tbody.innerHTML = '';
+    window.whIsDirty = false; // 💡 1. 창 열릴 때 상태 초기화
 
     const logs = window.currentWorkLogs.filter(l => l.date === dateStr && l.authorName === authorName);
     
@@ -624,17 +625,31 @@ window.openWhInputModal = function(dateStr, authorName) {
     document.addEventListener('keydown', handleWhModalKeydown);
 };
 
+// 💡 1. 안전하게 모달을 닫는 로직 추가 (ESC, 취소, X버튼 등에서 호출)
+window.attemptCloseWhModal = function() {
+    if (window.whIsDirty) {
+        if (!confirm("작성/수정 중인 내용이 있습니다. 저장하지 않고 닫으시겠습니까?")) {
+            return; // 닫기 취소
+        }
+    }
+    window.closeWhInputModal();
+};
+
 window.closeWhInputModal = function() {
     document.getElementById('wh-input-modal').classList.add('hidden');
     document.getElementById('wh-input-modal').classList.remove('flex');
     document.removeEventListener('keydown', handleWhModalKeydown);
     
-    // 모달을 닫을 때 임시 생성되었던 모든 드롭다운 엘리먼트 삭제 (찌꺼기 방지)
     document.querySelectorAll('.pjt-auto-drop').forEach(el => el.remove());
+    window.whIsDirty = false;
 };
 
+// 💡 1. ESC 입력 시 attemptCloseWhModal 작동하게 수정
 function handleWhModalKeydown(e) {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        window.attemptCloseWhModal();
+    } else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
         window.saveWhInputData();
     }
@@ -644,6 +659,7 @@ window.whAddInputRow = function() {
     const tbody = document.getElementById('wh-input-tbody');
     const rowCount = tbody.querySelectorAll('tr').length + 1;
     appendWhInputRow(null, rowCount);
+    window.whIsDirty = true;
 };
 
 function appendWhInputRow(logData = null, index = 1) {
@@ -666,25 +682,26 @@ function appendWhInputRow(logData = null, index = 1) {
     let idInput = logData ? `<input type="hidden" class="row-id" value="${logData.id}">` : `<input type="hidden" class="row-id" value="">`;
     let pNameHidden = `<input type="hidden" class="row-pjt-name-hidden" value="${pName}">`;
 
+    // 💡 1. oninput, onchange 에 window.whIsDirty = true 추가
     tr.innerHTML = `
         <td class="p-3 text-center text-slate-400 font-bold text-xs bg-slate-50">${index}${idInput}</td>
         <td class="p-2 relative">
-            <input type="text" id="${uniqueId}" class="row-pjt-name w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-indigo-700 placeholder-slate-400" value="${pCode}" placeholder="PJT 코드 검색 (초성)" oninput="window.whShowPjtAuto(this)" autocomplete="off">
+            <input type="text" id="${uniqueId}" class="row-pjt-name w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-indigo-700 placeholder-slate-400" value="${pCode}" placeholder="PJT 코드/명칭 검색 (초성)" oninput="window.whIsDirty=true; window.whShowPjtAuto(this)" autocomplete="off">
             <input type="hidden" class="row-pjt-id" value="${pId}">
             <input type="hidden" class="row-pjt-code" value="${pCode}">
             ${pNameHidden}
         </td>
-        <td class="p-2"><select class="row-type w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-slate-700 cursor-pointer">${typeOptions}</select></td>
-        <td class="p-2"><select class="row-loc w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-slate-700 cursor-pointer">${locOptions}</select></td>
-        <td class="p-2"><input type="number" step="0.5" min="0" class="row-hours w-full border border-indigo-200 bg-indigo-50 rounded-lg px-3 py-2 text-sm font-black text-center outline-indigo-500 text-indigo-700 shadow-inner" value="${logData ? logData.hours : ''}" placeholder="0.0"></td>
-        <td class="p-2"><input type="text" class="row-content w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-medium" value="${logData ? logData.content || '' : ''}" placeholder="작업 상세 내용 (선택)"></td>
-        <td class="p-2 text-center"><input type="checkbox" class="row-conf accent-emerald-500 w-5 h-5 rounded cursor-pointer shadow-sm" ${isConf} ${confDisabled}></td>
-        <td class="p-2 text-center"><button onclick="this.closest('tr').remove()" class="text-slate-300 hover:bg-rose-50 hover:text-rose-500 w-8 h-8 rounded-lg flex items-center justify-center mx-auto transition-colors"><i class="fa-solid fa-trash-can"></i></button></td>
+        <td class="p-2"><select class="row-type w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-slate-700 cursor-pointer" onchange="window.whIsDirty=true;">${typeOptions}</select></td>
+        <td class="p-2"><select class="row-loc w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-slate-700 cursor-pointer" onchange="window.whIsDirty=true;">${locOptions}</select></td>
+        <td class="p-2"><input type="number" step="0.5" min="0" class="row-hours w-full border border-indigo-200 bg-indigo-50 rounded-lg px-3 py-2 text-sm font-black text-center outline-indigo-500 text-indigo-700 shadow-inner" value="${logData ? logData.hours : ''}" placeholder="0.0" oninput="window.whIsDirty=true;"></td>
+        <td class="p-2"><input type="text" class="row-content w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-medium" value="${logData ? logData.content || '' : ''}" placeholder="작업 상세 내용 (선택)" oninput="window.whIsDirty=true;"></td>
+        <td class="p-2 text-center"><input type="checkbox" class="row-conf accent-emerald-500 w-5 h-5 rounded cursor-pointer shadow-sm" ${isConf} ${confDisabled} onchange="window.whIsDirty=true;"></td>
+        <td class="p-2 text-center"><button onclick="window.whIsDirty=true; this.closest('tr').remove()" class="text-slate-300 hover:bg-rose-50 hover:text-rose-500 w-8 h-8 rounded-lg flex items-center justify-center mx-auto transition-colors"><i class="fa-solid fa-trash-can"></i></button></td>
     `;
     tbody.appendChild(tr);
 }
 
-// 💡 2. PJT 코드 검색 시 명칭+코드(초성)로 찾고 UI에는 코드만 보여주는 로직 (절대좌표 적용)
+// 💡 2. PJT 코드 검색 (절대 좌표 및 글로벌 노드 활용)
 window.whShowPjtAuto = function(input) {
     const val = input.value.trim().toLowerCase();
     
@@ -698,7 +715,6 @@ window.whShowPjtAuto = function(input) {
 
     if(!val) { drop.classList.add('hidden'); return; }
 
-    // 명칭과 코드 양쪽 모두 검색 (초성 포함)
     let matches = (window.pjtCodeMasterList || []).filter(p => {
         let code = (p.code || '').toLowerCase();
         let name = (p.name || '').toLowerCase();
@@ -708,15 +724,13 @@ window.whShowPjtAuto = function(input) {
     });
 
     if(matches.length > 0) {
-        // 화면 렌더링 위치 절대 좌표 가져오기 (테이블 내부 overflow-hidden 잘림 방지!)
         const rect = input.getBoundingClientRect();
         drop.style.left = `${rect.left + window.scrollX}px`;
         drop.style.top = `${rect.bottom + window.scrollY + 2}px`;
-        drop.style.width = `${rect.width + 100}px`; // 명칭이 길 경우 대비 여유 확보
+        drop.style.width = `${rect.width + 100}px`; // 명칭이 길 경우 대비
 
         drop.innerHTML = matches.map(m => {
             let sName = m.name.replace(/'/g,"\\'").replace(/"/g,'&quot;');
-            // 리스트에는 [코드] + 명칭 노출. 선택 시에는 코드만 삽입됨.
             return `<li class="px-3 py-2 hover:bg-indigo-50 cursor-pointer text-xs font-black text-slate-700 border-b border-slate-50 truncate transition-colors flex items-center gap-1.5" onmousedown="window.whSelectPjt('${input.id}', '${m.id}', '${m.code||''}', '${sName}')"><span class="text-indigo-600">[${m.code||'-'}]</span> <span class="font-medium">${m.name}</span></li>`;
         }).join('');
         drop.classList.remove('hidden');
@@ -728,13 +742,14 @@ window.whShowPjtAuto = function(input) {
 window.whSelectPjt = function(inputId, pId, pCode, pName) {
     const input = document.getElementById(inputId);
     if(input) {
-        input.value = pCode; // 화면엔 코드만 셋팅!
+        input.value = pCode; // 화면엔 코드만 셋팅
         const tr = input.closest('tr');
         tr.querySelector('.row-pjt-id').value = pId;
         tr.querySelector('.row-pjt-code').value = pCode;
         tr.querySelector('.row-pjt-name-hidden').value = pName; 
     }
     
+    window.whIsDirty = true;
     const drop = document.getElementById('wh-pjt-autocomplete');
     if (drop) drop.classList.add('hidden');
 };
@@ -799,6 +814,7 @@ window.saveWhInputData = async function() {
         });
 
         await batch.commit();
+        window.whIsDirty = false; // 초기화
         window.showToast("투입공수가 저장되었습니다.");
         window.closeWhInputModal();
     } catch(e) {
