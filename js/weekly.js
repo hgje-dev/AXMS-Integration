@@ -7,6 +7,7 @@ let currentScheduleUnsubscribe = null;
 let noticeUnsubscribe = null;
 let monthlySchUnsubscribe = null;
 let myMonthlySchUnsubscribe = null;
+let periodUnsubscribe = null;
 
 window.currentWeeklyLogList = [];
 window.allSchedules = []; 
@@ -102,6 +103,28 @@ window.updateWeekLabels = function(weekStr) {
     
     if(periodEl) periodEl.innerText = `${window.getLocalDateStr(prevWed).substring(5)} ~ ${window.getLocalDateStr(wed).substring(5)}`;
     if(dLineEl) dLineEl.innerText = window.getLocalDateStr(deadline);
+};
+
+// 💡 관리자용 보고기간 수정 기능
+window.editWeeklyPeriod = async function(type) {
+    const weekInput = document.getElementById('weekly-log-filter-week');
+    if (!weekInput || !weekInput.value) return;
+    const w = weekInput.value;
+
+    const elId = type === 'period' ? 'weekly-period-text' : 'weekly-deadline-text';
+    const currentText = document.getElementById(elId).innerText;
+    const promptMsg = type === 'period' ? "보고 기간을 입력하세요 (비워두면 기본값 적용):" : "보고 마감일을 입력하세요 (비워두면 기본값 적용):";
+
+    const newText = prompt(promptMsg, currentText);
+    if (newText !== null) {
+        try {
+            const docRef = doc(db, "settings", "weekly_period_" + w);
+            await setDoc(docRef, { [type]: newText.trim(), updatedAt: Date.now() }, { merge: true });
+            if(window.showToast) window.showToast("수정되었습니다.");
+        } catch(e) {
+            if(window.showToast) window.showToast("수정 실패", "error");
+        }
+    }
 };
 
 window.handleWeekChange = function(val) {
@@ -225,6 +248,49 @@ window.loadWeeklyLogsData = function() {
 
     if (window.updateWeekLabels) window.updateWeekLabels(w);
 
+    const exportBtn = document.getElementById('btn-export-weekly');
+    if (exportBtn && window.userProfile && window.userProfile.role === 'admin') {
+        exportBtn.classList.remove('hidden');
+        exportBtn.classList.add('flex');
+    }
+
+    const adminBtns = document.querySelectorAll('.admin-only, .period-admin-btn');
+    if (window.userProfile && window.userProfile.role === 'admin') {
+        adminBtns.forEach(btn => btn.style.display = '');
+    } else {
+        adminBtns.forEach(btn => btn.style.display = 'none');
+    }
+
+    if (periodUnsubscribe) periodUnsubscribe();
+    periodUnsubscribe = onSnapshot(doc(db, "settings", "weekly_period_" + w), (docSnap) => {
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            const dates = window.getDatesFromWeek(w);
+            const wed = new Date(dates.start); wed.setDate(wed.getDate() + 2);
+            
+            const pEl = document.getElementById('weekly-period-text');
+            if (data.period && data.period.trim() !== '') {
+                if(pEl) pEl.innerText = data.period;
+            } else {
+                const prevWed = new Date(wed); prevWed.setDate(prevWed.getDate() - 7);
+                if(pEl) pEl.innerText = `${window.getLocalDateStr(prevWed).substring(5)} ~ ${window.getLocalDateStr(wed).substring(5)}`;
+            }
+
+            const dEl = document.getElementById('weekly-deadline-text');
+            if (data.deadline && data.deadline.trim() !== '') {
+                if(dEl) dEl.innerText = data.deadline;
+            } else {
+                let deadline = new Date(wed);
+                if(window.isWorkDay) {
+                    while(!window.isWorkDay(deadline)) deadline.setDate(deadline.getDate() - 1);
+                }
+                if(dEl) dEl.innerText = window.getLocalDateStr(deadline);
+            }
+        } else {
+            window.updateWeekLabels(w);
+        }
+    });
+
     if (!noticeUnsubscribe) {
         noticeUnsubscribe = onSnapshot(doc(db, "settings", "weekly_notice"), (docSnap) => {
             const el = document.getElementById('weekly-notice-text');
@@ -244,12 +310,6 @@ window.loadWeeklyLogsData = function() {
                 }
             }
         });
-    }
-    
-    const exportBtn = document.getElementById('btn-export-weekly');
-    if (exportBtn && window.userProfile && window.userProfile.role === 'admin') {
-        exportBtn.classList.remove('hidden');
-        exportBtn.classList.add('flex');
     }
 
     if (currentWeeklyLogUnsubscribe) currentWeeklyLogUnsubscribe(); 
