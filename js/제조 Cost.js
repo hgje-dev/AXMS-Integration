@@ -1,9 +1,4 @@
-<div class="space-y-6 max-w-[1600px] mx-auto pb-10">
-    <h2 class="text-xl font-black text-slate-800 flex items-center gap-2 mb-4">
-        <i class="fa-solid fa-sack-dollar text-amber-500"></i> 제조 Cost (구매 현황판)
-    </h2>
-    <div class="bg-white p-10 rounded-3xl shadow-sm border border-slate-200 text-center">
-        <i class="fa-solid fa-person-digging text-4xl text-slate-300 mb-4"></i>
-        <p class="text-slate-500 font-bold">화면 및 기능 준비 중입니다...</p>
-    </div>
-</div>
+window.initMfgCost = function() {
+    console.log("✅ 제조 Cost 페이지 로드 완료");
+    // 향후 여기에 제조 원가 데이터 로딩 로직 작성
+};
