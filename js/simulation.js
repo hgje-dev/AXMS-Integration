@@ -17,8 +17,10 @@ window.latestReqP90 = 0;
 window.masterPresets = {};
 window.currentTab = 'hist'; 
 window.currentProjectId = null;
-window.isProjectDirty = false; // 💡 수정사항 추적 변수
-window.latestAiResult = null; // 엑셀 출력을 위한 AI 결과 캐싱
+window.isProjectDirty = false; 
+window.latestAiResult = null; 
+window.completedProjects = [];
+window.selectedSimilarProjects = [];
 
 const defaultPresets = {
     dev: { 
@@ -36,7 +38,7 @@ const defaultPresets = {
     }
 };
 
-// 💡 프로젝트 이탈 시 경고
+// 💡 수정사항 경고
 window.addEventListener('beforeunload', (e) => {
     if (window.isProjectDirty) {
         e.preventDefault();
@@ -44,7 +46,6 @@ window.addEventListener('beforeunload', (e) => {
     }
 });
 
-// 💡 영업일 계산 유틸리티 함수 (목표일 분석용)
 window.getWorkingDays = function(startDate, endDate) {
     let start = new Date(startDate);
     let end = new Date(endDate);
@@ -74,7 +75,6 @@ simulationWorker.onmessage = function(e) {
     const pExp = parseFloat(document.getElementById('planned-expense')?.value) || 0; 
     const stD = document.getElementById('start-date')?.value || window.getLocalDateStr(new Date());
 
-    // 1) 기본 결과 카드 업데이트
     ['p50', 'p10', 'p90'].forEach((k) => { 
         const val = {p50, p10, p90}[k];
         const dur = {p50: d50, p10: d10, p90: d90}[k];
@@ -97,7 +97,6 @@ simulationWorker.onmessage = function(e) {
     
     if(document.getElementById('out-ccpm-buffer')) document.getElementById('out-ccpm-buffer').innerText = Math.max(0, d90 - d50);
 
-    // 2) 💡 목표일 달성 확률 및 필요 인원 분석 (완벽 복구)
     const tgD = document.getElementById('target-date')?.value;
     const tEl = document.getElementById('target-date-result');
     const inP = parseInt(document.getElementById('internal-personnel')?.value) || 0;
@@ -143,7 +142,6 @@ simulationWorker.onmessage = function(e) {
         if(tEl) tEl.classList.add('hidden');
     }
 
-    // 3) 리스크 민감도 데이터 세팅
     let s = [];
     const qty = Math.max(1, parseFloat(document.getElementById('equip-qty')?.value)||1);
     const uncert = method === 'mc' ? (parseFloat(document.getElementById('mc-uncertainty')?.value)||5)/100 : 0.05;
@@ -189,9 +187,6 @@ simulationWorker.onmessage = function(e) {
     if(window.renderGanttChart) window.renderGanttChart();
 };
 
-// ==========================================
-// 3. 시뮬레이션 실행 트리거
-// ==========================================
 window.runSimulation = () => {
     const method = document.getElementById('sim-method')?.value || 'mc';
     const qty = Math.max(1, parseFloat(document.getElementById('equip-qty')?.value) || 1);
@@ -199,7 +194,7 @@ window.runSimulation = () => {
     const iters = method === 'mc' ? (parseInt(document.getElementById('mc-iterations')?.value) || 5000) : 5000;
     const uncert = method === 'mc' ? (parseFloat(document.getElementById('mc-uncertainty')?.value) || 5) / 100 : 0.05;
     const diff = parseFloat(document.getElementById('diff-multiplier')?.value) || 1.0;
-    const rBase = (parseFloat(document.getElementById('rework-rate')?.value) || 2) / 100;
+    const rBase = (parseFloat(document.getElementById('rework-rate')?.value) || 5) / 100;
     const bBase = (parseFloat(document.getElementById('buffer-rate')?.value) || 5) / 100;
     
     const sen = parseInt(document.getElementById('p-senior')?.value) || 0;
@@ -226,15 +221,72 @@ window.debouncedRunSimulation = () => {
 };
 
 // ==========================================
-// 4. 프리셋 데이터 연동 및 테이블 렌더링 로직
+// 3. UI 관리 (초기화, 프리셋)
 // ==========================================
+
+// 💡 1. 새로 만들기 완벽 지원
+window.createNewProject = () => {
+    if (window.isProjectDirty && !confirm("저장하지 않은 변경사항이 있습니다. 무시하고 새 프로젝트를 생성하시겠습니까?")) return;
+    
+    window.currentProjectId = null;
+    document.getElementById('project-code').value = '';
+    document.getElementById('project-name').value = '';
+    document.getElementById('manager-name').value = '';
+    document.getElementById('equip-qty').value = '1';
+    document.getElementById('learning-curve').value = '95';
+    document.getElementById('diff-multiplier').value = '1.0';
+    document.getElementById('buffer-rate').value = '5';
+    
+    document.getElementById('start-date').value = window.getLocalDateStr(new Date());
+    document.getElementById('target-date').value = '';
+    document.getElementById('shipping-date').value = '';
+    
+    document.getElementById('actual-md').value = '';
+    document.getElementById('actual-expense').value = '';
+    document.getElementById('actual-start-date').value = '';
+    document.getElementById('actual-date').value = '';
+    
+    const typeSel = document.getElementById('eq-type');
+    if (typeSel && typeSel.options.length > 0) typeSel.selectedIndex = 0;
+    
+    window.currentProcessData = [];
+    window.isProjectDirty = false;
+    window.latestAiResult = null;
+    
+    window.renderProcessTable();
+    window.renderUnitTables();
+    
+    const bBox = document.getElementById('ai-briefing-text');
+    if(bBox) bBox.innerHTML = '<div class="text-center p-4 text-slate-500">AI 분석을 실행해주세요.</div>';
+    
+    const cBox = document.getElementById('ai-compare-result');
+    if(cBox) { cBox.innerHTML = ''; cBox.classList.add('hidden'); }
+    
+    const sList = document.getElementById('similar-projects-list');
+    if(sList) sList.innerHTML = '<div class="text-slate-400 text-xs p-2">비교할 프로젝트가 선택되지 않았습니다.</div>';
+    window.selectedSimilarProjects = [];
+
+    window.debouncedRunSimulation();
+    window.showToast("새 프로젝트 환경이 준비되었습니다.", "success");
+};
+
+// 💡 2. 복제 기능 (버그 픽스)
+window.cloneProject = () => {
+    if(window.currentProcessData.length === 0) return window.showToast("복제할 데이터가 없습니다.", "warning");
+    window.currentProjectId = null; // 💡 ID를 널로 만들어 다음 저장 시 addDoc이 호출되게 함
+    const nameEl = document.getElementById('project-name');
+    if(nameEl && !nameEl.value.includes('복제본')) nameEl.value += ' (복제본)';
+    window.isProjectDirty = true;
+    window.showToast("복제 모드로 전환되었습니다. '저장'을 누르면 새 프로젝트로 등록됩니다.", "success");
+};
+
 window.loadMasterPresets = async () => {
     try {
         const snap = await getDocs(collection(db, "sim_master_presets"));
         const sel = document.getElementById('eq-type');
         if (!sel) return;
         
-        sel.innerHTML = '';
+        sel.innerHTML = '<option value="">프리셋 선택 안함</option>';
         window.masterPresets = {};
         
         if (!snap.empty) {
@@ -248,19 +300,25 @@ window.loadMasterPresets = async () => {
                 sel.innerHTML += `<option value="${key}">${window.masterPresets[key].label}</option>`;
             }
         }
-        window.handleTypeChange();
     } catch (e) { console.error("Presets Load Error", e); }
 };
 
 window.handleTypeChange = () => {
     const id = document.getElementById('eq-type')?.value;
-    if (!id || !window.masterPresets[id]) return;
+    if (!id || !window.masterPresets[id]) {
+        window.currentProcessData = [];
+        window.renderProcessTable();
+        window.renderUnitTables();
+        window.debouncedRunSimulation();
+        return;
+    }
     
     const preset = window.masterPresets[id];
     window.currentProcessData = JSON.parse(JSON.stringify(preset.processData));
     
     if (preset.curve) document.getElementById('learning-curve').value = preset.curve;
-    if (preset.labor) document.getElementById('labor-cost').value = preset.labor;
+    if (preset.diff) document.getElementById('diff-multiplier').value = preset.diff;
+    if (preset.buffer) document.getElementById('buffer-rate').value = preset.buffer;
     
     window.handleMethodChange();
 };
@@ -293,7 +351,7 @@ window.setupAutoSaveTriggers = () => {
     });
 };
 
-// 💡 5. 드래그 앤 드롭 함수 구현
+// 💡 6개 점(그립) 드래그 앤 드롭 함수 구현
 window.dragProcessStart = (e, index) => {
     window.draggedProcessIndex = index;
     e.dataTransfer.effectAllowed = 'move';
@@ -334,7 +392,6 @@ window.dragUnitDrop = (e, dropPIdx, dropUIdx) => {
     window.debouncedRunSimulation();
 };
 
-
 window.renderProcessTable = () => {
     const m = document.getElementById('sim-method')?.value || 'mc';
     const tb = document.getElementById('process-tbody');
@@ -355,7 +412,6 @@ window.renderProcessTable = () => {
             <option value="schedule_test" ${pt==='schedule_test'?'selected':''}>🚗 시운전</option>
         </select>`;
         
-        // 💡 드래그 앤 드롭 이벤트 부여
         let act = `<div class="flex justify-center gap-2">
             <div class="cursor-grab text-slate-400 p-1" 
                  onmousedown="this.closest('tr').setAttribute('draggable',true)" 
@@ -429,7 +485,6 @@ window.renderUnitTables = () => {
                        <td class="px-1 py-1.5 bg-rose-50/30"><input type="number" value="${u.p}" step="0.1" oninput="window.updateUnitData(${pi},${ui},'p',Number(this.value))" class="table-input w-full text-right text-sm text-rose-700 calc-trigger"></td>`;
             }
             
-            // 💡 유닛 테이블 드래그 앤 드롭
             rH += `<td class="px-2 text-center">
                     <div class="flex items-center justify-center gap-2">
                         <div class="cursor-grab text-slate-400 p-1" 
@@ -502,7 +557,7 @@ window.switchTab = (tab) => {
 };
 
 // ==========================================
-// 5. 차트 (ChartJS) 및 간트 (Gantt)
+// 4. 차트 (ChartJS) 및 간트 (Gantt)
 // ==========================================
 window.renderChartJS = () => {
     const canvas = document.getElementById('chart-canvas');
@@ -599,7 +654,7 @@ window.renderGanttChart = () => {
 };
 
 // ==========================================
-// 6. 💡 직접 호출 AI 연동 로직 (프론트엔드 통신)
+// 5. 💡 강력해진 AI 연동 로직
 // ==========================================
 window.toggleAiApiPanel = (force) => {
     const panel = document.getElementById('ai-api-panel-wrap');
@@ -621,6 +676,7 @@ window.saveAiApiSettings = () => {
     window.toggleAiApiPanel(false);
 };
 
+// 💡 5-1. 고급 프롬프트가 적용된 심층 분석
 window.generateGroqInsight = async () => {
     if (!window.latestP50Md) return window.showToast("먼저 시뮬레이션을 실행해주세요.", "error");
     
@@ -632,12 +688,27 @@ window.generateGroqInsight = async () => {
 
     window.showToast("AI 심층 분석을 요청 중입니다...", "success");
     const bBox = document.getElementById('ai-briefing-text');
-    if(bBox) bBox.innerHTML = '<div class="text-center p-4"><i class="fa-solid fa-spinner fa-spin mr-2"></i>AI가 데이터를 분석하고 있습니다...</div>';
+    if(bBox) bBox.innerHTML = '<div class="text-center p-4"><i class="fa-solid fa-spinner fa-spin mr-2 text-indigo-400"></i>AI가 프로젝트 데이터를 분석하고 있습니다...</div>';
 
     try {
-        const promptStr = `당신은 제조 설비 프로젝트 PMO(Project Management Office) 분석 전문가입니다. 주어진 프로젝트 데이터(P50: ${window.latestP50Md}MD)를 분석하여 잠재적 리스크와 조치사항을 도출하세요. 
-        반드시 다음 JSON 형식으로만 응답해야 합니다: 
-        { "summary": "전체 분석 요약 한 줄", "mainRisk": "발생 가능한 핵심 리스크", "action": "권장 조치사항" }`;
+        const processStr = window.currentProcessData.map(p => `${p.name}(${p.m}MD)`).join(', ');
+        const promptStr = `당신은 제조 설비 프로젝트 PMO(Project Management Office) 분석 전문가입니다.
+        현재 시뮬레이션 중인 프로젝트 데이터는 다음과 같습니다.
+        - P50 예상 공수: ${window.latestP50Md}MD
+        - 총 투입 인원: ${document.getElementById('out-total-personnel')?.innerText}명
+        - 세부 공정: ${processStr}
+
+        이 데이터를 바탕으로 매우 전문적이고 통찰력 있는 리스크 분석 결과를 도출하세요.
+        반드시 다음 JSON 형식으로만 응답해야 합니다:
+        {
+            "summary": "현재 시뮬레이션 상태에 대한 종합 요약 (2~3문장)",
+            "riskScore": 15, 
+            "coreRisks": [
+                { "phase": "위험이 예상되는 공정명", "risk": "구체적인 리스크 요인", "mitigation": "실질적인 완화 조치" }
+            ],
+            "efficiency": "인원 및 공수 배분의 효율성 평가",
+            "conclusion": "최종 PMO 권고사항"
+        }`;
 
         const response = await fetch('https://api.groq.com/openai/v1/chat/completions', { 
             method: 'POST',
@@ -657,20 +728,40 @@ window.generateGroqInsight = async () => {
         
         const data = await response.json();
         const result = JSON.parse(data.choices[0].message.content);
-        window.latestAiResult = result; // 엑셀 출력을 위한 저장
+        window.latestAiResult = result; 
         
         if(bBox) {
             bBox.innerHTML = `
-                <div class="space-y-3 animate-fade-in">
-                    <p class="text-sm leading-relaxed">${result.summary || "분석이 완료되었습니다."}</p>
-                    <div class="grid grid-cols-2 gap-2 mt-2">
-                        <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-700">
-                            <span class="text-[10px] text-slate-400 block mb-1">예상 리스크</span>
-                            <span class="text-xs font-bold text-rose-400">${result.mainRisk||"없음"}</span>
+                <div class="space-y-4 animate-fade-in">
+                    <div class="flex justify-between items-start">
+                        <p class="text-sm leading-relaxed font-medium flex-1 pr-4">${result.summary}</p>
+                        <div class="shrink-0 text-center bg-slate-900 p-2 rounded-xl border border-slate-700 w-20">
+                            <span class="text-[10px] text-slate-400 block mb-1">리스크 지수</span>
+                            <span class="text-2xl font-black ${result.riskScore > 50 ? 'text-rose-500' : 'text-emerald-400'}">${result.riskScore}</span>
                         </div>
-                        <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-700">
-                            <span class="text-[10px] text-slate-400 block mb-1">권장 조치</span>
-                            <span class="text-xs font-bold text-emerald-400">${result.action||"정상 진행"}</span>
+                    </div>
+                    
+                    <div class="space-y-2">
+                        <h4 class="text-xs font-bold text-indigo-300 border-b border-slate-700 pb-1">⚠️ 핵심 리스크 및 조치계획</h4>
+                        ${result.coreRisks.map(r => `
+                            <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-700/50">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="text-[10px] bg-rose-500/20 text-rose-300 px-1.5 py-0.5 rounded font-bold">${r.phase}</span>
+                                    <span class="text-xs font-bold text-slate-200">${r.risk}</span>
+                                </div>
+                                <div class="text-[11px] text-emerald-400 font-medium pl-1"><i class="fa-solid fa-arrow-turn-up rotate-90 mr-1 opacity-70"></i>${r.mitigation}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                        <div class="bg-slate-800 p-3 rounded-xl border border-slate-600">
+                            <span class="text-[10px] text-slate-400 block mb-1">효율성 평가</span>
+                            <span class="text-[11px] font-medium text-slate-200 leading-relaxed">${result.efficiency}</span>
+                        </div>
+                        <div class="bg-slate-800 p-3 rounded-xl border border-slate-600">
+                            <span class="text-[10px] text-slate-400 block mb-1">PMO 최종 권고</span>
+                            <span class="text-[11px] font-medium text-slate-200 leading-relaxed">${result.conclusion}</span>
                         </div>
                     </div>
                 </div>`;
@@ -681,67 +772,150 @@ window.generateGroqInsight = async () => {
     }
 };
 
-window.generateAiComparison = async () => {
-    window.showToast("유사 프로젝트 AI 비교 분석은 백엔드 기능 준비중입니다.", "warning");
-};
-
-// ==========================================
-// 7. 데이터 저장 및 엑셀 출력 💡(요청하신 포맷 적용)
-// ==========================================
-window.saveToFirestore = async function(isSilent = false) {
-    const pCode = document.getElementById('project-code')?.value;
-    const pName = document.getElementById('project-name')?.value;
-    if (!pName) return window.showToast("프로젝트 이름을 입력하세요.", "error");
-
-    const payload = {
-        projectCode: pCode,
-        projectName: pName,
-        managerName: document.getElementById('manager-name')?.value,
-        qty: parseInt(document.getElementById('equip-qty')?.value) || 1,
-        curve: parseInt(document.getElementById('learning-curve')?.value) || 95,
-        processData: window.currentProcessData,
-        p50Md: window.latestP50Md,
-        authorUid: window.currentUser?.uid || 'guest',
-        authorName: window.userProfile?.name || '알수없음', 
-        updatedAt: Date.now()
-    };
+// 💡 5-2. 유사 프로젝트 비교 기능 및 모달
+window.openSimilarProjectModal = async () => {
+    const modal = document.getElementById('similar-project-modal');
+    const tbody = document.getElementById('similar-project-tbody');
+    if(!modal || !tbody) return;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center p-6"><i class="fa-solid fa-spinner fa-spin text-xl text-slate-400"></i> 데이터 불러오는 중...</td></tr>';
 
     try {
-        let pid = window.currentProjectId;
-        if (pid) {
-            const oldSnap = await getDoc(doc(db, "sim_projects", pid));
-            if(oldSnap.exists()) {
-                await addDoc(collection(db, "sim_project_history"), { projectId: pid, snapshot: oldSnap.data(), changedBy: window.userProfile?.name || 'guest', changedAt: Date.now() });
-            }
-            await setDoc(doc(db, "sim_projects", pid), payload, { merge: true });
-        } else {
-            payload.createdAt = Date.now();
-            const docRef = await addDoc(collection(db, "sim_projects"), payload);
-            window.currentProjectId = docRef.id;
+        const snap = await getDocs(query(collection(db, "projects_status"), where("status", "==", "completed")));
+        window.completedProjects = [];
+        snap.forEach(d => window.completedProjects.push({id: d.id, ...d.data()}));
+
+        if(window.completedProjects.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center p-6 font-bold text-slate-500">완료(출하)된 프로젝트 데이터가 없습니다.</td></tr>';
+            return;
         }
+
+        window.completedProjects.sort((a,b) => b.updatedAt - a.updatedAt);
         
-        window.isProjectDirty = false; // 💡 저장 완료 시 플래그 초기화
-        
-        if (!isSilent) window.showToast("클라우드에 저장되었습니다.");
-    } catch (e) {
-        window.showToast("저장 실패", "error");
+        tbody.innerHTML = window.completedProjects.map(p => `
+            <tr class="hover:bg-slate-50 border-b border-slate-100 cursor-pointer" onclick="const cb = this.querySelector('input'); cb.checked = !cb.checked; window.updateSelectedSimilarProjects();">
+                <td class="p-3 text-center" onclick="event.stopPropagation()"><input type="checkbox" value="${p.id}" class="sim-proj-cb accent-indigo-600 w-4 h-4 rounded cursor-pointer" onchange="window.updateSelectedSimilarProjects()"></td>
+                <td class="p-3 font-bold text-indigo-700 text-center w-32">[${p.code || '-'}]</td>
+                <td class="p-3 font-bold text-slate-700 truncate max-w-[250px]">${p.name}</td>
+                <td class="p-3 text-center font-black text-emerald-600 w-28">${(parseFloat(p.finalMd)||0).toFixed(1)} MD</td>
+            </tr>
+        `).join('');
+    } catch(e) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center p-6 text-rose-500 font-bold">데이터를 불러오지 못했습니다.</td></tr>';
     }
 };
 
-window.cloneProject = () => {
-    if(!window.currentProjectId) return window.showToast("저장되거나 불러온 프로젝트가 없습니다.", "warning");
-    window.currentProjectId = null;
-    document.getElementById('project-name').value += ' (복제본)';
-    window.isProjectDirty = true;
-    window.showToast("복제되었습니다. '저장'을 누르면 새 프로젝트로 등록됩니다.", "success");
+window.closeSimilarProjectModal = () => {
+    const modal = document.getElementById('similar-project-modal');
+    if(modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
 };
 
+window.updateSelectedSimilarProjects = () => {
+    const cbs = document.querySelectorAll('.sim-proj-cb:checked');
+    if(cbs.length > 3) {
+        window.showToast("최대 3개까지만 선택 가능합니다.", "warning");
+        event.target.checked = false; // 방금 누른 거 취소
+    }
+};
+
+window.applySimilarProjects = () => {
+    const cbs = document.querySelectorAll('.sim-proj-cb:checked');
+    if(cbs.length === 0) return window.showToast("비교할 프로젝트를 최소 1개 선택해주세요.", "warning");
+
+    window.selectedSimilarProjects = Array.from(cbs).map(cb => window.completedProjects.find(p => p.id === cb.value));
+    
+    const listContainer = document.getElementById('similar-projects-list');
+    if(listContainer) {
+        listContainer.innerHTML = window.selectedSimilarProjects.map(p => `
+            <div class="bg-white border border-slate-200 rounded-lg p-3 shadow-sm flex justify-between items-center">
+                <div class="truncate pr-2">
+                    <span class="text-[10px] font-bold text-indigo-600">[${p.code}]</span>
+                    <span class="text-xs font-bold text-slate-700 ml-1">${p.name}</span>
+                </div>
+                <span class="text-xs font-black text-emerald-600 shrink-0 ml-2 border-l pl-2">${(parseFloat(p.finalMd)||0).toFixed(1)} MD</span>
+            </div>
+        `).join('');
+    }
+    window.closeSimilarProjectModal();
+};
+
+window.generateAiComparison = async () => {
+    if(!window.selectedSimilarProjects || window.selectedSimilarProjects.length === 0) return window.showToast("비교할 과거 프로젝트를 먼저 선택하세요.", "warning");
+    
+    const apiKey = localStorage.getItem('axms_sim_api_key');
+    if (!apiKey) {
+        window.toggleAiApiPanel(true);
+        return window.showToast("Groq API 키를 먼저 입력해주세요.", "warning");
+    }
+
+    window.showToast("AI가 과거 데이터와 비교 분석을 수행 중입니다...", "success");
+    const cBox = document.getElementById('ai-compare-result');
+    if(cBox) { cBox.classList.remove('hidden'); cBox.innerHTML = '<div class="text-center p-6"><i class="fa-solid fa-spinner fa-spin mr-2 text-indigo-400"></i>과거 데이터 기반 정밀 비교 분석 중...</div>'; }
+
+    try {
+        const pastDataStr = window.selectedSimilarProjects.map(p => `[${p.name}] 실제 투입: ${(parseFloat(p.finalMd)||0).toFixed(1)}MD, 예정: ${(parseFloat(p.estMd)||0).toFixed(1)}MD`).join('\n');
+        
+        const promptStr = `당신은 제조 설비 데이터 분석가입니다.
+        현재 시뮬레이션 중인 프로젝트의 예상 공수는 ${window.latestP50Md}MD 입니다.
+        비교 대상인 과거 완료된 프로젝트들의 실적 데이터는 다음과 같습니다:
+        ${pastDataStr}
+
+        현재 프로젝트의 예상 공수가 과거 실적에 비추어 볼 때 적절한지(과소평가/과대평가) 분석하고, 어떤 점을 보완해야 실적 오차를 줄일 수 있을지 평가하세요.
+        반드시 다음 JSON 형식으로만 응답해야 합니다:
+        {
+            "verdict": "적정 / 과소평가 / 과대평가 중 택1",
+            "analysis": "비교 분석 상세 의견 (3문장 내외)",
+            "recommendation": "오차를 줄이기 위한 실질적 조언"
+        }`;
+
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+            body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: promptStr }], temperature: 0.5, response_format: { type: "json_object" } })
+        });
+
+        if (!response.ok) throw new Error("AI 서버 에러");
+        const data = await response.json();
+        const result = JSON.parse(data.choices[0].message.content);
+
+        let verdictColor = result.verdict.includes('적정') ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/30' : 'text-rose-400 bg-rose-400/10 border-rose-400/30';
+
+        if(cBox) {
+            cBox.innerHTML = `
+                <div class="animate-fade-in">
+                    <div class="flex items-center justify-between mb-4 border-b border-slate-700 pb-3">
+                        <h4 class="text-sm font-bold text-indigo-300"><i class="fa-solid fa-scale-balanced mr-1"></i> 과거 실적 대비 타당성 검증</h4>
+                        <span class="px-3 py-1 rounded-full border text-xs font-black ${verdictColor}">${result.verdict}</span>
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <span class="text-[10px] font-bold text-slate-400 block mb-1">상세 분석 결과</span>
+                            <p class="text-sm font-medium text-slate-200 leading-relaxed">${result.analysis}</p>
+                        </div>
+                        <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-600">
+                            <span class="text-[10px] font-bold text-emerald-400 block mb-1"><i class="fa-solid fa-lightbulb mr-1"></i>개선 제언</span>
+                            <p class="text-[11px] font-medium text-slate-300 leading-relaxed">${result.recommendation}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    } catch (e) {
+        window.showToast("비교 분석 실패", "error");
+        if(cBox) cBox.innerText = "분석 중 오류 발생";
+    }
+};
+
+// ==========================================
+// 6. 데이터 엑셀 출력 (완벽 복원된 폼 레이아웃)
+// ==========================================
 window.exportToExcel = async () => {
     if (typeof ExcelJS === 'undefined') return window.showToast("라이브러리 로딩 중입니다.", "warning");
     window.showToast("공수 보고서 엑셀 파일을 생성 중입니다...");
     
     const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet('시뮬레이션_보고서');
+    const ws = wb.addWorksheet('시뮬레이션_보고서', { views: [{ showGridLines: false }] });
     
     ws.columns = [
         { width: 35 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }
@@ -764,6 +938,12 @@ window.exportToExcel = async () => {
     const cost90 = document.getElementById('out-p90-cost')?.innerText || '0';
 
     const tPers = document.getElementById('out-total-personnel')?.innerText || '0';
+    const sMult = document.getElementById('out-avg-skill')?.innerText || '1.00';
+    
+    const pSen = document.getElementById('p-senior')?.value || '0';
+    const pMid = document.getElementById('p-mid')?.value || '0';
+    const pJun = document.getElementById('p-junior')?.value || '0';
+    
     const lCost = document.getElementById('labor-cost')?.value || '300000';
     const pExp = document.getElementById('planned-expense')?.value || '0';
 
@@ -775,7 +955,7 @@ window.exportToExcel = async () => {
     // 2. 프로젝트 정보
     ws.addRow(['■ 1. 프로젝트 정보 및 설정']).font = { bold: true };
     ws.addRow(['프로젝트 코드', pCode, '프로젝트 명', pName]);
-    ws.addRow(['담당자', mgr, '투입 인원 및 숙련도', `총 ${tPers}명`]);
+    ws.addRow(['담당자', mgr, '투입 인원 및 숙련도', `총 ${tPers}명 (고급 ${pSen}명, 중급 ${pMid}명, 초급 ${pJun}명) / 평균 보정치: ${sMult}배`]);
     ws.addRow(['1MD 기준 인건비', `${Number(lCost).toLocaleString()} 원`, '예상 기타 경비', `${Number(pExp).toLocaleString()} 원`]);
     ws.addRow([]);
 
@@ -823,7 +1003,82 @@ window.exportToExcel = async () => {
     window.showToast("엑셀 파일이 다운로드되었습니다.");
 };
 
-// ... (나머지 팝업 관리 로직은 이전 코드와 동일)
+// ==========================================
+// 8. 모달창 및 파일 관리
+// ==========================================
+window.saveToFirestore = async function(isSilent = false) {
+    const pCode = document.getElementById('project-code')?.value;
+    const pName = document.getElementById('project-name')?.value;
+    if (!pName) return window.showToast("프로젝트 이름을 입력하세요.", "error");
+
+    const payload = {
+        projectCode: pCode,
+        projectName: pName,
+        managerName: document.getElementById('manager-name')?.value,
+        qty: parseInt(document.getElementById('equip-qty')?.value) || 1,
+        curve: parseInt(document.getElementById('learning-curve')?.value) || 95,
+        processData: window.currentProcessData,
+        p50Md: window.latestP50Md,
+        authorUid: window.currentUser?.uid || 'guest',
+        authorName: window.userProfile?.name || '알수없음', 
+        updatedAt: Date.now()
+    };
+
+    try {
+        let pid = window.currentProjectId;
+        if (pid) {
+            const oldSnap = await getDoc(doc(db, "sim_projects", pid));
+            if(oldSnap.exists()) {
+                await addDoc(collection(db, "sim_project_history"), { projectId: pid, snapshot: oldSnap.data(), changedBy: window.userProfile?.name || 'guest', changedAt: Date.now() });
+            }
+            await setDoc(doc(db, "sim_projects", pid), payload, { merge: true });
+        } else {
+            payload.createdAt = Date.now();
+            const docRef = await addDoc(collection(db, "sim_projects"), payload);
+            window.currentProjectId = docRef.id;
+        }
+        
+        window.isProjectDirty = false; 
+        
+        if (!isSilent) window.showToast("클라우드에 저장되었습니다.");
+    } catch (e) {
+        window.showToast("저장 실패", "error");
+    }
+};
+
+window.saveCurrentAsPreset = async () => {
+    const id = window.prompt("등록할 프리셋 ID (영문/숫자, 예: custom_type_1):");
+    if(!id) return;
+    const label = window.prompt("목록에 표시할 프리셋 이름 (예: 신규 A타입 설비):");
+    if(!label) return;
+
+    const pData = {
+        label: label,
+        processData: window.currentProcessData,
+        curve: Number(document.getElementById('learning-curve')?.value) || 95,
+        labor: Number(document.getElementById('labor-cost')?.value) || 300000,
+        hex: '#6366f1' 
+    };
+    try {
+        await setDoc(doc(db, "sim_master_presets", id), pData);
+        window.showToast("프리셋이 성공적으로 등록되었습니다.", "success");
+        window.loadMasterPresets();
+    } catch(e) { window.showToast("프리셋 등록 실패", "error"); }
+};
+
+window.deleteCurrentPreset = async () => {
+    const id = document.getElementById('eq-type')?.value;
+    if(!id) return;
+    if(id === 'dev') return window.showToast("기본 개발 모델(dev)은 삭제할 수 없습니다.", "error");
+    if(!confirm("현재 선택된 프리셋을 완전히 삭제하시겠습니까?")) return;
+    
+    try {
+        await deleteDoc(doc(db, "sim_master_presets", id));
+        window.showToast("프리셋이 삭제되었습니다.", "success");
+        window.loadMasterPresets();
+    } catch(e) { window.showToast("프리셋 삭제 실패", "error"); }
+};
+
 window.openProjectModal = async () => {
     const container = document.getElementById('project-list-container');
     const modal = document.getElementById('project-list-modal');
@@ -843,27 +1098,7 @@ window.openProjectModal = async () => {
         snap.forEach(doc => {
             const d = doc.data();
             const dateStr = window.getDateTimeStr(new Date(d.updatedAt || d.createdAt));
-            const isL = d.isLocked || false;
             const isA = window.currentProjectId === doc.id;
-            
-            let aH = '';
-            const canManage = (window.userProfile?.role === 'admin' || window.currentUser?.uid === d.authorUid);
-
-            if (canManage) {
-                if (isL) {
-                    aH += `<button onclick="event.stopPropagation(); window.toggleProjectLock('${doc.id}', false)" class="text-amber-500 hover:text-amber-600 p-2 transition-colors" title="잠금 해제"><i class="fa-solid fa-lock"></i></button>
-                           <button onclick="event.stopPropagation(); window.showToast('잠금을 먼저 해제하세요.', 'error');" class="text-slate-200 cursor-not-allowed p-2" title="잠김 상태에선 삭제 불가"><i class="fa-solid fa-trash-can"></i></button>`;
-                } else {
-                    aH += `<button onclick="event.stopPropagation(); window.toggleProjectLock('${doc.id}', true)" class="text-slate-300 hover:text-amber-500 p-2 transition-colors" title="잠금 설정"><i class="fa-solid fa-lock-open"></i></button>
-                           <button onclick="event.stopPropagation(); window.deleteProject('${doc.id}')" class="text-slate-300 hover:text-rose-500 p-2 transition-colors" title="삭제"><i class="fa-solid fa-trash-can"></i></button>`;
-                }
-            } else {
-                 if (isL) {
-                     aH += `<button onclick="event.stopPropagation(); window.showToast('권한이 없습니다.', 'error');" class="text-amber-500/50 cursor-not-allowed p-2"><i class="fa-solid fa-lock"></i></button>`;
-                 }
-            }
-
-            const lockBadge = isL ? `<span class="text-[10px] bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full font-bold ml-2 shadow-sm border border-amber-100"><i class="fa-solid fa-lock text-[8px] mr-1"></i> 잠금됨</span>` : '';
             const activeBadge = isA ? `<span class="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-bold ml-2 shadow-sm border border-indigo-100">현재 열림</span>` : '';
 
             html += `
@@ -872,7 +1107,6 @@ window.openProjectModal = async () => {
                     <div class="flex items-center mb-1">
                         <span class="text-xs font-bold text-amber-600">[${d.projectCode || '코드없음'}]</span>
                         ${activeBadge}
-                        ${lockBadge}
                     </div>
                     <div class="text-sm font-black text-slate-800">${d.projectName}</div>
                     <div class="text-[10px] text-slate-400 mt-1 flex items-center gap-2">
@@ -884,7 +1118,7 @@ window.openProjectModal = async () => {
                     </div>
                 </div>
                 <div class="flex items-center gap-1">
-                    ${aH}
+                    <button onclick="event.stopPropagation(); window.deleteProject('${doc.id}')" class="text-slate-300 hover:text-rose-500 p-2 transition-colors" title="삭제"><i class="fa-solid fa-trash-can"></i></button>
                 </div>
             </div>`;
         });
@@ -900,40 +1134,6 @@ window.closeProjectModal = () => {
     if(m) { m.classList.add('hidden'); m.classList.remove('flex'); }
 };
 
-window.toggleProjectLock = async (id, loc) => {
-    try {
-        if (loc) {
-            const pwd = prompt('프로젝트를 보호하기 위한 비밀번호를 설정하세요:');
-            if (pwd === null) return; 
-            if (pwd.trim() === '') { window.showToast('비밀번호를 입력해야 합니다.', 'error'); return; }
-            
-            await setDoc(doc(db, 'sim_projects', id), { isLocked: true, lockPassword: pwd.trim() }, { merge: true });
-            window.showToast('프로젝트가 잠금 처리되었습니다.', 'success');
-            window.openProjectModal(); 
-        } else {
-            const dS = await getDoc(doc(db, 'sim_projects', id));
-            if (!dS.exists()) return; 
-            const d = dS.data();
-            
-            if (window.userProfile?.role !== 'admin' && window.currentUser?.uid !== d.authorUid) { 
-                window.showToast('권한이 없습니다.', 'error'); return;
-            }
-            
-            const pwd = prompt('잠금 해제 비밀번호를 입력하세요:');
-            if (pwd === null) return; 
-            if (pwd.trim() !== d.lockPassword) { 
-                window.showToast('비밀번호가 일치하지 않습니다.', 'error'); return;
-            }
-            
-            await setDoc(doc(db, 'sim_projects', id), { isLocked: false, lockPassword: null }, { merge: true });
-            window.showToast('잠금이 해제되었습니다.', 'success');
-            window.openProjectModal(); 
-        }
-    } catch(e) {
-        window.showToast("상태 변경 실패", "error");
-    }
-};
-
 window.loadProject = async (id) => {
     if (window.isProjectDirty && !confirm("저장하지 않은 변경사항이 있습니다. 그래도 불러오시겠습니까?")) return;
 
@@ -941,15 +1141,6 @@ window.loadProject = async (id) => {
         const docSnap = await getDoc(doc(db, "sim_projects", id));
         if(docSnap.exists()) {
             const d = docSnap.data();
-            
-            if (d.isLocked && window.userProfile?.role !== 'admin' && window.currentUser?.uid !== d.authorUid) {
-                const pwd = prompt('🔒 이 프로젝트는 잠겨있습니다. 비밀번호를 입력하세요:');
-                if (pwd === null) return;
-                if (pwd.trim() !== d.lockPassword) {
-                    window.showToast("비밀번호가 일치하지 않습니다.", "error");
-                    return;
-                }
-            }
 
             window.currentProjectId = id;
             document.getElementById('project-code').value = d.projectCode || '';
@@ -958,9 +1149,14 @@ window.loadProject = async (id) => {
             document.getElementById('equip-qty').value = d.qty || 1;
             document.getElementById('learning-curve').value = d.curve || 95;
             window.currentProcessData = d.processData || [];
+            
+            const typeSel = document.getElementById('eq-type');
+            if (typeSel && typeSel.options.length > 0) typeSel.selectedIndex = 0; // 프리셋 해제
+
             window.renderProcessTable();
             window.renderUnitTables();
             window.debouncedRunSimulation();
+            
             window.isProjectDirty = false;
             window.closeProjectModal();
             window.showToast("프로젝트를 불러왔습니다.");
@@ -1120,69 +1316,6 @@ window.closeDashboardModal = () => {
     if(m) { m.classList.add('hidden'); m.classList.remove('flex'); }
 };
 
-// 초성 검색 자동완성 
-window.showAutocomplete = function(inputEl, targetId1, targetId2, isNameSearch) {
-    const val = inputEl.value.trim().toLowerCase(); 
-    let dropdown = document.getElementById('pjt-autocomplete-dropdown');
-    
-    if(!dropdown) { 
-        dropdown = document.createElement('ul'); 
-        dropdown.id = 'pjt-autocomplete-dropdown'; 
-        dropdown.className = 'absolute z-[9999] bg-white border border-indigo-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-full custom-scrollbar py-1 mt-1'; 
-        inputEl.parentNode.appendChild(dropdown); 
-    }
-    
-    if(val.length < 1) { 
-        dropdown.classList.add('hidden'); 
-        return; 
-    }
-    
-    let matches = [];
-    for (let i = 0; i < (window.pjtCodeMasterList || []).length; i++) {
-        let p = window.pjtCodeMasterList[i];
-        if (isNameSearch) { 
-            if (p.name.toLowerCase().includes(val) || window.matchString(val, p.name)) matches.push(p); 
-        } else { 
-            if (p.code.toLowerCase().includes(val) || window.matchString(val, p.code)) matches.push(p); 
-        }
-    }
-    
-    if(matches.length > 0) {
-        dropdown.classList.remove('hidden');
-        let dropHtml = '';
-        matches.forEach(function(m) {
-            let safeName = m.name.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
-            dropHtml += `<li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-slate-700 font-bold text-xs border-b border-slate-50 last:border-0 truncate transition-colors" onmousedown="window.selectAutocomplete('${m.code}', '${safeName}', '${inputEl.id}', '${targetId1}')"><span class="text-indigo-600">[${m.code}]</span> ${m.name}</li>`;
-        }); 
-        dropdown.innerHTML = dropHtml;
-    } else { 
-        dropdown.classList.add('hidden'); 
-    }
-};
-
-window.selectAutocomplete = function(code, name, sourceId, targetId1) { 
-    const sourceEl = document.getElementById(sourceId); 
-    const t1 = document.getElementById(targetId1); 
-    
-    if (sourceId === 'project-code') { 
-        if (sourceEl) sourceEl.value = code; 
-        if (t1) t1.value = name; 
-    } else { 
-        if (sourceEl) sourceEl.value = name; 
-        if (t1) t1.value = code; 
-    } 
-    const drop = document.getElementById('pjt-autocomplete-dropdown'); 
-    if (drop) drop.classList.add('hidden'); 
-};
-
-document.addEventListener('click', function(e) {
-    const d = document.getElementById('pjt-autocomplete-dropdown'); 
-    if (d && !d.classList.contains('hidden') && !e.target.closest('#pjt-autocomplete-dropdown') && !e.target.closest('input[oninput*="showAutocomplete"]')) {
-        d.classList.add('hidden');
-    }
-});
-
-// 💡 새로 만들기 기능 추가
 window.createNewProject = () => {
     if (window.isProjectDirty && !confirm("저장하지 않은 변경사항이 있습니다. 무시하고 새 프로젝트를 생성하시겠습니까?")) return;
     
@@ -1191,95 +1324,39 @@ window.createNewProject = () => {
     document.getElementById('project-name').value = '';
     document.getElementById('manager-name').value = '';
     document.getElementById('equip-qty').value = '1';
+    document.getElementById('learning-curve').value = '95';
+    document.getElementById('diff-multiplier').value = '1.0';
+    document.getElementById('buffer-rate').value = '5';
+    
+    const typeSel = document.getElementById('eq-type');
+    if (typeSel && typeSel.options.length > 0) typeSel.selectedIndex = 0;
     
     window.currentProcessData = [];
     window.isProjectDirty = false;
     window.latestAiResult = null;
     
+    window.renderProcessTable();
+    window.renderUnitTables();
+    
     const bBox = document.getElementById('ai-briefing-text');
     if(bBox) bBox.innerHTML = '<div class="text-center p-4 text-slate-500">AI 분석을 실행해주세요.</div>';
     
-    window.handleTypeChange(); // 기본 프리셋 로드
-    window.showToast("새 프로젝트가 생성되었습니다.", "success");
-};
-
-// 💡 프리셋 설정 등록, 삭제, 기본 지정 기능 완벽 복구
-window.saveCurrentAsPreset = async () => {
-    const id = window.prompt("등록할 프리셋 ID (영문/숫자, 예: custom_type_1):");
-    if(!id) return;
-    const label = window.prompt("목록에 표시할 프리셋 이름 (예: 신규 A타입 설비):");
-    if(!label) return;
-
-    const pData = {
-        label: label,
-        processData: window.currentProcessData,
-        curve: Number(document.getElementById('learning-curve')?.value) || 95,
-        labor: Number(document.getElementById('labor-cost')?.value) || 300000,
-        hex: '#6366f1' // Default color for custom preset
-    };
-    try {
-        await setDoc(doc(db, "sim_master_presets", id), pData);
-        window.showToast("프리셋이 성공적으로 등록되었습니다.", "success");
-        window.loadMasterPresets();
-    } catch(e) { window.showToast("프리셋 등록 실패", "error"); }
-};
-
-window.deleteCurrentPreset = async () => {
-    const id = document.getElementById('eq-type')?.value;
-    if(!id) return;
-    if(id === 'dev') return window.showToast("기본 개발 모델(dev)은 삭제할 수 없습니다.", "error");
-    if(!confirm("현재 선택된 프리셋을 완전히 삭제하시겠습니까?")) return;
+    const cBox = document.getElementById('ai-compare-result');
+    if(cBox) { cBox.innerHTML = ''; cBox.classList.add('hidden'); }
     
-    try {
-        await deleteDoc(doc(db, "sim_master_presets", id));
-        window.showToast("프리셋이 삭제되었습니다.", "success");
-        window.loadMasterPresets();
-    } catch(e) { window.showToast("프리셋 삭제 실패", "error"); }
+    const sList = document.getElementById('similar-projects-list');
+    if(sList) sList.innerHTML = '<div class="text-slate-400 text-xs p-2">비교할 프로젝트가 선택되지 않았습니다.</div>';
+    window.selectedSimilarProjects = [];
+
+    window.debouncedRunSimulation();
+    window.showToast("새 프로젝트 환경이 준비되었습니다.", "success");
 };
 
-window.setDefaultPreset = async () => {
-    const id = document.getElementById('eq-type')?.value;
-    if(!id) return;
-    try {
-        // You can save this to user settings or global settings
-        // For now, local save for the user's browser is faster and better UX
-        localStorage.setItem('axms_sim_default_preset', id);
-        window.showToast(`[${window.masterPresets[id].label}] 이(가) 기본 프리셋으로 지정되었습니다.`, "success");
-    } catch(e) { window.showToast("지정 실패", "error"); }
+window.cloneProject = () => {
+    if(!window.currentProjectId && window.currentProcessData.length === 0) return window.showToast("복제할 데이터가 없습니다.", "warning");
+    window.currentProjectId = null; 
+    const nameEl = document.getElementById('project-name');
+    if(nameEl && !nameEl.value.includes('복제본')) nameEl.value += ' (복제본)';
+    window.isProjectDirty = true;
+    window.showToast("복제 모드로 전환되었습니다. '저장'을 누르면 새 프로젝트로 등록됩니다.", "success");
 };
-
-// 프리셋 로드 시 localStorage 우선 확인
-window.loadMasterPresets = async () => {
-    try {
-        const snap = await getDocs(collection(db, "sim_master_presets"));
-        const sel = document.getElementById('eq-type');
-        if (!sel) return;
-        
-        sel.innerHTML = '';
-        window.masterPresets = {};
-        
-        if (!snap.empty) {
-            snap.forEach(d => {
-                window.masterPresets[d.id] = d.data();
-                sel.innerHTML += `<option value="${d.id}">${d.data().label}</option>`;
-            });
-        } else {
-            window.masterPresets = JSON.parse(JSON.stringify(defaultPresets));
-            for (let key in window.masterPresets) {
-                sel.innerHTML += `<option value="${key}">${window.masterPresets[key].label}</option>`;
-            }
-        }
-        
-        const defaultPresetId = localStorage.getItem('axms_sim_default_preset');
-        if (defaultPresetId && window.masterPresets[defaultPresetId]) {
-            sel.value = defaultPresetId;
-        } else if (sel.options.length > 1) {
-            sel.selectedIndex = 1;
-        }
-
-        window.handleTypeChange();
-    } catch (e) { console.error("Presets Load Error", e); }
-};
-
-// 초기화 실행
-window.loadMasterPresets();
