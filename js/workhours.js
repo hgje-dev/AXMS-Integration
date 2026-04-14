@@ -36,7 +36,11 @@ window.matchString = function(q, t) {
 };
 
 let worklogsUnsubscribe = null;
+let workplansUnsubscribe = null;
+
 window.currentWorkLogs = [];
+window.currentWorkPlans = []; // 💡 계획 공수 데이터
+
 window.whStatMode = 'week';
 window.whViewMode = 'grid';
 window.whMemberMode = 'all'; 
@@ -66,7 +70,8 @@ document.addEventListener('mousemove', e => {
     }
 });
 
-const WH_TYPES = ['조립', '검수', '설치', 'Setup', '협업', '공통', '기타'];
+// 💡 휴가 항목 추가됨
+const WH_TYPES = ['조립', '검수', '설치', 'Setup', '협업', '공통', '휴가', '휴가(오전)', '휴가(오후)', '기타'];
 const WH_LOCS = ['사내', '국내', '해외'];
 const DRIVE_EXPORT_FOLDER = '1x8atDi95ybFH-YOYkfiaISw7BHdckQX4';
 
@@ -190,6 +195,7 @@ window.loadWorkhoursData = function() {
     
     window.updateWhWeekDisplay(picker.value);
     fetchWorkLogsForContext();
+    fetchWorkPlansForContext(); // 💡 계획 데이터 가져오기
     
     if (!window.todayBadgeInitialized && window.userProfile) {
         window.initTodayBadge();
@@ -239,6 +245,28 @@ function fetchWorkLogsForContext() {
     });
 }
 
+// 💡 투입 계획 데이터 Fetch
+function fetchWorkPlansForContext() {
+    if (workplansUnsubscribe) workplansUnsubscribe();
+    // 현재 선택된 모드에 맞춰 주간/월간 값으로 가져오기
+    const picker = document.getElementById('wh-week-picker');
+    if(!picker) return;
+    
+    let currentPeriod = picker.value; // ex: 2026-W15
+    if (window.whStatMode === 'month') {
+        const { start } = window.getDatesFromWeek(picker.value);
+        currentPeriod = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`; // ex: 2026-04
+    }
+
+    const q = query(collection(db, "work_plans"), where("period", "==", currentPeriod));
+    
+    workplansUnsubscribe = onSnapshot(q, (snapshot) => {
+        window.currentWorkPlans = [];
+        snapshot.forEach(doc => window.currentWorkPlans.push({ id: doc.id, ...doc.data() }));
+        window.updateWhDashboard(); // 대시보드 갱신
+    });
+}
+
 window.setWhStatMode = function(mode) {
     window.whStatMode = mode;
     const btnW = document.getElementById('wh-btn-period-week');
@@ -255,6 +283,7 @@ window.setWhStatMode = function(mode) {
         document.getElementById('wh-dash-period-label').innerHTML = '월간 총 투입 <span class="text-[9px] font-normal">(승인완료)</span>';
         document.getElementById('wh-chart-trend-title').innerText = '주차별 투입 추이 (MD)';
     }
+    fetchWorkPlansForContext(); // 기간 모드 변경 시 계획 데이터도 다시 로드
     window.updateWhDashboard();
 };
 
@@ -508,6 +537,56 @@ window.updateWhDashboard = function() {
     const totalMD = (totalHours / 8).toFixed(1);
     document.getElementById('wh-dash-total-md').innerText = totalMD;
 
+    // 💡 계획 대비 실적 계산
+    let totalPlanMd = 0;
+    let planData = window.currentWorkPlans.filter(p => p.status === 'confirmed');
+    
+    // 개인이면 계획 무시(또는 담당된 것만 찾을수도 있지만 보통 계획은 PJT 단위이므로)
+    // 여기서는 PJT 검색어 필터링 정도만 적용해 줍니다.
+    if (window.whPjtSearch) {
+        planData = planData.filter(p => {
+            const pCode = (p.projectCode || '').toLowerCase();
+            const pName = (p.projectName || '').toLowerCase();
+            const search = window.whPjtSearch.trim();
+            return pCode.includes(search) || pName.includes(search) || 
+                   (window.matchString && window.matchString(search, pCode)) || 
+                   (window.matchString && window.matchString(search, pName));
+        });
+    }
+
+    planData.forEach(p => {
+        totalPlanMd += parseFloat(p.plannedMd) || 0;
+    });
+
+    const planMdEl = document.getElementById('wh-dash-plan-md');
+    const actualMdEl = document.getElementById('wh-dash-actual-md');
+    const planRateEl = document.getElementById('wh-dash-plan-rate');
+    const planBarEl = document.getElementById('wh-dash-plan-bar');
+
+    if(planMdEl) planMdEl.innerText = `${totalPlanMd.toFixed(1)} MD`;
+    if(actualMdEl) actualMdEl.innerText = `${totalMD} MD`;
+    if(planRateEl && planBarEl) {
+        if(totalPlanMd > 0) {
+            let rate = (parseFloat(totalMD) / totalPlanMd * 100).toFixed(0);
+            planRateEl.innerText = `${rate}%`;
+            planBarEl.style.width = `${Math.min(rate, 100)}%`;
+            
+            if (rate > 100) {
+                planRateEl.classList.replace('text-indigo-600', 'text-rose-600');
+                planBarEl.classList.replace('bg-indigo-500', 'bg-rose-500');
+            } else {
+                planRateEl.classList.replace('text-rose-600', 'text-indigo-600');
+                planBarEl.classList.replace('bg-rose-500', 'bg-indigo-500');
+            }
+        } else {
+            planRateEl.innerText = `0%`;
+            planBarEl.style.width = `0%`;
+            planRateEl.classList.replace('text-rose-600', 'text-indigo-600');
+            planBarEl.classList.replace('bg-rose-500', 'bg-indigo-500');
+        }
+    }
+
+
     const breakdownEl = document.getElementById('wh-dash-pjt-breakdown');
     if (breakdownEl) {
         let breakdownHtml = '';
@@ -526,9 +605,6 @@ window.updateWhDashboard = function() {
         }
         breakdownEl.innerHTML = breakdownHtml;
     }
-
-    const pjtInfoContainer = document.getElementById('wh-dash-pjt-info');
-    if (pjtInfoContainer) pjtInfoContainer.classList.add('hidden');
 
     renderCustomPersonUI(personMap);
     renderCustomTypeUI(typeMap, totalMD);
@@ -1293,5 +1369,259 @@ window.saveWorkhoursToDrive = async function() {
     } catch (e) {
         console.error(e);
         window.showToast("드라이브 저장에 실패했습니다. (콘솔 확인)", "error");
+    }
+};
+
+// ==========================================
+// 💡 프로젝트별 투입 계획 관리 (팀장용) 로직
+// ==========================================
+window.toggleWhPlanPeriodType = function() {
+    const type = document.getElementById('wh-plan-period-type').value;
+    const weekEl = document.getElementById('wh-plan-week');
+    const monthEl = document.getElementById('wh-plan-month');
+    
+    if (type === 'week') {
+        weekEl.classList.remove('hidden');
+        monthEl.classList.add('hidden');
+        if (!weekEl.value) weekEl.value = window.getWeekString(new Date());
+    } else {
+        weekEl.classList.add('hidden');
+        monthEl.classList.remove('hidden');
+        if (!monthEl.value) {
+            const d = new Date();
+            monthEl.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        }
+    }
+    window.loadWhPlans();
+};
+
+window.openWhPlanModal = function() {
+    if (!window.userProfile || window.userProfile.role !== 'admin') {
+        return window.showToast("팀장(관리자) 권한이 필요합니다.", "error");
+    }
+    
+    // 기본값 세팅
+    document.getElementById('wh-plan-period-type').value = window.whStatMode === 'month' ? 'month' : 'week';
+    window.toggleWhPlanPeriodType();
+
+    const picker = document.getElementById('wh-week-picker');
+    if (picker && picker.value) {
+        if (window.whStatMode === 'month') {
+            const { start } = window.getDatesFromWeek(picker.value);
+            document.getElementById('wh-plan-month').value = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`;
+        } else {
+            document.getElementById('wh-plan-week').value = picker.value;
+        }
+    }
+
+    document.getElementById('wh-plan-modal').classList.remove('hidden');
+    document.getElementById('wh-plan-modal').classList.add('flex');
+    window.loadWhPlans();
+};
+
+window.closeWhPlanModal = function() {
+    document.getElementById('wh-plan-modal').classList.add('hidden');
+    document.getElementById('wh-plan-modal').classList.remove('flex');
+};
+
+window.loadWhPlans = function() {
+    const type = document.getElementById('wh-plan-period-type').value;
+    const currentPeriod = type === 'week' ? document.getElementById('wh-plan-week').value : document.getElementById('wh-plan-month').value;
+    
+    if (!currentPeriod) return;
+
+    // 현재 period에 해당하는 계획만 필터해서 테이블 렌더링
+    const plansForPeriod = window.currentWorkPlans.filter(p => p.period === currentPeriod);
+    const tbody = document.getElementById('wh-plan-tbody');
+    tbody.innerHTML = '';
+
+    if (plansForPeriod.length > 0) {
+        plansForPeriod.forEach(plan => appendWhPlanRow(plan));
+    } else {
+        appendWhPlanRow(null); // 빈 행 1개 추가
+    }
+};
+
+window.addWhPlanRow = function() {
+    appendWhPlanRow(null);
+};
+
+window.removeWhPlanRow = function(btn) {
+    const tr = btn.closest('tr');
+    tr.style.opacity = '0';
+    setTimeout(() => { tr.remove(); }, 200);
+};
+
+function appendWhPlanRow(planData = null) {
+    const tbody = document.getElementById('wh-plan-tbody');
+    const tr = document.createElement('tr');
+    tr.className = 'wh-plan-row hover:bg-slate-50 transition-colors';
+    
+    const uniqueId = 'wh-plan-pjt-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+    const pCode = planData ? (planData.projectCode || '') : '';
+    const pName = planData ? (planData.projectName || '') : '';
+    
+    let idInput = planData ? `<input type="hidden" class="plan-row-id" value="${planData.id}">` : `<input type="hidden" class="plan-row-id" value="">`;
+    let statusHtml = planData && planData.status === 'confirmed' 
+        ? `<span class="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-[10px] font-bold">계획 확정</span>` 
+        : `<span class="bg-slate-200 text-slate-500 px-2 py-1 rounded text-[10px] font-bold">임시 저장</span>`;
+
+    tr.innerHTML = `
+        <td class="p-3 relative">
+            ${idInput}
+            <div class="relative flex items-center">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 text-amber-300 text-xs"></i>
+                <input type="text" id="${uniqueId}" class="plan-row-pjt w-full border border-slate-200 rounded-xl pl-8 pr-3 py-2.5 text-sm font-bold text-slate-700 placeholder-slate-400 bg-slate-50 focus:bg-white outline-amber-500" value="${pCode}" placeholder="코드/명칭 검색" oninput="window.whShowPlanPjtAuto(this)" autocomplete="off">
+            </div>
+            <input type="hidden" class="plan-row-pjt-code" value="${pCode}">
+            <input type="hidden" class="plan-row-pjt-name" value="${pName}">
+        </td>
+        <td class="p-3">
+            <input type="number" min="0" step="0.5" class="plan-row-headcount w-full border border-amber-100 bg-amber-50/50 rounded-xl px-3 py-2.5 text-sm font-black text-center text-amber-600 outline-amber-500" value="${planData ? planData.headcount : ''}" placeholder="0.0">
+        </td>
+        <td class="p-3">
+            <input type="number" min="0" step="0.5" class="plan-row-md w-full border border-indigo-100 bg-indigo-50/50 rounded-xl px-3 py-2.5 text-sm font-black text-center text-indigo-600 outline-indigo-500" value="${planData ? planData.plannedMd : ''}" placeholder="0.0">
+        </td>
+        <td class="p-3">
+            <input type="text" class="plan-row-memo w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 outline-amber-500" value="${planData ? planData.memo || '' : ''}" placeholder="메모">
+        </td>
+        <td class="p-3 text-center">
+            ${statusHtml}
+            <input type="hidden" class="plan-row-status" value="${planData ? planData.status : 'draft'}">
+        </td>
+        <td class="p-3 text-center">
+            <button onclick="window.removeWhPlanRow(this)" class="text-slate-300 hover:text-rose-500 w-8 h-8 rounded-xl flex items-center justify-center mx-auto transition-all"><i class="fa-solid fa-trash-can"></i></button>
+        </td>
+    `;
+    tbody.appendChild(tr);
+}
+
+window.whShowPlanPjtAuto = function(input) {
+    const val = input.value.trim().toLowerCase();
+    let drop = document.getElementById('wh-plan-pjt-autocomplete');
+    if (!drop) {
+        drop = document.createElement('ul');
+        drop.id = 'wh-plan-pjt-autocomplete';
+        drop.className = 'fixed z-[99999] bg-white/95 backdrop-blur-xl border border-slate-200 shadow-2xl rounded-2xl max-h-56 overflow-y-auto text-sm custom-scrollbar py-2 hidden';
+        document.body.appendChild(drop);
+    }
+    
+    const tr = input.closest('tr');
+    tr.querySelector('.plan-row-pjt-code').value = '';
+    tr.querySelector('.plan-row-pjt-name').value = '';
+
+    if(!val) { drop.classList.add('hidden'); return; }
+
+    let searchPool = [];
+    let seenCodes = new Set();
+    (window.pjtCodeMasterList || []).forEach(p => {
+        if (p.code && !seenCodes.has(p.code)) {
+            seenCodes.add(p.code); searchPool.push(p);
+        }
+    });
+
+    let matches = searchPool.filter(p => {
+        let code = (p.code || '').toLowerCase();
+        let name = (p.name || '').toLowerCase();
+        return code.includes(val) || name.includes(val) || 
+               (window.matchString && window.matchString(val, p.code)) || 
+               (window.matchString && window.matchString(val, p.name));
+    });
+
+    if(matches.length > 0) {
+        const rect = input.getBoundingClientRect();
+        drop.style.position = 'fixed';
+        drop.style.left = `${rect.left}px`;
+        drop.style.top = `${rect.bottom + 4}px`;
+        drop.style.width = `${Math.max(rect.width, 300)}px`;
+
+        drop.innerHTML = matches.map(m => {
+            let sName = m.name ? m.name.replace(/'/g,"\\'").replace(/"/g,'&quot;') : '';
+            let sCode = m.code ? m.code.replace(/'/g,"\\'").replace(/"/g,'&quot;') : '-';
+            return `<li class="px-5 py-3 hover:bg-amber-50 cursor-pointer text-xs border-b border-slate-50 transition-all flex items-center gap-2" onmousedown="window.whSelectPlanPjt('${input.id}', '${sCode}', '${sName}')"><span class="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-md font-black tracking-wide shrink-0">[${sCode}]</span><span class="text-slate-600 font-bold truncate flex-1">${m.name}</span></li>`;
+        }).join('');
+        drop.classList.remove('hidden');
+    } else {
+        drop.classList.add('hidden');
+    }
+};
+
+window.whSelectPlanPjt = function(inputId, pCode, pName) {
+    const input = document.getElementById(inputId);
+    if(input) {
+        input.value = pCode; 
+        const tr = input.closest('tr');
+        tr.querySelector('.plan-row-pjt-code').value = pCode;
+        tr.querySelector('.plan-row-pjt-name').value = pName; 
+    }
+    const drop = document.getElementById('wh-plan-pjt-autocomplete');
+    if (drop) drop.classList.add('hidden');
+};
+
+document.addEventListener('click', function(e) {
+    const d = document.getElementById('wh-plan-pjt-autocomplete');
+    if (d && !d.classList.contains('hidden') && !e.target.closest('#wh-plan-pjt-autocomplete') && !e.target.closest('.plan-row-pjt')) {
+        d.classList.add('hidden');
+    }
+});
+
+// 💡 계획 저장 함수 (임시저장 / 확정)
+window.saveWhPlans = async function(targetStatus) {
+    const type = document.getElementById('wh-plan-period-type').value;
+    const currentPeriod = type === 'week' ? document.getElementById('wh-plan-week').value : document.getElementById('wh-plan-month').value;
+    
+    const rows = document.querySelectorAll('.wh-plan-row');
+    let toSave = [];
+
+    rows.forEach(tr => {
+        const id = tr.querySelector('.plan-row-id').value;
+        const projectCodeInput = tr.querySelector('.plan-row-pjt').value.trim(); 
+        const projectCode = tr.querySelector('.plan-row-pjt-code').value || projectCodeInput; 
+        const projectName = tr.querySelector('.plan-row-pjt-name').value || '';
+        
+        const headcount = parseFloat(tr.querySelector('.plan-row-headcount').value) || 0;
+        const plannedMd = parseFloat(tr.querySelector('.plan-row-md').value) || 0;
+        const memo = tr.querySelector('.plan-row-memo').value.trim();
+
+        if (projectCodeInput && (headcount > 0 || plannedMd > 0)) {
+            toSave.push({ 
+                id, 
+                periodType: type,
+                period: currentPeriod,
+                projectCode, 
+                projectName, 
+                headcount, 
+                plannedMd, 
+                memo, 
+                status: targetStatus, 
+                updatedAt: Date.now(),
+                authorName: window.userProfile?.name || '관리자'
+            });
+        }
+    });
+
+    try {
+        const batch = writeBatch(db);
+        
+        // 해당 기간의 기존 계획 삭제 후 덮어쓰기
+        const q = query(collection(db, "work_plans"), where("period", "==", currentPeriod));
+        const existingSnap = await getDocs(q);
+        existingSnap.forEach(docSnap => batch.delete(docSnap.ref));
+        
+        toSave.forEach(data => {
+            const ref = doc(collection(db, "work_plans")); 
+            data.createdAt = Date.now();
+            delete data.id; 
+            batch.set(ref, data);
+        });
+
+        await batch.commit();
+        window.showToast(targetStatus === 'confirmed' ? "계획이 확정되어 대시보드에 반영됩니다." : "임시 저장되었습니다.");
+        
+        // 다시 로드하여 UI 갱신
+        fetchWorkPlansForContext(); 
+        window.closeWhPlanModal();
+    } catch(e) {
+        window.showToast("저장 실패", "error");
     }
 };
