@@ -1,8 +1,9 @@
 // js/router.js
 
-// 💡 1. 윈도우 객체에 직접 안전하게 할당 (이름 충돌 방지 및 오타 수정 완료!)
+// 💡 1. 윈도우 객체에 직접 안전하게 할당
 window.appRoutes = {
     'dashboard-home': { url: './views/dashboard.html', init: () => { if(window.loadHomeDashboards) window.loadHomeDashboards(); } },
+    'completion-report': { url: './views/completion-report.html', init: () => { if(window.initCompletionReport) window.initCompletionReport(); } },
     
     'project-status': { 
         url: './views/project.html', 
@@ -24,6 +25,10 @@ window.appRoutes = {
     
     'workhours': { url: './views/workhours.html', init: () => { if(window.loadWorkhoursData) window.loadWorkhoursData(); } },
     'weekly-log': { url: './views/weekly.html', init: () => { document.getElementById('weekly-log-filter-week').value = window.getWeekString(new Date()); if(window.loadWeeklyLogsData) window.loadWeeklyLogsData(); } },
+    
+    'product-cost': { url: './views/product-cost.html', init: () => { if(window.initProductCost) window.initProductCost(); } },
+    'ncr-dashboard': { url: './views/ncr-dashboard.html', init: () => { if(window.initNcrDashboard) window.initNcrDashboard(); } },
+
     'simulation': { url: './views/simulation.html', init: () => { if(window.handleTypeChange) window.handleTypeChange(); if(window.setupAutoSaveTriggers) window.setupAutoSaveTriggers(); } },
     'collab': { url: './views/request.html', init: () => { window.currentAppId = 'collab'; if(window.loadRequestsData) window.loadRequestsData('collab'); } },
     'purchase': { url: './views/request.html', init: () => { window.currentAppId = 'purchase'; if(window.loadRequestsData) window.loadRequestsData('purchase'); } },
@@ -36,7 +41,9 @@ window.openApp = async function(viewId, title) {
     
     let permissionKey = routeKey;
     if (permissionKey.startsWith('project-status')) permissionKey = 'project-status'; 
-    if (permissionKey !== 'dashboard-home' && permissionKey !== 'dashboard-proj' && permissionKey !== 'simulation' && permissionKey !== 'workhours' && window.userProfile && window.userProfile.permissions && !window.userProfile.permissions[permissionKey]) {
+    
+    const bypassPerms = ['dashboard-home', 'dashboard-proj', 'simulation', 'workhours', 'completion-report', 'product-cost', 'ncr-dashboard'];
+    if (!bypassPerms.includes(permissionKey) && window.userProfile && window.userProfile.permissions && !window.userProfile.permissions[permissionKey]) {
         if(window.showToast) window.showToast("접근 권한이 없습니다.", "error"); return;
     }
 
