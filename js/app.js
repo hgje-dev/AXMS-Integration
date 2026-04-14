@@ -21,12 +21,17 @@ const initApp = () => {
         if(icon) icon.className = 'fa-solid fa-sun text-amber-400';
     }
     
-    // 이 부분이 핵심! 로그인 성공 여부를 감지해 화면을 넘겨줍니다.
+    // 로그인 성공 여부를 감지해 화면을 넘겨줍니다.
     if (window.initAuthListeners) {
         window.initAuthListeners();
     }
     
     initRouter();
+    
+    // 💡 추가됨: 퀵메뉴 렌더링 최초 1회 실행
+    if (window.renderQuickMenu) {
+        window.renderQuickMenu();
+    }
 };
 
 // 2. 현재 화면 로딩 상태를 파악해서 즉시 실행할지, 조금 기다릴지 결정합니다.
