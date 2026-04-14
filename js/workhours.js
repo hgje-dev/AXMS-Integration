@@ -27,6 +27,7 @@ function isWhHoliday(d) {
     return KR_HOLIDAYS.has(window.getLocalDateStr(d));
 }
 
+// 💡 1. 나의 현황 클릭 시 토글 연동 (단일 필터 UI 적용됨)
 window.setWhMemberMode = function(mode) {
     window.whMemberMode = mode;
     const btnAll = document.getElementById('wh-btn-member-all');
@@ -217,7 +218,7 @@ window.updateWhDashboard = function() {
             const pCode = (l.projectCode || '').toLowerCase();
             const pName = (l.projectName || '').toLowerCase();
             const search = window.whPjtSearch;
-            // 💡 2. 대시보드 검색: PJT 코드 + '명칭(초성포함)' 모두 매칭.
+            // 💡 2. 대시보드 검색: 명칭+초성 모두 매칭되도록 업데이트
             return pCode.includes(search) || pName.includes(search) || 
                    (window.matchString && window.matchString(search, pCode)) || 
                    (window.matchString && window.matchString(search, pName));
@@ -255,7 +256,6 @@ window.updateWhDashboard = function() {
         if (!locMap[loc]) locMap[loc] = new Set();
         locMap[loc].add(log.authorName);
 
-        // 💡 3. 프로젝트별 투입 공수를 위한 맵핑
         let pName = log.projectCode || '미분류';
         pjtMap[pName] = (pjtMap[pName] || 0) + h;
         datesSet.add(log.date);
@@ -283,6 +283,10 @@ window.updateWhDashboard = function() {
         }
         breakdownEl.innerHTML = breakdownHtml;
     }
+
+    // info 컨테이너는 이제 리스트로 대체하므로 숨김
+    const pjtInfoContainer = document.getElementById('wh-dash-pjt-info');
+    if (pjtInfoContainer) pjtInfoContainer.classList.add('hidden');
 
     renderWhChart('wh-chart-person', 'bar', personMap, 'MD', true);
     renderWhChart('wh-chart-type', 'bar', typeMap, 'MD', true);
@@ -625,7 +629,7 @@ window.closeWhInputModal = function() {
     document.getElementById('wh-input-modal').classList.remove('flex');
     document.removeEventListener('keydown', handleWhModalKeydown);
     
-    // 모달을 닫을 때 임시 생성되었던 모든 드롭다운 삭제
+    // 모달을 닫을 때 임시 생성되었던 모든 드롭다운 엘리먼트 삭제 (찌꺼기 방지)
     document.querySelectorAll('.pjt-auto-drop').forEach(el => el.remove());
 };
 
@@ -665,7 +669,7 @@ function appendWhInputRow(logData = null, index = 1) {
     tr.innerHTML = `
         <td class="p-3 text-center text-slate-400 font-bold text-xs bg-slate-50">${index}${idInput}</td>
         <td class="p-2 relative">
-            <input type="text" id="${uniqueId}" class="row-pjt-name w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-indigo-700 placeholder-slate-400" value="${pCode}" placeholder="PJT 코드 검색 (초성)" oninput="window.whShowPjtAuto(this)">
+            <input type="text" id="${uniqueId}" class="row-pjt-name w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-indigo-700 placeholder-slate-400" value="${pCode}" placeholder="PJT 코드 검색 (초성)" oninput="window.whShowPjtAuto(this)" autocomplete="off">
             <input type="hidden" class="row-pjt-id" value="${pId}">
             <input type="hidden" class="row-pjt-code" value="${pCode}">
             ${pNameHidden}
@@ -680,18 +684,13 @@ function appendWhInputRow(logData = null, index = 1) {
     tbody.appendChild(tr);
 }
 
-// 💡 2. PJT 코드 검색 시 명칭+코드(초성)로 찾고 UI에는 코드만 보여주는 로직
+// 💡 2. PJT 코드 검색 시 명칭+코드(초성)로 찾고 UI에는 코드만 보여주는 로직 (절대좌표 적용)
 window.whShowPjtAuto = function(input) {
     const val = input.value.trim().toLowerCase();
     
-    // 현재 입력창(td) 하위에 생성될 드롭다운
-    let drop = document.getElementById(`drop-${input.id}`);
-    if (!drop) {
-        drop = document.createElement('ul');
-        drop.id = `drop-${input.id}`;
-        drop.className = 'pjt-auto-drop absolute left-0 z-[50] bg-white border border-indigo-300 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-[250px] custom-scrollbar py-1 hidden';
-        input.parentNode.appendChild(drop);
-    }
+    // 테이블 내 overflow-hidden 에 잘리지 않게 body 직속의 글로벌 ul 요소를 사용합니다.
+    let drop = document.getElementById('wh-pjt-autocomplete');
+    if (!drop) return;
     
     const tr = input.closest('tr');
     tr.querySelector('.row-pjt-id').value = '';
@@ -699,7 +698,7 @@ window.whShowPjtAuto = function(input) {
 
     if(!val) { drop.classList.add('hidden'); return; }
 
-    // 명칭과 코드 양쪽 모두 검색
+    // 명칭과 코드 양쪽 모두 검색 (초성 포함)
     let matches = (window.pjtCodeMasterList || []).filter(p => {
         let code = (p.code || '').toLowerCase();
         let name = (p.name || '').toLowerCase();
@@ -709,11 +708,16 @@ window.whShowPjtAuto = function(input) {
     });
 
     if(matches.length > 0) {
-        drop.style.top = (input.offsetTop + input.offsetHeight + 2) + 'px';
+        // 화면 렌더링 위치 절대 좌표 가져오기 (테이블 내부 overflow-hidden 잘림 방지!)
+        const rect = input.getBoundingClientRect();
+        drop.style.left = `${rect.left + window.scrollX}px`;
+        drop.style.top = `${rect.bottom + window.scrollY + 2}px`;
+        drop.style.width = `${rect.width + 100}px`; // 명칭이 길 경우 대비 여유 확보
+
         drop.innerHTML = matches.map(m => {
             let sName = m.name.replace(/'/g,"\\'").replace(/"/g,'&quot;');
-            // 리스트에 코드만 출력!
-            return `<li class="px-3 py-2 hover:bg-indigo-50 cursor-pointer text-xs font-black text-indigo-700 border-b border-slate-50 truncate transition-colors" onmousedown="window.whSelectPjt('${input.id}', '${m.id}', '${m.code||''}', '${sName}')">${m.code||'-'}</li>`;
+            // 리스트에는 [코드] + 명칭 노출. 선택 시에는 코드만 삽입됨.
+            return `<li class="px-3 py-2 hover:bg-indigo-50 cursor-pointer text-xs font-black text-slate-700 border-b border-slate-50 truncate transition-colors flex items-center gap-1.5" onmousedown="window.whSelectPjt('${input.id}', '${m.id}', '${m.code||''}', '${sName}')"><span class="text-indigo-600">[${m.code||'-'}]</span> <span class="font-medium">${m.name}</span></li>`;
         }).join('');
         drop.classList.remove('hidden');
     } else {
@@ -724,19 +728,21 @@ window.whShowPjtAuto = function(input) {
 window.whSelectPjt = function(inputId, pId, pCode, pName) {
     const input = document.getElementById(inputId);
     if(input) {
-        input.value = pCode;
+        input.value = pCode; // 화면엔 코드만 셋팅!
         const tr = input.closest('tr');
         tr.querySelector('.row-pjt-id').value = pId;
         tr.querySelector('.row-pjt-code').value = pCode;
         tr.querySelector('.row-pjt-name-hidden').value = pName; 
     }
     
-    document.querySelectorAll('.pjt-auto-drop').forEach(el => el.classList.add('hidden'));
+    const drop = document.getElementById('wh-pjt-autocomplete');
+    if (drop) drop.classList.add('hidden');
 };
 
 document.addEventListener('click', function(e) {
-    if (!e.target.closest('.row-pjt-name')) {
-        document.querySelectorAll('.pjt-auto-drop').forEach(el => el.classList.add('hidden'));
+    const d = document.getElementById('wh-pjt-autocomplete');
+    if (d && !d.classList.contains('hidden') && !e.target.closest('#wh-pjt-autocomplete') && !e.target.classList.contains('row-pjt-name')) {
+        d.classList.add('hidden');
     }
 });
 
