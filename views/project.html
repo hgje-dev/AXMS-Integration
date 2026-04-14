@@ -16,7 +16,7 @@
                 <span class="text-2xl font-black text-blue-700" id="mini-dash-progress">0</span>
             </div>
         </div>
-        <div class="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 shadow-sm flex flex-col justify-center border-l-4 border-l-emerald-400 cursor-pointer hover:ring-2 ring-emerald-300 transition-all" onclick="window.filterByStatusOnly('completed')">
+        <div class="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 shadow-sm flex flex-col justify-center border-l-4 border-l-emerald-400 cursor-pointer hover:ring-2 ring-emerald-300 transition-all" onclick="window.filterByCompletedThisMonth()">
             <div class="flex justify-between items-center">
                 <span class="text-[11px] font-bold text-emerald-600" id="mini-dash-completed-label">
                     <i class="fa-solid fa-truck-fast"></i> 출하 완료
@@ -533,38 +533,6 @@
                     <button id="btn-log-save" onclick="window.saveDailyLogItem()" class="bg-sky-500 hover:bg-sky-600 text-white px-6 py-2.5 rounded-lg text-sm font-bold transition-colors shadow-sm w-full md:w-20 h-11">등록</button>
                     <button id="btn-log-cancel" onclick="window.resetDailyLogForm()" class="hidden bg-slate-100 text-slate-600 px-6 py-2.5 rounded-lg text-sm font-bold transition-colors w-full md:w-20 h-11">취소</button>
                 </div>
-            </div>
-
-            <div id="daily-log-list" class="space-y-3 flex-1 overflow-y-auto p-1 custom-scrollbar min-h-0"></div>
-        </div>
-    </div>
-</div>
-            
-            <div class="flex gap-2 items-end bg-white p-3 rounded-xl border border-slate-200 shadow-sm relative transition-colors"
-                 id="daily-log-dropzone"
-                 ondragover="event.preventDefault(); this.classList.add('bg-sky-50', 'border-sky-400');"
-                 ondragleave="event.preventDefault(); this.classList.remove('bg-sky-50', 'border-sky-400');"
-                 ondrop="event.preventDefault(); this.classList.remove('bg-sky-50', 'border-sky-400'); if(event.dataTransfer.files.length > 0) { document.getElementById('new-log-image').files = event.dataTransfer.files; window.updateDailyLogFileName(); }">
-                
-                <input type="date" id="new-log-date" class="border px-3 py-2 rounded-lg text-sm font-bold text-slate-600 w-36 mb-1 h-10 shrink-0">
-                
-                <div class="relative flex-1">
-                    <textarea id="new-log-text" placeholder="작업 내용 입력... (사진을 이곳에 드래그 앤 드롭 하세요)" class="w-full h-20 border px-3 py-2 rounded-lg text-sm outline-sky-500 resize-none custom-scrollbar transition-colors"></textarea>
-                    
-                    <div id="new-log-filename-wrap" class="hidden absolute bottom-2 left-2 bg-sky-100 text-sky-700 text-[10px] font-bold px-2 py-1 rounded shadow-sm flex items-center gap-1 z-10">
-                        <i class="fa-regular fa-image"></i> <span id="new-log-filename">파일명</span>
-                        <button onclick="window.clearDailyLogFile(event)" class="text-sky-500 hover:text-rose-500 ml-1"><i class="fa-solid fa-xmark"></i></button>
-                    </div>
-                </div>
-                
-                <input type="file" id="new-log-image" accept="image/*" class="hidden" onchange="window.updateDailyLogFileName()">
-                
-                <label for="new-log-image" class="cursor-pointer text-slate-400 hover:text-sky-500 px-3 flex items-center justify-center transition-colors mb-1 h-10 shrink-0" title="사진 첨부">
-                    <i class="fa-regular fa-image text-xl"></i>
-                </label>
-                
-                <button id="btn-log-save" onclick="window.saveDailyLogItem()" class="bg-sky-500 hover:bg-sky-600 text-white px-5 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm mb-1 h-10 shrink-0">등록</button>
-                <button id="btn-log-cancel" onclick="window.resetDailyLogForm()" class="hidden bg-slate-100 text-slate-600 px-4 py-2 rounded-lg text-sm font-bold transition-colors mb-1 h-10 shrink-0">취소</button>
             </div>
 
             <div id="daily-log-list" class="space-y-3 flex-1 overflow-y-auto p-1 custom-scrollbar min-h-0"></div>
