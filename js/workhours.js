@@ -1,6 +1,40 @@
 import { db } from './firebase.js';
 import { collection, doc, setDoc, addDoc, deleteDoc, query, onSnapshot, where, getDocs, writeBatch } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
+// 💡 [초성 검색 완벽 패치] 기존 matchString을 덮어씌워 검색 성능을 극대화 (현ㄷ -> 현대, e -> ㄷ 매칭 완벽 지원)
+window.matchString = function(q, t) {
+    if (!q) return true;
+    if (!t) return false;
+    q = q.toLowerCase().replace(/\s/g, '');
+    t = t.toLowerCase().replace(/\s/g, '');
+    if (t.includes(q)) return true;
+
+    const getCho = (str) => {
+        const cho = ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
+        let res = "";
+        for (let i = 0; i < str.length; i++) {
+            let code = str.charCodeAt(i) - 44032;
+            if (code > -1 && code < 11172) res += cho[Math.floor(code / 588)];
+            else res += str.charAt(i);
+        }
+        return res;
+    };
+
+    let choT = getCho(t);
+    let choQ = getCho(q);
+    if (choT.includes(choQ)) return true;
+
+    // 영문 타자 오타 대응 매핑 (예: e를 치면 ㄷ으로 인식하여 검색)
+    const enToKr = {'q':'ㅂ','w':'ㅈ','e':'ㄷ','r':'ㄱ','t':'ㅅ','y':'ㅛ','u':'ㅕ','i':'ㅑ','o':'ㅐ','p':'ㅔ','a':'ㅁ','s':'ㄴ','d':'ㅇ','f':'ㄹ','g':'ㅎ','h':'ㅗ','j':'ㅓ','k':'ㅏ','l':'ㅣ','z':'ㅋ','x':'ㅌ','c':'ㅊ','v':'ㅍ','b':'ㅠ','n':'ㅜ','m':'ㅡ'};
+    let korQ = "";
+    for(let i = 0; i < q.length; i++) korQ += enToKr[q[i]] || q[i];
+    
+    if (t.includes(korQ)) return true;
+    if (choT.includes(getCho(korQ))) return true;
+
+    return false;
+};
+
 let worklogsUnsubscribe = null;
 window.currentWorkLogs = [];
 window.whStatMode = 'week';
@@ -880,6 +914,7 @@ function appendWhInputRow(logData = null, index = 1) {
     tbody.appendChild(tr);
 }
 
+// 💡 모달에서 검색창 짤림 방지 및 초성 완벽 지원 연동
 window.whShowPjtAuto = function(input) {
     const val = input.value.trim().toLowerCase();
     
@@ -897,9 +932,29 @@ window.whShowPjtAuto = function(input) {
 
     if(!val) { drop.classList.add('hidden'); return; }
 
-    let matches = (window.pjtCodeMasterList || []).filter(p => {
+    let searchPool = [];
+    let seenCodes = new Set();
+
+    (window.pjtCodeMasterList || []).forEach(p => {
+        if (p.code && !seenCodes.has(p.code)) {
+            seenCodes.add(p.code);
+            searchPool.push(p);
+        }
+    });
+    (window.currentProjectStatusList || []).forEach(p => {
+        if (p.code && !seenCodes.has(p.code)) {
+            seenCodes.add(p.code);
+            searchPool.push(p);
+        }
+    });
+
+    let matches = searchPool.filter(p => {
         let code = (p.code || '').toLowerCase();
-        return code.includes(val) || (window.matchString && window.matchString(val, p.code));
+        let name = (p.name || '').toLowerCase();
+        // 💡 오타 대응이 포함된 완벽한 matchString 적용
+        return code.includes(val) || name.includes(val) || 
+               (window.matchString && window.matchString(val, p.code)) || 
+               (window.matchString && window.matchString(val, p.name));
     });
 
     if(matches.length > 0) {
@@ -907,12 +962,13 @@ window.whShowPjtAuto = function(input) {
         drop.style.position = 'fixed';
         drop.style.left = `${rect.left}px`;
         drop.style.top = `${rect.bottom + 4}px`;
-        drop.style.width = `${Math.max(rect.width, 200)}px`; 
+        drop.style.width = `${Math.max(rect.width, 300)}px`; // 여유있게 넓게
 
         drop.innerHTML = matches.map(m => {
             let sName = m.name ? m.name.replace(/'/g,"\\'").replace(/"/g,'&quot;') : '';
             let sCode = m.code ? m.code.replace(/'/g,"\\'").replace(/"/g,'&quot;') : '-';
-            return `<li class="px-5 py-3 hover:bg-indigo-50/80 cursor-pointer text-xs border-b border-slate-50 last:border-0 transition-all flex items-center gap-2" onmousedown="window.whSelectPjt('${input.id}', '${m.id}', '${sCode}', '${sName}')"><span class="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-md font-black tracking-wide">${sCode}</span><span class="text-slate-500 font-bold truncate flex-1">${m.name}</span></li>`;
+            // 리스트에 [코드] + 명칭 표시되도록 복구
+            return `<li class="px-5 py-3 hover:bg-indigo-50/80 cursor-pointer text-xs border-b border-slate-50 last:border-0 transition-all flex items-center gap-2" onmousedown="window.whSelectPjt('${input.id}', '${m.id}', '${sCode}', '${sName}')"><span class="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-md font-black tracking-wide shrink-0">[${sCode}]</span><span class="text-slate-600 font-bold truncate flex-1">${m.name}</span></li>`;
         }).join('');
         drop.classList.remove('hidden');
     } else {
@@ -942,6 +998,7 @@ document.addEventListener('click', function(e) {
     }
 });
 
+// 승인 해제 후 저장 시 데이터가 날아가는 현상 수정 (projectName 체크 추가)
 window.saveWhInputData = async function() {
     const dateStr = document.getElementById('wh-modal-date').value;
     const authorName = document.getElementById('wh-modal-author').value;
@@ -962,6 +1019,7 @@ window.saveWhInputData = async function() {
         const content = tr.querySelector('.row-content').value.trim();
         const isConfirmed = tr.querySelector('.row-conf').checked;
 
+        // 💡 projectName 추가 조건 체크로 코드가 비어있던 구버전 데이터 날아감 방지
         if (hours > 0 && (projectCodeInput || projectName || content)) {
             toSave.push({ 
                 id, 
@@ -1010,31 +1068,25 @@ window.exportWorkhoursExcel = async function(isDriveUpload = false, driveFolderI
         if(!isDriveUpload) window.showToast("프리미엄 엑셀 리포트를 생성 중입니다...", "success");
         const wb = new window.ExcelJS.Workbook();
         
-        const ws1 = wb.addWorksheet('대시보드 요약', { views: [{ showGridLines: false }] });
-        ws1.columns = [
-            { width: 3 },  { width: 25 }, { width: 20 }, { width: 5 }, 
-            { width: 35 }, { width: 15 }, { width: 3 }
-        ];
+        const ws1 = wb.addWorksheet('월간_통계_요약', { views: [{ showGridLines: false }] });
+        ws1.columns = [{width:2}, {width:15}, {width:15}, {width:15}, {width:15}, {width:15}];
         
         const pDate = document.getElementById('wh-week-picker').value; 
         const yStr = window.getDatesFromWeek(pDate).start.getFullYear();
         const mStr = String(window.getDatesFromWeek(pDate).start.getMonth() + 1).padStart(2, '0');
-        const reportTitle = `AXBIS 개인별 투입공수 통계 리포트 (${yStr}년 ${mStr}월)`;
+        const reportTitle = `${yStr}년 ${mStr}월 개인별 투입공수 통계`;
 
-        ws1.mergeCells('B2:F3');
+        ws1.mergeCells('B2:E3');
         const titleCell = ws1.getCell('B2');
         titleCell.value = reportTitle;
         titleCell.font = { name: '맑은 고딕', size: 18, bold: true, color: { argb: 'FF1E293B' } };
         titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
         
-        ws1.mergeCells('B4:F4');
-        const infoCell = ws1.getCell('B4');
-        let exporterName = window.userProfile ? window.userProfile.name : '시스템';
-        infoCell.value = `출력일시: ${new Date().toLocaleString()}  |  출력자: ${exporterName}`;
-        infoCell.font = { name: '맑은 고딕', size: 10, color: { argb: 'FF64748B' } };
-        infoCell.alignment = { vertical: 'middle', horizontal: 'left' };
+        ws1.getCell('B4').value = `출력일시: ${new Date().toLocaleString()}`;
+        ws1.getCell('B4').font = { size: 10, color: { argb: 'FF64748B' } };
 
         let monthlyLogs = window.currentWorkLogs.filter(l => l.date.startsWith(`${yStr}-${mStr}`) && l.isConfirmed);
+        
         if (window.whMemberMode === 'me' && window.userProfile) {
             monthlyLogs = monthlyLogs.filter(l => l.authorName === window.userProfile.name);
         }
@@ -1045,137 +1097,79 @@ window.exportWorkhoursExcel = async function(isDriveUpload = false, driveFolderI
             let md = l.hours / 8;
             tMd += md;
             pMap[l.authorName] = (pMap[l.authorName] || 0) + md;
-            let pName = l.projectCode ? `[${l.projectCode}] ${l.projectName||''}` : (l.projectName || '미분류');
+            let pName = l.projectCode || l.projectName || '미분류';
             pjtMap[pName] = (pjtMap[pName] || 0) + md;
         });
 
-        ws1.mergeCells('B6:C6');
-        let kpiTitle = ws1.getCell('B6');
-        kpiTitle.value = 'TOTAL WORKHOURS (총 투입)';
-        kpiTitle.font = { name: '맑은 고딕', size: 11, bold: true, color: { argb: 'FF4F46E5' } };
-        kpiTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
-        kpiTitle.border = { top: {style:'thin', color:{argb:'FFC7D2FE'}}, left: {style:'thin', color:{argb:'FFC7D2FE'}}, right: {style:'thin', color:{argb:'FFC7D2FE'}} };
-        kpiTitle.alignment = { vertical: 'middle', horizontal: 'center' };
+        ws1.getCell('B6').value = '총 투입 (MD)';
+        ws1.getCell('C6').value = tMd.toFixed(1) + ' MD';
+        ws1.getCell('B6').font = { bold: true }; ws1.getCell('C6').font = { bold: true, color: {argb:'FF4F46E5'} };
 
-        ws1.mergeCells('B7:C8');
-        let kpiVal = ws1.getCell('B7');
-        kpiVal.value = parseFloat(tMd.toFixed(1));
-        kpiVal.numFmt = '#,##0.0 "MD"';
-        kpiVal.font = { name: '맑은 고딕', size: 24, bold: true, color: { argb: 'FF312E81' } };
-        kpiVal.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
-        kpiVal.border = { left: {style:'thin', color:{argb:'FFC7D2FE'}}, bottom: {style:'thin', color:{argb:'FFC7D2FE'}}, right: {style:'thin', color:{argb:'FFC7D2FE'}} };
-        kpiVal.alignment = { vertical: 'middle', horizontal: 'center' };
+        ws1.getCell('B8').value = '[ 작업자별 누적 투입 공수 ]';
+        ws1.getCell('B8').font = { bold: true, color: {argb:'FF334155'} };
+        let r = 9;
+        Object.entries(pMap).sort((a,b)=>b[1]-a[1]).forEach(p => {
+            ws1.getCell(`B${r}`).value = p[0];
+            ws1.getCell(`C${r}`).value = p[1].toFixed(1) + ' MD';
+            ws1.getCell(`C${r}`).font = { bold: true, color: {argb:'FF059669'} };
+            r++;
+        });
 
-        let r = 11;
-        ws1.getCell(`B${r}`).value = '■ 작업자별 투입 공수';
-        ws1.getCell(`B${r}`).font = { name: '맑은 고딕', size: 12, bold: true, color: { argb: 'FF334155' } };
-
-        ws1.getCell(`E${r}`).value = '■ 프로젝트별 투입 공수 (Top 15)';
-        ws1.getCell(`E${r}`).font = { name: '맑은 고딕', size: 12, bold: true, color: { argb: 'FF334155' } };
+        r += 1;
+        ws1.getCell(`B${r}`).value = '[ 주요 프로젝트별 투입 (Top 10) ]';
+        ws1.getCell(`B${r}`).font = { bold: true, color: {argb:'FF334155'} };
         r++;
+        Object.entries(pjtMap).sort((a,b)=>b[1]-a[1]).slice(0, 10).forEach(p => {
+            ws1.mergeCells(`B${r}:C${r}`);
+            ws1.getCell(`B${r}`).value = p[0];
+            ws1.getCell(`D${r}`).value = p[1].toFixed(1) + ' MD';
+            ws1.getCell(`D${r}`).font = { bold: true, color: {argb:'FF9333EA'} };
+            r++;
+        });
 
-        let workerHeader1 = ws1.getCell(`B${r}`); workerHeader1.value = '작업자명'; workerHeader1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } }; workerHeader1.font = {bold: true}; workerHeader1.border = {bottom: {style:'medium', color:{argb:'FFCBD5E1'}}};
-        let workerHeader2 = ws1.getCell(`C${r}`); workerHeader2.value = '투입 공수 (MD)'; workerHeader2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } }; workerHeader2.font = {bold: true}; workerHeader2.border = {bottom: {style:'medium', color:{argb:'FFCBD5E1'}}};
-
-        let pjtHeader1 = ws1.getCell(`E${r}`); pjtHeader1.value = '프로젝트'; pjtHeader1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } }; pjtHeader1.font = {bold: true}; pjtHeader1.border = {bottom: {style:'medium', color:{argb:'FFCBD5E1'}}};
-        let pjtHeader2 = ws1.getCell(`F${r}`); pjtHeader2.value = '투입 공수 (MD)'; pjtHeader2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } }; pjtHeader2.font = {bold: true}; pjtHeader2.border = {bottom: {style:'medium', color:{argb:'FFCBD5E1'}}};
-        r++;
-
-        let sortedWorkers = Object.entries(pMap).sort((a,b)=>b[1]-a[1]);
-        let sortedPjts = Object.entries(pjtMap).sort((a,b)=>b[1]-a[1]).slice(0, 15);
-
-        let maxRows = Math.max(sortedWorkers.length, sortedPjts.length);
-        for(let i=0; i<maxRows; i++) {
-            if(i < sortedWorkers.length) {
-                let wCell1 = ws1.getCell(`B${r+i}`); wCell1.value = sortedWorkers[i][0]; wCell1.border = {bottom:{style:'thin', color:{argb:'FFF1F5F9'}}}; wCell1.alignment={vertical:'middle', horizontal:'center'};
-                let wCell2 = ws1.getCell(`C${r+i}`); wCell2.value = parseFloat(sortedWorkers[i][1].toFixed(1)); wCell2.border = {bottom:{style:'thin', color:{argb:'FFF1F5F9'}}}; wCell2.alignment={vertical:'middle', horizontal:'center'}; wCell2.numFmt = '#,##0.0'; wCell2.font={color:{argb:'FF059669'}, bold:true};
-            }
-            if(i < sortedPjts.length) {
-                let pCell1 = ws1.getCell(`E${r+i}`); pCell1.value = sortedPjts[i][0]; pCell1.border = {bottom:{style:'thin', color:{argb:'FFF1F5F9'}}}; pCell1.alignment={vertical:'middle', horizontal:'left'};
-                let pCell2 = ws1.getCell(`F${r+i}`); pCell2.value = parseFloat(sortedPjts[i][1].toFixed(1)); pCell2.border = {bottom:{style:'thin', color:{argb:'FFF1F5F9'}}}; pCell2.alignment={vertical:'middle', horizontal:'center'}; pCell2.numFmt = '#,##0.0'; pCell2.font={color:{argb:'FF4F46E5'}, bold:true};
-            }
-        }
-
-        const ws2 = wb.addWorksheet('전체_데이터_Raw', { views: [{ showGridLines: false }] });
+        const ws2 = wb.addWorksheet('데이터_Raw');
         ws2.columns = [
-            { header: 'No.', key: 'no', width: 6 },
-            { header: '날짜', key: 'date', width: 14 },
-            { header: '작업자', key: 'name', width: 14 },
-            { header: 'PJT 코드', key: 'code', width: 20 },
-            { header: '프로젝트명', key: 'pjt', width: 45 },
-            { header: '작업 구분', key: 'type', width: 12 },
-            { header: '장소', key: 'loc', width: 12 },
+            { header: '날짜', key: 'date', width: 12 },
+            { header: '작업자', key: 'name', width: 12 },
+            { header: '프로젝트', key: 'pjt', width: 35 },
+            { header: '구분', key: 'type', width: 10 },
+            { header: '장소', key: 'loc', width: 10 },
             { header: '투입시간(h)', key: 'hrs', width: 12 },
             { header: '환산공수(MD)', key: 'md', width: 12 },
-            { header: '상세 작업 내용', key: 'content', width: 60 },
-            { header: '승인 상태', key: 'conf', width: 15 }
+            { header: '상세내용', key: 'content', width: 50 },
+            { header: '승인여부', key: 'conf', width: 12 }
         ];
 
         let hr = ws2.getRow(1);
-        hr.height = 28;
-        hr.eachCell(function(cell) {
-            cell.font = { name: '맑은 고딕', bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
-            cell.alignment = { vertical: 'middle', horizontal: 'center' };
-            cell.border = {
-                top: {style:'thin', color:{argb:'FF334155'}}, left: {style:'thin', color:{argb:'FF334155'}},
-                bottom: {style:'thin', color:{argb:'FF334155'}}, right: {style:'thin', color:{argb:'FF334155'}}
-            };
-        });
+        hr.font = { bold: true, color: {argb: 'FFFFFFFF'} };
+        hr.fill = { type: 'pattern', pattern: 'solid', fgColor: {argb: 'FF4F46E5'} };
+        hr.alignment = { vertical: 'middle', horizontal: 'center' };
 
         let sortedLogs = window.currentWorkLogs.slice().sort((a,b) => a.date.localeCompare(b.date) || a.authorName.localeCompare(b.authorName));
         if (window.whMemberMode === 'me' && window.userProfile) {
             sortedLogs = sortedLogs.filter(l => l.authorName === window.userProfile.name);
         }
         
-        sortedLogs.forEach((l, index) => {
+        sortedLogs.forEach(l => {
             let row = ws2.addRow({
-                no: index + 1,
                 date: l.date,
                 name: l.authorName,
-                code: l.projectCode || '-',
-                pjt: l.projectName || '미분류',
+                pjt: l.projectCode ? `[${l.projectCode}] ${l.projectName||''}` : (l.projectName || '프로젝트 미지정'),
                 type: l.workType,
                 loc: l.location || '사내',
-                hrs: parseFloat(l.hours),
-                md: parseFloat((l.hours / 8).toFixed(2)),
+                hrs: l.hours,
+                md: (l.hours / 8).toFixed(2), 
                 content: l.content || '',
                 conf: l.isConfirmed ? '승인완료' : '미승인'
             });
-
-            let isEven = index % 2 === 0;
-            let rowBg = isEven ? 'FFFFFFFF' : 'FFF8FAFC'; 
-
-            row.eachCell({ includeEmpty: true }, function(cell, colNumber) {
-                cell.font = { name: '맑은 고딕', size: 10, color: { argb: 'FF334155' } };
-                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowBg } };
-                cell.border = {
-                    top: {style:'thin', color:{argb:'FFE2E8F0'}}, left: {style:'thin', color:{argb:'FFE2E8F0'}},
-                    bottom: {style:'thin', color:{argb:'FFE2E8F0'}}, right: {style:'thin', color:{argb:'FFE2E8F0'}}
-                };
-                cell.alignment = { vertical: 'middle', wrapText: true };
-                
-                if (colNumber === 5 || colNumber === 10) {
-                    cell.alignment.horizontal = 'left';
-                    cell.alignment.indent = 1;
-                } else {
-                    cell.alignment.horizontal = 'center';
-                }
-
-                if (colNumber === 8 || colNumber === 9) {
-                    cell.numFmt = '#,##0.0';
-                    cell.font.bold = true;
-                    cell.font.color = { argb: 'FF4F46E5' }; 
-                }
-
-                if (colNumber === 11) { 
-                    if(l.isConfirmed) {
-                        cell.font.color = { argb: 'FF059669' }; 
-                        cell.font.bold = true;
-                    } else {
-                        cell.font.color = { argb: 'FFEF4444' }; 
-                        cell.font.bold = true;
-                    }
+            
+            row.eachCell(function(cell, colNumber) {
+                cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+                cell.alignment = { vertical: 'middle' };
+                if(colNumber !== 3 && colNumber !== 8) cell.alignment.horizontal = 'center';
+                if(colNumber === 9) {
+                    if(l.isConfirmed) cell.font = { color: { argb: 'FF059669' }, bold: true };
+                    else cell.font = { color: { argb: 'FFE11D48' }, bold: true };
                 }
             });
         });
