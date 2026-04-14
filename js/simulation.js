@@ -22,6 +22,7 @@ window.latestAiResult = null;
 window.completedProjects = [];
 window.selectedSimilarProjects = [];
 window.dashMatchedData = []; 
+window.dashSelectedCodes = []; // 대시보드에서 선택된 PJT 코드들
 
 const defaultPresets = {
     dev: { 
@@ -39,7 +40,6 @@ const defaultPresets = {
     }
 };
 
-// 💡 수정사항 경고
 window.addEventListener('beforeunload', (e) => {
     if (window.isProjectDirty) {
         e.preventDefault();
@@ -188,9 +188,6 @@ simulationWorker.onmessage = function(e) {
     if(window.renderGanttChart) window.renderGanttChart();
 };
 
-// ==========================================
-// 3. 시뮬레이션 실행 트리거
-// ==========================================
 window.runSimulation = () => {
     const method = document.getElementById('sim-method')?.value || 'mc';
     const qty = Math.max(1, parseFloat(document.getElementById('equip-qty')?.value) || 1);
@@ -233,7 +230,7 @@ window.loadMasterPresets = async () => {
         const sel = document.getElementById('eq-type');
         if (!sel) return;
         
-        sel.innerHTML = '';
+        sel.innerHTML = '<option value="">프리셋 선택 안함</option>';
         window.masterPresets = {};
         
         if (!snap.empty) {
@@ -253,13 +250,20 @@ window.loadMasterPresets = async () => {
 
 window.handleTypeChange = () => {
     const id = document.getElementById('eq-type')?.value;
-    if (!id || !window.masterPresets[id]) return;
+    if (!id || !window.masterPresets[id]) {
+        window.currentProcessData = [];
+        window.renderProcessTable();
+        window.renderUnitTables();
+        window.debouncedRunSimulation();
+        return;
+    }
     
     const preset = window.masterPresets[id];
     window.currentProcessData = JSON.parse(JSON.stringify(preset.processData));
     
     if (preset.curve) document.getElementById('learning-curve').value = preset.curve;
-    if (preset.labor) document.getElementById('labor-cost').value = preset.labor;
+    if (preset.diff) document.getElementById('diff-multiplier').value = preset.diff;
+    if (preset.buffer) document.getElementById('buffer-rate').value = preset.buffer;
     
     window.handleMethodChange();
 };
@@ -408,7 +412,7 @@ window.renderUnitTables = () => {
 
     window.currentProcessData.forEach((p, pi) => {
         if(p.pType !== 'auto') return; 
-        if(!p.unitData || p.unitData.length === 0) p.unitData = [{name:"신규", q:1, m:1.0, o:0.9, p:1.4}];
+        if(!p.unitData || p.unitData.length === 0) p.unitData = [{name:"신규", q:1, m:1, o:0.9, p:1.4}];
         
         let pM = 0, tb = '';
         p.unitData.forEach((u, ui) => {
@@ -616,7 +620,6 @@ window.saveAiApiSettings = () => {
     window.toggleAiApiPanel(false);
 };
 
-// 💡 6-1. 고급 프롬프트가 적용된 심층 분석
 window.generateGroqInsight = async () => {
     if (!window.latestP50Md) return window.showToast("먼저 시뮬레이션을 실행해주세요.", "error");
     
@@ -712,7 +715,7 @@ window.generateGroqInsight = async () => {
     }
 };
 
-// 💡 6-2. 유사 프로젝트 비교 기능 및 모달
+// 💡 6-2. 유사 프로젝트 비교 기능 및 모달 (완벽 업그레이드)
 window.openSimilarProjectModal = async () => {
     const modal = document.getElementById('similar-project-modal');
     const tbody = document.getElementById('similar-project-tbody');
@@ -805,13 +808,16 @@ window.generateAiComparison = async () => {
         비교 대상인 과거 완료된 유사 프로젝트들의 실적 데이터는 다음과 같습니다:
         ${pastDataStr}
 
-        현재 프로젝트의 예상 데이터가 과거 실적에 비추어 볼 때 적절한지 분석하세요. 인원 배분, 일정 준수 여부, 총 공수 차이를 상세히 평가해야 합니다.
+        현재 프로젝트의 예상 데이터가 과거 실적에 비추어 볼 때 적절한지 분석하세요.
         반드시 다음 JSON 형식으로만 응답해야 합니다:
         {
             "verdict": "적정 / 과소평가 / 과대평가 중 택1",
             "md_analysis": "총 공수(MD) 관점의 비교 분석 (2문장 내외)",
             "personnel_analysis": "투입 인원 관점의 비교 분석 (2문장 내외)",
             "schedule_analysis": "일정(납기) 관점의 비교 분석 (2문장 내외)",
+            "coreRisks": [
+                { "risk": "가장 핵심적인 리스크 요인", "mitigation": "실질적 조치 계획" }
+            ],
             "recommendation": "오차를 줄이기 위한 실질적 조언"
         }`;
 
@@ -826,6 +832,21 @@ window.generateAiComparison = async () => {
         const result = JSON.parse(data.choices[0].message.content);
 
         let verdictColor = result.verdict.includes('적정') ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/30' : 'text-rose-400 bg-rose-400/10 border-rose-400/30';
+
+        let coreRisksHtml = '';
+        if(result.coreRisks && result.coreRisks.length > 0) {
+            coreRisksHtml = `
+                <div class="mt-4 space-y-2">
+                    <h4 class="text-sm font-black text-rose-400 border-b border-slate-700 pb-1 flex items-center gap-2"><i class="fa-solid fa-triangle-exclamation"></i> 핵심 리스크 및 조치계획</h4>
+                    ${result.coreRisks.map(r => `
+                        <div class="bg-rose-950/30 p-3 rounded-xl border border-rose-900/50">
+                            <div class="text-sm font-bold text-rose-300 mb-1">${r.risk}</div>
+                            <div class="text-xs font-medium text-emerald-400 pl-2 border-l-2 border-emerald-500/50">${r.mitigation}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
 
         if(cBox) {
             cBox.innerHTML = `
@@ -849,7 +870,8 @@ window.generateAiComparison = async () => {
                                 <p class="text-[11px] font-medium text-slate-300 leading-relaxed">${result.schedule_analysis}</p>
                             </div>
                         </div>
-                        <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-600">
+                        ${coreRisksHtml}
+                        <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-600 mt-2">
                             <span class="text-[10px] font-bold text-emerald-400 block mb-1"><i class="fa-solid fa-lightbulb mr-1"></i>최종 개선 제언</span>
                             <p class="text-[11px] font-medium text-slate-200 leading-relaxed">${result.recommendation}</p>
                         </div>
@@ -864,7 +886,7 @@ window.generateAiComparison = async () => {
 };
 
 // ==========================================
-// 7. 데이터 엑셀 출력 (완벽 복원된 폼 레이아웃)
+// 7. 데이터 엑셀 출력 (요청 CSV 완벽 반영)
 // ==========================================
 window.exportToExcel = async () => {
     if (typeof ExcelJS === 'undefined') return window.showToast("라이브러리 로딩 중입니다.", "warning");
@@ -874,7 +896,7 @@ window.exportToExcel = async () => {
     const ws = wb.addWorksheet('시뮬레이션_보고서', { views: [{ showGridLines: false }] });
     
     ws.columns = [
-        { width: 35 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }
+        { width: 30 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }
     ];
     
     const pCode = document.getElementById('project-code')?.value || '-';
@@ -918,7 +940,7 @@ window.exportToExcel = async () => {
     // 3. 분석 요약 결과
     ws.addRow(['■ 2. 분석 요약 결과']).font = { bold: true };
     ws.addRow(['목표 조립 완료일', document.getElementById('target-date')?.value || '-', '출하 예정일', document.getElementById('shipping-date')?.value || '-']);
-    const h1 = ws.addRow(['구분', '산출 공수(MD)', '조립 완료 예정일', '예상 총 비용']);
+    const h1 = ws.addRow(['구분', '산출 공수(MD)', '조립 완료 예정일', '예상 총 비용(인건비+경비)']);
     h1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
     h1.font = { bold: true };
     ws.addRow(['P10 (낙관적 10%)', p10, d10, cost10]);
@@ -939,7 +961,7 @@ window.exportToExcel = async () => {
         if(window.latestAiResult.coreRisks) {
             ws.addRow(['핵심 리스크 및 조치']);
             window.latestAiResult.coreRisks.forEach(r => {
-                ws.addRow(['', `[${r.phase}] ${r.risk} -> ${r.mitigation}`]);
+                ws.addRow(['', `[${r.phase || '공통'}] ${r.risk} -> ${r.mitigation}`]);
             });
         }
         ws.addRow(['효율성 평가', window.latestAiResult.efficiency || '-']);
@@ -960,13 +982,16 @@ window.exportToExcel = async () => {
         ws.addRow([p.name, pTypeStr, p.q, p.m]);
     });
     
+    ws.addRow([]);
+    ws.addRow(['■ 6. 전체 공정 타임라인 (Gantt Chart) 데이터는 화면에서 확인 가능합니다.']);
+
     const buffer = await wb.xlsx.writeBuffer();
     saveAs(new Blob([buffer]), `공수보고서_${pCode||pName}_${new Date().toISOString().split('T')[0]}.xlsx`);
     window.showToast("엑셀 파일이 다운로드되었습니다.");
 };
 
 // ==========================================
-// 8. 모달창 및 데이터베이스 연동
+// 8. 모달창 (저장, 대시보드, 이력)
 // ==========================================
 
 window.saveToFirestore = async function(isSilent = false) {
@@ -1008,41 +1033,6 @@ window.saveToFirestore = async function(isSilent = false) {
     }
 };
 
-window.saveCurrentAsPreset = async () => {
-    const id = window.prompt("등록할 프리셋 ID (영문/숫자, 예: custom_type_1):");
-    if(!id) return;
-    const label = window.prompt("목록에 표시할 프리셋 이름 (예: 신규 A타입 설비):");
-    if(!label) return;
-
-    const pData = {
-        label: label,
-        processData: window.currentProcessData,
-        curve: Number(document.getElementById('learning-curve')?.value) || 95,
-        diff: Number(document.getElementById('diff-multiplier')?.value) || 1.0,
-        buffer: Number(document.getElementById('buffer-rate')?.value) || 5,
-        labor: Number(document.getElementById('labor-cost')?.value) || 300000,
-        hex: '#6366f1' 
-    };
-    try {
-        await setDoc(doc(db, "sim_master_presets", id), pData);
-        window.showToast("프리셋이 성공적으로 등록되었습니다.", "success");
-        window.loadMasterPresets();
-    } catch(e) { window.showToast("프리셋 등록 실패", "error"); }
-};
-
-window.deleteCurrentPreset = async () => {
-    const id = document.getElementById('eq-type')?.value;
-    if(!id) return;
-    if(id === 'dev') return window.showToast("기본 개발 모델(dev)은 삭제할 수 없습니다.", "error");
-    if(!confirm("현재 선택된 프리셋을 완전히 삭제하시겠습니까?")) return;
-    
-    try {
-        await deleteDoc(doc(db, "sim_master_presets", id));
-        window.showToast("프리셋이 삭제되었습니다.", "success");
-        window.loadMasterPresets();
-    } catch(e) { window.showToast("프리셋 삭제 실패", "error"); }
-};
-
 window.openProjectModal = async () => {
     const container = document.getElementById('project-list-container');
     const modal = document.getElementById('project-list-modal');
@@ -1052,7 +1042,6 @@ window.openProjectModal = async () => {
     container.innerHTML = '<div class="text-center p-10"><i class="fa-solid fa-spinner fa-spin text-2xl text-slate-400"></i></div>';
     
     try {
-        // 인덱스 없이 안전하게 모든 문서를 가져와서 JS로 정렬
         const snap = await getDocs(collection(db, "sim_projects"));
         if(snap.empty) {
             container.innerHTML = '<div class="text-center p-10 text-slate-500 font-bold">저장된 프로젝트가 없습니다.</div>';
@@ -1181,7 +1170,6 @@ window.loadProject = async (id) => {
             document.getElementById('equip-qty').value = d.qty || 1;
             document.getElementById('learning-curve').value = d.curve || 95;
             
-            // 프리셋 선택 해제
             const typeSel = document.getElementById('eq-type');
             if (typeSel && typeSel.options.length > 0) typeSel.selectedIndex = 0; 
 
@@ -1268,13 +1256,14 @@ window.restoreHistory = async (histId) => {
 
 // 💡 9. 대시보드 모달 (예측 vs 실적 매칭 및 필터)
 window.dashMatchedData = []; 
+window.dashSelectedCodes = [];
 
 window.openDashboardModal = async () => {
     const modal = document.getElementById('dashboard-modal');
     if(modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
     
     document.getElementById('dash-part-filter').value = 'all';
-    document.getElementById('dash-search-input').value = '';
+    window.dashSelectedCodes = []; // 초기화
     
     await window.loadDashboardData();
 };
@@ -1326,22 +1315,54 @@ window.loadDashboardData = async () => {
     }
 };
 
+window.openDashProjectSelectModal = () => {
+    const modal = document.getElementById('dash-project-select-modal');
+    const tbody = document.getElementById('dash-project-select-tbody');
+    if(!modal || !tbody) return;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+
+    if(window.dashMatchedData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center p-6 font-bold text-slate-500">매칭된 프로젝트 데이터가 없습니다.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = window.dashMatchedData.map(p => `
+        <tr class="hover:bg-slate-50 border-b border-slate-100 cursor-pointer" onclick="const cb = this.querySelector('input'); cb.checked = !cb.checked;">
+            <td class="p-3 text-center" onclick="event.stopPropagation()"><input type="checkbox" value="${p.code}" class="dash-proj-cb accent-emerald-600 w-4 h-4 rounded cursor-pointer" ${window.dashSelectedCodes.includes(p.code) ? 'checked' : ''}></td>
+            <td class="p-3 text-center text-slate-500">${p.part}</td>
+            <td class="p-3 font-bold text-indigo-700 text-center w-32">[${p.code || '-'}]</td>
+            <td class="p-3 font-bold text-slate-700 truncate max-w-[250px]">${p.name}</td>
+            <td class="p-3 text-center font-black text-emerald-600 w-28">${(parseFloat(p.actMd)||0).toFixed(1)} MD</td>
+        </tr>
+    `).join('');
+};
+
+window.closeDashProjectSelectModal = () => {
+    const modal = document.getElementById('dash-project-select-modal');
+    if(modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+};
+
+window.applyDashProjectSelect = () => {
+    const cbs = document.querySelectorAll('.dash-proj-cb:checked');
+    window.dashSelectedCodes = Array.from(cbs).map(cb => cb.value);
+    window.filterDashboardData();
+    window.closeDashProjectSelectModal();
+};
+
 window.filterDashboardData = () => {
     const partFilter = document.getElementById('dash-part-filter').value;
-    const searchKeyword = document.getElementById('dash-search-input').value.toLowerCase().trim();
     
     let filtered = window.dashMatchedData.filter(d => {
         let match = true;
+        if(window.dashSelectedCodes.length > 0 && !window.dashSelectedCodes.includes(d.code)) match = false;
         if(partFilter !== 'all' && d.part !== partFilter) match = false;
-        if(searchKeyword) {
-            if(!d.code.toLowerCase().includes(searchKeyword) && !d.name.toLowerCase().includes(searchKeyword)) match = false;
-        }
         return match;
     });
 
     const tbody = document.getElementById('accuracy-tbody');
     if(filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center p-10 text-slate-500 font-bold">검색 결과가 없습니다.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center p-10 text-slate-500 font-bold">선택된 프로젝트가 없습니다.</td></tr>';
         if(window.accChart1) window.accChart1.destroy();
         if(window.accChart2) window.accChart2.destroy();
         return;
