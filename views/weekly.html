@@ -62,7 +62,8 @@
             <h3 class="text-sm font-black text-indigo-800 flex items-center gap-2"><i class="fa-solid fa-bullhorn text-indigo-500"></i> 이번 주 공지사항</h3>
             <button onclick="window.editNotice()" class="text-xs font-bold text-indigo-400 hover:text-indigo-600 hidden group-hover:block transition-colors admin-only"><i class="fa-solid fa-pen"></i> 수정</button>
         </div>
-        <p id="weekly-notice-text" class="text-sm text-slate-700 font-medium ml-6">공지사항을 불러오는 중입니다...</p>
+        <input type="hidden" id="weekly-notice-raw-text">
+        <p id="weekly-notice-text" class="text-sm text-slate-700 font-medium ml-6 leading-relaxed">공지사항을 불러오는 중입니다...</p>
     </div>
 
     <div id="weekly-team-view" class="space-y-6 block">
@@ -115,11 +116,30 @@
     </div>
 
     <div id="weekly-team-sch-view" class="hidden space-y-6">
-        <div class="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-            <h3 class="text-base font-black text-slate-800"><i class="fa-solid fa-users-viewfinder text-indigo-500 mr-2"></i> 이번 주 팀 전체 일정</h3>
-            <span class="text-xs text-slate-500 font-bold">휴가 및 기타 공통 일정 현황</span>
+        <div class="flex flex-wrap justify-between items-center bg-white p-4 rounded-2xl border border-slate-200 shadow-sm gap-4">
+            <div class="flex items-center gap-4">
+                <h3 class="text-base font-black text-slate-800 whitespace-nowrap"><i class="fa-solid fa-users-viewfinder text-indigo-500 mr-2"></i> 이번 주 팀 전체 일정</h3>
+                <div class="flex bg-slate-100 p-1 rounded-xl">
+                    <button id="btn-sch-kanban" onclick="window.setSchViewMode('kanban')" class="px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap">
+                        <i class="fa-solid fa-columns"></i> 칸반 뷰
+                    </button>
+                    <button id="btn-sch-calendar" onclick="window.setSchViewMode('calendar')" class="px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-1.5 bg-transparent whitespace-nowrap">
+                        <i class="fa-regular fa-calendar-days"></i> 달력 뷰
+                    </button>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="flex items-center gap-1">
+                    <button id="btn-cal-prev" onclick="window.changeCalMonth(-1)" class="hidden p-1.5 text-slate-400 hover:bg-slate-100 rounded transition-colors"><i class="fa-solid fa-chevron-left"></i></button>
+                    <span id="sch-cal-month-display" class="hidden text-sm font-bold text-indigo-700 mx-2"></span>
+                    <button id="btn-cal-next" onclick="window.changeCalMonth(1)" class="hidden p-1.5 text-slate-400 hover:bg-slate-100 rounded transition-colors"><i class="fa-solid fa-chevron-right"></i></button>
+                </div>
+                <span class="text-xs text-slate-500 font-bold ml-2 hidden sm:block">휴가 및 기타 공통 일정 현황</span>
+            </div>
         </div>
+        
         <div class="grid grid-cols-2 md:grid-cols-7 gap-4" id="weekly-team-kanban-board"></div>
+        <div class="hidden bg-white rounded-2xl border border-slate-200 overflow-hidden flex-col shadow-sm" id="weekly-team-calendar-board"></div>
     </div>
 
     <div id="weekly-my-view" class="hidden space-y-6">
@@ -206,6 +226,28 @@
                 <button onclick="window.saveWeeklyLog(false)" class="bg-white border border-slate-300 hover:bg-slate-50 text-slate-600 px-5 py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm flex items-center gap-2"><i class="fa-regular fa-floppy-disk"></i> 임시 저장 후 닫기</button>
                 <button onclick="window.saveWeeklyLog(true)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2"><i class="fa-regular fa-paper-plane"></i> 주간 일지 최종 제출</button>
             </div>
+        </div>
+    </div>
+</div>
+
+<div id="notice-modal" class="fixed inset-0 z-[300] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10 transition-opacity">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-indigo-50">
+            <h2 class="text-base font-extrabold text-indigo-800 flex items-center gap-2">
+                <i class="fa-solid fa-bullhorn text-indigo-500"></i> 주간 공지사항 작성
+            </h2>
+            <button onclick="window.closeNoticeModal()" class="text-indigo-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
+        </div>
+        <div class="p-6 bg-slate-50/50 flex flex-col gap-4">
+            <textarea id="notice-text-input" placeholder="이번 주 공지사항을 입력하세요. (@멘션, 자동 링크 변환, 줄바꿈 기능 지원)" class="w-full h-40 border border-slate-300 px-4 py-3 rounded-xl text-sm outline-indigo-500 resize-none custom-scrollbar bg-white" oninput="window.handleMention(this)"></textarea>
+            <div class="flex items-center gap-2 mt-2 bg-indigo-50/50 px-4 py-3 rounded-xl border border-indigo-100">
+                <input type="checkbox" id="notice-email-send" class="accent-indigo-600 w-4 h-4 cursor-pointer rounded border-slate-300" checked>
+                <label for="notice-email-send" class="text-[12px] font-bold text-slate-700 cursor-pointer select-none">저장 시 전체 팀원에게 알림 메일 자동 발송</label>
+            </div>
+        </div>
+        <div class="px-6 py-4 border-t bg-white flex justify-end gap-2">
+            <button onclick="window.closeNoticeModal()" class="px-5 py-2.5 bg-slate-100 border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 transition-colors">취소</button>
+            <button onclick="window.saveNotice()" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors"><i class="fa-solid fa-check mr-1"></i> 저장 및 전송</button>
         </div>
     </div>
 </div>
