@@ -154,7 +154,6 @@
                 </div>
             </div>
         </section>
-
     </div>
 
     <div class="lg:col-span-5 space-y-6 lg:sticky lg:top-24">
@@ -162,7 +161,7 @@
         <section class="glass-dark rounded-3xl shadow-2xl text-white p-8 space-y-8 relative overflow-hidden">
             <div class="absolute top-0 right-0 -mt-16 -mr-16 w-60 h-60 bg-indigo-500 rounded-full blur-[100px] opacity-20 pointer-events-none"></div>
             <div class="flex justify-between items-center relative z-10">
-                <h2 class="text-lg font-bold flex items-center gap-3 text-slate-100 tracking-wide"><i class="fa-solid fa-bolt text-indigo-400"></i> AI 납기 시뮬레이션</h2>
+                <h2 class="text-lg font-bold flex items-center gap-2"><i class="fa-solid fa-bolt text-indigo-400"></i> AI 납기 시뮬레이션</h2>
                 <span class="text-[10px] font-bold bg-slate-800/80 px-3 py-1.5 rounded-full text-slate-300 border border-slate-700 backdrop-blur-sm"><span id="out-iters">5000</span> Iterations</span>
             </div>
             
@@ -336,12 +335,20 @@
     <div class="bg-white rounded-3xl shadow-2xl w-full max-w-6xl flex flex-col h-[700px] md:h-[90vh] overflow-hidden">
         <div class="px-6 py-4 border-b flex justify-between items-center bg-emerald-50">
             <h2 class="text-lg font-extrabold text-emerald-800"><i class="fa-solid fa-chart-line"></i> 프로젝트 예측 vs 실적 분석</h2>
-            <button onclick="window.closeDashboardModal()" class="text-emerald-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-xl"></i></button>
+            <div class="flex gap-3 items-center">
+                <select id="dash-part-filter" onchange="window.filterDashboardData()" class="border border-emerald-200 bg-white rounded-lg px-3 py-1.5 text-xs font-bold text-emerald-700 outline-none">
+                    <option value="all">전체 파트</option>
+                    <option value="제조">제조</option>
+                    <option value="광학">광학</option>
+                </select>
+                <input type="text" id="dash-search-input" oninput="window.filterDashboardData()" placeholder="PJT 코드/명 검색..." class="border border-emerald-200 bg-white rounded-lg px-3 py-1.5 text-xs font-bold text-slate-600 outline-emerald-500 w-48">
+                <button onclick="window.closeDashboardModal()" class="text-emerald-400 hover:text-rose-500 ml-2"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
         </div>
         <div class="p-6 flex-1 overflow-y-auto bg-slate-50/50">
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                    <h3 class="text-sm font-bold text-slate-700 mb-4">공수 오차 (예측 - 실적)</h3>
+                    <h3 class="text-sm font-bold text-slate-700 mb-4">공수 비교 (예측 - 실적)</h3>
                     <div class="h-64 relative"><canvas id="accuracy-chart-md"></canvas></div>
                 </div>
                 <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
@@ -352,7 +359,7 @@
             <div class="mt-6 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <table class="w-full text-left text-xs whitespace-nowrap">
                     <thead class="bg-slate-100 text-slate-600 border-b">
-                        <tr><th class="p-3 text-center">PJT 코드</th><th class="p-3">프로젝트명</th><th class="p-3 text-center">예측 MD</th><th class="p-3 text-center text-indigo-600">실적 MD</th><th class="p-3 text-center text-rose-500">MD 오차율</th><th class="p-3 text-center">예측 출하일</th><th class="p-3 text-center text-indigo-600">실제 출하일</th></tr>
+                        <tr><th class="p-3 text-center">파트</th><th class="p-3 text-center">PJT 코드</th><th class="p-3">프로젝트명</th><th class="p-3 text-center">예측 MD</th><th class="p-3 text-center text-indigo-600">실적 MD</th><th class="p-3 text-center text-rose-500">MD 오차율</th><th class="p-3 text-center">예측 출하일</th><th class="p-3 text-center text-indigo-600">실제 출하일</th></tr>
                     </thead>
                     <tbody id="accuracy-tbody" class="divide-y divide-slate-100"></tbody>
                 </table>
