@@ -15,7 +15,7 @@ window.whIsDirty = false;
 window.todayBadgeInitialized = false;
 let myTodayLogUnsubscribe = null;
 
-// 💡 드래그 거리 판별용
+// 드래그 거리 판별용
 window.whDragDist = 0;
 window.whDragStartX = 0;
 window.whDragStartY = 0;
@@ -262,7 +262,7 @@ window.resetWhFilters = function() {
     window.applyWhFilters();
 };
 
-// 💡 1. 커스텀 인원 UI 렌더링
+// 커스텀 인원 UI 렌더링
 function renderCustomPersonUI(personMap) {
     const container = document.getElementById('wh-ui-person');
     const titleEl = document.getElementById('wh-ui-person-title');
@@ -295,7 +295,7 @@ function renderCustomPersonUI(personMap) {
     container.innerHTML = html;
 }
 
-// 💡 2. 커스텀 작업 비율 UI 렌더링
+// 커스텀 작업 비율 UI 렌더링
 function renderCustomTypeUI(typeMap, totalMDStr) {
     const container = document.getElementById('wh-ui-type');
     const titleEl = document.getElementById('wh-ui-type-title');
@@ -762,7 +762,7 @@ window.openWhInputModal = function(dateStr, authorName) {
     
     document.getElementById('wh-modal-date').value = dateStr;
     document.getElementById('wh-modal-author').value = authorName;
-    document.getElementById('wh-modal-subtitle').innerHTML = `<i class="fa-regular fa-calendar text-indigo-400 mr-1"></i> ${dateStr} <span class="mx-2 text-slate-300">|</span> <i class="fa-solid fa-user text-indigo-400 mr-1"></i> ${authorName}`;
+    document.getElementById('wh-modal-subtitle').innerHTML = `<i class="fa-regular fa-calendar text-indigo-400 mr-1.5"></i> ${dateStr} <span class="mx-3 text-slate-300">|</span> <i class="fa-solid fa-user text-indigo-400 mr-1.5"></i> ${authorName}`;
 
     const tbody = document.getElementById('wh-input-tbody');
     tbody.innerHTML = '';
@@ -816,10 +816,18 @@ window.whAddInputRow = function() {
     window.whIsDirty = true;
 };
 
+window.whRemoveInputRow = function(btn) {
+    window.whIsDirty = true;
+    const tr = btn.closest('tr');
+    tr.style.opacity = '0';
+    tr.style.transform = 'translateX(-10px)';
+    setTimeout(() => { tr.remove(); }, 200);
+}
+
 function appendWhInputRow(logData = null, index = 1) {
     const tbody = document.getElementById('wh-input-tbody');
     const tr = document.createElement('tr');
-    tr.className = 'wh-input-row hover:bg-indigo-50/30 transition-colors border-b border-slate-100 relative';
+    tr.className = 'wh-input-row hover:bg-slate-50/50 transition-all duration-300 border-b border-slate-100 group';
     
     const uniqueId = 'wh-pjt-input-' + Date.now() + '-' + index;
     const pName = logData ? (logData.projectName || '') : '';
@@ -837,19 +845,37 @@ function appendWhInputRow(logData = null, index = 1) {
     let pNameHidden = `<input type="hidden" class="row-pjt-name-hidden" value="${pName}">`;
 
     tr.innerHTML = `
-        <td class="p-3 text-center text-slate-400 font-bold text-xs bg-slate-50">${index}${idInput}</td>
-        <td class="p-2 relative">
-            <input type="text" id="${uniqueId}" class="row-pjt-name w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-indigo-700 placeholder-slate-400" value="${pCode}" placeholder="PJT 코드 검색 (초성 전용)" oninput="window.whIsDirty=true; window.whShowPjtAuto(this)" autocomplete="off">
+        <td class="p-3 text-center text-slate-400 font-extrabold text-xs">${index}${idInput}</td>
+        <td class="p-3 relative">
+            <div class="relative flex items-center">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 text-indigo-300 text-xs"></i>
+                <input type="text" id="${uniqueId}" class="row-pjt-name w-full border border-slate-200 rounded-xl pl-8 pr-3 py-2.5 text-sm font-bold text-indigo-700 placeholder-slate-400 bg-slate-50 hover:bg-slate-100 focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none" value="${pCode}" placeholder="코드 검색" oninput="window.whIsDirty=true; window.whShowPjtAuto(this)" autocomplete="off">
+            </div>
             <input type="hidden" class="row-pjt-id" value="${pId}">
             <input type="hidden" class="row-pjt-code" value="${pCode}">
             ${pNameHidden}
         </td>
-        <td class="p-2"><select class="row-type w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-slate-700 cursor-pointer" onchange="window.whIsDirty=true;">${typeOptions}</select></td>
-        <td class="p-2"><select class="row-loc w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-slate-700 cursor-pointer" onchange="window.whIsDirty=true;">${locOptions}</select></td>
-        <td class="p-2"><input type="number" step="0.5" min="0" class="row-hours w-full border border-indigo-200 bg-indigo-50 rounded-lg px-3 py-2 text-sm font-black text-center outline-indigo-500 text-indigo-700 shadow-inner" value="${logData ? logData.hours : ''}" placeholder="0.0" oninput="window.whIsDirty=true;"></td>
-        <td class="p-2"><input type="text" class="row-content w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-medium" value="${logData ? logData.content || '' : ''}" placeholder="작업 상세 내용 (선택)" oninput="window.whIsDirty=true;"></td>
-        <td class="p-2 text-center"><input type="checkbox" class="row-conf accent-emerald-500 w-5 h-5 rounded cursor-pointer shadow-sm" ${isConf} ${confDisabled} onchange="window.whIsDirty=true;"></td>
-        <td class="p-2 text-center"><button onclick="window.whIsDirty=true; this.closest('tr').remove()" class="text-slate-300 hover:bg-rose-50 hover:text-rose-500 w-8 h-8 rounded-lg flex items-center justify-center mx-auto transition-colors"><i class="fa-solid fa-trash-can"></i></button></td>
+        <td class="p-3">
+            <select class="row-type w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-600 bg-slate-50 hover:bg-slate-100 focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 transition-all cursor-pointer outline-none">${typeOptions}</select>
+        </td>
+        <td class="p-3">
+            <select class="row-loc w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-600 bg-slate-50 hover:bg-slate-100 focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 transition-all cursor-pointer outline-none">${locOptions}</select>
+        </td>
+        <td class="p-3">
+            <input type="number" step="0.5" min="0" class="row-hours w-full border border-indigo-100 bg-indigo-50/60 rounded-xl px-3 py-2.5 text-sm font-black text-center text-indigo-600 placeholder-indigo-300 hover:bg-indigo-100/60 focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none shadow-inner" value="${logData ? logData.hours : ''}" placeholder="0.0" oninput="window.whIsDirty=true;">
+        </td>
+        <td class="p-3">
+            <input type="text" class="row-content w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-700 placeholder-slate-400 bg-slate-50 hover:bg-slate-100 focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none" value="${logData ? logData.content || '' : ''}" placeholder="상세 작업 내용 입력" oninput="window.whIsDirty=true;">
+        </td>
+        <td class="p-3 text-center">
+            <label class="relative inline-flex items-center cursor-pointer justify-center mt-1">
+                <input type="checkbox" class="row-conf sr-only peer" ${isConf} ${confDisabled} onchange="window.whIsDirty=true;">
+                <div class="w-10 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500 shadow-inner"></div>
+            </label>
+        </td>
+        <td class="p-3 text-center">
+            <button onclick="window.whRemoveInputRow(this)" class="text-slate-300 hover:text-rose-500 hover:bg-rose-50 w-8 h-8 rounded-xl flex items-center justify-center mx-auto transition-all"><i class="fa-solid fa-trash-can"></i></button>
+        </td>
     `;
     tbody.appendChild(tr);
 }
@@ -861,7 +887,7 @@ window.whShowPjtAuto = function(input) {
     if (!drop) {
         drop = document.createElement('ul');
         drop.id = 'wh-pjt-autocomplete';
-        drop.className = 'fixed z-[99999] bg-white border border-indigo-400 shadow-2xl rounded-xl max-h-48 overflow-y-auto text-sm custom-scrollbar py-1 hidden';
+        drop.className = 'fixed z-[99999] bg-white/95 backdrop-blur-xl border border-slate-200 shadow-2xl rounded-2xl max-h-56 overflow-y-auto text-sm custom-scrollbar py-2 hidden';
         document.body.appendChild(drop);
     }
     
@@ -871,37 +897,22 @@ window.whShowPjtAuto = function(input) {
 
     if(!val) { drop.classList.add('hidden'); return; }
 
-    let searchPool = [];
-    let seenCodes = new Set();
-
-    (window.pjtCodeMasterList || []).forEach(p => {
-        if (p.code && !seenCodes.has(p.code)) {
-            seenCodes.add(p.code);
-            searchPool.push(p);
-        }
-    });
-    (window.currentProjectStatusList || []).forEach(p => {
-        if (p.code && !seenCodes.has(p.code)) {
-            seenCodes.add(p.code);
-            searchPool.push(p);
-        }
-    });
-
-    let matches = searchPool.filter(p => {
+    let matches = (window.pjtCodeMasterList || []).filter(p => {
         let code = (p.code || '').toLowerCase();
         return code.includes(val) || (window.matchString && window.matchString(val, p.code));
     });
 
     if(matches.length > 0) {
         const rect = input.getBoundingClientRect();
+        drop.style.position = 'fixed';
         drop.style.left = `${rect.left}px`;
         drop.style.top = `${rect.bottom + 4}px`;
-        drop.style.width = `${Math.max(rect.width, 150)}px`; 
+        drop.style.width = `${Math.max(rect.width, 200)}px`; 
 
         drop.innerHTML = matches.map(m => {
             let sName = m.name ? m.name.replace(/'/g,"\\'").replace(/"/g,'&quot;') : '';
             let sCode = m.code ? m.code.replace(/'/g,"\\'").replace(/"/g,'&quot;') : '-';
-            return `<li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-xs font-black text-indigo-700 border-b border-slate-50 truncate transition-colors flex items-center gap-1.5" onmousedown="window.whSelectPjt('${input.id}', '${m.id}', '${sCode}', '${sName}')">${sCode}</li>`;
+            return `<li class="px-5 py-3 hover:bg-indigo-50/80 cursor-pointer text-xs border-b border-slate-50 last:border-0 transition-all flex items-center gap-2" onmousedown="window.whSelectPjt('${input.id}', '${m.id}', '${sCode}', '${sName}')"><span class="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-md font-black tracking-wide">${sCode}</span><span class="text-slate-500 font-bold truncate flex-1">${m.name}</span></li>`;
         }).join('');
         drop.classList.remove('hidden');
     } else {
@@ -996,28 +1007,34 @@ window.exportWorkhoursExcel = async function(isDriveUpload = false, driveFolderI
     if (typeof window.ExcelJS === 'undefined') return window.showToast("ExcelJS 모듈이 필요합니다.", "error");
     
     try {
-        if(!isDriveUpload) window.showToast("엑셀 파일을 생성 중입니다...", "success");
+        if(!isDriveUpload) window.showToast("프리미엄 엑셀 리포트를 생성 중입니다...", "success");
         const wb = new window.ExcelJS.Workbook();
         
-        const ws1 = wb.addWorksheet('월간_통계_요약', { views: [{ showGridLines: false }] });
-        ws1.columns = [{width:2}, {width:15}, {width:15}, {width:15}, {width:15}, {width:15}];
+        const ws1 = wb.addWorksheet('대시보드 요약', { views: [{ showGridLines: false }] });
+        ws1.columns = [
+            { width: 3 },  { width: 25 }, { width: 20 }, { width: 5 }, 
+            { width: 35 }, { width: 15 }, { width: 3 }
+        ];
         
         const pDate = document.getElementById('wh-week-picker').value; 
         const yStr = window.getDatesFromWeek(pDate).start.getFullYear();
         const mStr = String(window.getDatesFromWeek(pDate).start.getMonth() + 1).padStart(2, '0');
-        const reportTitle = `${yStr}년 ${mStr}월 개인별 투입공수 통계`;
+        const reportTitle = `AXBIS 개인별 투입공수 통계 리포트 (${yStr}년 ${mStr}월)`;
 
-        ws1.mergeCells('B2:E3');
+        ws1.mergeCells('B2:F3');
         const titleCell = ws1.getCell('B2');
         titleCell.value = reportTitle;
         titleCell.font = { name: '맑은 고딕', size: 18, bold: true, color: { argb: 'FF1E293B' } };
         titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
         
-        ws1.getCell('B4').value = `출력일시: ${new Date().toLocaleString()}`;
-        ws1.getCell('B4').font = { size: 10, color: { argb: 'FF64748B' } };
+        ws1.mergeCells('B4:F4');
+        const infoCell = ws1.getCell('B4');
+        let exporterName = window.userProfile ? window.userProfile.name : '시스템';
+        infoCell.value = `출력일시: ${new Date().toLocaleString()}  |  출력자: ${exporterName}`;
+        infoCell.font = { name: '맑은 고딕', size: 10, color: { argb: 'FF64748B' } };
+        infoCell.alignment = { vertical: 'middle', horizontal: 'left' };
 
         let monthlyLogs = window.currentWorkLogs.filter(l => l.date.startsWith(`${yStr}-${mStr}`) && l.isConfirmed);
-        
         if (window.whMemberMode === 'me' && window.userProfile) {
             monthlyLogs = monthlyLogs.filter(l => l.authorName === window.userProfile.name);
         }
@@ -1028,79 +1045,137 @@ window.exportWorkhoursExcel = async function(isDriveUpload = false, driveFolderI
             let md = l.hours / 8;
             tMd += md;
             pMap[l.authorName] = (pMap[l.authorName] || 0) + md;
-            let pName = l.projectCode || l.projectName || '미분류';
+            let pName = l.projectCode ? `[${l.projectCode}] ${l.projectName||''}` : (l.projectName || '미분류');
             pjtMap[pName] = (pjtMap[pName] || 0) + md;
         });
 
-        ws1.getCell('B6').value = '총 투입 (MD)';
-        ws1.getCell('C6').value = tMd.toFixed(1) + ' MD';
-        ws1.getCell('B6').font = { bold: true }; ws1.getCell('C6').font = { bold: true, color: {argb:'FF4F46E5'} };
+        ws1.mergeCells('B6:C6');
+        let kpiTitle = ws1.getCell('B6');
+        kpiTitle.value = 'TOTAL WORKHOURS (총 투입)';
+        kpiTitle.font = { name: '맑은 고딕', size: 11, bold: true, color: { argb: 'FF4F46E5' } };
+        kpiTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
+        kpiTitle.border = { top: {style:'thin', color:{argb:'FFC7D2FE'}}, left: {style:'thin', color:{argb:'FFC7D2FE'}}, right: {style:'thin', color:{argb:'FFC7D2FE'}} };
+        kpiTitle.alignment = { vertical: 'middle', horizontal: 'center' };
 
-        ws1.getCell('B8').value = '[ 작업자별 누적 투입 공수 ]';
-        ws1.getCell('B8').font = { bold: true, color: {argb:'FF334155'} };
-        let r = 9;
-        Object.entries(pMap).sort((a,b)=>b[1]-a[1]).forEach(p => {
-            ws1.getCell(`B${r}`).value = p[0];
-            ws1.getCell(`C${r}`).value = p[1].toFixed(1) + ' MD';
-            ws1.getCell(`C${r}`).font = { bold: true, color: {argb:'FF059669'} };
-            r++;
-        });
+        ws1.mergeCells('B7:C8');
+        let kpiVal = ws1.getCell('B7');
+        kpiVal.value = parseFloat(tMd.toFixed(1));
+        kpiVal.numFmt = '#,##0.0 "MD"';
+        kpiVal.font = { name: '맑은 고딕', size: 24, bold: true, color: { argb: 'FF312E81' } };
+        kpiVal.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
+        kpiVal.border = { left: {style:'thin', color:{argb:'FFC7D2FE'}}, bottom: {style:'thin', color:{argb:'FFC7D2FE'}}, right: {style:'thin', color:{argb:'FFC7D2FE'}} };
+        kpiVal.alignment = { vertical: 'middle', horizontal: 'center' };
 
-        r += 1;
-        ws1.getCell(`B${r}`).value = '[ 주요 프로젝트별 투입 (Top 10) ]';
-        ws1.getCell(`B${r}`).font = { bold: true, color: {argb:'FF334155'} };
+        let r = 11;
+        ws1.getCell(`B${r}`).value = '■ 작업자별 투입 공수';
+        ws1.getCell(`B${r}`).font = { name: '맑은 고딕', size: 12, bold: true, color: { argb: 'FF334155' } };
+
+        ws1.getCell(`E${r}`).value = '■ 프로젝트별 투입 공수 (Top 15)';
+        ws1.getCell(`E${r}`).font = { name: '맑은 고딕', size: 12, bold: true, color: { argb: 'FF334155' } };
         r++;
-        Object.entries(pjtMap).sort((a,b)=>b[1]-a[1]).slice(0, 10).forEach(p => {
-            ws1.mergeCells(`B${r}:C${r}`);
-            ws1.getCell(`B${r}`).value = p[0];
-            ws1.getCell(`D${r}`).value = p[1].toFixed(1) + ' MD';
-            ws1.getCell(`D${r}`).font = { bold: true, color: {argb:'FF9333EA'} };
-            r++;
-        });
 
-        const ws2 = wb.addWorksheet('데이터_Raw');
+        let workerHeader1 = ws1.getCell(`B${r}`); workerHeader1.value = '작업자명'; workerHeader1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } }; workerHeader1.font = {bold: true}; workerHeader1.border = {bottom: {style:'medium', color:{argb:'FFCBD5E1'}}};
+        let workerHeader2 = ws1.getCell(`C${r}`); workerHeader2.value = '투입 공수 (MD)'; workerHeader2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } }; workerHeader2.font = {bold: true}; workerHeader2.border = {bottom: {style:'medium', color:{argb:'FFCBD5E1'}}};
+
+        let pjtHeader1 = ws1.getCell(`E${r}`); pjtHeader1.value = '프로젝트'; pjtHeader1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } }; pjtHeader1.font = {bold: true}; pjtHeader1.border = {bottom: {style:'medium', color:{argb:'FFCBD5E1'}}};
+        let pjtHeader2 = ws1.getCell(`F${r}`); pjtHeader2.value = '투입 공수 (MD)'; pjtHeader2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } }; pjtHeader2.font = {bold: true}; pjtHeader2.border = {bottom: {style:'medium', color:{argb:'FFCBD5E1'}}};
+        r++;
+
+        let sortedWorkers = Object.entries(pMap).sort((a,b)=>b[1]-a[1]);
+        let sortedPjts = Object.entries(pjtMap).sort((a,b)=>b[1]-a[1]).slice(0, 15);
+
+        let maxRows = Math.max(sortedWorkers.length, sortedPjts.length);
+        for(let i=0; i<maxRows; i++) {
+            if(i < sortedWorkers.length) {
+                let wCell1 = ws1.getCell(`B${r+i}`); wCell1.value = sortedWorkers[i][0]; wCell1.border = {bottom:{style:'thin', color:{argb:'FFF1F5F9'}}}; wCell1.alignment={vertical:'middle', horizontal:'center'};
+                let wCell2 = ws1.getCell(`C${r+i}`); wCell2.value = parseFloat(sortedWorkers[i][1].toFixed(1)); wCell2.border = {bottom:{style:'thin', color:{argb:'FFF1F5F9'}}}; wCell2.alignment={vertical:'middle', horizontal:'center'}; wCell2.numFmt = '#,##0.0'; wCell2.font={color:{argb:'FF059669'}, bold:true};
+            }
+            if(i < sortedPjts.length) {
+                let pCell1 = ws1.getCell(`E${r+i}`); pCell1.value = sortedPjts[i][0]; pCell1.border = {bottom:{style:'thin', color:{argb:'FFF1F5F9'}}}; pCell1.alignment={vertical:'middle', horizontal:'left'};
+                let pCell2 = ws1.getCell(`F${r+i}`); pCell2.value = parseFloat(sortedPjts[i][1].toFixed(1)); pCell2.border = {bottom:{style:'thin', color:{argb:'FFF1F5F9'}}}; pCell2.alignment={vertical:'middle', horizontal:'center'}; pCell2.numFmt = '#,##0.0'; pCell2.font={color:{argb:'FF4F46E5'}, bold:true};
+            }
+        }
+
+        const ws2 = wb.addWorksheet('전체_데이터_Raw', { views: [{ showGridLines: false }] });
         ws2.columns = [
-            { header: '날짜', key: 'date', width: 12 },
-            { header: '작업자', key: 'name', width: 12 },
-            { header: '프로젝트', key: 'pjt', width: 35 },
-            { header: '구분', key: 'type', width: 10 },
-            { header: '장소', key: 'loc', width: 10 },
+            { header: 'No.', key: 'no', width: 6 },
+            { header: '날짜', key: 'date', width: 14 },
+            { header: '작업자', key: 'name', width: 14 },
+            { header: 'PJT 코드', key: 'code', width: 20 },
+            { header: '프로젝트명', key: 'pjt', width: 45 },
+            { header: '작업 구분', key: 'type', width: 12 },
+            { header: '장소', key: 'loc', width: 12 },
             { header: '투입시간(h)', key: 'hrs', width: 12 },
             { header: '환산공수(MD)', key: 'md', width: 12 },
-            { header: '상세내용', key: 'content', width: 50 },
-            { header: '승인여부', key: 'conf', width: 12 }
+            { header: '상세 작업 내용', key: 'content', width: 60 },
+            { header: '승인 상태', key: 'conf', width: 15 }
         ];
 
         let hr = ws2.getRow(1);
-        hr.font = { bold: true, color: {argb: 'FFFFFFFF'} };
-        hr.fill = { type: 'pattern', pattern: 'solid', fgColor: {argb: 'FF4F46E5'} };
-        hr.alignment = { vertical: 'middle', horizontal: 'center' };
+        hr.height = 28;
+        hr.eachCell(function(cell) {
+            cell.font = { name: '맑은 고딕', bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            cell.border = {
+                top: {style:'thin', color:{argb:'FF334155'}}, left: {style:'thin', color:{argb:'FF334155'}},
+                bottom: {style:'thin', color:{argb:'FF334155'}}, right: {style:'thin', color:{argb:'FF334155'}}
+            };
+        });
 
         let sortedLogs = window.currentWorkLogs.slice().sort((a,b) => a.date.localeCompare(b.date) || a.authorName.localeCompare(b.authorName));
         if (window.whMemberMode === 'me' && window.userProfile) {
             sortedLogs = sortedLogs.filter(l => l.authorName === window.userProfile.name);
         }
         
-        sortedLogs.forEach(l => {
+        sortedLogs.forEach((l, index) => {
             let row = ws2.addRow({
+                no: index + 1,
                 date: l.date,
                 name: l.authorName,
-                pjt: l.projectCode ? `[${l.projectCode}] ${l.projectName||''}` : (l.projectName || '프로젝트 미지정'),
+                code: l.projectCode || '-',
+                pjt: l.projectName || '미분류',
                 type: l.workType,
                 loc: l.location || '사내',
-                hrs: l.hours,
-                md: (l.hours / 8).toFixed(2), 
+                hrs: parseFloat(l.hours),
+                md: parseFloat((l.hours / 8).toFixed(2)),
                 content: l.content || '',
                 conf: l.isConfirmed ? '승인완료' : '미승인'
             });
-            
-            row.eachCell(function(cell, colNumber) {
-                cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
-                cell.alignment = { vertical: 'middle' };
-                if(colNumber !== 3 && colNumber !== 8) cell.alignment.horizontal = 'center';
-                if(colNumber === 9) {
-                    if(l.isConfirmed) cell.font = { color: { argb: 'FF059669' }, bold: true };
-                    else cell.font = { color: { argb: 'FFE11D48' }, bold: true };
+
+            let isEven = index % 2 === 0;
+            let rowBg = isEven ? 'FFFFFFFF' : 'FFF8FAFC'; 
+
+            row.eachCell({ includeEmpty: true }, function(cell, colNumber) {
+                cell.font = { name: '맑은 고딕', size: 10, color: { argb: 'FF334155' } };
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowBg } };
+                cell.border = {
+                    top: {style:'thin', color:{argb:'FFE2E8F0'}}, left: {style:'thin', color:{argb:'FFE2E8F0'}},
+                    bottom: {style:'thin', color:{argb:'FFE2E8F0'}}, right: {style:'thin', color:{argb:'FFE2E8F0'}}
+                };
+                cell.alignment = { vertical: 'middle', wrapText: true };
+                
+                if (colNumber === 5 || colNumber === 10) {
+                    cell.alignment.horizontal = 'left';
+                    cell.alignment.indent = 1;
+                } else {
+                    cell.alignment.horizontal = 'center';
+                }
+
+                if (colNumber === 8 || colNumber === 9) {
+                    cell.numFmt = '#,##0.0';
+                    cell.font.bold = true;
+                    cell.font.color = { argb: 'FF4F46E5' }; 
+                }
+
+                if (colNumber === 11) { 
+                    if(l.isConfirmed) {
+                        cell.font.color = { argb: 'FF059669' }; 
+                        cell.font.bold = true;
+                    } else {
+                        cell.font.color = { argb: 'FFEF4444' }; 
+                        cell.font.bold = true;
+                    }
                 }
             });
         });
