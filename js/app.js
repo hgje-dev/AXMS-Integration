@@ -7,6 +7,9 @@ import './request.js';
 import './weekly.js';
 import './simulation.js';
 import './workhours.js';
+import './completion-report.js';
+import './product-cost.js';
+import './ncr-dashboard.js';
 import { initRouter } from './router.js';
 
 window.addEventListener('error', (e) => {
