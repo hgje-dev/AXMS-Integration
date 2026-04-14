@@ -157,21 +157,20 @@ window.updateWeekLabels = function(weekStr) {
     if(dLineEl) dLineEl.innerText = window.getLocalDateStr(deadline);
 };
 
-// 💡 관리자용 보고기간 수정 기능
-window.editWeeklyPeriod = async function(type) {
+// 💡 관리자용 마감일 수정 기능
+window.editWeeklyPeriod = async function() {
     const weekInput = document.getElementById('weekly-log-filter-week');
     if (!weekInput || !weekInput.value) return;
     const w = weekInput.value;
 
-    const elId = type === 'period' ? 'weekly-period-text' : 'weekly-deadline-text';
-    const currentText = document.getElementById(elId).innerText;
-    const promptMsg = type === 'period' ? "보고 기간을 입력하세요 (예: 04-08 ~ 04-15):" : "마감 요일/시간을 자유롭게 입력하세요 (예: 금요일 오후 5시):";
+    const currentText = document.getElementById('weekly-deadline-text').innerText;
+    const promptMsg = "마감 요일/시간을 자유롭게 입력하세요 (비워두면 자동 계산된 날짜로 복원):\n예: 금요일 오후 5시";
 
     const newText = prompt(promptMsg, currentText);
     if (newText !== null) {
         try {
             const docRef = doc(db, "settings", "weekly_period_" + w);
-            await setDoc(docRef, { [type]: newText.trim(), updatedAt: Date.now() }, { merge: true });
+            await setDoc(docRef, { deadline: newText.trim(), updatedAt: Date.now() }, { merge: true });
             if(window.showToast) window.showToast("수정되었습니다.");
         } catch(e) {
             if(window.showToast) window.showToast("수정 실패", "error");
@@ -336,31 +335,15 @@ window.loadWeeklyLogsData = function() {
 
     if (periodUnsubscribe) periodUnsubscribe();
     periodUnsubscribe = onSnapshot(doc(db, "settings", "weekly_period_" + w), (docSnap) => {
+        // 무조건 기본값으로 라벨(몇년 몇월 몇주, 보고기간, 마감일) 1차 세팅
+        window.updateWeekLabels(w);
+
         if (docSnap.exists()) {
             const data = docSnap.data();
-            const dates = window.getDatesFromWeek(w);
-            const wed = new Date(dates.start); wed.setDate(wed.getDate() + 2);
-            
-            const pEl = document.getElementById('weekly-period-text');
-            if (data.period && data.period.trim() !== '') {
-                if(pEl) pEl.innerText = data.period;
-            } else {
-                const prevWed = new Date(wed); prevWed.setDate(prevWed.getDate() - 7);
-                if(pEl) pEl.innerText = `${window.getLocalDateStr(prevWed).substring(5)} ~ ${window.getLocalDateStr(wed).substring(5)}`;
-            }
-
             const dEl = document.getElementById('weekly-deadline-text');
             if (data.deadline && data.deadline.trim() !== '') {
                 if(dEl) dEl.innerText = data.deadline;
-            } else {
-                let deadline = new Date(wed);
-                if(window.isWorkDay) {
-                    while(!window.isWorkDay(deadline)) deadline.setDate(deadline.getDate() - 1);
-                }
-                if(dEl) dEl.innerText = window.getLocalDateStr(deadline);
             }
-        } else {
-            window.updateWeekLabels(w);
         }
     });
 
@@ -567,16 +550,28 @@ window.renderWeeklyLogs = function() {
 
     const orderMap = { "월요일": 1, "화요일": 2, "수요일": 3, "목요일": 4, "금요일": 5, "토요일": 6, "일요일": 7, "주간 공통": 99 };
 
-    feed.innerHTML = displayList.map(function(log) {
+    let htmlArray = [];
+
+    displayList.forEach(function(log) {
         let tasksByDay = {};
+        
+        // 💡 선택된 통계 카드에 따라 task 배열 필터링
+        let filteredTasks = [];
         if (log.tasks && Array.isArray(log.tasks)) {
-            log.tasks.forEach(function(t) {
+            filteredTasks = log.tasks;
+            if (window.weeklyStatFilter === 'completed') {
+                filteredTasks = filteredTasks.filter(t => t.status === '완료');
+            } else if (window.weeklyStatFilter === 'progress') {
+                filteredTasks = filteredTasks.filter(t => t.status === '진행 중');
+            }
+            
+            filteredTasks.forEach(function(t) {
                 const safeDay = t.day || '기타';
                 if (!tasksByDay[safeDay]) tasksByDay[safeDay] = [];
                 tasksByDay[safeDay].push(t);
             });
         }
-
+        
         const sortedDays = Object.keys(tasksByDay).sort(function(a, b) { 
             return (orderMap[a] || 0) - (orderMap[b] || 0); 
         });
@@ -610,6 +605,11 @@ window.renderWeeklyLogs = function() {
             issuesHtml = '<div class="mt-5 bg-[#fffbf0] border border-orange-100 rounded-xl p-4 shadow-sm"><div class="text-[11px] font-bold text-orange-600 mb-2 flex items-center gap-1.5"><i class="fa-regular fa-comment-dots"></i> 요청사항 및 이슈</div><div class="text-sm font-medium text-slate-700 leading-relaxed">' + formattedIssue + '</div></div>';
         }
 
+        // 💡 필터 적용 시 남은 내역이 없으면 (빈 카드 방지) 출력하지 않음
+        if (filteredTasks.length === 0 && safeIssuesStr === '' && window.weeklyStatFilter !== 'all') {
+            return;
+        }
+
         let bottomMetaHtml = '<div class="mt-4 pt-3 border-t border-slate-100 flex gap-2 flex-wrap text-[11px] font-bold text-slate-500 items-center">';
         
         let pjtTags = '';
@@ -633,8 +633,10 @@ window.renderWeeklyLogs = function() {
         const authorName = log.authorName || '알수없음';
         const initial = window.getChosung ? window.getChosung(authorName).charAt(0) : authorName.charAt(0);
 
-        return '<div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm"><div class="flex justify-between items-start mb-4"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-black text-lg">' + initial + '</div><div><div class="font-black text-slate-800 text-base">' + authorName + ' <span class="text-[10px] font-bold text-slate-400 border border-slate-200 px-1.5 py-0.5 rounded ml-1 bg-slate-50">' + (log.authorTeam || '소속없음') + '</span></div><div class="text-[11px] text-slate-400 font-bold mt-0.5">' + dateStr + ' (' + window.getWeekString(new Date(log.updatedAt || Date.now())) + ')</div></div></div>' + actionHtml + '</div>' + tasksHtml + issuesHtml + bottomMetaHtml + '</div>';
-    }).join('');
+        htmlArray.push('<div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm"><div class="flex justify-between items-start mb-4"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-black text-lg">' + initial + '</div><div><div class="font-black text-slate-800 text-base">' + authorName + ' <span class="text-[10px] font-bold text-slate-400 border border-slate-200 px-1.5 py-0.5 rounded ml-1 bg-slate-50">' + (log.authorTeam || '소속없음') + '</span></div><div class="text-[11px] text-slate-400 font-bold mt-0.5">' + dateStr + ' (' + window.getWeekString(new Date(log.updatedAt || Date.now())) + ')</div></div></div>' + actionHtml + '</div>' + tasksHtml + issuesHtml + bottomMetaHtml + '</div>');
+    });
+
+    feed.innerHTML = htmlArray.join('');
 };
 
 window.addWlProject = function() {
