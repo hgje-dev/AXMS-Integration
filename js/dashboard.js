@@ -3,12 +3,12 @@ import { db } from './firebase.js';
 import { collection, query, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 let homeProjSnapshotUnsubscribe = null;
-let homeReqSnapshotUnsubscribe = null; // 리퀘스트 구독용 변수 추가
+let homeReqSnapshotUnsubscribe = null; 
 let chartInstances = {};
 
 window.currentDashStats = {};
 window.currentPeriodProjects = [];
-window.allDashRequests = []; // 리퀘스트 데이터 저장용 배열 추가
+window.allDashRequests = []; 
 
 const getSafeString = function(val) {
     if (val === null || val === undefined) {
@@ -37,7 +37,7 @@ window.loadHomeDashboards = function() {
             if (window.processDashboardData) window.processDashboardData(); 
         });
 
-        // 2. 리퀘스트 데이터 구독 (추가된 부분)
+        // 2. 리퀘스트 데이터 구독
         if (homeReqSnapshotUnsubscribe) homeReqSnapshotUnsubscribe();
         
         homeReqSnapshotUnsubscribe = onSnapshot(collection(db, "requests"), function(snapshot) {
@@ -50,11 +50,22 @@ window.loadHomeDashboards = function() {
             if (window.processRequestDashboardData) window.processRequestDashboardData();
         });
 
-        // 이벤트 리스너 바인딩 (리퀘스트 타입 셀렉트)
+        // 리퀘스트 대시보드 이벤트 리스너 연동 (Type, Year, Month)
         const reqTypeSelect = document.getElementById('req-dash-type-select');
+        const reqYearSelect = document.getElementById('req-dash-year-select');
+        const reqMonthSelect = document.getElementById('req-dash-month-select');
+
         if (reqTypeSelect) {
             reqTypeSelect.removeEventListener('change', window.processRequestDashboardData);
             reqTypeSelect.addEventListener('change', window.processRequestDashboardData);
+        }
+        if (reqYearSelect) {
+            reqYearSelect.removeEventListener('change', window.processRequestDashboardData);
+            reqYearSelect.addEventListener('change', window.processRequestDashboardData);
+        }
+        if (reqMonthSelect) {
+            reqMonthSelect.removeEventListener('change', window.processRequestDashboardData);
+            reqMonthSelect.addEventListener('change', window.processRequestDashboardData);
         }
 
         setTimeout(function() { 
@@ -241,26 +252,59 @@ window.processDashboardData = function() {
 };
 
 // ============================================================
-// 💡 리퀘스트 대시보드 처리 로직 추가
+// 💡 리퀘스트 대시보드 처리 로직 (년/월 필터 추가됨)
 // ============================================================
 window.processRequestDashboardData = function() {
     try {
+        // 1. 연도 Select 데이터 동적 생성 (요청이 등록된 연도 목록 파악)
+        let reqYears = new Set();
+        reqYears.add(new Date().getFullYear());
+        
+        (window.allDashRequests || []).forEach(req => {
+            if (req.createdAt) {
+                reqYears.add(new Date(req.createdAt).getFullYear());
+            }
+        });
+
+        const reqYearSelect = document.getElementById('req-dash-year-select');
+        if (reqYearSelect && reqYearSelect.options.length <= 1) { // 최초 1회만 옵션 생성
+            const currentVal = reqYearSelect.value;
+            reqYearSelect.innerHTML = '<option value="">All Years</option>';
+            Array.from(reqYears).sort((a,b) => b - a).forEach(y => {
+                reqYearSelect.innerHTML += `<option value="${y}" ${y.toString() === currentVal ? 'selected' : ''}>${y}</option>`;
+            });
+            if (currentVal) reqYearSelect.value = currentVal;
+        }
+
+        // 2. 필터 값 가져오기
         const typeSelect = document.getElementById('req-dash-type-select');
+        const monthSelect = document.getElementById('req-dash-month-select');
+
         const filterType = typeSelect ? typeSelect.value : 'all';
+        const filterYear = reqYearSelect ? reqYearSelect.value : '';
+        const filterMonth = monthSelect ? monthSelect.value : '';
 
         let total = 0, pending = 0, progress = 0, completed = 0;
         let typeCounts = { collab: 0, purchase: 0, repair: 0 };
 
         (window.allDashRequests || []).forEach(req => {
-            // 필터 적용
+            // 타입 필터 적용
             if (filterType !== 'all' && req.type !== filterType) return;
+
+            // 연/월 필터 적용
+            if (filterYear || filterMonth) {
+                if (!req.createdAt) return;
+                const d = new Date(req.createdAt);
+                if (filterYear && d.getFullYear().toString() !== filterYear) return;
+                if (filterMonth && String(d.getMonth() + 1).padStart(2, '0') !== filterMonth) return;
+            }
 
             total++;
             
             // 상태 집계
             if (req.status === 'completed') completed++;
             else if (req.status === 'progress' || req.status === 'inspecting') progress++;
-            else pending++; // draft, pending 등 모두 대기로 처리
+            else pending++;
 
             // 타입별 집계
             if (req.type === 'collab') typeCounts.collab++;
@@ -287,7 +331,6 @@ window.renderRequestCharts = function(pending, progress, completed, typeCounts) 
         const canvas = document.getElementById(id); 
         if (!canvas) return;
         
-        // 캔버스 보이기 및 준비중 텍스트 숨기기
         canvas.classList.remove('hidden');
         if(canvas.nextElementSibling) canvas.nextElementSibling.classList.add('hidden');
 
@@ -297,12 +340,11 @@ window.renderRequestCharts = function(pending, progress, completed, typeCounts) 
         chartInstances[id] = new window.Chart(canvas.getContext('2d'), { type: type, data: data, options: options });
     };
 
-    // 1. Status Overview 차트 (Doughnut)
     createChart('reqStatusChart', 'doughnut', {
         labels: ['대기/임시저장', '진행 중', '작업 완료'],
         datasets: [{
             data: [pending, progress, completed],
-            backgroundColor: ['#f59e0b', '#3b82f6', '#10b981'], // amber, blue, emerald
+            backgroundColor: ['#f59e0b', '#3b82f6', '#10b981'],
             borderWidth: 2,
             borderColor: '#ffffff',
             borderRadius: 4,
@@ -315,13 +357,12 @@ window.renderRequestCharts = function(pending, progress, completed, typeCounts) 
         plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 15, font: {size: 11} } } }
     });
 
-    // 2. Requests by Type 차트 (Bar)
     createChart('reqTypeChart', 'bar', {
-        labels: ['협업/조립', '구매의뢰', '수리/점검'],
+        labels: ['Collab', 'Purchase', 'Repair'],
         datasets: [{
             label: '요청 건수',
             data: [typeCounts.collab, typeCounts.purchase, typeCounts.repair],
-            backgroundColor: ['#6366f1', '#10b981', '#f43f5e'], // indigo, emerald, rose
+            backgroundColor: ['#6366f1', '#10b981', '#f43f5e'],
             borderRadius: 6,
             maxBarThickness: 40
         }]
