@@ -70,7 +70,7 @@ simulationWorker.onmessage = function(e) {
     
     if(document.getElementById('out-ccpm-buffer')) document.getElementById('out-ccpm-buffer').innerText = Math.max(0, d90 - d50);
 
-    // 2) 목표일 달성 확률 및 필요 인원 분석 (원본 로직 완벽 복구)
+    // 2) 목표일 달성 확률 및 필요 인원 분석
     const tgD = document.getElementById('target-date')?.value;
     const tEl = document.getElementById('target-date-result');
     const inP = parseInt(document.getElementById('internal-personnel')?.value) || 0;
@@ -116,7 +116,7 @@ simulationWorker.onmessage = function(e) {
         if(tEl) tEl.classList.add('hidden');
     }
 
-    // 3) 리스크 민감도(Tornado Chart) 데이터 세팅 (원본 완벽 복구)
+    // 3) 리스크 민감도 데이터 세팅
     let s = [];
     const qty = Math.max(1, parseFloat(document.getElementById('equip-qty')?.value)||1);
     const uncert = method === 'mc' ? (parseFloat(document.getElementById('mc-uncertainty')?.value)||5)/100 : 0.05;
@@ -199,7 +199,7 @@ window.debouncedRunSimulation = () => {
 };
 
 // ==========================================
-// 4. 프리셋 데이터 연동 및 테이블 렌더링 로직 (완벽 복구)
+// 4. 프리셋 데이터 연동 및 테이블 렌더링 로직
 // ==========================================
 window.loadMasterPresets = async () => {
     try {
@@ -216,7 +216,6 @@ window.loadMasterPresets = async () => {
                 sel.innerHTML += `<option value="${d.id}">${d.data().label}</option>`;
             });
         } else {
-            // DB에 없으면 기본값(defaultPresets) 강제 로드!
             window.masterPresets = JSON.parse(JSON.stringify(defaultPresets));
             for (let key in window.masterPresets) {
                 sel.innerHTML += `<option value="${key}">${window.masterPresets[key].label}</option>`;
@@ -267,7 +266,6 @@ window.setupAutoSaveTriggers = () => {
     });
 };
 
-// 원본의 테이블 렌더링(아이콘, UI) 100% 복구
 window.renderProcessTable = () => {
     const m = document.getElementById('sim-method')?.value || 'mc';
     const tb = document.getElementById('process-tbody');
@@ -431,7 +429,7 @@ window.renderChartJS = () => {
         window.theChart = new Chart(ctx, {
             type: 'bar',
             data: { labels: lbls, datasets: [{ data: bins, backgroundColor: window.latestHistData.hex, borderRadius: 4 }] },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { display: false }, x: { grid: { display: false } } } }
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { display: false }, x: { grid: { display: false }, ticks: { color: '#94a3b8', font: {size: 9} } } } }
         });
     } else if (window.currentTab === 'tor' && window.latestTorData) {
         const {swings, base} = window.latestTorData;
@@ -487,7 +485,7 @@ window.renderGanttChart = () => {
         html += `
             <div class="flex items-center text-xs group z-10">
                 <div class="w-56 font-bold truncate pr-4 text-right text-slate-700 group-hover:text-indigo-600 transition-colors">${isAutoBadge}${p.name}</div>
-                <div class="flex-1 relative h-7 bg-slate-100 rounded-full overflow-visible border border-slate-200">
+                <div class="flex-1 bg-slate-100 rounded-full h-7 relative overflow-hidden border border-slate-200">
                     <div class="absolute top-0 h-full rounded-full ${curColorCls} flex items-center justify-center px-2 shadow-md shadow-indigo-500/20 gantt-bar" 
                          style="left: ${left}%; width: ${width}%; min-width: 70px;">
                         <span class="text-white text-[10px] font-bold truncate leading-none pt-0.5 tracking-wider">${days.toFixed(1)}일 (${p.q}명)</span>
@@ -545,8 +543,14 @@ window.generateGroqInsight = async () => {
                 <div class="space-y-3 animate-fade-in">
                     <p class="text-sm leading-relaxed">${data.summary || "분석 완료"}</p>
                     <div class="grid grid-cols-2 gap-2 mt-2">
-                        <div class="bg-slate-800 p-2 rounded"><span class="text-[10px] text-slate-400 block">리스크</span><span class="text-xs font-bold text-rose-400">${data.mainRisk||"없음"}</span></div>
-                        <div class="bg-slate-800 p-2 rounded"><span class="text-[10px] text-slate-400 block">조치</span><span class="text-xs font-bold text-emerald-400">${data.action||"정상"}</span></div>
+                        <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-700">
+                            <span class="text-[10px] text-slate-400 block mb-1">예상 리스크</span>
+                            <span class="text-xs font-bold text-rose-400">${data.mainRisk||"없음"}</span>
+                        </div>
+                        <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-700">
+                            <span class="text-[10px] text-slate-400 block mb-1">권장 조치</span>
+                            <span class="text-xs font-bold text-emerald-400">${data.action||"정상"}</span>
+                        </div>
                     </div>
                 </div>`;
         }
@@ -561,8 +565,9 @@ window.generateAiComparison = async () => {
 };
 
 // ==========================================
-// 7. 모달창 (불러오기, 이력, 대시보드) 및 데이터 엑셀 내보내기 
+// 7. 모달창 (목록/이력/대시보드) & 권한 (잠금/삭제/내보내기)
 // ==========================================
+
 window.saveToFirestore = async function(isSilent = false) {
     const pCode = document.getElementById('project-code')?.value;
     const pName = document.getElementById('project-name')?.value;
@@ -577,6 +582,7 @@ window.saveToFirestore = async function(isSilent = false) {
         processData: window.currentProcessData,
         p50Md: window.latestP50Md,
         authorUid: window.currentUser?.uid || 'guest',
+        authorName: window.userProfile?.name || '알수없음', // 💡 작성자 저장
         updatedAt: Date.now()
     };
 
@@ -606,6 +612,7 @@ window.cloneProject = () => {
     window.showToast("복제되었습니다. '저장'을 누르면 새 프로젝트로 등록됩니다.", "success");
 };
 
+// 💡 1 & 2: 불러오기 모달창 렌더링 수정 (작성자 표시 & 잠금 UI 분기)
 window.openProjectModal = async () => {
     const container = document.getElementById('project-list-container');
     const modal = document.getElementById('project-list-modal');
@@ -625,14 +632,50 @@ window.openProjectModal = async () => {
         snap.forEach(doc => {
             const d = doc.data();
             const dateStr = window.getDateTimeStr(new Date(d.updatedAt || d.createdAt));
+            const isL = d.isLocked || false;
+            const isA = window.currentProjectId === doc.id;
+            
+            let aH = '';
+            // 관리자이거나 본인이 작성한 프로젝트만 관리 아이콘 렌더링
+            const canManage = (window.userProfile?.role === 'admin' || window.currentUser?.uid === d.authorUid);
+
+            if (canManage) {
+                if (isL) {
+                    aH += `<button onclick="event.stopPropagation(); window.toggleProjectLock('${doc.id}', false)" class="text-amber-500 hover:text-amber-600 p-2 transition-colors" title="잠금 해제"><i class="fa-solid fa-lock"></i></button>
+                           <button onclick="event.stopPropagation(); window.showToast('잠금을 먼저 해제하세요.', 'error');" class="text-slate-200 cursor-not-allowed p-2" title="잠김 상태에선 삭제 불가"><i class="fa-solid fa-trash-can"></i></button>`;
+                } else {
+                    aH += `<button onclick="event.stopPropagation(); window.toggleProjectLock('${doc.id}', true)" class="text-slate-300 hover:text-amber-500 p-2 transition-colors" title="잠금 설정"><i class="fa-solid fa-lock-open"></i></button>
+                           <button onclick="event.stopPropagation(); window.deleteProject('${doc.id}')" class="text-slate-300 hover:text-rose-500 p-2 transition-colors" title="삭제"><i class="fa-solid fa-trash-can"></i></button>`;
+                }
+            } else {
+                 if (isL) {
+                     aH += `<button onclick="event.stopPropagation(); window.showToast('권한이 없습니다.', 'error');" class="text-amber-500/50 cursor-not-allowed p-2"><i class="fa-solid fa-lock"></i></button>`;
+                 }
+            }
+
+            const lockBadge = isL ? `<span class="text-[10px] bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full font-bold ml-2 shadow-sm border border-amber-100"><i class="fa-solid fa-lock text-[8px] mr-1"></i> 잠금됨</span>` : '';
+            const activeBadge = isA ? `<span class="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-bold ml-2 shadow-sm border border-indigo-100">현재 열림</span>` : '';
+
             html += `
             <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center hover:border-amber-300 transition-colors cursor-pointer" onclick="window.loadProject('${doc.id}')">
                 <div>
-                    <div class="text-xs font-bold text-amber-600 mb-1">[${d.projectCode || '코드없음'}]</div>
+                    <div class="flex items-center mb-1">
+                        <span class="text-xs font-bold text-amber-600">[${d.projectCode || '코드없음'}]</span>
+                        ${activeBadge}
+                        ${lockBadge}
+                    </div>
                     <div class="text-sm font-black text-slate-800">${d.projectName}</div>
-                    <div class="text-[10px] text-slate-400 mt-1">담당자: ${d.managerName || '미지정'} | ${dateStr}</div>
+                    <div class="text-[10px] text-slate-400 mt-1 flex items-center gap-2">
+                        <span><i class="fa-regular fa-user mr-1"></i>작성자: <span class="font-bold text-slate-600">${d.authorName || '알수없음'}</span></span>
+                        <span>|</span>
+                        <span>담당자: ${d.managerName || '미지정'}</span>
+                        <span>|</span>
+                        <span><i class="fa-regular fa-clock mr-1"></i>${dateStr}</span>
+                    </div>
                 </div>
-                <button onclick="event.stopPropagation(); window.deleteProject('${doc.id}')" class="text-slate-300 hover:text-rose-500 p-2"><i class="fa-solid fa-trash-can"></i></button>
+                <div class="flex items-center gap-1">
+                    ${aH}
+                </div>
             </div>`;
         });
         html += '</div>';
@@ -647,11 +690,57 @@ window.closeProjectModal = () => {
     if(m) { m.classList.add('hidden'); m.classList.remove('flex'); }
 };
 
+// 💡 1. 잠금/해제 설정 함수 추가
+window.toggleProjectLock = async (id, loc) => {
+    try {
+        if (loc) {
+            const pwd = prompt('프로젝트를 보호하기 위한 비밀번호를 설정하세요:');
+            if (pwd === null) return; 
+            if (pwd.trim() === '') { window.showToast('비밀번호를 입력해야 합니다.', 'error'); return; }
+            
+            await setDoc(doc(db, 'sim_projects', id), { isLocked: true, lockPassword: pwd.trim() }, { merge: true });
+            window.showToast('프로젝트가 잠금 처리되었습니다.', 'success');
+            window.openProjectModal(); 
+        } else {
+            const dS = await getDoc(doc(db, 'sim_projects', id));
+            if (!dS.exists()) return; 
+            const d = dS.data();
+            
+            if (window.userProfile?.role !== 'admin' && window.currentUser?.uid !== d.authorUid) { 
+                window.showToast('권한이 없습니다.', 'error'); return;
+            }
+            
+            const pwd = prompt('잠금 해제 비밀번호를 입력하세요:');
+            if (pwd === null) return; 
+            if (pwd.trim() !== d.lockPassword) { 
+                window.showToast('비밀번호가 일치하지 않습니다.', 'error'); return;
+            }
+            
+            await setDoc(doc(db, 'sim_projects', id), { isLocked: false, lockPassword: null }, { merge: true });
+            window.showToast('잠금이 해제되었습니다.', 'success');
+            window.openProjectModal(); 
+        }
+    } catch(e) {
+        window.showToast("상태 변경 실패", "error");
+    }
+};
+
 window.loadProject = async (id) => {
     try {
         const docSnap = await getDoc(doc(db, "sim_projects", id));
         if(docSnap.exists()) {
             const d = docSnap.data();
+            
+            // 💡 1. 잠긴 프로젝트 불러올 때 비밀번호 확인
+            if (d.isLocked && window.userProfile?.role !== 'admin' && window.currentUser?.uid !== d.authorUid) {
+                const pwd = prompt('🔒 이 프로젝트는 잠겨있습니다. 비밀번호를 입력하세요:');
+                if (pwd === null) return;
+                if (pwd.trim() !== d.lockPassword) {
+                    window.showToast("비밀번호가 일치하지 않습니다.", "error");
+                    return;
+                }
+            }
+
             window.currentProjectId = id;
             document.getElementById('project-code').value = d.projectCode || '';
             document.getElementById('project-name').value = d.projectName || '';
@@ -702,12 +791,12 @@ window.openHistoryModal = async () => {
         hList.forEach(h => {
             const dateStr = window.getDateTimeStr(new Date(h.changedAt));
             html += `
-            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center">
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center hover:shadow-md transition-shadow">
                 <div>
                     <div class="font-bold text-sm text-slate-700">${dateStr}</div>
                     <div class="text-[10px] text-slate-500 mt-1">변경자: ${h.changedBy}</div>
                 </div>
-                <button onclick="window.restoreHistory('${h.id}')" class="bg-sky-50 text-sky-600 hover:bg-sky-100 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">이 시점으로 복구</button>
+                <button onclick="window.restoreHistory('${h.id}')" class="bg-sky-50 text-sky-600 hover:bg-sky-100 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm">이 시점으로 복원</button>
             </div>`;
         });
         html += '</div>';
@@ -732,7 +821,7 @@ window.restoreHistory = async (histId) => {
             await setDoc(doc(db, "sim_projects", window.currentProjectId), oldData);
             window.loadProject(window.currentProjectId);
             window.closeHistoryModal();
-            window.showToast("이력이 복구되었습니다.");
+            window.showToast("이력이 복원되었습니다.");
         }
     } catch(e) { window.showToast("복구 실패", "error"); }
 };
@@ -747,7 +836,6 @@ window.openDashboardModal = async () => {
     tbody.innerHTML = '<tr><td colspan="7" class="text-center p-10"><i class="fa-solid fa-spinner fa-spin text-2xl text-slate-400"></i></td></tr>';
     
     try {
-        // Fetch completed projects from projects_status
         const snap = await getDocs(query(collection(db, "projects_status"), where("status", "==", "completed")));
         let list = [];
         snap.forEach(d => list.push(d.data()));
@@ -790,7 +878,6 @@ window.openDashboardModal = async () => {
         
         tbody.innerHTML = html;
 
-        // Draw Accuracy Charts
         const ctx1 = document.getElementById('accuracy-chart-md')?.getContext('2d');
         const ctx2 = document.getElementById('accuracy-chart-date')?.getContext('2d');
         
@@ -822,6 +909,7 @@ window.closeDashboardModal = () => {
     if(m) { m.classList.add('hidden'); m.classList.remove('flex'); }
 };
 
+// 💡 3. 고급 엑셀 보고서 출력
 window.exportToExcel = async () => {
     if (typeof ExcelJS === 'undefined') return window.showToast("라이브러리 로딩 중입니다.", "warning");
     window.showToast("엑셀 파일 생성 중...");
