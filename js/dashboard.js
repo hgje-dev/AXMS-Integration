@@ -51,11 +51,13 @@ window.loadHomeDashboards = function() {
                 window.allDashRequests.push(data);
             });
             if (window.processRequestDashboardData) window.processRequestDashboardData();
+        }, function(error) {
+            console.error("리퀘스트 데이터 구독 에러:", error);
         });
 
-        // 이벤트 강제 재설정 및 화면 렌더링 호출
         setTimeout(() => {
-            ['req-dash-type-select', 'req-dash-year-select', 'req-dash-month-select'].forEach(id => {
+            // 리퀘스트 이벤트 바인딩
+            ['req-dash-type-select', 'req-period-type-select'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) {
                     el.removeEventListener('change', window.processRequestDashboardData);
@@ -63,12 +65,18 @@ window.loadHomeDashboards = function() {
                 }
             });
 
-            if (window.processRequestDashboardData) window.processRequestDashboardData();
-            
+            // 초기값 세팅
             const periodMonthInput = document.getElementById('period-value-month');
             if (periodMonthInput && !periodMonthInput.value) {
                 window.changePeriodType(); 
             }
+            
+            const reqPeriodMonthInput = document.getElementById('req-period-value-month');
+            if (reqPeriodMonthInput && !reqPeriodMonthInput.value) {
+                window.changeReqPeriodType(); 
+            }
+
+            if (window.processRequestDashboardData) window.processRequestDashboardData();
         }, 100);
 
     } catch(e) { 
@@ -210,37 +218,63 @@ window.processDashboardData = function() {
     } catch(e) { console.error("연간 데이터 연산 오류:", e); }
 };
 
+// ============================================================
+// 💡 리퀘스트 대시보드 처리 (월/주간 필터 적용)
+// ============================================================
+window.changeReqPeriodType = function() {
+    const typeSelect = document.getElementById('req-period-type-select');
+    let type = typeSelect ? typeSelect.value : 'month';
+    const mInput = document.getElementById('req-period-value-month');
+    const wInput = document.getElementById('req-period-value-week');
+    
+    if (type === 'month') { 
+        if (mInput) mInput.classList.remove('hidden'); 
+        if (wInput) wInput.classList.add('hidden'); 
+        if (mInput && !mInput.value) { 
+            const d = new Date();
+            let monthStr = String(d.getMonth() + 1).padStart(2, '0');
+            mInput.value = d.getFullYear() + '-' + monthStr; 
+        } 
+    } else { 
+        if (mInput) mInput.classList.add('hidden'); 
+        if (wInput) wInput.classList.remove('hidden'); 
+        if (wInput && !wInput.value && window.getWeekString) {
+            wInput.value = window.getWeekString(new Date()); 
+        } 
+    }
+    if (window.processRequestDashboardData) window.processRequestDashboardData();
+};
+
 window.processRequestDashboardData = function() {
     try {
-        // DOM 요소 렌더링 검사 후 대기 (재귀 호출 방어 포함)
-        if (!document.getElementById('dash-req-total') || !document.getElementById('reqStatusChart')) {
-            return;
-        }
-
-        let reqYears = new Set();
-        reqYears.add(new Date().getFullYear());
-        
-        (window.allDashRequests || []).forEach(req => {
-            const ms = getSafeMillis(req.createdAt);
-            if (ms > 0) reqYears.add(new Date(ms).getFullYear());
-        });
-
-        const reqYearSelect = document.getElementById('req-dash-year-select');
-        if (reqYearSelect && reqYearSelect.options.length <= 1) { 
-            const currentVal = reqYearSelect.value;
-            reqYearSelect.innerHTML = '<option value="">All Years</option>';
-            Array.from(reqYears).sort((a,b) => b - a).forEach(y => {
-                reqYearSelect.innerHTML += `<option value="${y}" ${y.toString() === currentVal ? 'selected' : ''}>${y}</option>`;
-            });
-            if (currentVal) reqYearSelect.value = currentVal;
-        }
+        if (!document.getElementById('dash-req-total') || !document.getElementById('reqStatusChart')) return;
 
         const typeSelect = document.getElementById('req-dash-type-select');
-        const monthSelect = document.getElementById('req-dash-month-select');
-
         const filterType = typeSelect ? typeSelect.value : 'all';
-        const filterYear = reqYearSelect ? reqYearSelect.value : '';
-        const filterMonth = monthSelect ? monthSelect.value : '';
+        
+        const periodTypeSelect = document.getElementById('req-period-type-select');
+        let periodType = periodTypeSelect ? periodTypeSelect.value : 'month';
+        let valInput = periodType === 'month' ? document.getElementById('req-period-value-month') : document.getElementById('req-period-value-week');
+        let val = valInput ? valInput.value : '';
+
+        let start = ''; let end = '';
+        
+        if (val) {
+            if (periodType === 'month') { 
+                const parts = val.split('-'); 
+                if (parts.length === 2) {
+                    start = val + '-01'; 
+                    let lastDayObj = new Date(parts[0], parts[1], 0);
+                    end = val + '-' + lastDayObj.getDate().toString(); 
+                }
+            } else { 
+                if (window.getDatesFromWeek) { 
+                    const dates = window.getDatesFromWeek(val); 
+                    start = window.getLocalDateStr(dates.start); 
+                    end = window.getLocalDateStr(dates.end); 
+                } 
+            }
+        }
 
         let total = 0, pending = 0, progress = 0, completed = 0;
         let typeCounts = { collab: 0, purchase: 0, repair: 0 };
@@ -248,12 +282,12 @@ window.processRequestDashboardData = function() {
         (window.allDashRequests || []).forEach(req => {
             if (filterType !== 'all' && req.type !== filterType) return;
 
-            if (filterYear || filterMonth) {
+            // 기간 필터 적용
+            if (start && end) {
                 const ms = getSafeMillis(req.createdAt);
                 if (ms === 0) return;
-                const d = new Date(ms);
-                if (filterYear && d.getFullYear().toString() !== filterYear) return;
-                if (filterMonth && String(d.getMonth() + 1).padStart(2, '0') !== filterMonth) return;
+                const reqDate = window.getLocalDateStr(new Date(ms));
+                if (reqDate < start || reqDate > end) return;
             }
 
             total++;
@@ -312,7 +346,7 @@ window.renderRequestCharts = function(pending, progress, completed, typeCounts) 
     });
 
     createChart('reqTypeChart', 'bar', {
-        labels: ['Collab', 'Purchase', 'Repair'],
+        labels: ['협업/조립', '구매의뢰', '수리/점검'],
         datasets: [{
             label: '요청 건수',
             data: [typeCounts.collab, typeCounts.purchase, typeCounts.repair],
@@ -329,6 +363,7 @@ window.renderRequestCharts = function(pending, progress, completed, typeCounts) 
         plugins: { legend: { display: false } }
     });
 };
+// ============================================================
 
 window.renderCharts = function(stats, monthlyCompleted, planData, actData) {
     const createChart = function(id, type, data, options) {
