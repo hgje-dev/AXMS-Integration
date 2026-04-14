@@ -18,7 +18,7 @@ window.masterPresets = {};
 window.currentTab = 'hist'; 
 window.currentProjectId = null;
 
-// 기본 프리셋 (DB가 비었을 때 fallback 용)
+// 기본 프리셋
 const defaultPresets = {
     dev: { 
         label: "🔬 기본 신규 개발", 
@@ -199,7 +199,7 @@ window.debouncedRunSimulation = () => {
 };
 
 // ==========================================
-// 4. 프리셋 데이터 연동 및 테이블 렌더링 로직
+// 4. 프리셋 데이터 연동 및 테이블 렌더링 로직 (완벽 복구)
 // ==========================================
 window.loadMasterPresets = async () => {
     try {
@@ -216,6 +216,7 @@ window.loadMasterPresets = async () => {
                 sel.innerHTML += `<option value="${d.id}">${d.data().label}</option>`;
             });
         } else {
+            // DB에 없으면 기본값(defaultPresets) 강제 로드!
             window.masterPresets = JSON.parse(JSON.stringify(defaultPresets));
             for (let key in window.masterPresets) {
                 sel.innerHTML += `<option value="${key}">${window.masterPresets[key].label}</option>`;
@@ -266,6 +267,7 @@ window.setupAutoSaveTriggers = () => {
     });
 };
 
+// 원본의 테이블 렌더링(아이콘, UI) 100% 복구
 window.renderProcessTable = () => {
     const m = document.getElementById('sim-method')?.value || 'mc';
     const tb = document.getElementById('process-tbody');
@@ -405,7 +407,7 @@ window.switchTab = (tab) => {
 };
 
 // ==========================================
-// 5. 차트 (ChartJS) 및 간트 (Gantt)
+// 5. 차트 (ChartJS) 및 💡 간트 (Gantt) 디자인 복구!
 // ==========================================
 window.renderChartJS = () => {
     const canvas = document.getElementById('chart-canvas');
@@ -464,7 +466,7 @@ window.renderGanttChart = () => {
     });
     if (totalDays <= 0) totalDays = 1;
 
-    let html = '<div class="flex flex-col gap-3 py-2">';
+    let html = '<div class="relative flex flex-col gap-3 py-2">';
     let offset = 0;
     window.currentProcessData.forEach(p => {
         let pt = p.pType || 'md'; let days = 0;
@@ -474,24 +476,25 @@ window.renderGanttChart = () => {
         
         let startD = window.calculateWorkDate(startStr, Math.floor(offset));
         let endD = window.calculateWorkDate(startStr, Math.floor(offset + days - 0.0001));
-        const width = (days / totalDays) * 100;
-        const left = (offset / totalDays) * 100;
+        const widthPct = (days / totalDays) * 100;
+        const leftPct = (offset / totalDays) * 100;
         
         let sStr = window.getLocalDateStr(startD).substring(5).replace('-','/'); 
         let eStr = window.getLocalDateStr(endD).substring(5).replace('-','/');
-        let isAutoBadge = pt === 'auto' ? '<i class="fa-solid fa-gears text-indigo-400 mr-1"></i>' : (pt === 'schedule_test' ? '<i class="fa-solid fa-car text-emerald-400 mr-1"></i>' : (pt.startsWith('schedule') ? '<i class="fa-regular fa-calendar text-emerald-400 mr-1"></i>' : ''));
-        let curColorCls = pt.startsWith('schedule') ? 'bg-gradient-to-r from-emerald-400 to-teal-500' : 'bg-gradient-to-r from-indigo-400 to-purple-500';
+        
+        let curColorCls = pt === 'auto' ? 'bg-amber-400' : (pt.startsWith('schedule') ? 'bg-emerald-400' : 'bg-amber-500');
+        let iconHtml = pt === 'auto' ? '<i class="fa-solid fa-gears text-slate-400 mr-1"></i>' : (pt.startsWith('schedule') ? '<i class="fa-regular fa-calendar text-emerald-500 mr-1"></i>' : '<i class="fa-solid fa-wrench text-amber-600 mr-1"></i>');
 
         html += `
-            <div class="flex items-center text-xs group z-10">
-                <div class="w-56 font-bold truncate pr-4 text-right text-slate-700 group-hover:text-indigo-600 transition-colors">${isAutoBadge}${p.name}</div>
-                <div class="flex-1 bg-slate-100 rounded-full h-7 relative overflow-hidden border border-slate-200">
-                    <div class="absolute top-0 h-full rounded-full ${curColorCls} flex items-center justify-center px-2 shadow-md shadow-indigo-500/20 gantt-bar" 
-                         style="left: ${left}%; width: ${width}%; min-width: 70px;">
-                        <span class="text-white text-[10px] font-bold truncate leading-none pt-0.5 tracking-wider">${days.toFixed(1)}일 (${p.q}명)</span>
+            <div class="flex items-center text-xs group z-10 w-full mb-3">
+                <div class="w-48 font-bold truncate pr-4 text-right text-slate-700">${iconHtml} ${p.name}</div>
+                <div class="flex-1 relative h-7 bg-slate-100 rounded-full border border-slate-200 mx-4 shadow-inner">
+                    <div class="absolute top-0 h-full rounded-full ${curColorCls} flex items-center justify-center px-2 shadow-sm gantt-bar" 
+                         style="left: ${leftPct}%; width: ${widthPct}%; min-width: 80px;">
+                        <span class="text-white text-[10px] font-bold truncate">${days.toFixed(1)}일 (${p.q}명)</span>
                     </div>
                 </div>
-                <div class="w-[100px] text-left text-slate-400 font-mono tracking-tight text-[11px] pl-4 font-semibold">${sStr} ~ ${eStr}</div>
+                <div class="w-24 text-right text-slate-400 font-mono text-[11px] font-semibold tracking-tighter shrink-0">${sStr} ~ ${eStr}</div>
             </div>
         `;
         offset += days;
@@ -501,7 +504,7 @@ window.renderGanttChart = () => {
 };
 
 // ==========================================
-// 6. 백엔드 연동 AI 분석, 모달창 띄우기
+// 6. 백엔드 연동 AI 분석
 // ==========================================
 window.toggleAiApiPanel = (force) => {
     const panel = document.getElementById('ai-api-panel-wrap');
@@ -565,9 +568,8 @@ window.generateAiComparison = async () => {
 };
 
 // ==========================================
-// 7. 모달창 (목록/이력/대시보드) & 권한 (잠금/삭제/내보내기)
+// 7. 모달창 (불러오기, 이력, 대시보드) 및 권한 관리 (잠금/삭제)
 // ==========================================
-
 window.saveToFirestore = async function(isSilent = false) {
     const pCode = document.getElementById('project-code')?.value;
     const pName = document.getElementById('project-name')?.value;
@@ -582,7 +584,7 @@ window.saveToFirestore = async function(isSilent = false) {
         processData: window.currentProcessData,
         p50Md: window.latestP50Md,
         authorUid: window.currentUser?.uid || 'guest',
-        authorName: window.userProfile?.name || '알수없음', // 💡 작성자 저장
+        authorName: window.userProfile?.name || '알수없음', 
         updatedAt: Date.now()
     };
 
@@ -612,7 +614,6 @@ window.cloneProject = () => {
     window.showToast("복제되었습니다. '저장'을 누르면 새 프로젝트로 등록됩니다.", "success");
 };
 
-// 💡 1 & 2: 불러오기 모달창 렌더링 수정 (작성자 표시 & 잠금 UI 분기)
 window.openProjectModal = async () => {
     const container = document.getElementById('project-list-container');
     const modal = document.getElementById('project-list-modal');
@@ -636,7 +637,6 @@ window.openProjectModal = async () => {
             const isA = window.currentProjectId === doc.id;
             
             let aH = '';
-            // 관리자이거나 본인이 작성한 프로젝트만 관리 아이콘 렌더링
             const canManage = (window.userProfile?.role === 'admin' || window.currentUser?.uid === d.authorUid);
 
             if (canManage) {
@@ -690,7 +690,6 @@ window.closeProjectModal = () => {
     if(m) { m.classList.add('hidden'); m.classList.remove('flex'); }
 };
 
-// 💡 1. 잠금/해제 설정 함수 추가
 window.toggleProjectLock = async (id, loc) => {
     try {
         if (loc) {
@@ -731,7 +730,6 @@ window.loadProject = async (id) => {
         if(docSnap.exists()) {
             const d = docSnap.data();
             
-            // 💡 1. 잠긴 프로젝트 불러올 때 비밀번호 확인
             if (d.isLocked && window.userProfile?.role !== 'admin' && window.currentUser?.uid !== d.authorUid) {
                 const pwd = prompt('🔒 이 프로젝트는 잠겨있습니다. 비밀번호를 입력하세요:');
                 if (pwd === null) return;
@@ -909,7 +907,6 @@ window.closeDashboardModal = () => {
     if(m) { m.classList.add('hidden'); m.classList.remove('flex'); }
 };
 
-// 💡 3. 고급 엑셀 보고서 출력
 window.exportToExcel = async () => {
     if (typeof ExcelJS === 'undefined') return window.showToast("라이브러리 로딩 중입니다.", "warning");
     window.showToast("엑셀 파일 생성 중...");
@@ -969,14 +966,67 @@ window.exportToExcel = async () => {
     window.showToast("다운로드 완료");
 };
 
-window.loadSimilarProjectsList = () => {
-    const list = document.getElementById('similar-projects-list');
-    if(list) list.innerHTML = '<div class="text-slate-400 text-xs p-2">과거 프로젝트 데이터를 불러오는 중...</div>';
-    setTimeout(() => {
-        if(list) list.innerHTML = '<div class="text-slate-400 text-xs p-2">불러올 수 있는 프로젝트가 없습니다.</div>';
-    }, 1000);
+// 💡 초성검색을 통한 프로젝트 자동완성 함수
+window.showAutocomplete = function(inputEl, targetId1, targetId2, isNameSearch) {
+    const val = inputEl.value.trim().toLowerCase(); 
+    let dropdown = document.getElementById('pjt-autocomplete-dropdown');
+    
+    if(!dropdown) { 
+        dropdown = document.createElement('ul'); 
+        dropdown.id = 'pjt-autocomplete-dropdown'; 
+        dropdown.className = 'absolute z-[9999] bg-white border border-indigo-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-full custom-scrollbar py-1 mt-1'; 
+        inputEl.parentNode.appendChild(dropdown); 
+    }
+    
+    if(val.length < 1) { 
+        dropdown.classList.add('hidden'); 
+        return; 
+    }
+    
+    let matches = [];
+    for (let i = 0; i < (window.pjtCodeMasterList || []).length; i++) {
+        let p = window.pjtCodeMasterList[i];
+        if (isNameSearch) { 
+            if (p.name.toLowerCase().includes(val) || window.matchString(val, p.name)) matches.push(p); 
+        } else { 
+            if (p.code.toLowerCase().includes(val) || window.matchString(val, p.code)) matches.push(p); 
+        }
+    }
+    
+    if(matches.length > 0) {
+        dropdown.classList.remove('hidden');
+        let dropHtml = '';
+        matches.forEach(function(m) {
+            let safeName = m.name.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+            dropHtml += `<li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-slate-700 font-bold text-xs border-b border-slate-50 last:border-0 truncate transition-colors" onmousedown="window.selectAutocomplete('${m.code}', '${safeName}', '${inputEl.id}', '${targetId1}')"><span class="text-indigo-600">[${m.code}]</span> ${m.name}</li>`;
+        }); 
+        dropdown.innerHTML = dropHtml;
+    } else { 
+        dropdown.classList.add('hidden'); 
+    }
 };
+
+window.selectAutocomplete = function(code, name, sourceId, targetId1) { 
+    const sourceEl = document.getElementById(sourceId); 
+    const t1 = document.getElementById(targetId1); 
+    
+    if (sourceId === 'project-code') { 
+        if (sourceEl) sourceEl.value = code; 
+        if (t1) t1.value = name; 
+    } else { 
+        if (sourceEl) sourceEl.value = name; 
+        if (t1) t1.value = code; 
+    } 
+    const drop = document.getElementById('pjt-autocomplete-dropdown'); 
+    if (drop) drop.classList.add('hidden'); 
+};
+
+document.addEventListener('click', function(e) {
+    const d = document.getElementById('pjt-autocomplete-dropdown'); 
+    if (d && !d.classList.contains('hidden') && !e.target.closest('#pjt-autocomplete-dropdown') && !e.target.closest('input[oninput*="showAutocomplete"]')) {
+        d.classList.add('hidden');
+    }
+});
 
 // 초기화 실행
 window.loadMasterPresets();
-window.loadSimilarProjectsList();
