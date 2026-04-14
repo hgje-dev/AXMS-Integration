@@ -1,59 +1,217 @@
-<div class="mt-8 border-t border-slate-200 pt-8 flex flex-col gap-6 pb-10">
+<div class="flex flex-col gap-6 pb-10">
+    <div class="flex flex-col md:flex-row md:items-end justify-between mb-2 border-b border-slate-200 pb-4">
+        <div>
+            <h2 class="text-xl font-black text-slate-800 flex items-center gap-2"><i class="fa-solid fa-chart-line text-indigo-500"></i> 프로젝트 통합 대시보드 (연간)</h2>
+            <p class="text-xs text-slate-500 mt-1">제조 및 광학 파트 통합 데이터 기준</p>
+        </div>
+        <div class="flex items-center gap-3 mt-4 md:mt-0">
+            <button id="btn-export-dash" onclick="window.exportDashboardExcel()" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-2">
+                <i class="fa-solid fa-file-excel"></i> 현황 보고서 다운로드
+            </button>
+            <div class="bg-white border border-slate-200 shadow-sm px-4 py-2 rounded-xl flex items-center gap-2">
+                <i class="fa-solid fa-users text-slate-400"></i>
+                <span class="text-xs font-bold text-slate-600">팀 총 인원수</span>
+                <span id="dash-team-count" class="text-sm font-black text-indigo-600 ml-1 border-l pl-2">0명</span>
+            </div>
+            <div class="flex items-center gap-2 bg-white border border-slate-200 shadow-sm px-3 py-1.5 rounded-xl">
+                <i class="fa-regular fa-calendar text-slate-400"></i>
+                <label class="text-xs font-bold text-slate-600 ml-1">기준 연도</label>
+                <select id="dash-year-select" class="px-2 py-1 border-0 text-sm font-black text-indigo-700 bg-transparent outline-none cursor-pointer" onchange="window.processDashboardData()"></select>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-2">
+        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-emerald-400">
+            <p class="text-[11px] font-bold text-slate-500 mb-0.5">완료 (출하)</p>
+            <p class="text-2xl font-black text-emerald-600 leading-tight" id="dash-pd-completed">0</p>
+            <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">해당 연도 출하 기준</p>
+        </div>
+        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-sky-400">
+            <p class="text-[11px] font-bold text-slate-500 mb-0.5">목표대비 출하 오차</p>
+            <p class="text-2xl font-black text-sky-600 leading-tight"><span id="dash-pd-ship-error">0</span><span class="text-[10px] text-slate-400 ml-1">일</span></p>
+            <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">출하완료 PJT 평균</p>
+        </div>
+        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-indigo-400">
+            <p class="text-[11px] font-bold text-slate-500 mb-0.5">총 예정 공수</p>
+            <p class="text-2xl font-black text-indigo-600 leading-tight"><span id="dash-pd-estMd">0.0</span><span class="text-[10px] text-slate-400 ml-1">MD</span></p>
+            <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">타겟 프로젝트 합산</p>
+        </div>
+        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-purple-400">
+            <p class="text-[11px] font-bold text-slate-500 mb-0.5">총 투입 공수 (최종)</p>
+            <p class="text-2xl font-black text-purple-600 leading-tight"><span id="dash-pd-curMd">0.0</span><span class="text-[10px] text-slate-400 ml-1">MD</span></p>
+            <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">타겟 프로젝트 합산</p>
+        </div>
+        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-orange-400">
+            <p class="text-[11px] font-bold text-slate-500 mb-0.5">총 외주 공수</p>
+            <p class="text-2xl font-black text-orange-600 leading-tight"><span id="dash-pd-outMd">0.0</span><span class="text-[10px] text-slate-400 ml-1">MD</span></p>
+            <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">타겟 프로젝트 합산</p>
+        </div>
+        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-amber-400">
+            <p class="text-[11px] font-bold text-slate-500 mb-0.5">계획대비 편차율</p>
+            <p class="text-2xl font-black text-amber-600 leading-tight" id="dash-pd-variance">0%</p>
+            <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">(최종 - 예정) / 예정</p>
+        </div>
+        <div class="bg-white rounded-2xl p-4 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-fuchsia-400">
+            <p class="text-[11px] font-bold text-slate-500 mb-0.5">팀 연간 부하율</p>
+            <p class="text-2xl font-black text-fuchsia-600 leading-tight" id="dash-pd-workload">0.0%</p>
+            <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">최종MD / 연간 가용력</p>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="bg-white rounded-3xl p-6 border shadow-sm flex flex-col h-[320px]">
+            <h3 class="text-sm font-extrabold text-slate-700 mb-4 border-b border-slate-100 pb-3">프로젝트 진행상태 비율</h3>
+            <div class="flex-1 relative w-full h-full pb-2"><canvas id="projPieChart"></canvas></div>
+        </div>
+        <div class="bg-white rounded-3xl p-6 border shadow-sm flex flex-col h-[320px]">
+            <h3 class="text-sm font-extrabold text-slate-700 mb-4 border-b border-slate-100 pb-3">월별 출하(완료) 추이 (해당 연도 1~12월)</h3>
+            <div class="flex-1 relative w-full h-full pb-2"><canvas id="projMonthlyChart"></canvas></div>
+        </div>
+        <div class="bg-white rounded-3xl p-6 border shadow-sm flex flex-col h-[320px]">
+            <h3 class="text-sm font-extrabold text-slate-700 mb-4 border-b border-slate-100 pb-3">월별 계획공수 vs 실제 투입(최종)공수</h3>
+            <div class="flex-1 relative w-full h-full pb-2"><canvas id="annualPlanVsActualChart"></canvas></div>
+        </div>
+    </div>
+
+    <div class="mt-8 border-t border-slate-200 pt-8 flex flex-col gap-6">
         <div class="flex flex-col md:flex-row md:items-center justify-between mb-2">
-            <h2 class="text-xl font-black text-slate-800 flex items-center gap-2"><i class="fa-solid fa-file-invoice text-blue-500"></i> Request Dashboard</h2>
-            <div class="flex items-center gap-2 mt-4 md:mt-0 flex-wrap">
-                <select id="req-dash-type-select" class="bg-white border border-slate-200 shadow-sm px-3 py-2 rounded-xl text-sm font-bold text-slate-700 outline-none cursor-pointer hover:border-blue-300 transition-colors">
-                    <option value="all">전체 요청</option>
-                    <option value="collab">협업/조립</option>
-                    <option value="purchase">구매의뢰</option>
-                    <option value="repair">수리/점검</option>
-                </select>
-                <select id="req-period-type-select" class="bg-white border border-slate-200 shadow-sm px-3 py-2 rounded-xl text-sm font-bold text-slate-700 outline-none cursor-pointer hover:border-blue-300 transition-colors" onchange="window.changeReqPeriodType()">
+            <h2 class="text-xl font-black text-indigo-800 flex items-center gap-2"><i class="fa-regular fa-calendar-check text-indigo-500"></i> 기간별 프로젝트 상세 분석</h2>
+            <div class="flex items-center gap-2 mt-4 md:mt-0">
+                <select id="period-type-select" class="bg-white border border-slate-200 shadow-sm px-3 py-2 rounded-xl text-sm font-bold text-slate-700 outline-none cursor-pointer hover:border-indigo-300 transition-colors" onchange="window.changePeriodType()">
                     <option value="month">월간 조회</option>
                     <option value="week">주간 조회</option>
                 </select>
-                <div class="flex items-center gap-2 bg-white border border-slate-200 shadow-sm px-3 py-1.5 rounded-xl focus-within:border-blue-400 transition-colors">
+                <div class="flex items-center gap-2 bg-white border border-slate-200 shadow-sm px-3 py-1.5 rounded-xl focus-within:border-indigo-400 transition-colors">
                     <i class="fa-solid fa-magnifying-glass text-slate-400"></i>
                     <label class="text-xs font-bold text-slate-600 ml-1">조회 기간</label>
-                    <input type="month" id="req-period-value-month" class="px-2 py-1 border-0 text-sm font-black text-blue-700 bg-transparent outline-none cursor-pointer" onchange="window.processRequestDashboardData()">
-                    <input type="week" id="req-period-value-week" class="px-2 py-1 border-0 text-sm font-black text-blue-700 bg-transparent outline-none cursor-pointer hidden" onchange="window.processRequestDashboardData()">
+                    <input type="month" id="period-value-month" class="px-2 py-1 border-0 text-sm font-black text-indigo-700 bg-transparent outline-none cursor-pointer" onchange="window.processPeriodData()">
+                    <input type="week" id="period-value-week" class="px-2 py-1 border-0 text-sm font-black text-indigo-700 bg-transparent outline-none cursor-pointer hidden" onchange="window.processPeriodData()">
                 </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-emerald-500">
+                <p class="text-[11px] font-bold text-slate-500 mb-0.5">완료 (출하)</p>
+                <p class="text-2xl font-black text-emerald-600 leading-tight" id="pd-period-completed">0</p>
+                <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">조회 기간 내 출하 기준</p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-slate-400">
+                <p class="text-[11px] font-bold text-slate-500 mb-0.5">대기 / 보류</p>
+                <p class="text-2xl font-black text-slate-700 leading-tight" id="pd-period-pending">0</p>
+                <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">조회 기간 타겟 PJT</p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-blue-400">
+                <p class="text-[11px] font-bold text-slate-500 mb-0.5">작업 진행중</p>
+                <p class="text-2xl font-black text-blue-600 leading-tight" id="pd-period-progress">0</p>
+                <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">조회 기간 타겟 PJT</p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-rose-400">
+                <p class="text-[11px] font-bold text-slate-500 mb-0.5">납기 임박</p>
+                <p class="text-2xl font-black text-rose-600 leading-tight" id="pd-period-urgent">0</p>
+                <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">D-7 이내 (예정일 기준)</p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-purple-400">
+                <p class="text-[11px] font-bold text-slate-500 mb-0.5" id="label-period-md">총 투입 공수 (최종)</p>
+                <p class="text-2xl font-black text-purple-600 leading-tight"><span id="pd-period-total-md">0.0</span><span class="text-sm text-slate-400 ml-1">MD</span></p>
+                <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">조회 기간 타겟 PJT 합산</p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-orange-400">
+                <p class="text-[11px] font-bold text-slate-500 mb-0.5">총 외주 공수</p>
+                <p class="text-2xl font-black text-orange-600 leading-tight"><span id="pd-period-out-md">0.0</span><span class="text-sm text-slate-400 ml-1">MD</span></p>
+                <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">조회 기간 타겟 PJT 합산</p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-fuchsia-400">
+                <p class="text-[11px] font-bold text-slate-500 mb-0.5">해당 기간 부하율</p>
+                <p class="text-2xl font-black text-fuchsia-600 leading-tight" id="pd-period-workload">0.0%</p>
+                <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">최종MD / 기간 내 가용력</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="bg-white rounded-3xl p-6 border shadow-sm flex flex-col h-[320px]"><h3 class="text-sm font-extrabold text-slate-700 mb-4 border-b border-slate-100 pb-3" id="chart-title-1">주차별 추이</h3><div class="flex-1 relative"><canvas id="periodChart1"></canvas></div></div>
+            <div class="bg-white rounded-3xl p-6 border shadow-sm flex flex-col h-[320px]"><h3 class="text-sm font-extrabold text-slate-700 mb-4 border-b border-slate-100 pb-3">계획 vs 실적(최종) MD</h3><div class="flex-1 relative"><canvas id="periodChart2"></canvas></div></div>
+            <div class="bg-white rounded-3xl p-6 border shadow-sm flex flex-col h-[320px]"><h3 class="text-sm font-extrabold text-slate-700 mb-4 border-b border-slate-100 pb-3">담당자별 프로젝트</h3><div class="flex-1 relative"><canvas id="periodChart3"></canvas></div></div>
+        </div>
+
+        <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col mt-4">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50"><h3 class="font-extrabold text-slate-800 text-sm">해당 기간 프로젝트 리스트</h3><span class="bg-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-1 rounded" id="period-table-count">총 0건</span></div>
+            <div class="overflow-x-auto custom-scrollbar max-h-[400px]">
+                <table class="w-full text-left border-collapse text-[11px] whitespace-nowrap">
+                    <thead class="bg-white text-slate-500 sticky top-0 border-b z-10 shadow-sm">
+                        <tr><th class="p-3 font-bold text-center">파트</th><th class="p-3 font-bold text-center">PJT 코드</th><th class="p-3 font-bold">프로젝트명</th><th class="p-3 font-bold text-center text-rose-500">예정출하일</th><th class="p-3 font-bold text-center text-emerald-500">진행률</th><th class="p-3 font-bold text-center">현재상태</th><th class="p-3 font-bold text-center">예정MD</th><th class="p-3 font-bold text-center text-amber-500">외주MD</th><th class="p-3 font-bold text-center bg-indigo-50/50 text-indigo-700" id="th-period-md">최종MD</th><th class="p-3 font-bold text-center text-amber-500">편차</th></tr>
+                    </thead>
+                    <tbody id="period-table-body" class="divide-y divide-slate-100 text-slate-700"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-8 border-t border-slate-200 pt-8 flex flex-col gap-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between mb-2">
+            <h2 class="text-xl font-black text-slate-800 flex items-center gap-2"><i class="fa-solid fa-file-invoice text-blue-500"></i> Request Dashboard</h2>
+            <div class="flex items-center gap-2 mt-4 md:mt-0 flex-wrap">
+                <select id="req-dash-year-select" class="bg-white border border-slate-200 shadow-sm px-3 py-2 rounded-xl text-sm font-bold text-slate-700 outline-none cursor-pointer hover:border-blue-300 transition-colors">
+                    <option value="">All Years</option>
+                </select>
+                <select id="req-dash-month-select" class="bg-white border border-slate-200 shadow-sm px-3 py-2 rounded-xl text-sm font-bold text-slate-700 outline-none cursor-pointer hover:border-blue-300 transition-colors">
+                    <option value="">All Months</option>
+                    <option value="01">Jan</option>
+                    <option value="02">Feb</option>
+                    <option value="03">Mar</option>
+                    <option value="04">Apr</option>
+                    <option value="05">May</option>
+                    <option value="06">Jun</option>
+                    <option value="07">Jul</option>
+                    <option value="08">Aug</option>
+                    <option value="09">Sep</option>
+                    <option value="10">Oct</option>
+                    <option value="11">Nov</option>
+                    <option value="12">Dec</option>
+                </select>
+                <select id="req-dash-type-select" class="bg-white border border-slate-200 shadow-sm px-3 py-2 rounded-xl text-sm font-bold text-slate-700 outline-none cursor-pointer hover:border-blue-300 transition-colors">
+                    <option value="all">All Requests</option>
+                    <option value="collab">Collab</option>
+                    <option value="purchase">Purchase</option>
+                    <option value="repair">Repair</option>
+                </select>
             </div>
         </div>
 
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-slate-400">
-                <p class="text-[11px] font-bold text-slate-500 mb-0.5">총 요청 건수</p>
+                <p class="text-[11px] font-bold text-slate-500 mb-0.5">Total Requests</p>
                 <p class="text-2xl font-black text-slate-700 leading-tight" id="dash-req-total">0</p>
-                <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">조회 기간 내 전체</p>
+                <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">총 요청 건수</p>
             </div>
             <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-amber-400">
-                <p class="text-[11px] font-bold text-slate-500 mb-0.5">접수 대기중</p>
+                <p class="text-[11px] font-bold text-slate-500 mb-0.5">Pending</p>
                 <p class="text-2xl font-black text-amber-600 leading-tight" id="dash-req-pending">0</p>
-                <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">조회 기간 내 대기</p>
+                <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">접수 대기중</p>
             </div>
             <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-blue-400">
-                <p class="text-[11px] font-bold text-slate-500 mb-0.5">진행 중</p>
+                <p class="text-[11px] font-bold text-slate-500 mb-0.5">In Progress</p>
                 <p class="text-2xl font-black text-blue-600 leading-tight" id="dash-req-progress">0</p>
-                <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">조회 기간 내 진행</p>
+                <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">진행 중</p>
             </div>
             <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-emerald-400">
-                <p class="text-[11px] font-bold text-slate-500 mb-0.5">작업 완료됨</p>
+                <p class="text-[11px] font-bold text-slate-500 mb-0.5">Completed</p>
                 <p class="text-2xl font-black text-emerald-600 leading-tight" id="dash-req-completed">0</p>
-                <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">조회 기간 내 완료</p>
+                <p class="text-[9px] font-medium text-slate-400 mt-1 truncate">작업 완료됨</p>
             </div>
         </div>
         
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div class="bg-white rounded-3xl p-6 border shadow-sm flex flex-col h-[320px]">
-                <h3 class="text-sm font-extrabold text-slate-700 mb-4 border-b border-slate-100 pb-3">진행 상태 요약</h3>
+                <h3 class="text-sm font-extrabold text-slate-700 mb-4 border-b border-slate-100 pb-3">Status Overview</h3>
                 <div class="flex-1 relative w-full h-full pb-2 flex items-center justify-center text-slate-400 font-bold">
                     <canvas id="reqStatusChart" class="hidden"></canvas>
                     <span>차트 준비 중...</span>
                 </div>
             </div>
             <div class="bg-white rounded-3xl p-6 border shadow-sm flex flex-col h-[320px]">
-                <h3 class="text-sm font-extrabold text-slate-700 mb-4 border-b border-slate-100 pb-3">유형별 요청 건수</h3>
+                <h3 class="text-sm font-extrabold text-slate-700 mb-4 border-b border-slate-100 pb-3">Requests by Type</h3>
                 <div class="flex-1 relative w-full h-full pb-2 flex items-center justify-center text-slate-400 font-bold">
                     <canvas id="reqTypeChart" class="hidden"></canvas>
                     <span>차트 준비 중...</span>
@@ -61,3 +219,4 @@
             </div>
         </div>
     </div>
+</div>
