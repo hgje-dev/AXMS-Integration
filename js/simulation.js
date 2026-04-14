@@ -21,6 +21,7 @@ window.isProjectDirty = false;
 window.latestAiResult = null; 
 window.completedProjects = [];
 window.selectedSimilarProjects = [];
+window.dashMatchedData = []; 
 
 const defaultPresets = {
     dev: { 
@@ -187,6 +188,9 @@ simulationWorker.onmessage = function(e) {
     if(window.renderGanttChart) window.renderGanttChart();
 };
 
+// ==========================================
+// 3. 시뮬레이션 실행 트리거
+// ==========================================
 window.runSimulation = () => {
     const method = document.getElementById('sim-method')?.value || 'mc';
     const qty = Math.max(1, parseFloat(document.getElementById('equip-qty')?.value) || 1);
@@ -194,7 +198,7 @@ window.runSimulation = () => {
     const iters = method === 'mc' ? (parseInt(document.getElementById('mc-iterations')?.value) || 5000) : 5000;
     const uncert = method === 'mc' ? (parseFloat(document.getElementById('mc-uncertainty')?.value) || 5) / 100 : 0.05;
     const diff = parseFloat(document.getElementById('diff-multiplier')?.value) || 1.0;
-    const rBase = (parseFloat(document.getElementById('rework-rate')?.value) || 5) / 100;
+    const rBase = (parseFloat(document.getElementById('rework-rate')?.value) || 2) / 100;
     const bBase = (parseFloat(document.getElementById('buffer-rate')?.value) || 5) / 100;
     
     const sen = parseInt(document.getElementById('p-senior')?.value) || 0;
@@ -221,72 +225,15 @@ window.debouncedRunSimulation = () => {
 };
 
 // ==========================================
-// 3. UI 관리 (초기화, 프리셋)
+// 4. 프리셋 데이터 연동 및 테이블 렌더링 로직
 // ==========================================
-
-// 💡 1. 새로 만들기 완벽 지원
-window.createNewProject = () => {
-    if (window.isProjectDirty && !confirm("저장하지 않은 변경사항이 있습니다. 무시하고 새 프로젝트를 생성하시겠습니까?")) return;
-    
-    window.currentProjectId = null;
-    document.getElementById('project-code').value = '';
-    document.getElementById('project-name').value = '';
-    document.getElementById('manager-name').value = '';
-    document.getElementById('equip-qty').value = '1';
-    document.getElementById('learning-curve').value = '95';
-    document.getElementById('diff-multiplier').value = '1.0';
-    document.getElementById('buffer-rate').value = '5';
-    
-    document.getElementById('start-date').value = window.getLocalDateStr(new Date());
-    document.getElementById('target-date').value = '';
-    document.getElementById('shipping-date').value = '';
-    
-    document.getElementById('actual-md').value = '';
-    document.getElementById('actual-expense').value = '';
-    document.getElementById('actual-start-date').value = '';
-    document.getElementById('actual-date').value = '';
-    
-    const typeSel = document.getElementById('eq-type');
-    if (typeSel && typeSel.options.length > 0) typeSel.selectedIndex = 0;
-    
-    window.currentProcessData = [];
-    window.isProjectDirty = false;
-    window.latestAiResult = null;
-    
-    window.renderProcessTable();
-    window.renderUnitTables();
-    
-    const bBox = document.getElementById('ai-briefing-text');
-    if(bBox) bBox.innerHTML = '<div class="text-center p-4 text-slate-500">AI 분석을 실행해주세요.</div>';
-    
-    const cBox = document.getElementById('ai-compare-result');
-    if(cBox) { cBox.innerHTML = ''; cBox.classList.add('hidden'); }
-    
-    const sList = document.getElementById('similar-projects-list');
-    if(sList) sList.innerHTML = '<div class="text-slate-400 text-xs p-2">비교할 프로젝트가 선택되지 않았습니다.</div>';
-    window.selectedSimilarProjects = [];
-
-    window.debouncedRunSimulation();
-    window.showToast("새 프로젝트 환경이 준비되었습니다.", "success");
-};
-
-// 💡 2. 복제 기능 (버그 픽스)
-window.cloneProject = () => {
-    if(window.currentProcessData.length === 0) return window.showToast("복제할 데이터가 없습니다.", "warning");
-    window.currentProjectId = null; // 💡 ID를 널로 만들어 다음 저장 시 addDoc이 호출되게 함
-    const nameEl = document.getElementById('project-name');
-    if(nameEl && !nameEl.value.includes('복제본')) nameEl.value += ' (복제본)';
-    window.isProjectDirty = true;
-    window.showToast("복제 모드로 전환되었습니다. '저장'을 누르면 새 프로젝트로 등록됩니다.", "success");
-};
-
 window.loadMasterPresets = async () => {
     try {
         const snap = await getDocs(collection(db, "sim_master_presets"));
         const sel = document.getElementById('eq-type');
         if (!sel) return;
         
-        sel.innerHTML = '<option value="">프리셋 선택 안함</option>';
+        sel.innerHTML = '';
         window.masterPresets = {};
         
         if (!snap.empty) {
@@ -300,25 +247,19 @@ window.loadMasterPresets = async () => {
                 sel.innerHTML += `<option value="${key}">${window.masterPresets[key].label}</option>`;
             }
         }
+        window.handleTypeChange();
     } catch (e) { console.error("Presets Load Error", e); }
 };
 
 window.handleTypeChange = () => {
     const id = document.getElementById('eq-type')?.value;
-    if (!id || !window.masterPresets[id]) {
-        window.currentProcessData = [];
-        window.renderProcessTable();
-        window.renderUnitTables();
-        window.debouncedRunSimulation();
-        return;
-    }
+    if (!id || !window.masterPresets[id]) return;
     
     const preset = window.masterPresets[id];
     window.currentProcessData = JSON.parse(JSON.stringify(preset.processData));
     
     if (preset.curve) document.getElementById('learning-curve').value = preset.curve;
-    if (preset.diff) document.getElementById('diff-multiplier').value = preset.diff;
-    if (preset.buffer) document.getElementById('buffer-rate').value = preset.buffer;
+    if (preset.labor) document.getElementById('labor-cost').value = preset.labor;
     
     window.handleMethodChange();
 };
@@ -351,7 +292,6 @@ window.setupAutoSaveTriggers = () => {
     });
 };
 
-// 💡 6개 점(그립) 드래그 앤 드롭 함수 구현
 window.dragProcessStart = (e, index) => {
     window.draggedProcessIndex = index;
     e.dataTransfer.effectAllowed = 'move';
@@ -468,7 +408,7 @@ window.renderUnitTables = () => {
 
     window.currentProcessData.forEach((p, pi) => {
         if(p.pType !== 'auto') return; 
-        if(!p.unitData || p.unitData.length === 0) p.unitData = [{name:"신규", q:1, m:1, o:0.9, p:1.4}];
+        if(!p.unitData || p.unitData.length === 0) p.unitData = [{name:"신규", q:1, m:1.0, o:0.9, p:1.4}];
         
         let pM = 0, tb = '';
         p.unitData.forEach((u, ui) => {
@@ -557,7 +497,7 @@ window.switchTab = (tab) => {
 };
 
 // ==========================================
-// 4. 차트 (ChartJS) 및 간트 (Gantt)
+// 5. 차트 (ChartJS) 및 간트 (Gantt)
 // ==========================================
 window.renderChartJS = () => {
     const canvas = document.getElementById('chart-canvas');
@@ -654,7 +594,7 @@ window.renderGanttChart = () => {
 };
 
 // ==========================================
-// 5. 💡 강력해진 AI 연동 로직
+// 6. 💡 직접 호출 AI 연동 로직 (프론트엔드 통신)
 // ==========================================
 window.toggleAiApiPanel = (force) => {
     const panel = document.getElementById('ai-api-panel-wrap');
@@ -676,7 +616,7 @@ window.saveAiApiSettings = () => {
     window.toggleAiApiPanel(false);
 };
 
-// 💡 5-1. 고급 프롬프트가 적용된 심층 분석
+// 💡 6-1. 고급 프롬프트가 적용된 심층 분석
 window.generateGroqInsight = async () => {
     if (!window.latestP50Md) return window.showToast("먼저 시뮬레이션을 실행해주세요.", "error");
     
@@ -772,7 +712,7 @@ window.generateGroqInsight = async () => {
     }
 };
 
-// 💡 5-2. 유사 프로젝트 비교 기능 및 모달
+// 💡 6-2. 유사 프로젝트 비교 기능 및 모달
 window.openSimilarProjectModal = async () => {
     const modal = document.getElementById('similar-project-modal');
     const tbody = document.getElementById('similar-project-tbody');
@@ -815,7 +755,7 @@ window.updateSelectedSimilarProjects = () => {
     const cbs = document.querySelectorAll('.sim-proj-cb:checked');
     if(cbs.length > 3) {
         window.showToast("최대 3개까지만 선택 가능합니다.", "warning");
-        event.target.checked = false; // 방금 누른 거 취소
+        event.target.checked = false; 
     }
 };
 
@@ -854,18 +794,24 @@ window.generateAiComparison = async () => {
     if(cBox) { cBox.classList.remove('hidden'); cBox.innerHTML = '<div class="text-center p-6"><i class="fa-solid fa-spinner fa-spin mr-2 text-indigo-400"></i>과거 데이터 기반 정밀 비교 분석 중...</div>'; }
 
     try {
-        const pastDataStr = window.selectedSimilarProjects.map(p => `[${p.name}] 실제 투입: ${(parseFloat(p.finalMd)||0).toFixed(1)}MD, 예정: ${(parseFloat(p.estMd)||0).toFixed(1)}MD`).join('\n');
+        const pastDataStr = window.selectedSimilarProjects.map(p => `[${p.name}] 실제투입공수: ${(parseFloat(p.finalMd)||0).toFixed(1)}MD, 실제투입인원: ${p.totPers||0}명, 실제출하일: ${p.d_shipEn||'미상'}, 예정출하일: ${p.d_shipEst||'미상'}`).join('\n');
         
         const promptStr = `당신은 제조 설비 데이터 분석가입니다.
-        현재 시뮬레이션 중인 프로젝트의 예상 공수는 ${window.latestP50Md}MD 입니다.
-        비교 대상인 과거 완료된 프로젝트들의 실적 데이터는 다음과 같습니다:
+        현재 시뮬레이션 중인 프로젝트의 예상 데이터는 다음과 같습니다.
+        - 예상 공수: ${window.latestP50Md}MD
+        - 예상 투입 인원: ${document.getElementById('out-total-personnel')?.innerText || 0}명
+        - 목표 조립 완료일: ${document.getElementById('target-date')?.value || '미정'}
+        
+        비교 대상인 과거 완료된 유사 프로젝트들의 실적 데이터는 다음과 같습니다:
         ${pastDataStr}
 
-        현재 프로젝트의 예상 공수가 과거 실적에 비추어 볼 때 적절한지(과소평가/과대평가) 분석하고, 어떤 점을 보완해야 실적 오차를 줄일 수 있을지 평가하세요.
+        현재 프로젝트의 예상 데이터가 과거 실적에 비추어 볼 때 적절한지 분석하세요. 인원 배분, 일정 준수 여부, 총 공수 차이를 상세히 평가해야 합니다.
         반드시 다음 JSON 형식으로만 응답해야 합니다:
         {
             "verdict": "적정 / 과소평가 / 과대평가 중 택1",
-            "analysis": "비교 분석 상세 의견 (3문장 내외)",
+            "md_analysis": "총 공수(MD) 관점의 비교 분석 (2문장 내외)",
+            "personnel_analysis": "투입 인원 관점의 비교 분석 (2문장 내외)",
+            "schedule_analysis": "일정(납기) 관점의 비교 분석 (2문장 내외)",
             "recommendation": "오차를 줄이기 위한 실질적 조언"
         }`;
 
@@ -889,13 +835,23 @@ window.generateAiComparison = async () => {
                         <span class="px-3 py-1 rounded-full border text-xs font-black ${verdictColor}">${result.verdict}</span>
                     </div>
                     <div class="space-y-4">
-                        <div>
-                            <span class="text-[10px] font-bold text-slate-400 block mb-1">상세 분석 결과</span>
-                            <p class="text-sm font-medium text-slate-200 leading-relaxed">${result.analysis}</p>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div class="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
+                                <span class="text-[10px] font-bold text-indigo-400 block mb-1">총 공수 (MD) 비교</span>
+                                <p class="text-[11px] font-medium text-slate-300 leading-relaxed">${result.md_analysis}</p>
+                            </div>
+                            <div class="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
+                                <span class="text-[10px] font-bold text-teal-400 block mb-1">투입 인원 분석</span>
+                                <p class="text-[11px] font-medium text-slate-300 leading-relaxed">${result.personnel_analysis}</p>
+                            </div>
+                            <div class="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
+                                <span class="text-[10px] font-bold text-amber-400 block mb-1">일정(납기) 분석</span>
+                                <p class="text-[11px] font-medium text-slate-300 leading-relaxed">${result.schedule_analysis}</p>
+                            </div>
                         </div>
                         <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-600">
-                            <span class="text-[10px] font-bold text-emerald-400 block mb-1"><i class="fa-solid fa-lightbulb mr-1"></i>개선 제언</span>
-                            <p class="text-[11px] font-medium text-slate-300 leading-relaxed">${result.recommendation}</p>
+                            <span class="text-[10px] font-bold text-emerald-400 block mb-1"><i class="fa-solid fa-lightbulb mr-1"></i>최종 개선 제언</span>
+                            <p class="text-[11px] font-medium text-slate-200 leading-relaxed">${result.recommendation}</p>
                         </div>
                     </div>
                 </div>
@@ -908,7 +864,7 @@ window.generateAiComparison = async () => {
 };
 
 // ==========================================
-// 6. 데이터 엑셀 출력 (완벽 복원된 폼 레이아웃)
+// 7. 데이터 엑셀 출력 (완벽 복원된 폼 레이아웃)
 // ==========================================
 window.exportToExcel = async () => {
     if (typeof ExcelJS === 'undefined') return window.showToast("라이브러리 로딩 중입니다.", "warning");
@@ -980,8 +936,14 @@ window.exportToExcel = async () => {
     ws.addRow(['■ 4. AI 리스크 분석 결과']).font = { bold: true };
     if (window.latestAiResult) {
         ws.addRow(['분석 요약', window.latestAiResult.summary || '-']);
-        ws.addRow(['주요 리스크', window.latestAiResult.mainRisk || '-']);
-        ws.addRow(['권장 조치', window.latestAiResult.action || '-']);
+        if(window.latestAiResult.coreRisks) {
+            ws.addRow(['핵심 리스크 및 조치']);
+            window.latestAiResult.coreRisks.forEach(r => {
+                ws.addRow(['', `[${r.phase}] ${r.risk} -> ${r.mitigation}`]);
+            });
+        }
+        ws.addRow(['효율성 평가', window.latestAiResult.efficiency || '-']);
+        ws.addRow(['최종 권고', window.latestAiResult.conclusion || '-']);
     } else {
         ws.addRow(['AI 분석 결과 없음 (분석 미실행)']);
     }
@@ -1004,8 +966,9 @@ window.exportToExcel = async () => {
 };
 
 // ==========================================
-// 8. 모달창 및 파일 관리
+// 8. 모달창 및 데이터베이스 연동
 // ==========================================
+
 window.saveToFirestore = async function(isSilent = false) {
     const pCode = document.getElementById('project-code')?.value;
     const pName = document.getElementById('project-name')?.value;
@@ -1039,7 +1002,6 @@ window.saveToFirestore = async function(isSilent = false) {
         }
         
         window.isProjectDirty = false; 
-        
         if (!isSilent) window.showToast("클라우드에 저장되었습니다.");
     } catch (e) {
         window.showToast("저장 실패", "error");
@@ -1056,6 +1018,8 @@ window.saveCurrentAsPreset = async () => {
         label: label,
         processData: window.currentProcessData,
         curve: Number(document.getElementById('learning-curve')?.value) || 95,
+        diff: Number(document.getElementById('diff-multiplier')?.value) || 1.0,
+        buffer: Number(document.getElementById('buffer-rate')?.value) || 5,
         labor: Number(document.getElementById('labor-cost')?.value) || 300000,
         hex: '#6366f1' 
     };
@@ -1088,25 +1052,50 @@ window.openProjectModal = async () => {
     container.innerHTML = '<div class="text-center p-10"><i class="fa-solid fa-spinner fa-spin text-2xl text-slate-400"></i></div>';
     
     try {
-        const snap = await getDocs(query(collection(db, "sim_projects"), orderBy("updatedAt", "desc")));
+        // 인덱스 없이 안전하게 모든 문서를 가져와서 JS로 정렬
+        const snap = await getDocs(collection(db, "sim_projects"));
         if(snap.empty) {
             container.innerHTML = '<div class="text-center p-10 text-slate-500 font-bold">저장된 프로젝트가 없습니다.</div>';
             return;
         }
         
+        let pList = [];
+        snap.forEach(doc => pList.push({id: doc.id, ...doc.data()}));
+        pList.sort((a,b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+
         let html = '<div class="grid gap-3">';
-        snap.forEach(doc => {
-            const d = doc.data();
+        pList.forEach(d => {
             const dateStr = window.getDateTimeStr(new Date(d.updatedAt || d.createdAt));
-            const isA = window.currentProjectId === doc.id;
+            const isL = d.isLocked || false;
+            const isA = window.currentProjectId === d.id;
+            
+            let aH = '';
+            const canManage = (window.userProfile?.role === 'admin' || window.currentUser?.uid === d.authorUid);
+
+            if (canManage) {
+                if (isL) {
+                    aH += `<button onclick="event.stopPropagation(); window.toggleProjectLock('${d.id}', false)" class="text-amber-500 hover:text-amber-600 p-2 transition-colors" title="잠금 해제"><i class="fa-solid fa-lock"></i></button>
+                           <button onclick="event.stopPropagation(); window.showToast('잠금을 먼저 해제하세요.', 'error');" class="text-slate-200 cursor-not-allowed p-2" title="잠김 상태에선 삭제 불가"><i class="fa-solid fa-trash-can"></i></button>`;
+                } else {
+                    aH += `<button onclick="event.stopPropagation(); window.toggleProjectLock('${d.id}', true)" class="text-slate-300 hover:text-amber-500 p-2 transition-colors" title="잠금 설정"><i class="fa-solid fa-lock-open"></i></button>
+                           <button onclick="event.stopPropagation(); window.deleteProject('${d.id}')" class="text-slate-300 hover:text-rose-500 p-2 transition-colors" title="삭제"><i class="fa-solid fa-trash-can"></i></button>`;
+                }
+            } else {
+                 if (isL) {
+                     aH += `<button onclick="event.stopPropagation(); window.showToast('권한이 없습니다.', 'error');" class="text-amber-500/50 cursor-not-allowed p-2"><i class="fa-solid fa-lock"></i></button>`;
+                 }
+            }
+
+            const lockBadge = isL ? `<span class="text-[10px] bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full font-bold ml-2 shadow-sm border border-amber-100"><i class="fa-solid fa-lock text-[8px] mr-1"></i> 잠금됨</span>` : '';
             const activeBadge = isA ? `<span class="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-bold ml-2 shadow-sm border border-indigo-100">현재 열림</span>` : '';
 
             html += `
-            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center hover:border-amber-300 transition-colors cursor-pointer" onclick="window.loadProject('${doc.id}')">
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center hover:border-amber-300 transition-colors cursor-pointer" onclick="window.loadProject('${d.id}')">
                 <div>
                     <div class="flex items-center mb-1">
                         <span class="text-xs font-bold text-amber-600">[${d.projectCode || '코드없음'}]</span>
                         ${activeBadge}
+                        ${lockBadge}
                     </div>
                     <div class="text-sm font-black text-slate-800">${d.projectName}</div>
                     <div class="text-[10px] text-slate-400 mt-1 flex items-center gap-2">
@@ -1118,7 +1107,7 @@ window.openProjectModal = async () => {
                     </div>
                 </div>
                 <div class="flex items-center gap-1">
-                    <button onclick="event.stopPropagation(); window.deleteProject('${doc.id}')" class="text-slate-300 hover:text-rose-500 p-2 transition-colors" title="삭제"><i class="fa-solid fa-trash-can"></i></button>
+                    ${aH}
                 </div>
             </div>`;
         });
@@ -1134,6 +1123,40 @@ window.closeProjectModal = () => {
     if(m) { m.classList.add('hidden'); m.classList.remove('flex'); }
 };
 
+window.toggleProjectLock = async (id, loc) => {
+    try {
+        if (loc) {
+            const pwd = prompt('프로젝트를 보호하기 위한 비밀번호를 설정하세요:');
+            if (pwd === null) return; 
+            if (pwd.trim() === '') { window.showToast('비밀번호를 입력해야 합니다.', 'error'); return; }
+            
+            await setDoc(doc(db, 'sim_projects', id), { isLocked: true, lockPassword: pwd.trim() }, { merge: true });
+            window.showToast('프로젝트가 잠금 처리되었습니다.', 'success');
+            window.openProjectModal(); 
+        } else {
+            const dS = await getDoc(doc(db, 'sim_projects', id));
+            if (!dS.exists()) return; 
+            const d = dS.data();
+            
+            if (window.userProfile?.role !== 'admin' && window.currentUser?.uid !== d.authorUid) { 
+                window.showToast('권한이 없습니다.', 'error'); return;
+            }
+            
+            const pwd = prompt('잠금 해제 비밀번호를 입력하세요:');
+            if (pwd === null) return; 
+            if (pwd.trim() !== d.lockPassword) { 
+                window.showToast('비밀번호가 일치하지 않습니다.', 'error'); return;
+            }
+            
+            await setDoc(doc(db, 'sim_projects', id), { isLocked: false, lockPassword: null }, { merge: true });
+            window.showToast('잠금이 해제되었습니다.', 'success');
+            window.openProjectModal(); 
+        }
+    } catch(e) {
+        window.showToast("상태 변경 실패", "error");
+    }
+};
+
 window.loadProject = async (id) => {
     if (window.isProjectDirty && !confirm("저장하지 않은 변경사항이 있습니다. 그래도 불러오시겠습니까?")) return;
 
@@ -1141,6 +1164,15 @@ window.loadProject = async (id) => {
         const docSnap = await getDoc(doc(db, "sim_projects", id));
         if(docSnap.exists()) {
             const d = docSnap.data();
+            
+            if (d.isLocked && window.userProfile?.role !== 'admin' && window.currentUser?.uid !== d.authorUid) {
+                const pwd = prompt('🔒 이 프로젝트는 잠겨있습니다. 비밀번호를 입력하세요:');
+                if (pwd === null) return;
+                if (pwd.trim() !== d.lockPassword) {
+                    window.showToast("비밀번호가 일치하지 않습니다.", "error");
+                    return;
+                }
+            }
 
             window.currentProjectId = id;
             document.getElementById('project-code').value = d.projectCode || '';
@@ -1148,11 +1180,12 @@ window.loadProject = async (id) => {
             document.getElementById('manager-name').value = d.managerName || '';
             document.getElementById('equip-qty').value = d.qty || 1;
             document.getElementById('learning-curve').value = d.curve || 95;
-            window.currentProcessData = d.processData || [];
             
+            // 프리셋 선택 해제
             const typeSel = document.getElementById('eq-type');
-            if (typeSel && typeSel.options.length > 0) typeSel.selectedIndex = 0; // 프리셋 해제
+            if (typeSel && typeSel.options.length > 0) typeSel.selectedIndex = 0; 
 
+            window.currentProcessData = d.processData || [];
             window.renderProcessTable();
             window.renderUnitTables();
             window.debouncedRunSimulation();
@@ -1233,81 +1266,135 @@ window.restoreHistory = async (histId) => {
     } catch(e) { window.showToast("복구 실패", "error"); }
 };
 
+// 💡 9. 대시보드 모달 (예측 vs 실적 매칭 및 필터)
+window.dashMatchedData = []; 
+
 window.openDashboardModal = async () => {
     const modal = document.getElementById('dashboard-modal');
     if(modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
     
+    document.getElementById('dash-part-filter').value = 'all';
+    document.getElementById('dash-search-input').value = '';
+    
+    await window.loadDashboardData();
+};
+
+window.loadDashboardData = async () => {
     const tbody = document.getElementById('accuracy-tbody');
     if(!tbody) return;
     
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center p-10"><i class="fa-solid fa-spinner fa-spin text-2xl text-slate-400"></i></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center p-10"><i class="fa-solid fa-spinner fa-spin text-2xl text-slate-400"></i> 데이터 매칭 중...</td></tr>';
     
     try {
-        const snap = await getDocs(query(collection(db, "projects_status"), where("status", "==", "completed")));
-        let list = [];
-        snap.forEach(d => list.push(d.data()));
-        
-        if(list.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="text-center p-10 text-slate-500 font-bold">완료된 프로젝트 실적 데이터가 없습니다.</td></tr>';
-            return;
-        }
-        
-        let html = '';
-        let labels = [], errMds = [], errDates = [];
+        const simSnap = await getDocs(collection(db, "sim_projects"));
+        let simList = [];
+        simSnap.forEach(d => simList.push(d.data()));
 
-        list.forEach(p => {
-            const estMd = parseFloat(p.estMd) || 0;
-            const actMd = parseFloat(p.finalMd) || 0;
-            const mdErr = estMd > 0 ? ((actMd - estMd)/estMd * 100).toFixed(1) : 0;
+        const statSnap = await getDocs(query(collection(db, "projects_status"), where("status", "==", "completed")));
+        let statList = [];
+        statSnap.forEach(d => statList.push(d.data()));
+
+        window.dashMatchedData = [];
+        
+        statList.forEach(stat => {
+            let matchedSim = simList.find(sim => 
+                (sim.projectCode && sim.projectCode === stat.code) || 
+                (sim.projectName && sim.projectName === stat.name)
+            );
             
-            const estDate = p.d_shipEst || '-';
-            const actDate = p.d_shipEn || '-';
-            
-            let dateErr = 0;
-            if(estDate !== '-' && actDate !== '-') {
-                dateErr = Math.round((new Date(actDate) - new Date(estDate))/(1000*60*60*24));
+            if (matchedSim) {
+                window.dashMatchedData.push({
+                    part: stat.part || '제조',
+                    code: stat.code || '-',
+                    name: stat.name || '무제',
+                    predMd: parseFloat(matchedSim.p50Md) || 0,
+                    actMd: parseFloat(stat.finalMd) || 0,
+                    predDate: matchedSim.shippingDate || stat.d_shipEst || '-', 
+                    actDate: stat.d_shipEn || '-'
+                });
             }
-
-            labels.push(p.name.substring(0, 10));
-            errMds.push(parseFloat(mdErr));
-            errDates.push(dateErr);
-
-            html += `<tr class="hover:bg-slate-50 border-b border-slate-100">
-                <td class="p-3 text-center font-bold text-emerald-600">${p.code || '-'}</td>
-                <td class="p-3 truncate max-w-[150px] font-bold text-slate-700" title="${p.name}">${p.name}</td>
-                <td class="p-3 text-center text-slate-500">${estMd.toFixed(1)}</td>
-                <td class="p-3 text-center font-black text-emerald-600">${actMd.toFixed(1)}</td>
-                <td class="p-3 text-center font-bold ${parseFloat(mdErr) > 0 ? 'text-rose-500' : 'text-blue-500'}">${mdErr}%</td>
-                <td class="p-3 text-center text-slate-500">${estDate}</td>
-                <td class="p-3 text-center font-black text-emerald-600">${actDate}</td>
-            </tr>`;
         });
         
-        tbody.innerHTML = html;
+        if(window.dashMatchedData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center p-10 text-slate-500 font-bold">시뮬레이션(예측)과 PJT현황(실적)이 매칭된 완료 프로젝트가 없습니다.<br><span class="text-xs font-normal">(PJT 코드 또는 명칭이 동일해야 합니다.)</span></td></tr>';
+            return;
+        }
 
-        const ctx1 = document.getElementById('accuracy-chart-md')?.getContext('2d');
-        const ctx2 = document.getElementById('accuracy-chart-date')?.getContext('2d');
-        
+        window.filterDashboardData();
+    } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center p-10 text-rose-500 font-bold">분석 데이터를 불러오지 못했습니다.</td></tr>';
+    }
+};
+
+window.filterDashboardData = () => {
+    const partFilter = document.getElementById('dash-part-filter').value;
+    const searchKeyword = document.getElementById('dash-search-input').value.toLowerCase().trim();
+    
+    let filtered = window.dashMatchedData.filter(d => {
+        let match = true;
+        if(partFilter !== 'all' && d.part !== partFilter) match = false;
+        if(searchKeyword) {
+            if(!d.code.toLowerCase().includes(searchKeyword) && !d.name.toLowerCase().includes(searchKeyword)) match = false;
+        }
+        return match;
+    });
+
+    const tbody = document.getElementById('accuracy-tbody');
+    if(filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center p-10 text-slate-500 font-bold">검색 결과가 없습니다.</td></tr>';
         if(window.accChart1) window.accChart1.destroy();
         if(window.accChart2) window.accChart2.destroy();
+        return;
+    }
+
+    let html = '';
+    let labels = [], errMds = [], errDates = [];
+
+    filtered.forEach(p => {
+        const mdErr = p.predMd > 0 ? ((p.actMd - p.predMd)/p.predMd * 100).toFixed(1) : 0;
         
-        if(ctx1) {
-            window.accChart1 = new Chart(ctx1, {
-                type: 'bar',
-                data: { labels: labels, datasets: [{ label: 'MD 오차율 (%)', data: errMds, backgroundColor: errMds.map(v => v>0 ? '#f43f5e' : '#3b82f6') }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: {legend:{display:false}} }
-            });
+        let dateErr = 0;
+        if(p.predDate !== '-' && p.actDate !== '-') {
+            dateErr = Math.round((new Date(p.actDate) - new Date(p.predDate))/(1000*60*60*24));
         }
-        if(ctx2) {
-            window.accChart2 = new Chart(ctx2, {
-                type: 'bar',
-                data: { labels: labels, datasets: [{ label: '일정 지연 (일)', data: errDates, backgroundColor: errDates.map(v => v>0 ? '#f43f5e' : '#10b981') }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: {legend:{display:false}} }
-            });
-        }
-        
-    } catch(e) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-10 text-rose-500 font-bold">분석 데이터를 불러오지 못했습니다.</td></tr>';
+
+        labels.push(p.name.substring(0, 10));
+        errMds.push(parseFloat(mdErr));
+        errDates.push(dateErr);
+
+        html += `<tr class="hover:bg-slate-50 border-b border-slate-100">
+            <td class="p-3 text-center text-slate-500">${p.part}</td>
+            <td class="p-3 text-center font-bold text-emerald-600">${p.code}</td>
+            <td class="p-3 truncate max-w-[150px] font-bold text-slate-700" title="${p.name}">${p.name}</td>
+            <td class="p-3 text-center text-slate-500">${p.predMd.toFixed(1)}</td>
+            <td class="p-3 text-center font-black text-emerald-600">${p.actMd.toFixed(1)}</td>
+            <td class="p-3 text-center font-bold ${parseFloat(mdErr) > 0 ? 'text-rose-500' : 'text-blue-500'}">${mdErr}%</td>
+            <td class="p-3 text-center text-slate-500">${p.predDate}</td>
+            <td class="p-3 text-center font-black text-emerald-600">${p.actDate}</td>
+        </tr>`;
+    });
+    
+    tbody.innerHTML = html;
+
+    const ctx1 = document.getElementById('accuracy-chart-md')?.getContext('2d');
+    const ctx2 = document.getElementById('accuracy-chart-date')?.getContext('2d');
+    
+    if(window.accChart1) window.accChart1.destroy();
+    if(window.accChart2) window.accChart2.destroy();
+    
+    if(ctx1) {
+        window.accChart1 = new Chart(ctx1, {
+            type: 'bar',
+            data: { labels: labels, datasets: [{ label: 'MD 오차율 (%)', data: errMds, backgroundColor: errMds.map(v => v>0 ? '#f43f5e' : '#3b82f6') }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: {legend:{display:false}} }
+        });
+    }
+    if(ctx2) {
+        window.accChart2 = new Chart(ctx2, {
+            type: 'bar',
+            data: { labels: labels, datasets: [{ label: '일정 지연 (일)', data: errDates, backgroundColor: errDates.map(v => v>0 ? '#f43f5e' : '#10b981') }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: {legend:{display:false}} }
+        });
     }
 };
 
@@ -1316,47 +1403,67 @@ window.closeDashboardModal = () => {
     if(m) { m.classList.add('hidden'); m.classList.remove('flex'); }
 };
 
-window.createNewProject = () => {
-    if (window.isProjectDirty && !confirm("저장하지 않은 변경사항이 있습니다. 무시하고 새 프로젝트를 생성하시겠습니까?")) return;
+// 초성 검색 자동완성 
+window.showAutocomplete = function(inputEl, targetId1, targetId2, isNameSearch) {
+    const val = inputEl.value.trim().toLowerCase(); 
+    let dropdown = document.getElementById('pjt-autocomplete-dropdown');
     
-    window.currentProjectId = null;
-    document.getElementById('project-code').value = '';
-    document.getElementById('project-name').value = '';
-    document.getElementById('manager-name').value = '';
-    document.getElementById('equip-qty').value = '1';
-    document.getElementById('learning-curve').value = '95';
-    document.getElementById('diff-multiplier').value = '1.0';
-    document.getElementById('buffer-rate').value = '5';
+    if(!dropdown) { 
+        dropdown = document.createElement('ul'); 
+        dropdown.id = 'pjt-autocomplete-dropdown'; 
+        dropdown.className = 'absolute z-[9999] bg-white border border-indigo-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-full custom-scrollbar py-1 mt-1'; 
+        inputEl.parentNode.appendChild(dropdown); 
+    }
     
-    const typeSel = document.getElementById('eq-type');
-    if (typeSel && typeSel.options.length > 0) typeSel.selectedIndex = 0;
+    if(val.length < 1) { 
+        dropdown.classList.add('hidden'); 
+        return; 
+    }
     
-    window.currentProcessData = [];
-    window.isProjectDirty = false;
-    window.latestAiResult = null;
+    let matches = [];
+    for (let i = 0; i < (window.pjtCodeMasterList || []).length; i++) {
+        let p = window.pjtCodeMasterList[i];
+        if (isNameSearch) { 
+            if (p.name.toLowerCase().includes(val) || window.matchString(val, p.name)) matches.push(p); 
+        } else { 
+            if (p.code.toLowerCase().includes(val) || window.matchString(val, p.code)) matches.push(p); 
+        }
+    }
     
-    window.renderProcessTable();
-    window.renderUnitTables();
-    
-    const bBox = document.getElementById('ai-briefing-text');
-    if(bBox) bBox.innerHTML = '<div class="text-center p-4 text-slate-500">AI 분석을 실행해주세요.</div>';
-    
-    const cBox = document.getElementById('ai-compare-result');
-    if(cBox) { cBox.innerHTML = ''; cBox.classList.add('hidden'); }
-    
-    const sList = document.getElementById('similar-projects-list');
-    if(sList) sList.innerHTML = '<div class="text-slate-400 text-xs p-2">비교할 프로젝트가 선택되지 않았습니다.</div>';
-    window.selectedSimilarProjects = [];
-
-    window.debouncedRunSimulation();
-    window.showToast("새 프로젝트 환경이 준비되었습니다.", "success");
+    if(matches.length > 0) {
+        dropdown.classList.remove('hidden');
+        let dropHtml = '';
+        matches.forEach(function(m) {
+            let safeName = m.name.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+            dropHtml += `<li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-slate-700 font-bold text-xs border-b border-slate-50 last:border-0 truncate transition-colors" onmousedown="window.selectAutocomplete('${m.code}', '${safeName}', '${inputEl.id}', '${targetId1}')"><span class="text-indigo-600">[${m.code}]</span> ${m.name}</li>`;
+        }); 
+        dropdown.innerHTML = dropHtml;
+    } else { 
+        dropdown.classList.add('hidden'); 
+    }
 };
 
-window.cloneProject = () => {
-    if(!window.currentProjectId && window.currentProcessData.length === 0) return window.showToast("복제할 데이터가 없습니다.", "warning");
-    window.currentProjectId = null; 
-    const nameEl = document.getElementById('project-name');
-    if(nameEl && !nameEl.value.includes('복제본')) nameEl.value += ' (복제본)';
-    window.isProjectDirty = true;
-    window.showToast("복제 모드로 전환되었습니다. '저장'을 누르면 새 프로젝트로 등록됩니다.", "success");
+window.selectAutocomplete = function(code, name, sourceId, targetId1) { 
+    const sourceEl = document.getElementById(sourceId); 
+    const t1 = document.getElementById(targetId1); 
+    
+    if (sourceId === 'project-code') { 
+        if (sourceEl) sourceEl.value = code; 
+        if (t1) t1.value = name; 
+    } else { 
+        if (sourceEl) sourceEl.value = name; 
+        if (t1) t1.value = code; 
+    } 
+    const drop = document.getElementById('pjt-autocomplete-dropdown'); 
+    if (drop) drop.classList.add('hidden'); 
 };
+
+document.addEventListener('click', function(e) {
+    const d = document.getElementById('pjt-autocomplete-dropdown'); 
+    if (d && !d.classList.contains('hidden') && !e.target.closest('#pjt-autocomplete-dropdown') && !e.target.closest('input[oninput*="showAutocomplete"]')) {
+        d.classList.add('hidden');
+    }
+});
+
+// 초기화 실행
+window.loadMasterPresets();
