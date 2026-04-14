@@ -15,6 +15,7 @@ window.currentScheduleList = [];
 window.draftTasks = []; 
 window.wlInvolvedProjects = []; 
 window.activeWeeklyTab = 'team'; 
+window.weeklyStatFilter = 'all'; // 통계 필터 변수 추가
 
 window.schCalDate = new Date();
 window.schViewMode = 'kanban'; 
@@ -22,6 +23,7 @@ window.schViewMode = 'kanban';
 window.mySchCalDate = new Date();
 window.mySchViewMode = 'kanban'; 
 window.myMonthlySchedules = [];
+window.missingMembersList = []; // 미작성자 배열 추가
 
 // 💡 한국 공휴일 데이터 세팅 (2024년 ~ 2027년)
 const WEEKLY_KR_HOLIDAYS = {
@@ -65,6 +67,56 @@ window.switchWeeklyTab = function(tabName) {
         if (window.schViewMode === 'calendar') window.loadMonthlySchedules();
     }
 };
+
+// 💡 PJT 초성 검색을 위한 자동완성 (ui.js 기반)
+window.showAutocomplete = function(inputEl, targetId1, targetId2, isNameSearch) {
+    const val = inputEl.value.trim().toLowerCase();
+    let dropdown = document.getElementById('pjt-autocomplete-dropdown');
+    
+    if(!dropdown) {
+        dropdown = document.createElement('ul');
+        dropdown.id = 'pjt-autocomplete-dropdown';
+        dropdown.className = 'absolute z-[9999] bg-white border border-indigo-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-[300px] custom-scrollbar py-1 mt-1';
+        inputEl.parentNode.appendChild(dropdown);
+    }
+    
+    if(val.length < 1) { dropdown.classList.add('hidden'); return; }
+
+    let matches = (window.pjtCodeMasterList || []).filter(p => {
+        let code = (p.code || '').toLowerCase();
+        let name = (p.name || '').toLowerCase();
+        return code.includes(val) || name.includes(val) ||
+               (window.matchString && window.matchString(val, p.code)) ||
+               (window.matchString && window.matchString(val, p.name));
+    });
+
+    if(matches.length > 0) {
+        dropdown.classList.remove('hidden');
+        dropdown.innerHTML = matches.map(m => {
+            let safeName = m.name.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+            return `<li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-slate-700 font-bold text-xs border-b border-slate-50 last:border-0 truncate transition-colors" onmousedown="window.selectAutocomplete('${m.code}', '${safeName}', '${inputEl.id}', '${targetId1}')"><span class="text-indigo-600">[${m.code}]</span> ${m.name}</li>`;
+        }).join('');
+    } else {
+        dropdown.classList.add('hidden');
+    }
+};
+
+window.selectAutocomplete = function(code, name, sourceId, targetId1) {
+    const sourceEl = document.getElementById(sourceId);
+    const t1 = document.getElementById(targetId1);
+    if (sourceEl) sourceEl.value = name;
+    if (t1) t1.value = code;
+    const drop = document.getElementById('pjt-autocomplete-dropdown');
+    if (drop) drop.classList.add('hidden');
+};
+
+document.addEventListener('click', function(e) {
+    const d = document.getElementById('pjt-autocomplete-dropdown');
+    if (d && !d.classList.contains('hidden') && !e.target.closest('#pjt-autocomplete-dropdown') && !e.target.closest('input[oninput*="showAutocomplete"]')) {
+        d.classList.add('hidden');
+    }
+});
+
 
 window.updateWeekLabels = function(weekStr) {
     if(!weekStr || !window.getDatesFromWeek) return;
@@ -113,7 +165,7 @@ window.editWeeklyPeriod = async function(type) {
 
     const elId = type === 'period' ? 'weekly-period-text' : 'weekly-deadline-text';
     const currentText = document.getElementById(elId).innerText;
-    const promptMsg = type === 'period' ? "보고 기간을 입력하세요 (비워두면 기본값 적용):" : "보고 마감일을 입력하세요 (비워두면 기본값 적용):";
+    const promptMsg = type === 'period' ? "보고 기간을 입력하세요 (예: 04-08 ~ 04-15):" : "마감 요일/시간을 자유롭게 입력하세요 (예: 금요일 오후 5시):";
 
     const newText = prompt(promptMsg, currentText);
     if (newText !== null) {
@@ -218,12 +270,19 @@ window.saveNotice = async function() {
     const newText = document.getElementById('notice-text-input').value.trim();
     const sendEmail = document.getElementById('notice-email-send').checked;
     
+    // 💡 구글 연동 체크 (메일 발송 시 필수)
+    if (sendEmail && newText && !window.googleAccessToken) {
+        window.showToast("공지사항 메일 발송을 위해 구글 연동이 필요합니다.", "warning");
+        if (window.authenticateGoogle) window.authenticateGoogle();
+        return;
+    }
+    
     try {
         await setDoc(doc(db, "settings", "weekly_notice"), { text: newText, updatedAt: Date.now() }, { merge: true });
-        if(window.showToast) window.showToast("공지사항이 정상적으로 수정되었습니다.");
         window.closeNoticeModal();
         
         if (sendEmail && newText) {
+            window.showToast("공지사항 메일을 발송하는 중입니다...");
             let recipients = window.teamMembers || window.allSystemUsers || [];
             let count = 0;
             for (let i = 0; i < recipients.length; i++) {
@@ -235,18 +294,32 @@ window.saveNotice = async function() {
                 }
             }
             if(window.showToast && count > 0) window.showToast(`팀원 ${count}명에게 공지 알림이 발송되었습니다.`);
+        } else {
+            if(window.showToast) window.showToast("공지사항이 정상적으로 수정되었습니다.");
         }
     } catch (e) {
         if(window.showToast) window.showToast("공지사항 수정 실패", "error");
     }
 };
 
+// 💡 대시보드 통계 클릭 필터
+window.filterWeeklyLogsByStat = function(stat) {
+    window.weeklyStatFilter = stat;
+    
+    document.querySelectorAll('.stat-card').forEach(el => el.classList.remove('ring-2', 'ring-indigo-400'));
+    const el = document.getElementById('card-stat-' + stat);
+    if(el) el.classList.add('ring-2', 'ring-indigo-400');
+    
+    window.renderWeeklyLogs();
+    
+    const feed = document.getElementById('weekly-log-feed');
+    if(feed) feed.scrollIntoView({behavior: 'smooth'});
+};
+
 window.loadWeeklyLogsData = function() { 
     const weekInput = document.getElementById('weekly-log-filter-week');
     if (!weekInput || !weekInput.value) return;
     const w = weekInput.value; 
-
-    if (window.updateWeekLabels) window.updateWeekLabels(w);
 
     const exportBtn = document.getElementById('btn-export-weekly');
     if (exportBtn && window.userProfile && window.userProfile.role === 'admin') {
@@ -395,6 +468,8 @@ window.checkMissingMembers = function() {
         }
     });
 
+    window.missingMembersList = missing;
+
     const card = document.getElementById('missing-members-card');
     if (!card) return;
 
@@ -414,8 +489,23 @@ window.checkMissingMembers = function() {
     }
 };
 
-window.urgeMissingMembers = function() {
-    if (window.showToast) window.showToast("작성 독려 알림이 발송되었습니다.", "success");
+window.urgeMissingMembers = async function() {
+    if(!window.missingMembersList || window.missingMembersList.length === 0) return;
+    
+    if (!window.googleAccessToken) {
+        window.showToast("알림 메일 발송을 위해 구글 연동이 필요합니다.", "warning");
+        if (window.authenticateGoogle) window.authenticateGoogle();
+        return;
+    }
+
+    let count = 0;
+    for(let m of window.missingMembersList) {
+        if(window.notifyUser) {
+            await window.notifyUser(m.name, "이번 주 업무 일지를 아직 제출하지 않으셨습니다. 확인 후 빠른 제출 부탁드립니다.", null, "일지 작성 독려");
+            count++;
+        }
+    }
+    if(window.showToast) window.showToast(`미작성자 ${count}명에게 작성 독려 알림 및 메일을 발송했습니다.`, "success");
 };
 
 window.filterWeeklyLogs = function() {
@@ -435,6 +525,14 @@ window.renderWeeklyLogs = function() {
     let displayList = window.currentWeeklyLogList.filter(function(l) { 
         return l.isSubmitted; 
     });
+
+    if (window.weeklyStatFilter === 'completed') {
+        displayList = displayList.filter(l => l.tasks && l.tasks.some(t => t.status === '완료'));
+    } else if (window.weeklyStatFilter === 'progress') {
+        displayList = displayList.filter(l => l.tasks && l.tasks.some(t => t.status === '진행 중'));
+    } else if (window.weeklyStatFilter === 'issue') {
+        displayList = displayList.filter(l => String(l.issues||'').trim() !== '');
+    }
 
     if (searchName) {
         displayList = displayList.filter(function(l) { 
@@ -495,7 +593,7 @@ window.renderWeeklyLogs = function() {
                 }
                 
                 const locBadge = '<span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded ml-1"><i class="fa-solid fa-location-dot text-[9px]"></i> ' + (t.loc || '사내') + '</span>';
-                const safeContent = window.formatMentions ? window.formatMentions(String(t.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')) : String(t.content || '');
+                const safeContent = window.formatMentions ? window.formatMentions(String(t.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')) : String(t.content || '').replace(/\n/g, '<br>');
                 
                 const timeBadge = t.createdAtTime ? '<span class="text-[9px] text-slate-400 ml-2 font-mono tracking-tighter">' + t.createdAtTime.split(' ')[1] + '</span>' : '';
 
@@ -508,7 +606,7 @@ window.renderWeeklyLogs = function() {
         let issuesHtml = '';
         const safeIssuesStr = String(log.issues || '').trim();
         if (safeIssuesStr !== '') {
-            const formattedIssue = window.formatMentions ? window.formatMentions(safeIssuesStr.replace(/</g, '&lt;').replace(/>/g, '&gt;')) : safeIssuesStr;
+            const formattedIssue = window.formatMentions ? window.formatMentions(safeIssuesStr.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')) : safeIssuesStr.replace(/\n/g, '<br>');
             issuesHtml = '<div class="mt-5 bg-[#fffbf0] border border-orange-100 rounded-xl p-4 shadow-sm"><div class="text-[11px] font-bold text-orange-600 mb-2 flex items-center gap-1.5"><i class="fa-regular fa-comment-dots"></i> 요청사항 및 이슈</div><div class="text-sm font-medium text-slate-700 leading-relaxed">' + formattedIssue + '</div></div>';
         }
 
@@ -735,7 +833,7 @@ window.renderDraftTasks = function() {
 
     listEl.innerHTML = sorted.map(function(t) {
         let statusClass = t.status === '완료' ? 'text-emerald-600 bg-emerald-50 border-emerald-200' : (t.status === '진행 중' ? 'text-blue-600 bg-blue-50 border-blue-200' : 'text-slate-500 bg-slate-50 border-slate-200');
-        const safeContent = window.formatMentions ? window.formatMentions(String(t.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')) : String(t.content || '');
+        const safeContent = window.formatMentions ? window.formatMentions(String(t.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')) : String(t.content || '').replace(/\n/g, '<br>');
         
         let timeBadge = '';
         if (t.isCarryOver) {
