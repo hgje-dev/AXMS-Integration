@@ -345,44 +345,29 @@ window.setupAutoSaveTriggers = () => {
     });
 };
 
-window.dragProcessStart = (e, index) => {
-    window.draggedProcessIndex = index;
-    e.dataTransfer.effectAllowed = 'move';
-};
+window.dragProcessStart = (e, index) => { window.draggedProcessIndex = index; e.dataTransfer.effectAllowed = 'move'; };
 window.dragProcessDrop = (e, dropIndex) => {
     e.preventDefault();
     const dragIndex = window.draggedProcessIndex;
     if (dragIndex === null || dragIndex === undefined || dragIndex === dropIndex) return;
-    
     const movedItem = window.currentProcessData.splice(dragIndex, 1)[0];
     window.currentProcessData.splice(dropIndex, 0, movedItem);
-    
     window.draggedProcessIndex = null;
     window.isProjectDirty = true;
-    window.renderProcessTable();
-    window.renderUnitTables();
-    window.debouncedRunSimulation();
+    window.renderProcessTable(); window.renderUnitTables(); window.debouncedRunSimulation();
 };
 
-window.dragUnitStart = (e, pIdx, uIdx) => {
-    window.draggedUnitInfo = { pIdx, uIdx };
-    e.dataTransfer.effectAllowed = 'move';
-};
+window.dragUnitStart = (e, pIdx, uIdx) => { window.draggedUnitInfo = { pIdx, uIdx }; e.dataTransfer.effectAllowed = 'move'; };
 window.dragUnitDrop = (e, dropPIdx, dropUIdx) => {
     e.preventDefault();
     if (!window.draggedUnitInfo) return;
     const { pIdx: dragPIdx, uIdx: dragUIdx } = window.draggedUnitInfo;
-    
     if (dragPIdx !== dropPIdx || dragUIdx === dropUIdx) return; 
-    
     const movedItem = window.currentProcessData[dragPIdx].unitData.splice(dragUIdx, 1)[0];
     window.currentProcessData[dropPIdx].unitData.splice(dropUIdx, 0, movedItem);
-    
     window.draggedUnitInfo = null;
     window.isProjectDirty = true;
-    window.renderUnitTables();
-    window.renderProcessTable();
-    window.debouncedRunSimulation();
+    window.renderUnitTables(); window.renderProcessTable(); window.debouncedRunSimulation();
 };
 
 window.renderProcessTable = () => {
@@ -405,16 +390,7 @@ window.renderProcessTable = () => {
             <option value="schedule_test" ${pt==='schedule_test'?'selected':''}>🚗 시운전</option>
         </select>`;
         
-        let act = `<div class="flex justify-center gap-2">
-            <div class="cursor-grab text-slate-400 p-1" 
-                 onmousedown="this.closest('tr').setAttribute('draggable',true)" 
-                 onmouseup="this.closest('tr').removeAttribute('draggable')" 
-                 onmouseleave="this.closest('tr').removeAttribute('draggable')" 
-                 ondragstart="window.dragProcessStart(event, ${i})" 
-                 ondragover="event.preventDefault()" 
-                 ondrop="window.dragProcessDrop(event, ${i})">
-                <i class="fa-solid fa-grip-vertical"></i>
-            </div>`;
+        let act = `<div class="flex justify-center gap-2"><div class="cursor-grab text-slate-400 p-1" onmousedown="this.closest('tr').setAttribute('draggable',true)" onmouseup="this.closest('tr').removeAttribute('draggable')" onmouseleave="this.closest('tr').removeAttribute('draggable')" ondragstart="window.dragProcessStart(event, ${i})" ondragover="event.preventDefault()" ondrop="window.dragProcessDrop(event, ${i})"><i class="fa-solid fa-grip-vertical"></i></div>`;
             
         if(pt === 'auto') act += `<div class="text-slate-300 p-1"><i class="fa-solid fa-lock"></i></div></div>`;
         else act += `<button onclick="window.deleteProcessRow(${i})" class="text-slate-400 hover:text-rose-500 p-1"><i class="fa-solid fa-trash-can"></i></button></div>`;
@@ -424,11 +400,7 @@ window.renderProcessTable = () => {
             let um = 0;
             (p.unitData || []).forEach(u => um += (parseFloat(u.q)||0)*(parseFloat(u.m)||0));
             let ed = (um / (parseFloat(p.q)||1)).toFixed(1);
-            
-            h = `<td class="px-3 py-2"><input value="${p.name}" oninput="window.updateProcessData(${i},'name',this.value)" class="w-full text-xs font-bold text-indigo-700 bg-transparent outline-none"></td>
-                 <td class="px-1 py-2">${sel}</td>
-                 <td class="px-1 py-2"><input type="number" value="${p.q}" min="1" oninput="window.updateProcessData(${i},'q',Number(this.value))" class="table-input w-full text-right text-sm font-black text-indigo-700 calc-trigger"></td>`;
-            
+            h = `<td class="px-3 py-2"><input value="${p.name}" oninput="window.updateProcessData(${i},'name',this.value)" class="w-full text-xs font-bold text-indigo-700 bg-transparent outline-none"></td><td class="px-1 py-2">${sel}</td><td class="px-1 py-2"><input type="number" value="${p.q}" min="1" oninput="window.updateProcessData(${i},'q',Number(this.value))" class="table-input w-full text-right text-sm font-black text-indigo-700 calc-trigger"></td>`;
             if(m === 'mc') h += `<td class="px-2 py-2 text-right font-bold text-indigo-600"><span id="p-days-${i}">${ed}</span> 일</td><td class="px-4 py-2 text-right font-bold text-indigo-900"><span id="p-sub-${i}">${um.toFixed(1)}</span> MD</td>`;
             else h += `<td colspan="3" class="px-4 py-2 text-center text-[11px] text-indigo-500">(자동계산)</td>`;
             h += `<td class="px-2 text-center">${act}</td>`;
@@ -441,14 +413,9 @@ window.renderProcessTable = () => {
             if(m === 'mc') sH = `<td class="px-4 py-1.5 text-right font-bold text-slate-700" id="p-sub-${i}">${sV}</td>`;
             else sH = `<td class="px-1 py-1.5"><input type="number" value="${p.o}" step="0.1" oninput="window.updateProcessData(${i},'o',Number(this.value))" class="table-input w-full text-right text-sm font-bold text-emerald-700 calc-trigger"></td><td class="px-1 py-1.5"><input type="number" value="${p.p}" step="0.1" oninput="window.updateProcessData(${i},'p',Number(this.value))" class="table-input w-full text-right text-sm font-bold text-rose-700 calc-trigger"></td>`;
             
-            h = `<td class="px-3 py-1.5"><input value="${p.name}" oninput="window.updateProcessData(${i},'name',this.value)" class="table-input w-full text-xs font-bold"></td>
-                 <td class="px-1 py-1.5">${sel}</td>
-                 <td class="px-1 py-1.5">${qI}</td>
-                 <td class="px-1 py-1.5 relative"><input type="number" value="${p.m}" step="0.1" oninput="window.updateProcessData(${i},'m',Number(this.value))" class="table-input w-full text-right text-sm calc-trigger pr-6"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">${iL}</span></td>
-                 ${sH}<td class="px-2 text-center">${act}</td>`;
+            h = `<td class="px-3 py-1.5"><input value="${p.name}" oninput="window.updateProcessData(${i},'name',this.value)" class="table-input w-full text-xs font-bold"></td><td class="px-1 py-1.5">${sel}</td><td class="px-1 py-1.5">${qI}</td><td class="px-1 py-1.5 relative"><input type="number" value="${p.m}" step="0.1" oninput="window.updateProcessData(${i},'m',Number(this.value))" class="table-input w-full text-right text-sm calc-trigger pr-6"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">${iL}</span></td>${sH}<td class="px-2 text-center">${act}</td>`;
         }
-        tr.innerHTML = h;
-        tb.appendChild(tr);
+        tr.innerHTML = h; tb.appendChild(tr);
     });
     window.setupAutoSaveTriggers();
 };
@@ -466,32 +433,13 @@ window.renderUnitTables = () => {
         let pM = 0, tb = '';
         p.unitData.forEach((u, ui) => {
             pM += (parseFloat(u.q)||0)*(parseFloat(u.m)||0); 
-            
-            let rH = `<td class="px-3 py-1.5"><input value="${u.name}" oninput="window.updateUnitData(${pi},${ui},'name',this.value)" class="table-input w-full text-xs font-bold"></td>
-                      <td class="px-1 py-1.5"><input type="number" value="${u.q}" oninput="window.updateUnitData(${pi},${ui},'q',Number(this.value))" class="table-input w-full text-right text-sm font-semibold calc-trigger"></td>`;
+            let rH = `<td class="px-3 py-1.5"><input value="${u.name}" oninput="window.updateUnitData(${pi},${ui},'name',this.value)" class="table-input w-full text-xs font-bold"></td><td class="px-1 py-1.5"><input type="number" value="${u.q}" oninput="window.updateUnitData(${pi},${ui},'q',Number(this.value))" class="table-input w-full text-right text-sm font-semibold calc-trigger"></td>`;
             if(m === 'mc') {
-                rH += `<td class="px-1 py-1.5"><input type="number" value="${u.m}" step="0.1" oninput="window.updateUnitData(${pi},${ui},'m',Number(this.value))" class="table-input w-full text-right text-sm font-semibold calc-trigger"></td>
-                       <td class="px-4 py-1.5 text-right font-bold text-blue-900 bg-blue-50/30">${(parseFloat(u.q)*parseFloat(u.m)).toFixed(1)}</td>`;
+                rH += `<td class="px-1 py-1.5"><input type="number" value="${u.m}" step="0.1" oninput="window.updateUnitData(${pi},${ui},'m',Number(this.value))" class="table-input w-full text-right text-sm font-semibold calc-trigger"></td><td class="px-4 py-1.5 text-right font-bold text-blue-900 bg-blue-50/30">${(parseFloat(u.q)*parseFloat(u.m)).toFixed(1)}</td>`;
             } else {
-                rH += `<td class="px-1 py-1.5"><input type="number" value="${u.m}" step="0.1" oninput="window.updateUnitData(${pi},${ui},'m',Number(this.value))" class="table-input w-full text-right text-sm calc-trigger"></td>
-                       <td class="px-1 py-1.5 bg-emerald-50/30"><input type="number" value="${u.o}" step="0.1" oninput="window.updateUnitData(${pi},${ui},'o',Number(this.value))" class="table-input w-full text-right text-sm text-emerald-700 calc-trigger"></td>
-                       <td class="px-1 py-1.5 bg-rose-50/30"><input type="number" value="${u.p}" step="0.1" oninput="window.updateUnitData(${pi},${ui},'p',Number(this.value))" class="table-input w-full text-right text-sm text-rose-700 calc-trigger"></td>`;
+                rH += `<td class="px-1 py-1.5"><input type="number" value="${u.m}" step="0.1" oninput="window.updateUnitData(${pi},${ui},'m',Number(this.value))" class="table-input w-full text-right text-sm calc-trigger"></td><td class="px-1 py-1.5 bg-emerald-50/30"><input type="number" value="${u.o}" step="0.1" oninput="window.updateUnitData(${pi},${ui},'o',Number(this.value))" class="table-input w-full text-right text-sm text-emerald-700 calc-trigger"></td><td class="px-1 py-1.5 bg-rose-50/30"><input type="number" value="${u.p}" step="0.1" oninput="window.updateUnitData(${pi},${ui},'p',Number(this.value))" class="table-input w-full text-right text-sm text-rose-700 calc-trigger"></td>`;
             }
-            
-            rH += `<td class="px-2 text-center">
-                    <div class="flex items-center justify-center gap-2">
-                        <div class="cursor-grab text-slate-400 p-1" 
-                             onmousedown="this.closest('tr').setAttribute('draggable',true)" 
-                             onmouseup="this.closest('tr').removeAttribute('draggable')" 
-                             onmouseleave="this.closest('tr').removeAttribute('draggable')" 
-                             ondragstart="window.dragUnitStart(event, ${pi}, ${ui})" 
-                             ondragover="event.preventDefault()" 
-                             ondrop="window.dragUnitDrop(event, ${pi}, ${ui})">
-                            <i class="fa-solid fa-grip-vertical"></i>
-                        </div>
-                        <button onclick="window.deleteUnitRow(${pi},${ui})" class="text-slate-400 hover:text-rose-500 p-1"><i class="fa-solid fa-trash-can"></i></button>
-                    </div>
-                   </td>`;
+            rH += `<td class="px-2 text-center"><div class="flex items-center justify-center gap-2"><div class="cursor-grab text-slate-400 p-1" onmousedown="this.closest('tr').setAttribute('draggable',true)" onmouseup="this.closest('tr').removeAttribute('draggable')" onmouseleave="this.closest('tr').removeAttribute('draggable')" ondragstart="window.dragUnitStart(event, ${pi}, ${ui})" ondragover="event.preventDefault()" ondrop="window.dragUnitDrop(event, ${pi}, ${ui})"><i class="fa-solid fa-grip-vertical"></i></div><button onclick="window.deleteUnitRow(${pi},${ui})" class="text-slate-400 hover:text-rose-500 p-1"><i class="fa-solid fa-trash-can"></i></button></div></td>`;
             tb += `<tr class="hover:bg-blue-50/30 transition-colors">${rH}</tr>`;
         });
 
@@ -500,31 +448,15 @@ window.renderUnitTables = () => {
         else uh += `<th class="px-2 text-center text-slate-500 w-16">최빈</th><th class="px-2 text-center text-emerald-600 bg-emerald-50/50 w-16">낙관</th><th class="px-2 text-center text-rose-600 bg-rose-50/50 w-16">비관</th>`;
         uh += `<th class="px-3 text-center text-slate-400 w-16"><i class="fa-solid fa-gear"></i></th></tr>`;
         
-        h += `<section class="bg-white rounded-3xl border border-blue-200 border-l-8 border-l-blue-500 mb-6 overflow-hidden">
-                <div class="px-8 py-5 border-b border-slate-100 flex justify-between">
-                    <h2 class="text-sm font-bold flex items-center gap-2 text-slate-800"><i class="fa-solid fa-cubes text-blue-500"></i> 유닛 - ${p.name}</h2>
-                    <button onclick="window.addUnitRow(${pi})" class="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-xs font-bold">+ 추가</button>
-                </div>
-                <div class="overflow-x-auto"><table class="w-full text-xs"><thead class="bg-slate-50 border-b">${uh}</thead><tbody class="divide-y">${tb}</tbody></table></div>
-                <div class="bg-blue-50/30 p-4 text-right border-t"><span class="text-[11px] font-bold text-slate-500">유닛 합계</span><span class="ml-3 text-lg font-black text-blue-700">${pM.toFixed(1)} <span class="text-sm">MD</span></span></div>
-              </section>`;
+        h += `<section class="bg-white rounded-3xl border border-blue-200 border-l-8 border-l-blue-500 mb-6 overflow-hidden"><div class="px-8 py-5 border-b border-slate-100 flex justify-between"><h2 class="text-sm font-bold flex items-center gap-2 text-slate-800"><i class="fa-solid fa-cubes text-blue-500"></i> 유닛 - ${p.name}</h2><button onclick="window.addUnitRow(${pi})" class="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-xs font-bold">+ 추가</button></div><div class="overflow-x-auto"><table class="w-full text-xs"><thead class="bg-slate-50 border-b">${uh}</thead><tbody class="divide-y">${tb}</tbody></table></div><div class="bg-blue-50/30 p-4 text-right border-t"><span class="text-[11px] font-bold text-slate-500">유닛 합계</span><span class="ml-3 text-lg font-black text-blue-700">${pM.toFixed(1)} <span class="text-sm">MD</span></span></div></section>`;
     });
     cont.innerHTML = h;
     window.setupAutoSaveTriggers();
 };
 
-window.updateProcessData = (i, f, v) => { 
-    window.currentProcessData[i][f] = f==='name'||f==='pType' ? v : parseFloat(v);
-    if(f === 'pType' && v === 'auto' && !window.currentProcessData[i].unitData) {
-        window.currentProcessData[i].unitData = [{name:"신규", q:1, m:1.0, o:0.9, p:1.4}]; 
-    }
-    window.isProjectDirty = true;
-    window.renderProcessTable(); window.renderUnitTables(); 
-    window.debouncedRunSimulation(); 
-};
+window.updateProcessData = (i, f, v) => { window.currentProcessData[i][f] = f==='name'||f==='pType' ? v : parseFloat(v); if(f === 'pType' && v === 'auto' && !window.currentProcessData[i].unitData) { window.currentProcessData[i].unitData = [{name:"신규", q:1, m:1.0, o:0.9, p:1.4}]; } window.isProjectDirty = true; window.renderProcessTable(); window.renderUnitTables(); window.debouncedRunSimulation(); };
 window.addProcessRow = () => { window.currentProcessData.push({name:"신규 공정", q:1, m:1.0, pType:'md'}); window.isProjectDirty = true; window.renderProcessTable(); window.debouncedRunSimulation(); };
 window.deleteProcessRow = (i) => { window.currentProcessData.splice(i,1); window.isProjectDirty = true; window.renderProcessTable(); window.renderUnitTables(); window.debouncedRunSimulation(); };
-
 window.updateUnitData = (pI, uI, f, v) => { window.currentProcessData[pI].unitData[uI][f] = v; window.isProjectDirty = true; window.debouncedRunSimulation(); window.renderUnitTables(); window.renderProcessTable(); };
 window.addUnitRow = (pI) => { window.currentProcessData[pI].unitData.push({name:"신규 유닛", q:1, m:1.0, o:0.9, p:1.4}); window.isProjectDirty = true; window.renderUnitTables(); window.renderProcessTable(); window.debouncedRunSimulation(); };
 window.deleteUnitRow = (pI, uI) => { if(window.currentProcessData[pI].unitData.length <= 1) return; window.currentProcessData[pI].unitData.splice(uI,1); window.isProjectDirty = true; window.renderUnitTables(); window.renderProcessTable(); window.debouncedRunSimulation(); };
@@ -669,7 +601,6 @@ window.saveAiApiSettings = () => {
     window.toggleAiApiPanel(false);
 };
 
-// 💡 6-1. 고급 프롬프트가 적용된 심층 분석
 window.generateGroqInsight = async () => {
     if (!window.latestP50Md) return window.showToast("먼저 시뮬레이션을 실행해주세요.", "error");
     
@@ -765,264 +696,99 @@ window.generateGroqInsight = async () => {
     }
 };
 
-// 💡 6-2. 유사 프로젝트 비교 기능 및 모달
-window.openSimilarProjectModal = async () => {
-    const modal = document.getElementById('similar-project-modal');
-    const tbody = document.getElementById('similar-project-tbody');
-    if(!modal || !tbody) return;
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-    tbody.innerHTML = '<tr><td colspan="4" class="text-center p-6"><i class="fa-solid fa-spinner fa-spin text-xl text-slate-400"></i> 데이터 불러오는 중...</td></tr>';
-
-    try {
-        const snap = await getDocs(query(collection(db, "projects_status"), where("status", "==", "completed")));
-        window.completedProjects = [];
-        snap.forEach(d => window.completedProjects.push({id: d.id, ...d.data()}));
-
-        if(window.completedProjects.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="text-center p-6 font-bold text-slate-500">완료(출하)된 프로젝트 데이터가 없습니다.</td></tr>';
-            return;
-        }
-
-        window.completedProjects.sort((a,b) => b.updatedAt - a.updatedAt);
-        
-        tbody.innerHTML = window.completedProjects.map(p => `
-            <tr class="hover:bg-slate-50 border-b border-slate-100 cursor-pointer" onclick="const cb = this.querySelector('input'); cb.checked = !cb.checked; window.updateSelectedSimilarProjects();">
-                <td class="p-3 text-center" onclick="event.stopPropagation()"><input type="checkbox" value="${p.id}" class="sim-proj-cb accent-indigo-600 w-4 h-4 rounded cursor-pointer" onchange="window.updateSelectedSimilarProjects()"></td>
-                <td class="p-3 font-bold text-indigo-700 text-center w-32">[${p.code || '-'}]</td>
-                <td class="p-3 font-bold text-slate-700 truncate max-w-[250px]">${p.name}</td>
-                <td class="p-3 text-center font-black text-emerald-600 w-28">${(parseFloat(p.finalMd)||0).toFixed(1)} MD</td>
-            </tr>
-        `).join('');
-    } catch(e) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center p-6 text-rose-500 font-bold">데이터를 불러오지 못했습니다.</td></tr>';
-    }
-};
-
-window.closeSimilarProjectModal = () => {
-    const modal = document.getElementById('similar-project-modal');
-    if(modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
-};
-
-window.updateSelectedSimilarProjects = () => {
-    const cbs = document.querySelectorAll('.sim-proj-cb:checked');
-    if(cbs.length > 3) {
-        window.showToast("최대 3개까지만 선택 가능합니다.", "warning");
-        event.target.checked = false; 
-    }
-};
-
-window.applySimilarProjects = () => {
-    const cbs = document.querySelectorAll('.sim-proj-cb:checked');
-    if(cbs.length === 0) return window.showToast("비교할 프로젝트를 최소 1개 선택해주세요.", "warning");
-
-    window.selectedSimilarProjects = Array.from(cbs).map(cb => window.completedProjects.find(p => p.id === cb.value));
-    
-    const listContainer = document.getElementById('similar-projects-list');
-    if(listContainer) {
-        listContainer.innerHTML = window.selectedSimilarProjects.map(p => `
-            <div class="bg-white border border-slate-200 rounded-lg p-3 shadow-sm flex justify-between items-center">
-                <div class="truncate pr-2">
-                    <span class="text-[10px] font-bold text-indigo-600">[${p.code}]</span>
-                    <span class="text-xs font-bold text-slate-700 ml-1">${p.name}</span>
-                </div>
-                <span class="text-xs font-black text-emerald-600 shrink-0 ml-2 border-l pl-2">${(parseFloat(p.finalMd)||0).toFixed(1)} MD</span>
-            </div>
-        `).join('');
-    }
-    window.closeSimilarProjectModal();
-};
-
-window.generateAiComparison = async () => {
-    if(!window.selectedSimilarProjects || window.selectedSimilarProjects.length === 0) return window.showToast("비교할 과거 프로젝트를 먼저 선택하세요.", "warning");
-    
-    const apiKey = localStorage.getItem('axms_sim_api_key');
-    if (!apiKey) {
-        window.toggleAiApiPanel(true);
-        return window.showToast("Groq API 키를 먼저 입력해주세요.", "warning");
-    }
-
-    window.showToast("AI가 과거 데이터와 비교 분석을 수행 중입니다...", "success");
-    const cBox = document.getElementById('ai-compare-result');
-    if(cBox) { cBox.classList.remove('hidden'); cBox.innerHTML = '<div class="text-center p-6"><i class="fa-solid fa-spinner fa-spin mr-2 text-indigo-400"></i>과거 데이터 기반 정밀 비교 분석 중...</div>'; }
-
-    try {
-        const pastDataStr = window.selectedSimilarProjects.map(p => `[${p.name}] 실제투입공수: ${(parseFloat(p.finalMd)||0).toFixed(1)}MD, 실제투입인원: ${p.totPers||0}명, 실제출하일: ${p.d_shipEn||'미상'}, 예정출하일: ${p.d_shipEst||'미상'}`).join('\n');
-        
-        const promptStr = `당신은 제조 설비 데이터 분석가입니다.
-        현재 시뮬레이션 중인 프로젝트의 예상 데이터는 다음과 같습니다.
-        - 예상 공수: ${window.latestP50Md}MD
-        - 예상 투입 인원: ${document.getElementById('out-total-personnel')?.innerText || 0}명
-        - 목표 조립 완료일: ${document.getElementById('target-date')?.value || '미정'}
-        
-        비교 대상인 과거 완료된 유사 프로젝트들의 실적 데이터는 다음과 같습니다:
-        ${pastDataStr}
-
-        현재 프로젝트의 예상 데이터가 과거 실적에 비추어 볼 때 적절한지 분석하세요. 인원 배분, 일정 준수 여부, 총 공수 차이를 상세히 평가해야 합니다.
-        반드시 다음 JSON 형식으로만 응답해야 합니다:
-        {
-            "verdict": "적정 / 과소평가 / 과대평가 중 택1",
-            "md_analysis": "총 공수(MD) 관점의 비교 분석 (2문장 내외)",
-            "personnel_analysis": "투입 인원 관점의 비교 분석 (2문장 내외)",
-            "schedule_analysis": "일정(납기) 관점의 비교 분석 (2문장 내외)",
-            "coreRisks": [
-                { "risk": "가장 핵심적인 리스크 요인", "mitigation": "실질적 조치 계획" }
-            ],
-            "recommendation": "오차를 줄이기 위한 실질적 조언"
-        }`;
-
-        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', { 
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-            body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: promptStr }], temperature: 0.5, response_format: { type: "json_object" } })
-        });
-
-        if (!response.ok) throw new Error("AI 서버 에러");
-        const data = await response.json();
-        const result = JSON.parse(data.choices[0].message.content);
-
-        let verdictColor = result.verdict.includes('적정') ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/30' : 'text-rose-400 bg-rose-400/10 border-rose-400/30';
-
-        let coreRisksHtml = '';
-        if(result.coreRisks && result.coreRisks.length > 0) {
-            coreRisksHtml = `
-                <div class="mt-4 space-y-2">
-                    <h4 class="text-sm font-black text-rose-400 border-b border-slate-700 pb-1 flex items-center gap-2"><i class="fa-solid fa-triangle-exclamation"></i> 핵심 리스크 및 조치계획</h4>
-                    ${result.coreRisks.map(r => `
-                        <div class="bg-rose-950/30 p-3 rounded-xl border border-rose-900/50">
-                            <div class="text-sm font-bold text-rose-300 mb-1">${r.risk}</div>
-                            <div class="text-xs font-medium text-emerald-400 pl-2 border-l-2 border-emerald-500/50">${r.mitigation}</div>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-        }
-
-        if(cBox) {
-            cBox.innerHTML = `
-                <div class="animate-fade-in">
-                    <div class="flex items-center justify-between mb-4 border-b border-slate-700 pb-3">
-                        <h4 class="text-sm font-bold text-indigo-300"><i class="fa-solid fa-scale-balanced mr-1"></i> 과거 실적 대비 타당성 검증</h4>
-                        <span class="px-3 py-1 rounded-full border text-xs font-black ${verdictColor}">${result.verdict}</span>
-                    </div>
-                    <div class="space-y-4">
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            <div class="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
-                                <span class="text-[10px] font-bold text-indigo-400 block mb-1">총 공수 (MD) 비교</span>
-                                <p class="text-[11px] font-medium text-slate-300 leading-relaxed">${result.md_analysis}</p>
-                            </div>
-                            <div class="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
-                                <span class="text-[10px] font-bold text-teal-400 block mb-1">투입 인원 분석</span>
-                                <p class="text-[11px] font-medium text-slate-300 leading-relaxed">${result.personnel_analysis}</p>
-                            </div>
-                            <div class="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
-                                <span class="text-[10px] font-bold text-amber-400 block mb-1">일정(납기) 분석</span>
-                                <p class="text-[11px] font-medium text-slate-300 leading-relaxed">${result.schedule_analysis}</p>
-                            </div>
-                        </div>
-                        ${coreRisksHtml}
-                        <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-600 mt-2">
-                            <span class="text-[10px] font-bold text-emerald-400 block mb-1"><i class="fa-solid fa-lightbulb mr-1"></i>최종 개선 제언</span>
-                            <p class="text-[11px] font-medium text-slate-200 leading-relaxed">${result.recommendation}</p>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-    } catch (e) {
-        window.showToast("비교 분석 실패", "error");
-        if(cBox) cBox.innerText = "분석 중 오류 발생";
-    }
-};
-
 // ==========================================
-// 7. 💡 완벽하게 복원된 엑셀 출력 로직 (ExcelJS)
+// 7. 데이터 엑셀 출력 (ExcelJS) 완벽 복구
 // ==========================================
 window.exportToExcel = async () => {
     if (typeof ExcelJS === 'undefined') return window.showToast("라이브러리 로딩 중입니다.", "warning");
     window.showToast("공수 보고서 엑셀 파일을 생성 중입니다...");
-    
+
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('시뮬레이션_보고서', { views: [{ showGridLines: false }] });
-    
-    ws.getColumn(1).width = 5;  
-    ws.getColumn(2).width = 35; 
-    ws.getColumn(3).width = 15; 
-    ws.getColumn(4).width = 15; 
-    ws.getColumn(5).width = 15; 
-    ws.getColumn(6).width = 10; 
-    ws.getColumn(7).width = 10; 
-    
+
+    ws.columns = [
+        { width: 35 }, { width: 18 }, { width: 18 }, { width: 20 }, { width: 15 }, { width: 15 }
+    ];
+
+    const setBg = (cell, color) => { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } }; };
+    const setFont = (cell, opts) => { cell.font = { name: '맑은 고딕', ...opts }; };
+    const setBorder = (cell) => { cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; };
+
+    ws.mergeCells('A1:F1');
+    const titleCell = ws.getCell('A1');
+    titleCell.value = '📊 제조 설비 공수 시뮬레이터 종합 보고서';
+    setFont(titleCell, { size: 16, bold: true, color: { argb: 'FF0F172A' } });
+    titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
+
+    ws.mergeCells('A2:F2');
+    ws.getCell('A2').value = `출력 일시: ${new Date().toLocaleString()}`;
+    setFont(ws.getCell('A2'), { color: { argb: 'FF64748B' } });
+    ws.addRow([]); 
+
     const pCode = document.getElementById('project-code')?.value || '-';
     const pName = document.getElementById('project-name')?.value || '무제';
     const mgr = document.getElementById('manager-name')?.value || '미정';
-    
     const p50 = document.getElementById('out-p50-md')?.innerText || '0';
     const p10 = document.getElementById('out-p10-md')?.innerText || '0';
     const p90 = document.getElementById('out-p90-md')?.innerText || '0';
-    
     const d50 = document.getElementById('out-p50-date')?.innerText || '-';
     const d10 = document.getElementById('out-p10-date')?.innerText || '-';
     const d90 = document.getElementById('out-p90-date')?.innerText || '-';
-    
     const cost50 = document.getElementById('out-p50-cost')?.innerText || '0';
     const cost10 = document.getElementById('out-p10-cost')?.innerText || '0';
     const cost90 = document.getElementById('out-p90-cost')?.innerText || '0';
-
     const tPers = document.getElementById('out-total-personnel')?.innerText || '0';
     const sMult = document.getElementById('out-avg-skill')?.innerText || '1.00';
     const pSen = document.getElementById('p-senior')?.value || '0';
     const pMid = document.getElementById('p-mid')?.value || '0';
     const pJun = document.getElementById('p-junior')?.value || '0';
-    
     const lCost = document.getElementById('labor-cost')?.value || '300000';
     const pExp = document.getElementById('planned-expense')?.value || '0';
+    const tgD = document.getElementById('target-date')?.value || '-';
+    const spD = document.getElementById('shipping-date')?.value || '-';
 
-    const learnCurve = document.getElementById('learning-curve')?.value || '95';
-    const diffMult = document.getElementById('diff-multiplier')?.value || '1.0';
-    const bufRate = document.getElementById('buffer-rate')?.value || '5';
-
-    const addSectionHeader = (text) => {
-        const row = ws.addRow([text]);
-        row.font = { bold: true, size: 12, color: { argb: 'FF1E293B' } };
-        return row;
-    };
-
-    // 1. 헤더 영역
-    ws.addRow(['📊 제조 설비 공수 시뮬레이터 종합 보고서']).font = { size: 16, bold: true, color: { argb: 'FF0F172A' } };
-    ws.addRow([`출력 일시: ${new Date().toLocaleString()}`]).font = { color: { argb: 'FF64748B' } };
-    ws.addRow([]);
-    
-    // 2. 프로젝트 정보
-    addSectionHeader('■ 1. 프로젝트 정보 및 설정');
-    ws.addRow(['프로젝트 코드', pCode, '프로젝트 명', pName]);
-    ws.addRow(['담당자', mgr, '투입 인원 및 숙련도', `총 ${tPers}명 (고급 ${pSen}명, 중급 ${pMid}명, 초급 ${pJun}명) / 평균 보정치: ${sMult}배`]);
-    ws.addRow(['1MD 기준 인건비', `${Number(lCost).toLocaleString()} 원`, '예상 기타 경비', `${Number(pExp).toLocaleString()} 원`]);
+    ws.addRow(['■ 1. 프로젝트 정보 및 설정']).font = { bold: true, size: 12 };
+    let r5 = ws.addRow(['프로젝트 코드', pCode, '프로젝트 명', pName]);
+    let r6 = ws.addRow(['담당자', mgr, '투입 인원 및 숙련도', `총 ${tPers}명 (고급 ${pSen}명, 중급 ${pMid}명, 초급 ${pJun}명) / 평균 보정치: ${sMult}배`]);
+    let r7 = ws.addRow(['1MD 기준 인건비', `${Number(lCost).toLocaleString()} 원`, '예상 기타 경비', `${Number(pExp).toLocaleString()} 원`]);
+    [r5, r6, r7].forEach(r => {
+        setBg(r.getCell(1), 'FFF1F5F9'); setFont(r.getCell(1), { bold: true });
+        setBg(r.getCell(3), 'FFF1F5F9'); setFont(r.getCell(3), { bold: true });
+        r.eachCell(c => setBorder(c));
+    });
+    ws.mergeCells('D6:F6'); 
     ws.addRow([]);
 
-    // 3. 분석 요약 결과
-    addSectionHeader('■ 2. 분석 요약 결과');
-    ws.addRow(['목표 조립 완료일', document.getElementById('target-date')?.value || '-', '출하 예정일', document.getElementById('shipping-date')?.value || '-']);
+    ws.addRow(['■ 2. 분석 요약 결과']).font = { bold: true, size: 12 };
+    let r10 = ws.addRow(['목표 조립 완료일', tgD, '출하 예정일', spD]);
+    setBg(r10.getCell(1), 'FFF1F5F9'); setFont(r10.getCell(1), { bold: true });
+    setBg(r10.getCell(3), 'FFF1F5F9'); setFont(r10.getCell(3), { bold: true });
+    r10.eachCell(c => setBorder(c));
+
     const h1 = ws.addRow(['구분', '산출 공수(MD)', '조립 완료 예정일', '예상 총 비용(인건비+경비)']);
-    h1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
-    h1.font = { bold: true, color: { argb: 'FF334155' } };
-    
-    ws.addRow(['P10 (낙관적 10%)', p10, d10, cost10]);
-    ws.addRow(['P50 (가장 유력)', p50, d50, cost50]).font = { bold: true, color: { argb: 'FF4F46E5' } };
-    ws.addRow(['P90 (보수적 90%)', p90, d90, cost90]);
+    h1.eachCell(c => { setBg(c, 'FF334155'); setFont(c, { bold: true, color: { argb: 'FFFFFFFF' } }); setBorder(c); c.alignment = {horizontal:'center'}; });
+
+    let r12 = ws.addRow(['P10 (낙관적 10%)', p10, d10, cost10 + ' 원']);
+    let r13 = ws.addRow(['P50 (가장 유력)', p50, d50, cost50 + ' 원']);
+    let r14 = ws.addRow(['P90 (보수적 90%)', p90, d90, cost90 + ' 원']);
+    [r12, r13, r14].forEach(r => { r.eachCell(c => { setBorder(c); c.alignment = {horizontal:'center'}; }); });
+    setFont(r13, { bold: true, color: { argb: 'FF4F46E5' } }); 
     ws.addRow([]);
 
-    // 4. 인원 분석
-    addSectionHeader('■ 3. 필요 인원 분석 (목표 조립 완료일 기준)');
-    ws.addRow(['가용 일수', `${document.getElementById('out-target-days')?.innerText||0} 일`, '달성 확률', document.getElementById('out-target-prob')?.innerText||'0%']);
-    ws.addRow(['[P50] 필요 인원', `${document.getElementById('out-req-p50')?.innerText||0} 명`, '[P90] 필요 인원', `${document.getElementById('out-req-p90')?.innerText||0} 명`]);
+    ws.addRow(['■ 3. 필요 인원 분석 (목표 조립 완료일 기준)']).font = { bold: true, size: 12 };
+    let r17 = ws.addRow(['가용 일수', `${document.getElementById('out-target-days')?.innerText||0} 일`, '달성 확률', document.getElementById('out-target-prob')?.innerText||'0%']);
+    let r18 = ws.addRow(['[P50] 필요 인원', `${document.getElementById('out-req-p50')?.innerText||0} 명`, '[P90] 필요 인원', `${document.getElementById('out-req-p90')?.innerText||0} 명`]);
+    [r17, r18].forEach(r => {
+        setBg(r.getCell(1), 'FFF1F5F9'); setFont(r.getCell(1), { bold: true });
+        setBg(r.getCell(3), 'FFF1F5F9'); setFont(r.getCell(3), { bold: true });
+        r.eachCell(c => { setBorder(c); c.alignment = {horizontal:'center'}; });
+    });
     ws.addRow([]);
 
-    // 5. AI 분석
-    addSectionHeader('■ 4. AI 리스크 분석 결과');
+    ws.addRow(['■ 4. AI 리스크 분석 결과']).font = { bold: true, size: 12 };
     if (window.latestAiResult) {
         ws.addRow(['분석 요약', window.latestAiResult.summary || '-']);
-        if(window.latestAiResult.coreRisks) {
+        if(window.latestAiResult.coreRisks && window.latestAiResult.coreRisks.length > 0) {
             ws.addRow(['핵심 리스크 및 조치']);
             window.latestAiResult.coreRisks.forEach(r => {
                 ws.addRow(['', `[${r.phase || '공통'}] ${r.risk} -> ${r.mitigation}`]);
@@ -1035,112 +801,88 @@ window.exportToExcel = async () => {
     }
     ws.addRow([]);
 
-    // 6. 시뮬레이션 파라미터
-    addSectionHeader('■ 5. 시뮬레이션 세부 파라미터');
-    ws.addRow(['적용 학습 곡선', `${learnCurve}%`, '난이도 배수', `${diffMult} 배`, '안전 버퍼율', `${bufRate}%`]);
+    ws.addRow(['■ 5. 세부 공정별 데이터']).font = { bold: true, size: 12 };
+    const h2 = ws.addRow(['공정명', '수량', 'MD', '최빈', '낙관', '비관']);
+    h2.eachCell(c => { setBg(c, 'FF334155'); setFont(c, { bold: true, color: { argb: 'FFFFFFFF' } }); setBorder(c); c.alignment = {horizontal:'center'}; });
+
+    window.currentProcessData.forEach(p => {
+        let row = ws.addRow([p.name, p.q, p.m, p.m, p.o || '-', p.p || '-']);
+        row.eachCell(c => setBorder(c));
+        row.getCell(1).alignment = { horizontal: 'left' };
+        for(let i=2; i<=6; i++) row.getCell(i).alignment = { horizontal: 'center' };
+    });
     ws.addRow([]);
 
-    // 공정 데이터 처리 및 간트 연산
+    ws.addRow(['■ 6. 전체 공정 타임라인 (Gantt Chart)']).font = { bold: true, size: 12 };
+
     let startStr = document.getElementById('start-date')?.value || window.getLocalDateStr(new Date());
     let processGanttData = [];
     let offset = 0;
-    
-    window.currentProcessData.forEach((p, idx) => {
+
+    window.currentProcessData.forEach(p => {
         let pt = p.pType || 'md';
         let days = 0;
         if(pt === 'auto') {
-            let um = 0;
-            (p.unitData || []).forEach(u => um += (parseFloat(u.q)||0)*(parseFloat(u.m)||0));
+            let um = 0; (p.unitData || []).forEach(u => um += (parseFloat(u.q)||0)*(parseFloat(u.m)||0));
             days = um / (parseFloat(p.q)||1);
-        } else {
-            days = parseFloat(p.m) || 0;
-        }
-        
+        } else { days = parseFloat(p.m) || 0; }
+
+        if(days <= 0) return;
+
         let sD = window.calculateWorkDate(startStr, Math.floor(offset));
         let eD = window.calculateWorkDate(startStr, Math.floor(offset + days - 0.0001));
-        
+
         processGanttData.push({
             name: p.name,
-            type: pt === 'md' ? '제조(MD)' : (pt === 'auto' ? '제조(유닛)' : '일정'),
-            q: p.q,
-            m: p.m,
-            o: p.o || '-',
-            p: p.p || '-',
-            days: days,
-            start: sD,
-            end: eD,
-            color: pt === 'auto' ? 'FFFBBF24' : (pt.startsWith('schedule') ? 'FF34D399' : 'FF818CF8') 
+            type: pt === 'md' ? '제조(수동)' : (pt === 'auto' ? '제조(유닛)' : '일정'),
+            start: sD, end: eD, days: days,
+            color: pt === 'auto' ? 'FFF59E0B' : (pt.startsWith('schedule') ? 'FF10B981' : 'FF6366F1')
         });
-        
         offset += days;
     });
 
-    // 7. 세부 공정별 데이터
-    addSectionHeader('■ 6. 공정별 세부 데이터');
-    const h2 = ws.addRow(['No', '공정명', '인원(명)', '구분', '기준(MD)', '최빈', '낙관', '비관']);
-    h2.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    h2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF475569' } };
-    h2.eachCell(c => c.alignment = { horizontal: 'center' });
-    
-    processGanttData.forEach((p, idx) => {
-        const row = ws.addRow([idx + 1, p.name, p.q, p.type, p.m, p.m, p.o, p.p]);
-        row.eachCell(c => c.alignment = { horizontal: 'center' });
-        row.getCell(2).alignment = { horizontal: 'left' }; 
-    });
-    ws.addRow([]);
+    if(processGanttData.length > 0) {
+        let minDate = new Date(startStr);
+        let maxDate = new Date(processGanttData[processGanttData.length-1].end);
 
-    // 8. 전체 공정 타임라인 (Gantt Chart)
-    addSectionHeader('■ 7. 전체 공정 타임라인 (Gantt Chart)');
-    
-    let minDate = new Date(startStr);
-    let maxDate = new Date(startStr);
-    processGanttData.forEach(p => {
-        if(p.start < minDate) minDate = p.start;
-        if(p.end > maxDate) maxDate = p.end;
-    });
-    
-    let dateHeaders = ['공정명', '타입', '시작일', '종료일', '기간(일)'];
-    let dateCols = [];
-    let curr = new Date(minDate);
-    while(curr <= maxDate) {
-        dateCols.push(new Date(curr));
-        dateHeaders.push(`${curr.getMonth()+1}/${curr.getDate()}`);
-        curr.setDate(curr.getDate() + 1);
-    }
-    
-    const h3 = ws.addRow(dateHeaders);
-    h3.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    h3.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
-    h3.alignment = { horizontal: 'center' };
-    
-    processGanttData.forEach(p => {
-        let rowData = [
-            p.name, 
-            p.type, 
-            window.getLocalDateStr(p.start), 
-            window.getLocalDateStr(p.end), 
-            p.days.toFixed(1)
-        ];
-        
-        dateCols.forEach(() => rowData.push(''));
-        let row = ws.addRow(rowData);
-        
-        row.getCell(1).alignment = { horizontal: 'left' };
-        for(let i=2; i<=5; i++) row.getCell(i).alignment = { horizontal: 'center' };
-        
-        dateCols.forEach((d, idx) => {
-            let cell = row.getCell(idx + 6);
-            cell.border = { top: {style:'thin', color:{argb:'FFE2E8F0'}}, left: {style:'thin', color:{argb:'FFE2E8F0'}}, bottom: {style:'thin', color:{argb:'FFE2E8F0'}}, right: {style:'thin', color:{argb:'FFE2E8F0'}} };
-            
-            let dTime = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-            let sTime = new Date(p.start.getFullYear(), p.start.getMonth(), p.start.getDate()).getTime();
-            let eTime = new Date(p.end.getFullYear(), p.end.getMonth(), p.end.getDate()).getTime();
-            
-            if (dTime >= sTime && dTime <= eTime) {
-                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: p.color } };
-            }
+        let dateHeaders = ['공정명', '타입', '시작일', '종료일', '기간(일)'];
+        let dateCols = [];
+        let curr = new Date(minDate);
+        while(curr <= maxDate) {
+            dateCols.push(new Date(curr));
+            dateHeaders.push(`${curr.getMonth()+1}/${curr.getDate()}`);
+            curr.setDate(curr.getDate() + 1);
+        }
+
+        const h3 = ws.addRow(dateHeaders);
+        h3.eachCell((c, cNum) => {
+            setBg(c, 'FF334155'); setFont(c, { bold: true, color: { argb: 'FFFFFFFF' } }); setBorder(c); c.alignment = {horizontal:'center'};
+            if(cNum > 5) ws.getColumn(cNum).width = 4; 
         });
-    });
+
+        processGanttData.forEach(p => {
+            let rowData = [p.name, p.type, window.getLocalDateStr(p.start), window.getLocalDateStr(p.end), p.days.toFixed(1)];
+            dateCols.forEach(() => rowData.push(''));
+            let row = ws.addRow(rowData);
+
+            row.eachCell((c, cNum) => {
+                setBorder(c);
+                if(cNum === 1) c.alignment = { horizontal: 'left' };
+                else if(cNum <= 5) c.alignment = { horizontal: 'center' };
+            });
+
+            dateCols.forEach((d, idx) => {
+                let cell = row.getCell(idx + 6);
+                let dTime = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+                let sTime = new Date(p.start.getFullYear(), p.start.getMonth(), p.start.getDate()).getTime();
+                let eTime = new Date(p.end.getFullYear(), p.end.getMonth(), p.end.getDate()).getTime();
+
+                if (dTime >= sTime && dTime <= eTime) {
+                    setBg(cell, p.color);
+                }
+            });
+        });
+    }
 
     const buffer = await wb.xlsx.writeBuffer();
     saveAs(new Blob([buffer]), `공수보고서_${pCode||pName}_${new Date().toISOString().split('T')[0]}.xlsx`);
