@@ -3,7 +3,7 @@
 let ncrChartInstances = {};
 let ncrFilteredData = [];
 
-// Chart.js DataLabels 플러그인 동적 로드 보장
+// Chart.js DataLabels 플러그인 안전하게 동적 로드
 function loadDataLabelsPlugin(callback) {
     if (typeof ChartDataLabels !== 'undefined') {
         callback();
@@ -25,8 +25,13 @@ function loadDataLabelsPlugin(callback) {
 window.initNcrDashboard = function(forceReload = false) {
     console.log("✅ 초격차 프리미엄 NCR 대시보드 로드 완료");
     
+    // 💡 (수정) PJT 코드 마스터 데이터가 로드되어 있지 않다면 로드 시도
+    if (!window.pjtCodeMasterList || window.pjtCodeMasterList.length === 0) {
+        if (window.loadProjectCodeMaster) window.loadProjectCodeMaster();
+    }
+    
     const initProcess = () => {
-        // 글로벌 설정
+        // 차트 글로벌 기본 설정
         Chart.defaults.font.family = "'Pretendard', sans-serif";
         Chart.defaults.color = '#94a3b8'; 
         Chart.defaults.scale.grid.color = '#f1f5f9'; 
@@ -40,7 +45,7 @@ window.initNcrDashboard = function(forceReload = false) {
             });
         }
 
-        // 데이터 페칭
+        // 데이터 페칭 및 렌더링
         if (forceReload || !window.ncrData || window.ncrData.length === 0) {
             if (window.loadNcrData) {
                 window.loadNcrData().then(() => {
@@ -58,11 +63,13 @@ window.initNcrDashboard = function(forceReload = false) {
         }
     };
 
+    // SPA 타이밍 이슈 방지를 위해 약간의 딜레이 후 실행
     setTimeout(() => {
         loadDataLabelsPlugin(initProcess);
     }, 100);
 };
 
+// 필터 옵션 동적 채우기
 function populateNcrFilters() {
     const rawData = window.ncrData || [];
     let pjtSet = new Set();
@@ -91,6 +98,7 @@ function populateNcrFilters() {
     }
 }
 
+// 필터 적용 및 재렌더링
 window.filterNcrDashboard = function() {
     const year = document.getElementById('ncr-filter-year')?.value || '';
     const month = document.getElementById('ncr-filter-month')?.value || '';
@@ -110,11 +118,28 @@ window.filterNcrDashboard = function() {
         if (month && (!d.date || d.date.split('-')[1] !== month)) match = false;
         if (pjt && d.pjtCode !== pjt) match = false;
         
+        // 💡 [핵심수정] PJT 코드 전용 초성 검색 (마스터 데이터와 연동)
         if (pjtCodeSearch) {
+            let isCodeMatch = false;
             const targetCode = (d.pjtCode || '').toLowerCase();
-            if (!targetCode.includes(pjtCodeSearch) && !(window.matchString && window.matchString(pjtCodeSearch, targetCode))) {
-                match = false;
+            
+            // 1. 코드 원본 자체가 일치하는지 먼저 검사
+            if (targetCode.includes(pjtCodeSearch) || (window.matchString && window.matchString(pjtCodeSearch, targetCode))) {
+                isCodeMatch = true;
+            } else {
+                // 2. 마스터 데이터(pjtCodeMasterList)를 뒤져서 해당 코드의 프로젝트명이 초성과 일치하는지 검사
+                if (window.pjtCodeMasterList && window.pjtCodeMasterList.length > 0) {
+                    const masterInfo = window.pjtCodeMasterList.find(m => (m.code || '').toLowerCase() === targetCode);
+                    if (masterInfo && masterInfo.name) {
+                        const targetName = masterInfo.name.toLowerCase();
+                        if (targetName.includes(pjtCodeSearch) || (window.matchString && window.matchString(pjtCodeSearch, targetName))) {
+                            isCodeMatch = true;
+                        }
+                    }
+                }
             }
+            
+            if (!isCodeMatch) match = false;
         }
         
         if (search) {
@@ -358,22 +383,32 @@ function drawParetoChart(paretoData) {
     });
 }
 
+// 도넛 차트 텍스트 중앙 완벽 정렬 커스텀 플러그인
 const donutCenterTextPlugin = {
     id: 'donutCenterText',
     beforeDraw: function(chart) {
         if (chart.config.type !== 'doughnut') return;
-        let ctx = chart.ctx; ctx.restore();
+        let ctx = chart.ctx; 
+        ctx.restore();
+        
         let centerX = (chart.chartArea.left + chart.chartArea.right) / 2;
         let centerY = (chart.chartArea.top + chart.chartArea.bottom) / 2;
+
         let textTop = "총 부적합";
         let textBottomEl = document.getElementById('donut-center-total');
         let textBottom = textBottomEl ? textBottomEl.innerText : "0";
+
+        ctx.textAlign = "center"; 
+        ctx.textBaseline = "middle";
         
-        ctx.textAlign = "center"; ctx.textBaseline = "middle";
-        ctx.font = "bold 13px Pretendard"; ctx.fillStyle = "#94a3b8"; 
+        ctx.font = "bold 13px Pretendard"; 
+        ctx.fillStyle = "#94a3b8"; 
         ctx.fillText(textTop, centerX, centerY - 18);
-        ctx.font = "900 44px Pretendard"; ctx.fillStyle = "#1e293b"; 
+
+        ctx.font = "900 44px Pretendard"; 
+        ctx.fillStyle = "#1e293b"; 
         ctx.fillText(textBottom, centerX, centerY + 20);
+
         ctx.save();
     }
 };
@@ -381,7 +416,8 @@ const donutCenterTextPlugin = {
 function drawDonutChart(data) {
     destroyChart('donut');
     const total = Object.values(data).reduce((a,b)=>a+b, 0);
-    const el = document.getElementById('donut-center-total'); if (el) el.innerText = total;
+    const el = document.getElementById('donut-center-total'); 
+    if (el) el.innerText = total;
 
     const canvas = document.getElementById('chart-ncr-type');
     if(!canvas) return;
@@ -465,6 +501,7 @@ function drawTopSupplierChart(data) {
     });
 }
 
+// Mock Data (시트 데이터가 없을 때 폴백 용도)
 function generateMockDashboard() {
     const mockData = [];
     for(let i=0; i<107; i++) {
