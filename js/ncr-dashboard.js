@@ -3,7 +3,7 @@
 let ncrChartInstances = {};
 let ncrFilteredData = [];
 
-// Chart.js DataLabels 플러그인 안전하게 동적 로드
+// Chart.js DataLabels 플러그인 동적 로드 보장
 function loadDataLabelsPlugin(callback) {
     if (typeof ChartDataLabels !== 'undefined') {
         callback();
@@ -26,7 +26,7 @@ window.initNcrDashboard = function(forceReload = false) {
     console.log("✅ 초격차 프리미엄 NCR 대시보드 로드 완료");
     
     const initProcess = () => {
-        // 차트 글로벌 기본 설정
+        // 글로벌 설정
         Chart.defaults.font.family = "'Pretendard', sans-serif";
         Chart.defaults.color = '#94a3b8'; 
         Chart.defaults.scale.grid.color = '#f1f5f9'; 
@@ -40,7 +40,7 @@ window.initNcrDashboard = function(forceReload = false) {
             });
         }
 
-        // 데이터 페칭 및 렌더링
+        // 데이터 페칭
         if (forceReload || !window.ncrData || window.ncrData.length === 0) {
             if (window.loadNcrData) {
                 window.loadNcrData().then(() => {
@@ -58,13 +58,11 @@ window.initNcrDashboard = function(forceReload = false) {
         }
     };
 
-    // SPA 타이밍 이슈 방지를 위해 약간의 딜레이 후 실행 (DOM 렌더링 확보)
     setTimeout(() => {
         loadDataLabelsPlugin(initProcess);
     }, 100);
 };
 
-// 필터 옵션 동적 채우기
 function populateNcrFilters() {
     const rawData = window.ncrData || [];
     let pjtSet = new Set();
@@ -93,11 +91,11 @@ function populateNcrFilters() {
     }
 }
 
-// 필터 적용 및 재렌더링
 window.filterNcrDashboard = function() {
     const year = document.getElementById('ncr-filter-year')?.value || '';
     const month = document.getElementById('ncr-filter-month')?.value || '';
     const pjt = document.getElementById('ncr-filter-pjt')?.value || '';
+    const pjtCodeSearch = document.getElementById('ncr-filter-pjt-code')?.value.toLowerCase() || '';
     const search = document.getElementById('ncr-search')?.value.toLowerCase() || '';
 
     const rawData = window.ncrData || [];
@@ -111,6 +109,14 @@ window.filterNcrDashboard = function() {
         if (year && (!d.date || !d.date.startsWith(year))) match = false;
         if (month && (!d.date || d.date.split('-')[1] !== month)) match = false;
         if (pjt && d.pjtCode !== pjt) match = false;
+        
+        if (pjtCodeSearch) {
+            const targetCode = (d.pjtCode || '').toLowerCase();
+            if (!targetCode.includes(pjtCodeSearch) && !(window.matchString && window.matchString(pjtCodeSearch, targetCode))) {
+                match = false;
+            }
+        }
+        
         if (search) {
             const content = (d.content || '').toLowerCase();
             const partName = (d.partName || '').toLowerCase();
@@ -134,9 +140,10 @@ function renderPremiumNcrDashboard() {
         if(document.getElementById('kpi-total-rate')) document.getElementById('kpi-total-rate').innerText = "0.0%";
         if(document.getElementById('kpi-qcost')) document.getElementById('kpi-qcost').innerText = "₩0";
         if(document.getElementById('kpi-resolution-rate')) document.getElementById('kpi-resolution-rate').innerText = "0.0%";
-        if(document.getElementById('kpi-resolved')) document.getElementById('kpi-resolved').innerHTML = `0 <span class="text-[14px] font-bold text-[#64748b] ml-1 tracking-tight">건 완료</span>`;
-        if(document.getElementById('kpi-pending')) document.getElementById('kpi-pending').innerHTML = `0 <span class="text-[14px] font-bold text-[#fb7185] ml-1 tracking-tight">건 조치중</span>`;
+        if(document.getElementById('kpi-resolved')) document.getElementById('kpi-resolved').innerHTML = `0 <span class="text-[12px] font-bold text-[#64748b] ml-1 tracking-tight">건 완료</span>`;
+        if(document.getElementById('kpi-pending')) document.getElementById('kpi-pending').innerHTML = `0 <span class="text-[12px] font-bold text-[#fb7185] ml-1 tracking-tight">건 조치중</span>`;
         if(document.getElementById('recent-ncr-list')) document.getElementById('recent-ncr-list').innerHTML = '<div class="text-sm font-bold text-slate-400">조건에 맞는 데이터가 없습니다.</div>';
+        if(document.getElementById('worst-top3-list')) document.getElementById('worst-top3-list').innerHTML = '<span class="text-[10px] font-bold text-rose-300">데이터 없음</span>';
         
         ['pareto', 'donut', 'monthly', 'pjtBar', 'supplierTop'].forEach(id => destroyChart(id));
         return;
@@ -192,10 +199,13 @@ function renderPremiumNcrDashboard() {
     if(document.getElementById('kpi-qcost')) document.getElementById('kpi-qcost').innerText = '₩' + (totalCount * 30611).toLocaleString();
     if(document.getElementById('kpi-resolution-rate')) document.getElementById('kpi-resolution-rate').innerText = resolvedRate + '%';
     
-    if(document.getElementById('kpi-resolved')) document.getElementById('kpi-resolved').innerHTML = `${resolvedCount} <span class="text-[14px] font-bold text-[#64748b] ml-1 tracking-tight">건 완료</span>`;
-    if(document.getElementById('kpi-pending')) document.getElementById('kpi-pending').innerHTML = `${pendingCount} <span class="text-[14px] font-bold text-[#fb7185] ml-1 tracking-tight">건 조치중</span>`;
+    if(document.getElementById('kpi-resolved')) document.getElementById('kpi-resolved').innerHTML = `${resolvedCount} <span class="text-[12px] font-bold text-[#64748b] ml-1 tracking-tight">건 완료</span>`;
+    if(document.getElementById('kpi-pending')) document.getElementById('kpi-pending').innerHTML = `${pendingCount} <span class="text-[12px] font-bold text-[#fb7185] ml-1 tracking-tight">건 조치중</span>`;
 
+    // 컴포넌트 그리기
     drawRecentNcrs(data);
+    drawWorstTop3(pjtCounts, totalCount);
+
     drawParetoChart(paretoData);
     drawDonutChart(typeCounts);
     drawMonthlyChart(monthlyCounts);
@@ -204,7 +214,7 @@ function renderPremiumNcrDashboard() {
 }
 
 // ---------------------------------------------------------
-// 0. 최근 3일간 부적합 리스트 렌더링 함수
+// 0-1. 최근 업데이트 내역 렌더링 (슬림 버전)
 // ---------------------------------------------------------
 function drawRecentNcrs(dataList) {
     const container = document.getElementById('recent-ncr-list');
@@ -230,8 +240,8 @@ function drawRecentNcrs(dataList) {
         const isCompleted = s.includes('완료') || s.includes('종결') || s.includes('완료됨');
         
         const statusBadge = isCompleted 
-            ? '<span class="bg-emerald-50 text-emerald-600 px-2 py-1 rounded text-[10px] font-bold shrink-0 border border-emerald-200 shadow-sm"><i class="fa-solid fa-check mr-0.5"></i>완료</span>'
-            : '<span class="bg-rose-50 text-rose-600 px-2 py-1 rounded text-[10px] font-bold shrink-0 border border-rose-200 shadow-sm"><i class="fa-solid fa-spinner fa-spin mr-0.5"></i>진행중</span>';
+            ? '<span class="bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 border border-emerald-200 shadow-sm"><i class="fa-solid fa-check mr-0.5"></i>완료</span>'
+            : '<span class="bg-rose-50 text-rose-600 px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 border border-rose-200 shadow-sm"><i class="fa-solid fa-spinner fa-spin mr-0.5"></i>진행중</span>';
         
         let dateText = item.date || '-';
         let dateColor = 'text-indigo-400';
@@ -247,10 +257,10 @@ function drawRecentNcrs(dataList) {
         }
 
         html += `
-            <div class="flex items-center justify-between bg-white border border-slate-200/80 rounded-xl px-4 py-2.5 shrink-0 min-w-[280px] max-w-[340px] hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer group">
-                <div class="flex flex-col gap-1 truncate pr-4">
-                    <span class="text-[10px] font-black text-slate-400 tracking-tight">${item.pjtCode || '-'} <span class="ml-1.5 ${dateColor} font-bold">${dateText}</span></span>
-                    <span class="text-xs font-bold text-slate-700 truncate group-hover:text-indigo-600 transition-colors">${item.content || '내용 없음'}</span>
+            <div class="flex items-center justify-between bg-white border border-slate-200/80 rounded-lg px-3 py-1.5 shrink-0 min-w-[240px] max-w-[300px] hover:border-indigo-300 hover:shadow-sm transition-all cursor-pointer group">
+                <div class="flex flex-col truncate pr-3">
+                    <span class="text-[9px] font-black text-slate-400 tracking-tight">${item.pjtCode || '-'} <span class="ml-1.5 ${dateColor} font-bold">${dateText}</span></span>
+                    <span class="text-[11px] font-bold text-slate-700 truncate group-hover:text-indigo-600 transition-colors">${item.content || '내용 없음'}</span>
                 </div>
                 ${statusBadge}
             </div>
@@ -261,7 +271,38 @@ function drawRecentNcrs(dataList) {
 }
 
 // ---------------------------------------------------------
-// 차트 렌더링 로직 (널 체크 보장)
+// 0-2. 불량 비중 Top 3 렌더링
+// ---------------------------------------------------------
+function drawWorstTop3(pjtCounts, totalCount) {
+    const container = document.getElementById('worst-top3-list');
+    if(!container) return;
+
+    if(totalCount === 0 || Object.keys(pjtCounts).length === 0) {
+        container.innerHTML = '<span class="text-[10px] font-bold text-rose-300">데이터 없음</span>';
+        return;
+    }
+
+    let sorted = Object.entries(pjtCounts).sort((a,b)=>b[1]-a[1]).slice(0,3);
+    let html = '';
+    
+    sorted.forEach(item => {
+        let pjtCode = item[0];
+        let count = item[1];
+        let rate = ((count / totalCount) * 100).toFixed(1);
+        
+        html += `
+            <div class="flex items-center gap-1.5 bg-white px-2 py-1 rounded shadow-sm border border-rose-100/50 shrink-0">
+                <span class="truncate max-w-[90px] text-[10px] font-bold text-slate-700" title="${pjtCode}">${pjtCode}</span>
+                <span class="text-rose-600 font-black text-[11px]">${rate}%</span>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+// ---------------------------------------------------------
+// 차트 렌더링 로직
 // ---------------------------------------------------------
 function destroyChart(id) {
     if (ncrChartInstances[id]) {
@@ -317,32 +358,22 @@ function drawParetoChart(paretoData) {
     });
 }
 
-// 자체 커스텀 플러그인: 도넛 차트의 중앙에 텍스트 렌더링
 const donutCenterTextPlugin = {
     id: 'donutCenterText',
     beforeDraw: function(chart) {
         if (chart.config.type !== 'doughnut') return;
-        let ctx = chart.ctx; 
-        ctx.restore();
-        
+        let ctx = chart.ctx; ctx.restore();
         let centerX = (chart.chartArea.left + chart.chartArea.right) / 2;
         let centerY = (chart.chartArea.top + chart.chartArea.bottom) / 2;
-
         let textTop = "총 부적합";
         let textBottomEl = document.getElementById('donut-center-total');
         let textBottom = textBottomEl ? textBottomEl.innerText : "0";
-
-        ctx.textAlign = "center"; 
-        ctx.textBaseline = "middle";
         
-        ctx.font = "bold 13px Pretendard"; 
-        ctx.fillStyle = "#94a3b8"; 
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.font = "bold 13px Pretendard"; ctx.fillStyle = "#94a3b8"; 
         ctx.fillText(textTop, centerX, centerY - 18);
-
-        ctx.font = "900 44px Pretendard"; 
-        ctx.fillStyle = "#1e293b"; 
+        ctx.font = "900 44px Pretendard"; ctx.fillStyle = "#1e293b"; 
         ctx.fillText(textBottom, centerX, centerY + 20);
-
         ctx.save();
     }
 };
@@ -350,8 +381,7 @@ const donutCenterTextPlugin = {
 function drawDonutChart(data) {
     destroyChart('donut');
     const total = Object.values(data).reduce((a,b)=>a+b, 0);
-    const el = document.getElementById('donut-center-total'); 
-    if (el) el.innerText = total;
+    const el = document.getElementById('donut-center-total'); if (el) el.innerText = total;
 
     const canvas = document.getElementById('chart-ncr-type');
     if(!canvas) return;
@@ -435,7 +465,6 @@ function drawTopSupplierChart(data) {
     });
 }
 
-// Mock Data (시트 데이터가 없을 때 폴백 용도)
 function generateMockDashboard() {
     const mockData = [];
     for(let i=0; i<107; i++) {
@@ -457,6 +486,6 @@ function generateMockDashboard() {
         });
     }
     window.ncrData = mockData;
-    populateNcrFilters(); // 데이터 생성 후 필터 업데이트
+    populateNcrFilters(); 
     window.filterNcrDashboard();
 }
