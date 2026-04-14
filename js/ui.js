@@ -328,20 +328,17 @@ window.insertMention = function(textareaId, name, startIndex, endIndex) {
     if (drop) drop.classList.add('hidden');
 };
 
-// 💡 [핵심] 특정 유저에게 종모양 알림과 이메일을 동시에 쏘는 가장 안정적인 함수
 window.notifyUser = async function(targetName, content, projectId, typeDesc) {
     if (!targetName) return false;
     const users = window.allSystemUsers || [];
     let targetUser = users.find(u => u.name === targetName);
     
-    // 유저가 존재하지 않거나, 내가 작성한 내용을 나에게 알림 보내는 경우 무시
     if (!targetUser || targetUser.uid === window.currentUser?.uid) return false;
 
     try {
         let sysName = window.userProfile ? window.userProfile.name : '시스템';
         let msgTitle = `📢 ${sysName}님이 [${typeDesc}] 을(를) 남겼습니다.`;
         
-        // 1. 내부 종모양 알림 (Firestore) 추가
         await addDoc(collection(db, "notifications"), {
             targetUid: targetUser.uid,
             senderName: sysName,
@@ -352,7 +349,6 @@ window.notifyUser = async function(targetName, content, projectId, typeDesc) {
             createdAt: Date.now()
         });
 
-        // 2. 이메일 발송 (Gmail API)
         if (targetUser.email && window.googleAccessToken) {
             const subject = `[AXBIS 알림] ${msgTitle}`;
             const bodyHtml = `
@@ -384,7 +380,6 @@ window.notifyUser = async function(targetName, content, projectId, typeDesc) {
     }
 };
 
-// 💡 내용에서 멘션(@이름)을 찾아 알림을 보내는 함수
 window.processMentions = async function(content, projectId, typeDesc) {
     let notifiedNames = [];
     if(!content) return notifiedNames;
@@ -570,8 +565,98 @@ window.selectAutocomplete = function(code, name, company, sourceId, targetId1, t
     const drop = document.getElementById('pjt-autocomplete-dropdown'); if (drop) drop.classList.add('hidden');
 };
 
+
+// ==========================================
+// 💡 상단 퀵메뉴 관련 로직
+// ==========================================
+window.availableApps = {
+    'dashboard-home': { title: '대시보드', icon: 'fa-solid fa-chart-pie', color: 'text-indigo-600' },
+    'project-status': { title: 'PJT현황', icon: 'fa-solid fa-table-list', color: 'text-slate-600' },
+    'workhours': { title: '투입공수', icon: 'fa-solid fa-user-clock', color: 'text-slate-600' },
+    'weekly-log': { title: '주간일지', icon: 'fa-solid fa-calendar-week', color: 'text-slate-600' },
+    'collab': { title: '협업/조립', icon: 'fa-regular fa-handshake', color: 'text-blue-600' },
+    'purchase': { title: '구매의뢰', icon: 'fa-solid fa-cart-flatbed', color: 'text-emerald-600' },
+    'repair': { title: '수리/점검', icon: 'fa-solid fa-stethoscope', color: 'text-rose-600' },
+    'simulation': { title: '시뮬레이션', icon: 'fa-solid fa-bolt', color: 'text-amber-500' }
+};
+
+window.quickMenuItems = JSON.parse(localStorage.getItem('axbis_quick_menu')) || ['dashboard-home', 'project-status', 'workhours', 'weekly-log'];
+
+window.renderQuickMenu = function() {
+    const container = document.getElementById('quick-menu-container');
+    if (!container) return;
+
+    let html = '';
+    window.quickMenuItems.forEach((key, index) => {
+        const app = window.availableApps[key];
+        if (!app) return;
+        html += `
+        <div class="group relative flex items-center bg-white border border-slate-200 px-3 py-1.5 rounded-full shadow-sm cursor-pointer hover:bg-indigo-50 transition-colors shrink-0" draggable="true" ondragstart="window.dragQmStart(event, ${index})" ondragover="event.preventDefault()" ondrop="window.dragQmDrop(event, ${index})">
+            <div onclick="window.openApp('${key}', '${app.title}')" class="flex items-center gap-1.5">
+                <i class="${app.icon} ${app.color} text-[11px]"></i>
+                <span class="text-[11px] font-bold text-slate-700 whitespace-nowrap">${app.title}</span>
+            </div>
+            <button onclick="window.removeQuickMenu(event, ${index})" class="ml-2 w-4 h-4 rounded-full flex items-center justify-center text-slate-300 hover:text-white hover:bg-rose-500 opacity-0 group-hover:opacity-100 transition-all"><i class="fa-solid fa-xmark text-[9px]"></i></button>
+        </div>`;
+    });
+
+    if (window.quickMenuItems.length < 5) {
+        html += `<button onclick="window.openQuickMenuAdd(event)" class="w-7 h-7 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center hover:bg-indigo-500 hover:text-white transition-colors shrink-0 shadow-sm"><i class="fa-solid fa-plus text-xs"></i></button>`;
+    }
+
+    container.innerHTML = html;
+};
+
+window.dragQmStart = (e, index) => { window.draggedQmIndex = index; };
+window.dragQmDrop = (e, dropIndex) => {
+    e.preventDefault();
+    if (window.draggedQmIndex === undefined || window.draggedQmIndex === dropIndex) return;
+    const item = window.quickMenuItems.splice(window.draggedQmIndex, 1)[0];
+    window.quickMenuItems.splice(dropIndex, 0, item);
+    localStorage.setItem('axbis_quick_menu', JSON.stringify(window.quickMenuItems));
+    window.renderQuickMenu();
+};
+
+window.openQuickMenuAdd = function(e) {
+    if(e) e.stopPropagation();
+    const drop = document.getElementById('qm-add-dropdown');
+    if (drop.classList.contains('hidden')) {
+        drop.classList.remove('hidden');
+        let html = '';
+        for (let key in window.availableApps) {
+            if (!window.quickMenuItems.includes(key)) {
+                const app = window.availableApps[key];
+                html += `<li class="px-4 py-2 hover:bg-indigo-50 cursor-pointer text-xs font-bold text-slate-600 flex items-center gap-2 border-b border-slate-50 last:border-0 transition-colors" onclick="window.addQuickMenu('${key}')"><i class="${app.icon} ${app.color}"></i> ${app.title}</li>`;
+            }
+        }
+        if (html === '') html = '<li class="px-3 py-2 text-xs text-slate-400 text-center">추가할 메뉴가 없습니다.</li>';
+        drop.innerHTML = html;
+    } else {
+        drop.classList.add('hidden');
+    }
+};
+
+window.addQuickMenu = function(key) {
+    if (window.quickMenuItems.length >= 5) return window.showToast('최대 5개까지만 추가 가능합니다.', 'warning');
+    if (!window.quickMenuItems.includes(key)) {
+        window.quickMenuItems.push(key);
+        localStorage.setItem('axbis_quick_menu', JSON.stringify(window.quickMenuItems));
+        window.renderQuickMenu();
+    }
+    document.getElementById('qm-add-dropdown').classList.add('hidden');
+};
+
+window.removeQuickMenu = function(e, index) {
+    if(e) e.stopPropagation();
+    window.quickMenuItems.splice(index, 1);
+    localStorage.setItem('axbis_quick_menu', JSON.stringify(window.quickMenuItems));
+    window.renderQuickMenu();
+};
+
+// 통합 클릭 리스너 병합
 document.addEventListener('click', function(e) {
     const n = document.getElementById('notification-dropdown'); if (n && !n.classList.contains('hidden') && !e.target.closest('.relative.cursor-pointer')) n.classList.add('hidden');
     const m = document.getElementById('mention-dropdown'); if (m && !m.classList.contains('hidden') && !e.target.closest('#mention-dropdown')) m.classList.add('hidden');
     const d = document.getElementById('pjt-autocomplete-dropdown'); if (d && !d.classList.contains('hidden') && !e.target.closest('#pjt-autocomplete-dropdown') && !e.target.closest('input[oninput*="showAutocomplete"]')) d.classList.add('hidden');
+    const qm = document.getElementById('qm-add-dropdown'); if (qm && !qm.classList.contains('hidden') && !e.target.closest('#qm-add-dropdown') && !e.target.closest('button[onclick*="openQuickMenuAdd"]')) qm.classList.add('hidden');
 });
