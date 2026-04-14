@@ -2,7 +2,7 @@
 import { db } from './firebase.js';
 import { 
     collection, doc, setDoc, getDoc, getDocs, 
-    addDoc, deleteDoc, query, where, serverTimestamp, orderBy 
+    addDoc, deleteDoc, query, where, orderBy, serverTimestamp 
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 // ==========================================
@@ -16,6 +16,7 @@ window.latestP50Md = 0;
 window.latestReqP90 = 0;
 window.masterPresets = {};
 window.currentTab = 'hist'; 
+window.currentProjectId = null;
 
 // 기본 프리셋 (DB가 비었을 때 fallback 용)
 const defaultPresets = {
@@ -215,6 +216,7 @@ window.loadMasterPresets = async () => {
                 sel.innerHTML += `<option value="${d.id}">${d.data().label}</option>`;
             });
         } else {
+            // DB에 없으면 기본값(defaultPresets) 강제 로드!
             window.masterPresets = JSON.parse(JSON.stringify(defaultPresets));
             for (let key in window.masterPresets) {
                 sel.innerHTML += `<option value="${key}">${window.masterPresets[key].label}</option>`;
@@ -501,52 +503,56 @@ window.renderGanttChart = () => {
 };
 
 // ==========================================
-// 6. 백엔드 연동 AI 분석
+// 6. 백엔드 연동 AI 분석, 모달창 띄우기
 // ==========================================
+window.toggleAiApiPanel = (force) => {
+    const panel = document.getElementById('ai-api-panel-wrap');
+    if(!panel) return;
+    if(typeof force === 'boolean') {
+        if(force) panel.classList.remove('hidden'); else panel.classList.add('hidden');
+    } else {
+        panel.classList.toggle('hidden');
+    }
+    if(!panel.classList.contains('hidden')) {
+        document.getElementById('ai-api-key').value = localStorage.getItem('axms_sim_api_key') || '';
+    }
+};
+
+window.saveAiApiSettings = () => {
+    const key = document.getElementById('ai-api-key').value.trim();
+    localStorage.setItem('axms_sim_api_key', key);
+    window.showToast("AI 설정이 저장되었습니다.");
+    window.toggleAiApiPanel(false);
+};
+
 window.generateGroqInsight = async () => {
     if (!window.latestP50Md) return window.showToast("먼저 시뮬레이션을 실행해주세요.", "error");
-
     window.showToast("AI 심층 분석을 요청 중입니다...", "success");
-    const briefingBox = document.getElementById('ai-briefing-text');
-    if(briefingBox) briefingBox.innerHTML = '<div class="text-center p-4"><i class="fa-solid fa-spinner fa-spin mr-2"></i>AI가 데이터를 분석하고 있습니다...</div>';
+    const bBox = document.getElementById('ai-briefing-text');
+    if(bBox) bBox.innerHTML = '<div class="text-center p-4"><i class="fa-solid fa-spinner fa-spin mr-2"></i>AI가 분석 중입니다...</div>';
 
     try {
         const response = await fetch('/api/simulation/analyze', { 
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                projectInfo: {
-                    code: document.getElementById('project-code')?.value,
-                    name: document.getElementById('project-name')?.value,
-                    p50Md: window.latestP50Md,
-                    processData: window.currentProcessData
-                }
-            })
+            body: JSON.stringify({ projectInfo: { p50Md: window.latestP50Md, processData: window.currentProcessData } })
         });
-
-        if (!response.ok) throw new Error("AI 서버 응답 실패");
+        if (!response.ok) throw new Error("AI 서버 에러");
         const data = await response.json();
         
-        if(briefingBox) {
-            briefingBox.innerHTML = `
+        if(bBox) {
+            bBox.innerHTML = `
                 <div class="space-y-3 animate-fade-in">
                     <p class="text-sm leading-relaxed">${data.summary || "분석 완료"}</p>
                     <div class="grid grid-cols-2 gap-2 mt-2">
-                        <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-700">
-                            <span class="text-[10px] text-slate-400 block mb-1">예상 리스크</span>
-                            <span class="text-xs font-bold text-rose-400">${data.mainRisk || "없음"}</span>
-                        </div>
-                        <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-700">
-                            <span class="text-[10px] text-slate-400 block mb-1">권장 조치</span>
-                            <span class="text-xs font-bold text-emerald-400">${data.action || "정상 진행"}</span>
-                        </div>
+                        <div class="bg-slate-800 p-2 rounded"><span class="text-[10px] text-slate-400 block">리스크</span><span class="text-xs font-bold text-rose-400">${data.mainRisk||"없음"}</span></div>
+                        <div class="bg-slate-800 p-2 rounded"><span class="text-[10px] text-slate-400 block">조치</span><span class="text-xs font-bold text-emerald-400">${data.action||"정상"}</span></div>
                     </div>
-                </div>
-            `;
+                </div>`;
         }
     } catch (e) {
-        window.showToast("AI 분석 모듈이 준비되지 않았습니다.", "error");
-        if(briefingBox) briefingBox.innerText = "AI 서버와 연결할 수 없습니다.";
+        window.showToast("AI 분석 모듈을 사용할 수 없습니다.", "error");
+        if(bBox) bBox.innerText = "서버 연결 안됨";
     }
 };
 
@@ -555,7 +561,7 @@ window.generateAiComparison = async () => {
 };
 
 // ==========================================
-// 7. 데이터 내보내기 (Firestore & Excel)
+// 7. 모달창 (불러오기, 이력, 대시보드) 및 데이터 엑셀 내보내기 
 // ==========================================
 window.saveToFirestore = async function(isSilent = false) {
     const pCode = document.getElementById('project-code')?.value;
@@ -571,14 +577,20 @@ window.saveToFirestore = async function(isSilent = false) {
         processData: window.currentProcessData,
         p50Md: window.latestP50Md,
         authorUid: window.currentUser?.uid || 'guest',
-        updatedAt: serverTimestamp()
+        updatedAt: Date.now()
     };
 
     try {
-        if (window.currentProjectId) {
-            await setDoc(doc(db, "sim_projects", window.currentProjectId), payload, { merge: true });
+        let pid = window.currentProjectId;
+        if (pid) {
+            const oldSnap = await getDoc(doc(db, "sim_projects", pid));
+            if(oldSnap.exists()) {
+                await addDoc(collection(db, "sim_project_history"), { projectId: pid, snapshot: oldSnap.data(), changedBy: window.userProfile?.name || 'guest', changedAt: Date.now() });
+            }
+            await setDoc(doc(db, "sim_projects", pid), payload, { merge: true });
         } else {
-            const docRef = await addDoc(collection(db, "sim_projects"), { ...payload, createdAt: serverTimestamp() });
+            payload.createdAt = Date.now();
+            const docRef = await addDoc(collection(db, "sim_projects"), payload);
             window.currentProjectId = docRef.id;
         }
         if (!isSilent) window.showToast("클라우드에 저장되었습니다.");
@@ -587,32 +599,286 @@ window.saveToFirestore = async function(isSilent = false) {
     }
 };
 
+window.cloneProject = () => {
+    if(!window.currentProjectId) return window.showToast("저장되거나 불러온 프로젝트가 없습니다.", "warning");
+    window.currentProjectId = null;
+    document.getElementById('project-name').value += ' (복제본)';
+    window.showToast("복제되었습니다. '저장'을 누르면 새 프로젝트로 등록됩니다.", "success");
+};
+
+window.openProjectModal = async () => {
+    const container = document.getElementById('project-list-container');
+    const modal = document.getElementById('project-list-modal');
+    if(modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
+    if(!container) return;
+
+    container.innerHTML = '<div class="text-center p-10"><i class="fa-solid fa-spinner fa-spin text-2xl text-slate-400"></i></div>';
+    
+    try {
+        const snap = await getDocs(query(collection(db, "sim_projects"), orderBy("updatedAt", "desc")));
+        if(snap.empty) {
+            container.innerHTML = '<div class="text-center p-10 text-slate-500 font-bold">저장된 프로젝트가 없습니다.</div>';
+            return;
+        }
+        
+        let html = '<div class="grid gap-3">';
+        snap.forEach(doc => {
+            const d = doc.data();
+            const dateStr = window.getDateTimeStr(new Date(d.updatedAt || d.createdAt));
+            html += `
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center hover:border-amber-300 transition-colors cursor-pointer" onclick="window.loadProject('${doc.id}')">
+                <div>
+                    <div class="text-xs font-bold text-amber-600 mb-1">[${d.projectCode || '코드없음'}]</div>
+                    <div class="text-sm font-black text-slate-800">${d.projectName}</div>
+                    <div class="text-[10px] text-slate-400 mt-1">담당자: ${d.managerName || '미지정'} | ${dateStr}</div>
+                </div>
+                <button onclick="event.stopPropagation(); window.deleteProject('${doc.id}')" class="text-slate-300 hover:text-rose-500 p-2"><i class="fa-solid fa-trash-can"></i></button>
+            </div>`;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+    } catch(e) {
+        container.innerHTML = '<div class="text-center p-10 text-rose-500">데이터를 불러오지 못했습니다.</div>';
+    }
+};
+
+window.closeProjectModal = () => {
+    const m = document.getElementById('project-list-modal');
+    if(m) { m.classList.add('hidden'); m.classList.remove('flex'); }
+};
+
+window.loadProject = async (id) => {
+    try {
+        const docSnap = await getDoc(doc(db, "sim_projects", id));
+        if(docSnap.exists()) {
+            const d = docSnap.data();
+            window.currentProjectId = id;
+            document.getElementById('project-code').value = d.projectCode || '';
+            document.getElementById('project-name').value = d.projectName || '';
+            document.getElementById('manager-name').value = d.managerName || '';
+            document.getElementById('equip-qty').value = d.qty || 1;
+            document.getElementById('learning-curve').value = d.curve || 95;
+            window.currentProcessData = d.processData || [];
+            window.renderProcessTable();
+            window.renderUnitTables();
+            window.debouncedRunSimulation();
+            window.closeProjectModal();
+            window.showToast("프로젝트를 불러왔습니다.");
+        }
+    } catch(e) { window.showToast("불러오기 실패", "error"); }
+};
+
+window.deleteProject = async (id) => {
+    if(!confirm("이 프로젝트를 영구 삭제하시겠습니까?")) return;
+    try {
+        await deleteDoc(doc(db, "sim_projects", id));
+        window.showToast("삭제되었습니다.");
+        window.openProjectModal();
+    } catch(e) { window.showToast("삭제 실패", "error"); }
+};
+
+window.openHistoryModal = async () => {
+    if(!window.currentProjectId) return window.showToast("먼저 프로젝트를 불러오거나 저장하세요.", "warning");
+    
+    const modal = document.getElementById('history-modal');
+    const container = document.getElementById('history-list-container');
+    if(modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
+    if(!container) return;
+
+    container.innerHTML = '<div class="text-center p-10"><i class="fa-solid fa-spinner fa-spin text-2xl text-slate-400"></i></div>';
+    
+    try {
+        const snap = await getDocs(query(collection(db, "sim_project_history"), where("projectId", "==", window.currentProjectId)));
+        let hList = [];
+        snap.forEach(d => hList.push({id: d.id, ...d.data()}));
+        hList.sort((a,b) => b.changedAt - a.changedAt);
+        
+        if(hList.length === 0) {
+            container.innerHTML = '<div class="text-center p-10 text-slate-500 font-bold">이력 데이터가 없습니다.</div>';
+            return;
+        }
+        
+        let html = '<div class="space-y-3">';
+        hList.forEach(h => {
+            const dateStr = window.getDateTimeStr(new Date(h.changedAt));
+            html += `
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center">
+                <div>
+                    <div class="font-bold text-sm text-slate-700">${dateStr}</div>
+                    <div class="text-[10px] text-slate-500 mt-1">변경자: ${h.changedBy}</div>
+                </div>
+                <button onclick="window.restoreHistory('${h.id}')" class="bg-sky-50 text-sky-600 hover:bg-sky-100 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">이 시점으로 복구</button>
+            </div>`;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+    } catch(e) {
+        container.innerHTML = '<div class="text-center p-10 text-rose-500">데이터를 불러오지 못했습니다.</div>';
+    }
+};
+
+window.closeHistoryModal = () => {
+    const m = document.getElementById('history-modal');
+    if(m) { m.classList.add('hidden'); m.classList.remove('flex'); }
+};
+
+window.restoreHistory = async (histId) => {
+    if(!confirm("이 시점으로 복구하시겠습니까? 현재 내역은 덮어씌워집니다.")) return;
+    try {
+        const snap = await getDoc(doc(db, "sim_project_history", histId));
+        if(snap.exists()) {
+            const oldData = snap.data().snapshot;
+            oldData.updatedAt = Date.now();
+            await setDoc(doc(db, "sim_projects", window.currentProjectId), oldData);
+            window.loadProject(window.currentProjectId);
+            window.closeHistoryModal();
+            window.showToast("이력이 복구되었습니다.");
+        }
+    } catch(e) { window.showToast("복구 실패", "error"); }
+};
+
+window.openDashboardModal = async () => {
+    const modal = document.getElementById('dashboard-modal');
+    if(modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
+    
+    const tbody = document.getElementById('accuracy-tbody');
+    if(!tbody) return;
+    
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center p-10"><i class="fa-solid fa-spinner fa-spin text-2xl text-slate-400"></i></td></tr>';
+    
+    try {
+        // Fetch completed projects from projects_status
+        const snap = await getDocs(query(collection(db, "projects_status"), where("status", "==", "completed")));
+        let list = [];
+        snap.forEach(d => list.push(d.data()));
+        
+        if(list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center p-10 text-slate-500 font-bold">완료된 프로젝트 실적 데이터가 없습니다.</td></tr>';
+            return;
+        }
+        
+        let html = '';
+        let labels = [], errMds = [], errDates = [];
+
+        list.forEach(p => {
+            const estMd = parseFloat(p.estMd) || 0;
+            const actMd = parseFloat(p.finalMd) || 0;
+            const mdErr = estMd > 0 ? ((actMd - estMd)/estMd * 100).toFixed(1) : 0;
+            
+            const estDate = p.d_shipEst || '-';
+            const actDate = p.d_shipEn || '-';
+            
+            let dateErr = 0;
+            if(estDate !== '-' && actDate !== '-') {
+                dateErr = Math.round((new Date(actDate) - new Date(estDate))/(1000*60*60*24));
+            }
+
+            labels.push(p.name.substring(0, 10));
+            errMds.push(parseFloat(mdErr));
+            errDates.push(dateErr);
+
+            html += `<tr class="hover:bg-slate-50 border-b border-slate-100">
+                <td class="p-3 text-center font-bold text-emerald-600">${p.code || '-'}</td>
+                <td class="p-3 truncate max-w-[150px] font-bold text-slate-700" title="${p.name}">${p.name}</td>
+                <td class="p-3 text-center text-slate-500">${estMd.toFixed(1)}</td>
+                <td class="p-3 text-center font-black text-emerald-600">${actMd.toFixed(1)}</td>
+                <td class="p-3 text-center font-bold ${parseFloat(mdErr) > 0 ? 'text-rose-500' : 'text-blue-500'}">${mdErr}%</td>
+                <td class="p-3 text-center text-slate-500">${estDate}</td>
+                <td class="p-3 text-center font-black text-emerald-600">${actDate}</td>
+            </tr>`;
+        });
+        
+        tbody.innerHTML = html;
+
+        // Draw Accuracy Charts
+        const ctx1 = document.getElementById('accuracy-chart-md')?.getContext('2d');
+        const ctx2 = document.getElementById('accuracy-chart-date')?.getContext('2d');
+        
+        if(window.accChart1) window.accChart1.destroy();
+        if(window.accChart2) window.accChart2.destroy();
+        
+        if(ctx1) {
+            window.accChart1 = new Chart(ctx1, {
+                type: 'bar',
+                data: { labels: labels, datasets: [{ label: 'MD 오차율 (%)', data: errMds, backgroundColor: errMds.map(v => v>0 ? '#f43f5e' : '#3b82f6') }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: {legend:{display:false}} }
+            });
+        }
+        if(ctx2) {
+            window.accChart2 = new Chart(ctx2, {
+                type: 'bar',
+                data: { labels: labels, datasets: [{ label: '일정 지연 (일)', data: errDates, backgroundColor: errDates.map(v => v>0 ? '#f43f5e' : '#10b981') }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: {legend:{display:false}} }
+            });
+        }
+        
+    } catch(e) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-10 text-rose-500 font-bold">분석 데이터를 불러오지 못했습니다.</td></tr>';
+    }
+};
+
+window.closeDashboardModal = () => {
+    const m = document.getElementById('dashboard-modal');
+    if(m) { m.classList.add('hidden'); m.classList.remove('flex'); }
+};
+
 window.exportToExcel = async () => {
     if (typeof ExcelJS === 'undefined') return window.showToast("라이브러리 로딩 중입니다.", "warning");
+    window.showToast("엑셀 파일 생성 중...");
     
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('공수시뮬레이션_결과');
     
     ws.columns = [
-        { header: '공정명', key: 'name', width: 25 },
-        { header: '유형', key: 'type', width: 10 },
-        { header: '수량', key: 'q', width: 10 },
-        { header: '기준MD', key: 'm', width: 10 }
+        { width: 30 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 15 }
     ];
     
-    ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } };
-    ws.getRow(1).alignment = { horizontal: 'center' };
+    // Header
+    ws.mergeCells('A1:F2');
+    ws.getCell('A1').value = '공수 시뮬레이션 결과 보고서';
+    ws.getCell('A1').font = { size: 16, bold: true };
+    ws.getCell('A1').alignment = { vertical: 'middle', horizontal: 'center' };
+    
+    // Project Info
+    ws.addRow(['프로젝트 코드', document.getElementById('project-code')?.value || '-']);
+    ws.addRow(['프로젝트 명', document.getElementById('project-name')?.value || '-']);
+    ws.addRow(['담당자', document.getElementById('manager-name')?.value || '-']);
+    ws.addRow([]);
+    
+    // Params
+    ws.addRow(['장비 대수', document.getElementById('equip-qty')?.value, '학습 곡선', document.getElementById('learning-curve')?.value + '%', '난이도 보정', document.getElementById('diff-multiplier')?.value]);
+    ws.addRow([]);
 
+    // Results
+    ws.addRow(['[시뮬레이션 분석 결과]']);
+    ws.getCell(`A${ws.lastRow.number}`).font = { bold: true, color: { argb: 'FF4F46E5' } };
+    ws.addRow(['P50 (평균)', document.getElementById('out-p50-md')?.innerText + ' MD', '완료예정일', document.getElementById('out-p50-date')?.innerText]);
+    ws.addRow(['P10 (낙관)', document.getElementById('out-p10-md')?.innerText + ' MD', 'P90 (안전)', document.getElementById('out-p90-md')?.innerText + ' MD']);
+    ws.addRow([]);
+
+    // Process Table Header
+    const hRow = ws.addRow(['공정명', '유형', '수량', '기준MD/최빈', '낙관', '비관']);
+    hRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    hRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
+    hRow.eachCell(c => c.alignment = { horizontal: 'center' });
+    
+    // Process Data
     window.currentProcessData.forEach(p => {
-        const row = ws.addRow({ name: p.name, type: p.pType === 'md' ? '수동' : (p.pType === 'auto' ? '유닛' : '일정'), q: p.q, m: p.m });
-        row.eachCell(cell => { cell.alignment = { horizontal: 'center' }; });
+        const row = ws.addRow([
+            p.name, 
+            p.pType === 'md' ? '수동' : (p.pType === 'auto' ? '유닛' : '일정'), 
+            p.q, 
+            p.m,
+            p.o || '-',
+            p.p || '-'
+        ]);
+        row.eachCell(c => c.alignment = { horizontal: 'center' });
         row.getCell(1).alignment = { horizontal: 'left' };
     });
     
     const buffer = await wb.xlsx.writeBuffer();
     saveAs(new Blob([buffer]), `AXMS_Simulation_${new Date().toISOString().split('T')[0]}.xlsx`);
-    window.showToast("엑셀 파일이 다운로드되었습니다.");
+    window.showToast("다운로드 완료");
 };
 
 window.loadSimilarProjectsList = () => {
@@ -621,7 +887,7 @@ window.loadSimilarProjectsList = () => {
     setTimeout(() => {
         if(list) list.innerHTML = '<div class="text-slate-400 text-xs p-2">불러올 수 있는 프로젝트가 없습니다.</div>';
     }, 1000);
-}
+};
 
 // 초기화 실행
 window.loadMasterPresets();
