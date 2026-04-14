@@ -25,7 +25,7 @@ function loadDataLabelsPlugin(callback) {
 window.initNcrDashboard = function(forceReload = false) {
     console.log("✅ 초격차 프리미엄 NCR 대시보드 로드 완료");
     
-    // 💡 (수정) PJT 코드 마스터 데이터가 로드되어 있지 않다면 로드 시도
+    // PJT 코드 마스터 데이터 로드 확인
     if (!window.pjtCodeMasterList || window.pjtCodeMasterList.length === 0) {
         if (window.loadProjectCodeMaster) window.loadProjectCodeMaster();
     }
@@ -63,7 +63,6 @@ window.initNcrDashboard = function(forceReload = false) {
         }
     };
 
-    // SPA 타이밍 이슈 방지를 위해 약간의 딜레이 후 실행
     setTimeout(() => {
         loadDataLabelsPlugin(initProcess);
     }, 100);
@@ -98,6 +97,82 @@ function populateNcrFilters() {
     }
 }
 
+// 💡 [핵심 추가] PJT 초성 검색 자동완성 로직
+window.ncrShowPjtAuto = function(input) {
+    const val = input.value.trim().toLowerCase();
+    const drop = document.getElementById('ncr-pjt-autocomplete');
+    if (!drop) return;
+
+    if(!val) {
+        drop.classList.add('hidden');
+        window.filterNcrDashboard(); // 검색어가 지워지면 필터 즉시 초기화
+        return;
+    }
+
+    let searchPool = [];
+    let seenCodes = new Set();
+
+    // 1. 마스터 리스트에서 가져오기
+    if (window.pjtCodeMasterList) {
+        window.pjtCodeMasterList.forEach(p => {
+            if (p.code && !seenCodes.has(p.code)) {
+                seenCodes.add(p.code);
+                searchPool.push({code: p.code, name: p.name || ''});
+            }
+        });
+    }
+
+    // 2. 혹시 마스터엔 없지만 NCR 데이터엔 있는 코드가 있을 경우 방어 로직
+    (window.ncrData || []).forEach(d => {
+        if (d.pjtCode && !seenCodes.has(d.pjtCode)) {
+            seenCodes.add(d.pjtCode);
+            searchPool.push({code: d.pjtCode, name: ''}); 
+        }
+    });
+
+    let matches = searchPool.filter(p => {
+        let code = (p.code || '').toLowerCase();
+        let name = (p.name || '').toLowerCase();
+        return code.includes(val) || name.includes(val) ||
+               (window.matchString && window.matchString(val, p.code)) ||
+               (window.matchString && window.matchString(val, p.name));
+    });
+
+    if(matches.length > 0) {
+        drop.innerHTML = matches.map(m => {
+            let sCode = m.code ? m.code.replace(/'/g,"\\'").replace(/"/g,'&quot;') : '-';
+            let sName = m.name ? `<span class="text-[10px] text-slate-400 truncate w-full block">${m.name}</span>` : '';
+            return `<li class="px-3 py-2 hover:bg-indigo-50 cursor-pointer border-b border-slate-50 last:border-0 transition-colors flex flex-col" onmousedown="window.ncrSelectPjt('${sCode}')">
+                        <span class="text-indigo-600 font-bold text-xs">${sCode}</span>${sName}
+                    </li>`;
+        }).join('');
+        drop.classList.remove('hidden');
+    } else {
+        drop.classList.add('hidden');
+    }
+    
+    window.filterNcrDashboard(); // 타이핑과 동시에 필터링 반영
+};
+
+window.ncrSelectPjt = function(code) {
+    const input = document.getElementById('ncr-filter-pjt-code');
+    if(input) input.value = code;
+    
+    const drop = document.getElementById('ncr-pjt-autocomplete');
+    if(drop) drop.classList.add('hidden');
+    
+    window.filterNcrDashboard(); // 선택 후 최종 필터 적용
+};
+
+// 외부 클릭 시 드롭다운 닫기
+document.addEventListener('click', function(e) {
+    const drop = document.getElementById('ncr-pjt-autocomplete');
+    if (drop && !drop.classList.contains('hidden') && !e.target.closest('#ncr-filter-pjt-code') && !e.target.closest('#ncr-pjt-autocomplete')) {
+        drop.classList.add('hidden');
+    }
+});
+
+
 // 필터 적용 및 재렌더링
 window.filterNcrDashboard = function() {
     const year = document.getElementById('ncr-filter-year')?.value || '';
@@ -118,16 +193,14 @@ window.filterNcrDashboard = function() {
         if (month && (!d.date || d.date.split('-')[1] !== month)) match = false;
         if (pjt && d.pjtCode !== pjt) match = false;
         
-        // 💡 [핵심수정] PJT 코드 전용 초성 검색 (마스터 데이터와 연동)
+        // PJT 코드 전용 초성 검색 매칭
         if (pjtCodeSearch) {
             let isCodeMatch = false;
             const targetCode = (d.pjtCode || '').toLowerCase();
             
-            // 1. 코드 원본 자체가 일치하는지 먼저 검사
             if (targetCode.includes(pjtCodeSearch) || (window.matchString && window.matchString(pjtCodeSearch, targetCode))) {
                 isCodeMatch = true;
             } else {
-                // 2. 마스터 데이터(pjtCodeMasterList)를 뒤져서 해당 코드의 프로젝트명이 초성과 일치하는지 검사
                 if (window.pjtCodeMasterList && window.pjtCodeMasterList.length > 0) {
                     const masterInfo = window.pjtCodeMasterList.find(m => (m.code || '').toLowerCase() === targetCode);
                     if (masterInfo && masterInfo.name) {
@@ -138,7 +211,6 @@ window.filterNcrDashboard = function() {
                     }
                 }
             }
-            
             if (!isCodeMatch) match = false;
         }
         
@@ -168,7 +240,6 @@ function renderPremiumNcrDashboard() {
         if(document.getElementById('kpi-resolved')) document.getElementById('kpi-resolved').innerHTML = `0 <span class="text-[12px] font-bold text-[#64748b] ml-1 tracking-tight">건 완료</span>`;
         if(document.getElementById('kpi-pending')) document.getElementById('kpi-pending').innerHTML = `0 <span class="text-[12px] font-bold text-[#fb7185] ml-1 tracking-tight">건 조치중</span>`;
         if(document.getElementById('recent-ncr-list')) document.getElementById('recent-ncr-list').innerHTML = '<div class="text-sm font-bold text-slate-400">조건에 맞는 데이터가 없습니다.</div>';
-        if(document.getElementById('worst-top3-list')) document.getElementById('worst-top3-list').innerHTML = '<span class="text-[10px] font-bold text-rose-300">데이터 없음</span>';
         
         ['pareto', 'donut', 'monthly', 'pjtBar', 'supplierTop'].forEach(id => destroyChart(id));
         return;
@@ -227,9 +298,8 @@ function renderPremiumNcrDashboard() {
     if(document.getElementById('kpi-resolved')) document.getElementById('kpi-resolved').innerHTML = `${resolvedCount} <span class="text-[12px] font-bold text-[#64748b] ml-1 tracking-tight">건 완료</span>`;
     if(document.getElementById('kpi-pending')) document.getElementById('kpi-pending').innerHTML = `${pendingCount} <span class="text-[12px] font-bold text-[#fb7185] ml-1 tracking-tight">건 조치중</span>`;
 
-    // 컴포넌트 그리기
+    // 컴포넌트 그리기 (불량 비중 Top3 함수는 삭제되었습니다)
     drawRecentNcrs(data);
-    drawWorstTop3(pjtCounts, totalCount);
 
     drawParetoChart(paretoData);
     drawDonutChart(typeCounts);
@@ -239,7 +309,7 @@ function renderPremiumNcrDashboard() {
 }
 
 // ---------------------------------------------------------
-// 0-1. 최근 업데이트 내역 렌더링 (슬림 버전)
+// 0. 최근 업데이트 내역 렌더링 (슬림 버전)
 // ---------------------------------------------------------
 function drawRecentNcrs(dataList) {
     const container = document.getElementById('recent-ncr-list');
@@ -288,37 +358,6 @@ function drawRecentNcrs(dataList) {
                     <span class="text-[11px] font-bold text-slate-700 truncate group-hover:text-indigo-600 transition-colors">${item.content || '내용 없음'}</span>
                 </div>
                 ${statusBadge}
-            </div>
-        `;
-    });
-    
-    container.innerHTML = html;
-}
-
-// ---------------------------------------------------------
-// 0-2. 불량 비중 Top 3 렌더링
-// ---------------------------------------------------------
-function drawWorstTop3(pjtCounts, totalCount) {
-    const container = document.getElementById('worst-top3-list');
-    if(!container) return;
-
-    if(totalCount === 0 || Object.keys(pjtCounts).length === 0) {
-        container.innerHTML = '<span class="text-[10px] font-bold text-rose-300">데이터 없음</span>';
-        return;
-    }
-
-    let sorted = Object.entries(pjtCounts).sort((a,b)=>b[1]-a[1]).slice(0,3);
-    let html = '';
-    
-    sorted.forEach(item => {
-        let pjtCode = item[0];
-        let count = item[1];
-        let rate = ((count / totalCount) * 100).toFixed(1);
-        
-        html += `
-            <div class="flex items-center gap-1.5 bg-white px-2 py-1 rounded shadow-sm border border-rose-100/50 shrink-0">
-                <span class="truncate max-w-[90px] text-[10px] font-bold text-slate-700" title="${pjtCode}">${pjtCode}</span>
-                <span class="text-rose-600 font-black text-[11px]">${rate}%</span>
             </div>
         `;
     });
@@ -501,7 +540,6 @@ function drawTopSupplierChart(data) {
     });
 }
 
-// Mock Data (시트 데이터가 없을 때 폴백 용도)
 function generateMockDashboard() {
     const mockData = [];
     for(let i=0; i<107; i++) {
