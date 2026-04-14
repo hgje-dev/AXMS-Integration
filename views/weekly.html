@@ -66,7 +66,7 @@
     <div class="bg-indigo-50/50 rounded-2xl border border-indigo-100 p-5 shadow-sm relative group">
         <div class="flex justify-between items-center mb-2">
             <h3 class="text-sm font-black text-indigo-800 flex items-center gap-2"><i class="fa-solid fa-bullhorn text-indigo-500"></i> 이번 주 공지사항</h3>
-            <button onclick="window.editNotice()" class="text-xs font-bold text-indigo-400 hover:text-indigo-600 transition-colors admin-only" style="display:none;"><i class="fa-solid fa-pen"></i> 수정</button>
+            <button onclick="window.editNotice()" class="text-xs font-bold text-indigo-400 hover:text-indigo-600 hidden group-hover:block transition-colors admin-only"><i class="fa-solid fa-pen"></i> 수정</button>
         </div>
         <input type="hidden" id="weekly-notice-raw-text">
         <p id="weekly-notice-text" class="text-sm text-slate-700 font-medium ml-6 leading-relaxed">공지사항을 불러오는 중입니다...</p>
@@ -74,21 +74,21 @@
 
     <div id="weekly-team-view" class="space-y-6 block">
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-center">
-                <div class="flex justify-between items-start mb-2"><span class="text-[11px] font-bold text-slate-500">제출된 일지</span><i class="fa-regular fa-calendar-check text-slate-300 text-lg"></i></div>
+            <div id="card-stat-all" onclick="window.filterWeeklyLogsByStat('all')" class="stat-card bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-center cursor-pointer hover:bg-slate-50 transition-all ring-2 ring-indigo-400">
+                <div class="flex justify-between items-start mb-2"><span class="text-[11px] font-bold text-slate-500">제출된 일지 (전체)</span><i class="fa-regular fa-calendar-check text-slate-300 text-lg"></i></div>
                 <p class="text-3xl font-black text-slate-800"><span id="stat-submitted">0</span><span class="text-sm text-slate-500 ml-1 font-bold">건</span></p>
             </div>
-            <div class="bg-white rounded-2xl p-5 border border-emerald-200 shadow-sm flex flex-col justify-center relative overflow-hidden">
+            <div id="card-stat-completed" onclick="window.filterWeeklyLogsByStat('completed')" class="stat-card bg-white rounded-2xl p-5 border border-emerald-200 shadow-sm flex flex-col justify-center relative overflow-hidden cursor-pointer hover:bg-emerald-50 transition-all">
                 <div class="absolute -right-4 -bottom-4 opacity-5"><i class="fa-solid fa-circle-check text-8xl text-emerald-500"></i></div>
-                <div class="flex justify-between items-start mb-2 relative z-10"><span class="text-[11px] font-bold text-emerald-600">완료된 업무</span><div class="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-500"><i class="fa-solid fa-check text-xs"></i></div></div>
+                <div class="flex justify-between items-start mb-2 relative z-10"><span class="text-[11px] font-bold text-emerald-600">완료된 업무 포함</span><div class="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-500"><i class="fa-solid fa-check text-xs"></i></div></div>
                 <p class="text-3xl font-black text-emerald-600 relative z-10"><span id="stat-completed">0</span><span class="text-sm ml-1 font-bold">건</span></p>
             </div>
-            <div class="bg-white rounded-2xl p-5 border border-blue-200 shadow-sm flex flex-col justify-center">
-                <div class="flex justify-between items-start mb-2"><span class="text-[11px] font-bold text-blue-600">진행 중</span><div class="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-500"><i class="fa-regular fa-clock text-xs"></i></div></div>
+            <div id="card-stat-progress" onclick="window.filterWeeklyLogsByStat('progress')" class="stat-card bg-white rounded-2xl p-5 border border-blue-200 shadow-sm flex flex-col justify-center cursor-pointer hover:bg-blue-50 transition-all">
+                <div class="flex justify-between items-start mb-2"><span class="text-[11px] font-bold text-blue-600">진행 중 포함</span><div class="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-500"><i class="fa-regular fa-clock text-xs"></i></div></div>
                 <p class="text-3xl font-black text-blue-600"><span id="stat-progress">0</span><span class="text-sm ml-1 font-bold">건</span></p>
             </div>
-            <div class="bg-white rounded-2xl p-5 border border-rose-200 shadow-sm flex flex-col justify-center">
-                <div class="flex justify-between items-start mb-2"><span class="text-[11px] font-bold text-rose-600">이슈/지연</span><div class="w-6 h-6 rounded-full bg-rose-100 flex items-center justify-center text-rose-500"><i class="fa-solid fa-exclamation text-xs"></i></div></div>
+            <div id="card-stat-issue" onclick="window.filterWeeklyLogsByStat('issue')" class="stat-card bg-white rounded-2xl p-5 border border-rose-200 shadow-sm flex flex-col justify-center cursor-pointer hover:bg-rose-50 transition-all">
+                <div class="flex justify-between items-start mb-2"><span class="text-[11px] font-bold text-rose-600">이슈/지연 포함</span><div class="w-6 h-6 rounded-full bg-rose-100 flex items-center justify-center text-rose-500"><i class="fa-solid fa-exclamation text-xs"></i></div></div>
                 <p class="text-3xl font-black text-rose-600"><span id="stat-issue">0</span><span class="text-sm ml-1 font-bold">건</span></p>
             </div>
         </div>
@@ -118,7 +118,7 @@
             </div>
         </div>
 
-        <div id="weekly-log-feed" class="space-y-6"></div>
+        <div id="weekly-log-feed" class="space-y-6 scroll-mt-6"></div>
     </div>
 
     <div id="weekly-team-sch-view" class="hidden space-y-6">
@@ -230,9 +230,9 @@
                     <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative">
                         <h4 class="text-[11px] font-bold text-slate-500 mb-2">관여한 프로젝트 (선택)</h4>
                         
-                        <div class="flex gap-2 mb-3">
+                        <div class="flex gap-2 mb-3 relative">
                             <div class="relative flex-1">
-                                <input type="text" id="wl-pjt-input" placeholder="프로젝트명 검색..." oninput="window.showAutocomplete(this, 'wl-temp-pjt-code', '', true)" onkeydown="if(event.key==='Enter') { event.preventDefault(); window.addWlProject(); }" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-indigo-500 font-bold bg-slate-50">
+                                <input type="text" id="wl-pjt-input" placeholder="프로젝트명 검색 (초성 지원)..." oninput="window.showAutocomplete(this, 'wl-temp-pjt-code', '', true)" onkeydown="if(event.key==='Enter') { event.preventDefault(); window.addWlProject(); }" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-indigo-500 font-bold bg-slate-50" autocomplete="off">
                                 <input type="hidden" id="wl-temp-pjt-code">
                             </div>
                             <button onclick="window.addWlProject()" class="bg-slate-800 hover:bg-slate-700 text-white px-4 rounded-xl text-xs font-bold transition-colors shadow-sm shrink-0">추가</button>
