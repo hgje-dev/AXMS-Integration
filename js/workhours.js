@@ -11,7 +11,26 @@ window.whFilters = { text: '', loc: '', type: '', status: '' };
 window.whSelectedCells = new Set();
 window.isWhDragging = false;
 window.whCharts = {};
-window.whIsDirty = false; // 💡 입력 모달 수정 감지용 플래그
+window.whIsDirty = false; 
+window.todayBadgeInitialized = false;
+let myTodayLogUnsubscribe = null;
+
+// 💡 2. 드래그와 클릭을 정확히 구분하기 위한 전역 변수 추가
+window.whDragDist = 0;
+window.whDragStartX = 0;
+window.whDragStartY = 0;
+
+document.addEventListener('mousedown', e => {
+    window.whDragDist = 0;
+    window.whDragStartX = e.clientX;
+    window.whDragStartY = e.clientY;
+});
+
+document.addEventListener('mousemove', e => {
+    if (window.whDragStartX) {
+        window.whDragDist = Math.abs(e.clientX - window.whDragStartX) + Math.abs(e.clientY - window.whDragStartY);
+    }
+});
 
 const WH_TYPES = ['조립', '검수', '설치', 'Setup', '협업', '공통', '기타'];
 const WH_LOCS = ['사내', '국내', '해외'];
@@ -27,6 +46,52 @@ function isWhHoliday(d) {
     if (d.getDay() === 0 || d.getDay() === 6) return true;
     return KR_HOLIDAYS.has(window.getLocalDateStr(d));
 }
+
+window.initTodayBadge = function() {
+    if (!window.userProfile || !window.userProfile.name) return;
+    const todayStr = window.getLocalDateStr(new Date());
+    const q = query(collection(db, "work_logs"), where("date", "==", todayStr), where("authorName", "==", window.userProfile.name));
+    
+    if (myTodayLogUnsubscribe) myTodayLogUnsubscribe();
+    myTodayLogUnsubscribe = onSnapshot(q, (snapshot) => {
+        let totalHours = 0;
+        snapshot.forEach(doc => {
+            totalHours += parseFloat(doc.data().hours) || 0;
+        });
+        window.updateTodayBadgeUI(totalHours > 0);
+    });
+};
+
+window.updateTodayBadgeUI = function(isCompleted) {
+    const badge = document.getElementById('wh-today-badge');
+    if (!badge) return;
+    if (isCompleted) {
+        badge.innerHTML = `<i class="fa-solid fa-circle-check"></i> 오늘 작성완료`;
+        badge.className = "cursor-pointer ml-2 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-600 border border-emerald-200 shadow-sm hover:bg-emerald-200 transition-colors flex items-center gap-1 hidden sm:flex";
+        badge.classList.remove('animate-pulse');
+    } else {
+        badge.innerHTML = `<i class="fa-solid fa-pen"></i> 오늘 미작성`;
+        badge.className = "cursor-pointer ml-2 text-[11px] font-bold px-2.5 py-1 rounded-full bg-rose-50 text-rose-500 border border-rose-200 shadow-sm hover:bg-rose-100 transition-colors flex items-center gap-1 animate-pulse hidden sm:flex";
+    }
+};
+
+window.openTodayWhModal = function() {
+    const todayStr = window.getLocalDateStr(new Date());
+    const myName = window.userProfile ? window.userProfile.name : '';
+    const todayWeekStr = window.getWeekString(new Date());
+    const picker = document.getElementById('wh-week-picker');
+
+    if (picker && picker.value !== todayWeekStr) {
+        picker.value = todayWeekStr;
+        window.updateWhWeekDisplay(picker.value);
+        window.loadWorkhoursData();
+        setTimeout(() => {
+            window.openWhInputModal(todayStr, myName);
+        }, 300);
+    } else {
+        window.openWhInputModal(todayStr, myName);
+    }
+};
 
 window.setWhMemberMode = function(mode) {
     window.whMemberMode = mode;
@@ -87,6 +152,11 @@ window.loadWorkhoursData = function() {
     
     window.updateWhWeekDisplay(picker.value);
     fetchWorkLogsForContext();
+    
+    if (!window.todayBadgeInitialized && window.userProfile) {
+        window.initTodayBadge();
+        window.todayBadgeInitialized = true;
+    }
 };
 
 window.changeWhWeek = function(offset) {
@@ -110,7 +180,7 @@ function fetchWorkLogsForContext() {
     if (worklogsUnsubscribe) worklogsUnsubscribe();
 
     const picker = document.getElementById('wh-week-picker');
-    const { start } = window.getDatesFromWeek(picker.value);
+    const { start, end } = window.getDatesFromWeek(picker.value);
     
     const y = start.getFullYear();
     const m = start.getMonth();
@@ -213,7 +283,6 @@ window.updateWhDashboard = function() {
         baseData = baseData.filter(l => l.authorName === window.userProfile.name);
     }
     
-    // 💡 2. 대시보드 검색창 완벽 연동
     if (window.whPjtSearch) {
         baseData = baseData.filter(l => {
             const pCode = (l.projectCode || '').toLowerCase();
@@ -257,7 +326,6 @@ window.updateWhDashboard = function() {
         if (!locMap[loc]) locMap[loc] = new Set();
         locMap[loc].add(log.authorName);
 
-        // 💡 2. 옛날 데이터에 코드가 없을 경우 명칭으로 묶기 (미분류 버그 해결)
         let pNameKey = log.projectCode ? `[${log.projectCode}] ${log.projectName||''}` : (log.projectName || '미분류');
         pjtMap[pNameKey] = (pjtMap[pNameKey] || 0) + h;
         datesSet.add(log.date);
@@ -391,6 +459,7 @@ function getFilteredLogs() {
     });
 }
 
+// 💡 2. 드래그와 클릭을 정확히 구분하는 일괄 승인 연동 그리드
 function renderWhGrid() {
     const thead = document.getElementById('wh-grid-thead');
     const tbody = document.getElementById('wh-grid-tbody');
@@ -454,12 +523,12 @@ function renderWhGrid() {
                 let confClass = log.isConfirmed ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-white border-slate-200 text-slate-700 hover:border-indigo-300';
                 let selClass = window.whSelectedCells.has(log.id) ? 'ring-2 ring-indigo-500 shadow-md transform scale-[1.02]' : '';
                 
-                bodyHtml += `<div class="p-1.5 rounded-lg border ${confClass} ${opacityClass} ${selClass} text-[10px] mb-1.5 cursor-pointer transition-all duration-200" data-logid="${log.id}" onclick="window.openWhInputModal('${dateStr}', '${member.name}'); event.stopPropagation();">
+                bodyHtml += `<div class="p-1.5 rounded-lg border ${confClass} ${opacityClass} ${selClass} text-[10px] mb-1.5 cursor-pointer transition-all duration-200" data-logid="${log.id}" onclick="if(window.whDragDist < 5) window.openWhInputModal('${dateStr}', '${member.name}'); event.stopPropagation();">
                     <div class="font-bold truncate text-[11px]" title="${log.projectName||''}"><span class="text-slate-400 font-medium mr-0.5">[${log.location||'사내'}]</span>${log.projectCode||'PJT미지정'}</div>
                     <div class="flex justify-between items-center mt-1 pt-1 border-t border-slate-100/50"><span class="font-medium text-slate-500">${log.workType}</span><span class="font-black text-indigo-600 bg-white/50 px-1.5 py-0.5 rounded shadow-sm">${log.hours}h</span></div>
                 </div>`;
             });
-            bodyHtml += `<div class="absolute inset-0 z-0 h-full w-full opacity-0 hover:opacity-100 cursor-pointer bg-indigo-50/50 flex items-center justify-center text-indigo-400 text-xl transition-opacity" onclick="window.openWhInputModal('${dateStr}', '${member.name}')" style="${rawLogs.length > 0 ? 'display:none;' : ''}"><i class="fa-solid fa-plus"></i></div></td>`;
+            bodyHtml += `<div class="absolute inset-0 z-0 h-full w-full opacity-0 hover:opacity-100 cursor-pointer bg-indigo-50/50 flex items-center justify-center text-indigo-400 text-xl transition-opacity" onclick="if(window.whDragDist < 5) window.openWhInputModal('${dateStr}', '${member.name}')" style="${rawLogs.length > 0 ? 'display:none;' : ''}"><i class="fa-solid fa-plus"></i></div></td>`;
         }
         bodyHtml += `</tr>`;
     });
@@ -527,41 +596,42 @@ function renderWhCalendar() {
     grid.innerHTML = html;
 }
 
+// 💡 2. 다중 선택 및 드래그 로직 강화
 window.whCellMouseDown = function(e, cell) {
     if(e.button !== 0) return; 
-    if(e.target.tagName === 'I' || e.target.tagName === 'BUTTON' || e.target.closest('div[data-logid]')) return;
-
-    window.isWhDragging = true;
-    window.whClearSelection();
-    toggleCellSelection(cell);
     
+    window.isWhDragging = true;
+    if (!e.shiftKey && !e.ctrlKey) {
+        window.whClearSelection();
+    }
+    
+    const logs = cell.querySelectorAll('div[data-logid]');
+    logs.forEach(logDiv => {
+        const id = logDiv.dataset.logid;
+        window.whSelectedCells.add(id);
+        logDiv.classList.add('ring-2', 'ring-indigo-500', 'shadow-md', 'transform', 'scale-[1.02]');
+    });
+    
+    updateWhFloatingBar();
     document.addEventListener('mouseup', window.whCellMouseUp);
 };
 
 window.whCellMouseEnter = function(e, cell) {
-    if(window.isWhDragging) toggleCellSelection(cell);
+    if(window.isWhDragging) {
+        const logs = cell.querySelectorAll('div[data-logid]');
+        logs.forEach(logDiv => {
+            const id = logDiv.dataset.logid;
+            window.whSelectedCells.add(id);
+            logDiv.classList.add('ring-2', 'ring-indigo-500', 'shadow-md', 'transform', 'scale-[1.02]');
+        });
+        updateWhFloatingBar();
+    }
 };
 
 window.whCellMouseUp = function() {
     window.isWhDragging = false;
     document.removeEventListener('mouseup', window.whCellMouseUp);
-    updateWhFloatingBar();
 };
-
-function toggleCellSelection(cell) {
-    const logs = cell.querySelectorAll('div[data-logid]');
-    logs.forEach(logDiv => {
-        const id = logDiv.dataset.logid;
-        if(window.whSelectedCells.has(id)) {
-            window.whSelectedCells.delete(id);
-            logDiv.classList.remove('ring-2', 'ring-indigo-500', 'shadow-md', 'transform', 'scale-[1.02]');
-        } else {
-            window.whSelectedCells.add(id);
-            logDiv.classList.add('ring-2', 'ring-indigo-500', 'shadow-md', 'transform', 'scale-[1.02]');
-        }
-    });
-    updateWhFloatingBar();
-}
 
 window.whClearSelection = function() {
     window.whSelectedCells.clear();
@@ -610,7 +680,7 @@ window.openWhInputModal = function(dateStr, authorName) {
 
     const tbody = document.getElementById('wh-input-tbody');
     tbody.innerHTML = '';
-    window.whIsDirty = false; // 💡 1. 창 열릴 때 상태 초기화
+    window.whIsDirty = false;
 
     const logs = window.currentWorkLogs.filter(l => l.date === dateStr && l.authorName === authorName);
     
@@ -625,11 +695,11 @@ window.openWhInputModal = function(dateStr, authorName) {
     document.addEventListener('keydown', handleWhModalKeydown);
 };
 
-// 💡 1. 안전하게 모달을 닫는 로직 추가 (ESC, 취소, X버튼 등에서 호출)
+// 💡 1. 모달 강제 닫기 감지
 window.attemptCloseWhModal = function() {
     if (window.whIsDirty) {
-        if (!confirm("작성/수정 중인 내용이 있습니다. 저장하지 않고 닫으시겠습니까?")) {
-            return; // 닫기 취소
+        if (!confirm("작성/수정 중인 내용이 있습니다. 저장하지 않고 창을 닫으시겠습니까?")) {
+            return;
         }
     }
     window.closeWhInputModal();
@@ -644,7 +714,6 @@ window.closeWhInputModal = function() {
     window.whIsDirty = false;
 };
 
-// 💡 1. ESC 입력 시 attemptCloseWhModal 작동하게 수정
 function handleWhModalKeydown(e) {
     if (e.key === 'Escape') {
         e.preventDefault();
@@ -668,8 +737,9 @@ function appendWhInputRow(logData = null, index = 1) {
     tr.className = 'wh-input-row hover:bg-indigo-50/30 transition-colors border-b border-slate-100 relative';
     
     const uniqueId = 'wh-pjt-input-' + Date.now() + '-' + index;
+    // 💡 데이터 소실 방지를 위해 projectName을 우선 획득하여 유지 (PJT코드가 없는 과거 데이터용)
     const pName = logData ? (logData.projectName || '') : '';
-    const pCode = logData ? (logData.projectCode || '') : '';
+    const pCode = logData ? (logData.projectCode || pName || '') : ''; 
     const pId = logData ? (logData.projectId || '') : '';
 
     let typeOptions = WH_TYPES.map(t => `<option value="${t}" ${logData && logData.workType === t ? 'selected' : ''}>${t}</option>`).join('');
@@ -682,11 +752,10 @@ function appendWhInputRow(logData = null, index = 1) {
     let idInput = logData ? `<input type="hidden" class="row-id" value="${logData.id}">` : `<input type="hidden" class="row-id" value="">`;
     let pNameHidden = `<input type="hidden" class="row-pjt-name-hidden" value="${pName}">`;
 
-    // 💡 1. oninput, onchange 에 window.whIsDirty = true 추가
     tr.innerHTML = `
         <td class="p-3 text-center text-slate-400 font-bold text-xs bg-slate-50">${index}${idInput}</td>
         <td class="p-2 relative">
-            <input type="text" id="${uniqueId}" class="row-pjt-name w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-indigo-700 placeholder-slate-400" value="${pCode}" placeholder="PJT 코드/명칭 검색 (초성)" oninput="window.whIsDirty=true; window.whShowPjtAuto(this)" autocomplete="off">
+            <input type="text" id="${uniqueId}" class="row-pjt-name w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-indigo-700 placeholder-slate-400" value="${pCode}" placeholder="PJT 코드 검색 (초성 전용)" oninput="window.whIsDirty=true; window.whShowPjtAuto(this)" autocomplete="off">
             <input type="hidden" class="row-pjt-id" value="${pId}">
             <input type="hidden" class="row-pjt-code" value="${pCode}">
             ${pNameHidden}
@@ -701,11 +770,10 @@ function appendWhInputRow(logData = null, index = 1) {
     tbody.appendChild(tr);
 }
 
-// 💡 2. PJT 코드 검색 (절대 좌표 및 글로벌 노드 활용)
+// 💡 3. 절대좌표 (fixed) 기반 모달용 PJT 코드 자동완성 검색 
 window.whShowPjtAuto = function(input) {
     const val = input.value.trim().toLowerCase();
     
-    // 테이블 내 overflow-hidden 에 잘리지 않게 body 직속의 글로벌 ul 요소를 사용합니다.
     let drop = document.getElementById('wh-pjt-autocomplete');
     if (!drop) return;
     
@@ -715,23 +783,22 @@ window.whShowPjtAuto = function(input) {
 
     if(!val) { drop.classList.add('hidden'); return; }
 
+    // 명칭 제외! 코드(p.code) 기준으로만 초성 매치
     let matches = (window.pjtCodeMasterList || []).filter(p => {
         let code = (p.code || '').toLowerCase();
-        let name = (p.name || '').toLowerCase();
-        return code.includes(val) || name.includes(val) || 
-               (window.matchString && window.matchString(val, p.code)) || 
-               (window.matchString && window.matchString(val, p.name));
+        return code.includes(val) || (window.matchString && window.matchString(val, p.code));
     });
 
     if(matches.length > 0) {
         const rect = input.getBoundingClientRect();
-        drop.style.left = `${rect.left + window.scrollX}px`;
-        drop.style.top = `${rect.bottom + window.scrollY + 2}px`;
-        drop.style.width = `${rect.width + 100}px`; // 명칭이 길 경우 대비
+        drop.style.position = 'fixed';
+        drop.style.left = `${rect.left}px`;
+        drop.style.top = `${rect.bottom + 2}px`;
+        drop.style.width = `${rect.width + 50}px`; 
 
         drop.innerHTML = matches.map(m => {
             let sName = m.name.replace(/'/g,"\\'").replace(/"/g,'&quot;');
-            return `<li class="px-3 py-2 hover:bg-indigo-50 cursor-pointer text-xs font-black text-slate-700 border-b border-slate-50 truncate transition-colors flex items-center gap-1.5" onmousedown="window.whSelectPjt('${input.id}', '${m.id}', '${m.code||''}', '${sName}')"><span class="text-indigo-600">[${m.code||'-'}]</span> <span class="font-medium">${m.name}</span></li>`;
+            return `<li class="px-3 py-2 hover:bg-indigo-50 cursor-pointer text-xs font-black text-slate-700 border-b border-slate-50 truncate transition-colors flex items-center gap-1.5" onmousedown="window.whSelectPjt('${input.id}', '${m.id}', '${m.code||''}', '${sName}')"><span class="text-indigo-600">[${m.code||'-'}]</span></li>`;
         }).join('');
         drop.classList.remove('hidden');
     } else {
@@ -742,7 +809,7 @@ window.whShowPjtAuto = function(input) {
 window.whSelectPjt = function(inputId, pId, pCode, pName) {
     const input = document.getElementById(inputId);
     if(input) {
-        input.value = pCode; // 화면엔 코드만 셋팅
+        input.value = pCode; 
         const tr = input.closest('tr');
         tr.querySelector('.row-pjt-id').value = pId;
         tr.querySelector('.row-pjt-code').value = pCode;
@@ -756,11 +823,12 @@ window.whSelectPjt = function(inputId, pId, pCode, pName) {
 
 document.addEventListener('click', function(e) {
     const d = document.getElementById('wh-pjt-autocomplete');
-    if (d && !d.classList.contains('hidden') && !e.target.closest('#wh-pjt-autocomplete') && !e.target.classList.contains('row-pjt-name')) {
+    if (d && !d.classList.contains('hidden') && !e.target.closest('#wh-pjt-autocomplete') && !e.target.closest('.row-pjt-name')) {
         d.classList.add('hidden');
     }
 });
 
+// 💡 1. 승인 해제 버그 완벽 수정 (저장 시 조건 체크 로직 변경)
 window.saveWhInputData = async function() {
     const dateStr = document.getElementById('wh-modal-date').value;
     const authorName = document.getElementById('wh-modal-author').value;
@@ -781,7 +849,8 @@ window.saveWhInputData = async function() {
         const content = tr.querySelector('.row-content').value.trim();
         const isConfirmed = tr.querySelector('.row-conf').checked;
 
-        if (hours > 0 && (projectCodeInput || content)) {
+        // 💡 [핵심] projectName 도 유효성 검사에 포함시켜서 코드가 없는 옛날 데이터가 날아가는 것을 방지
+        if (hours > 0 && (projectCodeInput || projectName || content)) {
             toSave.push({ 
                 id, 
                 date: dateStr, 
@@ -814,7 +883,7 @@ window.saveWhInputData = async function() {
         });
 
         await batch.commit();
-        window.whIsDirty = false; // 초기화
+        window.whIsDirty = false; 
         window.showToast("투입공수가 저장되었습니다.");
         window.closeWhInputModal();
     } catch(e) {
