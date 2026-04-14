@@ -124,6 +124,52 @@ window.switchProjPartTab = function(part) {
     window.loadProjectStatusData();
 };
 
+window.filterByStatusOnly = function(status) {
+    window.currentCategoryFilter = 'all'; 
+    window.currentYearFilter = ''; 
+    window.currentMonthFilter = ''; 
+    window.hideCompletedFilter = false;
+    
+    const cSelect = document.getElementById('filter-category-select'); 
+    if(cSelect) cSelect.value = 'all';
+    
+    const ySelect = document.getElementById('filter-year-select'); 
+    if(ySelect) ySelect.value = '';
+    
+    const mSelect = document.getElementById('filter-month-select'); 
+    if(mSelect) mSelect.value = '';
+    
+    const hCb = document.getElementById('hide-completed-cb'); 
+    if(hCb) hCb.checked = false;
+    
+    window.filterProjectStatus(status);
+};
+
+// 💡 새로 추가된 당월 완료건 필터 함수!
+window.filterByCompletedThisMonth = function() {
+    window.currentCategoryFilter = 'all'; 
+    window.currentYearFilter = ''; 
+    window.hideCompletedFilter = false;
+    
+    const now = new Date();
+    const currentMonthStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+    window.currentMonthFilter = currentMonthStr;
+    
+    const cSelect = document.getElementById('filter-category-select'); 
+    if(cSelect) cSelect.value = 'all';
+    
+    const ySelect = document.getElementById('filter-year-select'); 
+    if(ySelect) ySelect.value = '';
+    
+    const mSelect = document.getElementById('filter-month-select'); 
+    if(mSelect) mSelect.value = currentMonthStr;
+    
+    const hCb = document.getElementById('hide-completed-cb'); 
+    if(hCb) hCb.checked = false;
+    
+    window.filterProjectStatus('completed');
+};
+
 window.filterProjectStatus = function(status) {
     window.currentStatusFilter = status;
     if(window.currentProjDashView === 'gantt') window.renderProjGantt(); 
@@ -146,27 +192,6 @@ window.filterByMonth = function(monthStr) {
     window.currentMonthFilter = monthStr; 
     window.updateMiniDashboard(); 
     window.filterProjectStatus(window.currentStatusFilter); 
-};
-
-window.filterByStatusOnly = function(status) {
-    window.currentCategoryFilter = 'all'; 
-    window.currentYearFilter = ''; 
-    window.currentMonthFilter = ''; 
-    window.hideCompletedFilter = false;
-    
-    const cSelect = document.getElementById('filter-category-select'); 
-    if(cSelect) cSelect.value = 'all';
-    
-    const ySelect = document.getElementById('filter-year-select'); 
-    if(ySelect) ySelect.value = '';
-    
-    const mSelect = document.getElementById('filter-month-select'); 
-    if(mSelect) mSelect.value = '';
-    
-    const hCb = document.getElementById('hide-completed-cb'); 
-    if(hCb) hCb.checked = false;
-    
-    window.filterProjectStatus(status);
 };
 
 window.resetAllFilters = function() {
@@ -341,12 +366,13 @@ window.renderProjectStatusList = function() {
         return; 
     }
     
+    // 💡 진행중(제작) 글씨 짤림 방지 및 텍스트 수정 완료!
     const statusMap = { 
-        'pending': '<span class="text-slate-500 bg-slate-100 px-2 py-0.5 rounded shadow-sm border border-slate-200">대기/보류</span>', 
-        'progress': '<span class="text-blue-600 bg-blue-50 px-2 py-0.5 rounded shadow-sm border border-blue-200">진행중(제작)</span>', 
-        'inspecting': '<span class="text-amber-600 bg-amber-50 px-2 py-0.5 rounded shadow-sm border border-amber-200">진행중(검수)</span>', 
-        'completed': '<span class="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded shadow-sm border border-emerald-200">완료(출하)</span>', 
-        'rejected': '<span class="text-rose-600 bg-rose-50 px-2 py-0.5 rounded shadow-sm border border-rose-200">보류/불가</span>' 
+        'pending': '<span class="text-slate-500 bg-slate-100 px-2 py-0.5 rounded shadow-sm border border-slate-200 whitespace-nowrap">대기/보류</span>', 
+        'progress': '<span class="text-blue-600 bg-blue-50 px-2 py-0.5 rounded shadow-sm border border-blue-200 whitespace-nowrap">진행(제작)</span>', 
+        'inspecting': '<span class="text-amber-600 bg-amber-50 px-2 py-0.5 rounded shadow-sm border border-amber-200 whitespace-nowrap">진행(검수)</span>', 
+        'completed': '<span class="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded shadow-sm border border-emerald-200 whitespace-nowrap">완료(출하)</span>', 
+        'rejected': '<span class="text-rose-600 bg-rose-50 px-2 py-0.5 rounded shadow-sm border border-rose-200 whitespace-nowrap">보류/불가</span>' 
     };
     
     let htmlStr = '';
@@ -364,7 +390,6 @@ window.renderProjectStatusList = function() {
         const desCnt = (window.projectDesignCounts && window.projectDesignCounts[item.id]) || 0;
         const schCnt = (window.projectScheduleCounts && window.projectScheduleCounts[item.id]) || 0;
 
-        // 💡 부적합(NCR) 데이터 상태 확인 로직
         const safeItemCode = String(item.code || '').replace(/\s/g, '').toUpperCase();
         const pjtNcrData = (window.ncrData || []).filter(n => String(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeItemCode);
         
@@ -374,7 +399,6 @@ window.renderProjectStatusList = function() {
             return !(s.includes('완료') || s.includes('종결') || s.includes('완료됨'));
         }).length;
 
-        // 💡 상태별 아이콘 생성 (회색 / 녹색 / 빨간색)
         let ncrIconHtml = '';
         if (totalNcrCnt === 0) {
             ncrIconHtml = `<button onclick="window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-slate-300 hover:text-indigo-400 transition-colors p-1" title="부적합 내역 없음"><i class="fa-solid fa-file-circle-check text-lg"></i></button>`;
@@ -403,9 +427,8 @@ window.renderProjectStatusList = function() {
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openPurchaseModal('${item.id}', '${safeNameJs}')" class="text-amber-500 relative"><i class="fa-solid fa-cart-shopping text-lg"></i>${purCnt ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-amber-200">${purCnt}</span>` : ''}</button></td>`;
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openDesignModal('${item.id}', '${safeNameJs}')" class="text-teal-400 relative"><i class="fa-solid fa-pen-ruler text-lg"></i>${desCnt ? `<span class="absolute -top-1 -right-2 bg-teal-100 text-teal-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-teal-200">${desCnt}</span>` : ''}</button></td>`;
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openPjtScheduleModal('${item.id}', '${safeNameJs}')" class="text-fuchsia-400 relative"><i class="fa-regular fa-calendar-check text-lg"></i>${schCnt ? `<span class="absolute -top-1 -right-2 bg-fuchsia-100 text-fuchsia-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-fuchsia-200">${schCnt}</span>` : ''}</button></td>`;
-        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openDailyLogModal('${item.id}', '${safeNameJs}', ${parseFloat(item.progress)||0})" class="text-sky-400 relative"><i class="fa-solid fa-book text-lg"></i>${lCnt ? `<span class="absolute -top-1 -right-2 bg-sky-100 text-sky-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-sky-200">${lCnt}</span>` : ''}</button></td>`;
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openDailyLogModal('${item.id}')" class="text-sky-400 relative"><i class="fa-solid fa-book text-lg"></i>${lCnt ? `<span class="absolute -top-1 -right-2 bg-sky-100 text-sky-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-sky-200">${lCnt}</span>` : ''}</button></td>`;
         
-        // 💡 부적합 아이콘을 정확히 렌더링
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()">${ncrIconHtml}</td>`;
 
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center text-sky-600">${item.estMd||0}</td>`;
@@ -574,7 +597,6 @@ window.savePurchaseItem = async function() {
     const pId = document.getElementById('pur-req-id').value;
     const title = document.getElementById('pur-project-title').innerText;
     
-    // 💡 [추가된 부분] PJT 코드를 찾아 폴더명으로 설정
     const proj = window.currentProjectStatusList.find(p => p.id === pId);
     const folderName = proj && proj.code ? proj.code : title;
 
@@ -587,7 +609,6 @@ window.savePurchaseItem = async function() {
     btn.innerHTML = '저장중..'; btn.disabled = true;
     try { 
         let fileUrl = null; 
-        // 💡 [수정된 부분] title 대신 folderName(PJT 코드) 전달
         if(fileInput.files.length > 0) fileUrl = await handleDriveUploadWithProgress(fileInput, folderName);
         await addDoc(collection(db, "project_purchases"), { projectId: pId, content: content, fileUrl: fileUrl, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
         window.showToast("구매 내역이 등록되었습니다."); 
@@ -659,7 +680,6 @@ window.saveDesignItem = async function() {
     const pId = document.getElementById('des-req-id').value;
     const title = document.getElementById('des-project-title').innerText;
     
-    // 💡 [추가된 부분] PJT 코드를 찾아 폴더명으로 설정
     const proj = window.currentProjectStatusList.find(p => p.id === pId);
     const folderName = proj && proj.code ? proj.code : title;
 
@@ -672,7 +692,6 @@ window.saveDesignItem = async function() {
     btn.innerHTML = '저장중..'; btn.disabled = true;
     try { 
         let fileUrl = null; 
-        // 💡 [수정된 부분] title 대신 folderName(PJT 코드) 전달
         if(fileInput.files.length > 0) fileUrl = await handleDriveUploadWithProgress(fileInput, folderName);
         await addDoc(collection(db, "project_designs"), { projectId: pId, content: content, fileUrl: fileUrl, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
         window.showToast("설계 내역이 등록되었습니다."); 
@@ -744,7 +763,6 @@ window.savePjtScheduleItem = async function() {
     const pId = document.getElementById('sch-req-id').value;
     const title = document.getElementById('sch-project-title').innerText;
     
-    // 💡 [추가된 부분] PJT 코드를 찾아 폴더명으로 설정
     const proj = window.currentProjectStatusList.find(p => p.id === pId);
     const folderName = proj && proj.code ? proj.code : title;
 
@@ -757,7 +775,6 @@ window.savePjtScheduleItem = async function() {
     btn.innerHTML = '저장중..'; btn.disabled = true;
     try { 
         let fileUrl = null; 
-        // 💡 [수정된 부분] title 대신 folderName(PJT 코드) 전달
         if(fileInput.files.length > 0) fileUrl = await handleDriveUploadWithProgress(fileInput, folderName);
         await addDoc(collection(db, "project_schedules"), { projectId: pId, content: content, fileUrl: fileUrl, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
         window.showToast("PJT 일정 내역이 등록되었습니다."); 
@@ -768,6 +785,7 @@ window.savePjtScheduleItem = async function() {
         btn.innerHTML = '등록'; btn.disabled = false; 
     }
 };
+
 window.deletePjtSchedule = async function(id) { 
     if(confirm("삭제하시겠습니까?")) await deleteDoc(doc(db, "project_schedules", id)); 
 };
@@ -1412,7 +1430,6 @@ window.saveDailyLogItem = async function() {
                 purchaseRate: purchaseRateVal 
             }, { merge: true }); 
             
-            // 🔥 알림 연동
             let notified = [];
             if(window.processMentions) {
                 notified = await window.processMentions(content, projectId, "생산일지"); 
@@ -1668,7 +1685,6 @@ window.saveCommentItem = async function() {
                 await addDoc(collection(db, "project_comments"), payload); 
                 window.showToast("코멘트가 등록되었습니다."); 
                 
-                // 🔥 담당자 알림 연동
                 let notified = [];
                 if(window.processMentions) {
                     notified = await window.processMentions(content, projectId, "코멘트");
@@ -1869,7 +1885,6 @@ window.saveIssueItem = async function() {
             }); 
             window.showToast("이슈가 등록되었습니다."); 
             
-            // 🔥 이슈 작성 시 담당자에게 알림 전송
             let notified = [];
             if(window.processMentions) {
                 notified = await window.processMentions(content, projectId, "이슈");
@@ -2035,7 +2050,6 @@ window.saveMdLogItem = async function() {
             }); 
             window.showToast("MD 내역이 등록되었습니다."); 
             
-            // 🔥 MD 담당자 자동 알림
             let notified = [];
             if(window.processMentions) {
                 notified = await window.processMentions(desc, projectId, "투입MD기록");
@@ -2312,7 +2326,6 @@ window.loadNcrData = async function() {
         }
         if (col !== "" || row.length > 0) { row.push(col); rows.push(row); }
 
-        // 헤더 건너뛰기 (NCR No 문구가 있는 행 찾기)
         let dataStartIndex = 1;
         for (let i = 0; i < Math.min(5, rows.length); i++) {
             if (rows[i][0] && String(rows[i][0]).includes('NCR No')) {
@@ -2321,19 +2334,18 @@ window.loadNcrData = async function() {
             }
         }
 
-        // 💡 [핵심 수정] CSV 열(Column) 위치 완벽 매칭!
         window.ncrData = rows.slice(dataStartIndex).map(r => {
             return {
-                ncrNo: r[0] ? String(r[0]).trim() : '',      // A열 (Index 0)
-                date: r[1] ? String(r[1]).trim() : '',       // B열 (Index 1)
-                pjtCode: r[2] ? String(r[2]).trim() : '',    // C열 (Index 2)
-                partName: r[3] ? String(r[3]).trim() : '',   // D열 (Index 3)
-                drawingNo: r[4] ? String(r[4]).trim() : '',  // E열 (Index 4)
-                type: r[12] ? String(r[12]).trim() : '',     // M열 (Index 12)
-                content: r[13] ? String(r[13]).trim() : '',  // N열 (Index 13)
-                status: r[15] ? String(r[15]).trim() : ''    // P열 (Index 15)
+                ncrNo: r[0] ? String(r[0]).trim() : '',      
+                date: r[1] ? String(r[1]).trim() : '',       
+                pjtCode: r[2] ? String(r[2]).trim() : '',    
+                partName: r[3] ? String(r[3]).trim() : '',   
+                drawingNo: r[4] ? String(r[4]).trim() : '',  
+                type: r[12] ? String(r[12]).trim() : '',     
+                content: r[13] ? String(r[13]).trim() : '',  
+                status: r[15] ? String(r[15]).trim() : ''    
             };
-        }).filter(n => n.pjtCode !== ''); // PJT 코드가 있는 것만 필터링
+        }).filter(n => n.pjtCode !== ''); 
 
         if (window.ncrData.length === 0) {
             if(window.showToast) window.showToast("RAWDATA 시트에서 데이터를 찾을 수 없습니다.", "warning");
@@ -2341,10 +2353,8 @@ window.loadNcrData = async function() {
             if(window.showToast) window.showToast(`부적합(NCR) 데이터 ${window.ncrData.length}건 동기화 완료!`, "success");
         }
 
-        // 1. 현황판 리스트(아이콘) 다시 그리기
         window.renderProjectStatusList();
 
-        // 2. 모달창이 열려있다면 모달창 리스트도 즉시 다시 그리기
         const modal = document.getElementById('ncr-modal');
         if (modal && !modal.classList.contains('hidden')) {
             const titleEl = document.getElementById('ncr-project-title');
