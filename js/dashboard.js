@@ -11,16 +11,10 @@ window.currentPeriodProjects = [];
 window.allDashRequests = []; 
 
 const getSafeString = function(val) {
-    return (val === null || val === undefined) ? '' : String(val);
-};
-
-// 타임스탬프를 안전하게 파싱하는 유틸리티
-const getSafeMillis = function(val) {
-    if (!val) return 0;
-    if (typeof val.toMillis === 'function') return val.toMillis();
-    if (typeof val === 'number') return val;
-    if (typeof val === 'string') return new Date(val).getTime() || 0;
-    return 0;
+    if (val === null || val === undefined) {
+        return '';
+    }
+    return String(val);
 };
 
 window.loadHomeDashboards = function() {
@@ -30,8 +24,9 @@ window.loadHomeDashboards = function() {
             exportBtn.classList.remove('hidden');
         }
 
-        // 1. 프로젝트 데이터 구독
+        // 1. 프로젝트 현황 데이터 구독
         if (homeProjSnapshotUnsubscribe) homeProjSnapshotUnsubscribe();
+        
         homeProjSnapshotUnsubscribe = onSnapshot(collection(db, "projects_status"), function(snapshot) { 
             window.allDashProjects = []; 
             snapshot.forEach(function(docSnap) {
@@ -44,6 +39,7 @@ window.loadHomeDashboards = function() {
 
         // 2. 리퀘스트 데이터 구독
         if (homeReqSnapshotUnsubscribe) homeReqSnapshotUnsubscribe();
+        
         homeReqSnapshotUnsubscribe = onSnapshot(collection(db, "requests"), function(snapshot) {
             window.allDashRequests = [];
             snapshot.forEach(function(docSnap) {
@@ -52,23 +48,27 @@ window.loadHomeDashboards = function() {
                 window.allDashRequests.push(data);
             });
             if (window.processRequestDashboardData) window.processRequestDashboardData();
-        }, function(error) {
-            console.error("리퀘스트 데이터 구독 에러:", error);
         });
 
-        // 이벤트 바인딩 설정 대기
-        setTimeout(() => {
-            ['req-dash-type-select', 'req-dash-year-select', 'req-dash-month-select'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) {
-                    el.removeEventListener('change', window.processRequestDashboardData);
-                    el.addEventListener('change', window.processRequestDashboardData);
-                }
-            });
+        // 리퀘스트 대시보드 이벤트 리스너 연동 (Type, Year, Month)
+        const reqTypeSelect = document.getElementById('req-dash-type-select');
+        const reqYearSelect = document.getElementById('req-dash-year-select');
+        const reqMonthSelect = document.getElementById('req-dash-month-select');
 
-            // 강제 초기 렌더링 호출
-            if (window.processRequestDashboardData) window.processRequestDashboardData();
-            
+        if (reqTypeSelect) {
+            reqTypeSelect.removeEventListener('change', window.processRequestDashboardData);
+            reqTypeSelect.addEventListener('change', window.processRequestDashboardData);
+        }
+        if (reqYearSelect) {
+            reqYearSelect.removeEventListener('change', window.processRequestDashboardData);
+            reqYearSelect.addEventListener('change', window.processRequestDashboardData);
+        }
+        if (reqMonthSelect) {
+            reqMonthSelect.removeEventListener('change', window.processRequestDashboardData);
+            reqMonthSelect.addEventListener('change', window.processRequestDashboardData);
+        }
+
+        setTimeout(function() { 
             const periodMonthInput = document.getElementById('period-value-month');
             if (periodMonthInput && !periodMonthInput.value) {
                 window.changePeriodType(); 
@@ -136,15 +136,22 @@ window.processDashboardData = function() {
                 let isTargetThisYear = false;
                 
                 if (status === 'completed') {
-                    if (shipEn.startsWith(year)) isTargetThisYear = true;
+                    if (shipEn.startsWith(year)) {
+                        isTargetThisYear = true;
+                    }
                 } else {
-                    if (shipEst.startsWith(year)) isTargetThisYear = true;
+                    if (shipEst.startsWith(year)) {
+                        isTargetThisYear = true;
+                    }
                 }
 
                 if (!isTargetThisYear) return;
                 
-                if (stats[status] !== undefined) stats[status]++;
-                else stats[status] = 1;
+                if (stats[status] !== undefined) {
+                    stats[status]++;
+                } else {
+                    stats[status] = 1;
+                }
                 
                 stats.estMd += eMd;
                 stats.finalMd += fMd;
@@ -156,7 +163,9 @@ window.processDashboardData = function() {
                     if (mIdx >= 0 && mIdx < 12) {
                         annualPlanData[mIdx] += eMd;
                         annualActData[mIdx] += fMd; 
-                        if (status === 'completed') monthlyCompleted[mIdx]++;
+                        if (status === 'completed') {
+                            monthlyCompleted[mIdx]++;
+                        }
                     }
                 }
                 
@@ -172,69 +181,93 @@ window.processDashboardData = function() {
         }
 
         let finalAvgShipError = 0;
-        if (shipErrorCount > 0) finalAvgShipError = Math.round(totalShipErrorDays / shipErrorCount);
+        if (shipErrorCount > 0) {
+            finalAvgShipError = Math.round(totalShipErrorDays / shipErrorCount);
+        }
 
         window.currentDashStats = { 
-            year: year, pending: stats.pending, progress: stats.progress, inspecting: stats.inspecting,
-            completed: stats.completed, rejected: stats.rejected, estMd: stats.estMd, finalMd: stats.finalMd,
-            outMd: stats.outMd, avgShipError: finalAvgShipError
+            year: year,
+            pending: stats.pending,
+            progress: stats.progress,
+            inspecting: stats.inspecting,
+            completed: stats.completed,
+            rejected: stats.rejected,
+            estMd: stats.estMd,
+            finalMd: stats.finalMd,
+            outMd: stats.outMd,
+            avgShipError: finalAvgShipError
         };
 
-        if (document.getElementById('dash-team-count')) {
-            document.getElementById('dash-team-count').innerText = (window.teamMembers ? window.teamMembers.length : 0) + '명';
+        const dashTeamCountEl = document.getElementById('dash-team-count');
+        if (dashTeamCountEl) {
+            let tCount = 0;
+            if (window.teamMembers) tCount = window.teamMembers.length;
+            dashTeamCountEl.innerText = tCount + '명';
         }
-        if (document.getElementById('dash-pd-completed')) document.getElementById('dash-pd-completed').innerText = stats.completed;
-        if (document.getElementById('dash-pd-estMd')) document.getElementById('dash-pd-estMd').innerText = stats.estMd.toFixed(1);
-        if (document.getElementById('dash-pd-curMd')) document.getElementById('dash-pd-curMd').innerText = stats.finalMd.toFixed(1);
-        if (document.getElementById('dash-pd-outMd')) document.getElementById('dash-pd-outMd').innerText = stats.outMd.toFixed(1);
         
-        if (document.getElementById('dash-pd-variance')) {
+        const elCompleted = document.getElementById('dash-pd-completed');
+        if (elCompleted) elCompleted.innerText = stats.completed;
+        
+        const elEstMd = document.getElementById('dash-pd-estMd');
+        if (elEstMd) elEstMd.innerText = stats.estMd.toFixed(1);
+        
+        const elCurMd = document.getElementById('dash-pd-curMd');
+        if (elCurMd) elCurMd.innerText = stats.finalMd.toFixed(1);
+
+        const elOutMd = document.getElementById('dash-pd-outMd');
+        if (elOutMd) elOutMd.innerText = stats.outMd.toFixed(1);
+        
+        const elVariance = document.getElementById('dash-pd-variance');
+        if (elVariance) {
             if (stats.estMd > 0) {
                 let varianceVal = ((stats.finalMd - stats.estMd) / stats.estMd * 100).toFixed(1);
-                document.getElementById('dash-pd-variance').innerText = varianceVal + '%';
+                elVariance.innerText = varianceVal + '%';
             } else {
-                document.getElementById('dash-pd-variance').innerText = '0%';
+                elVariance.innerText = '0%';
             }
         }
         
-        if (document.getElementById('dash-pd-ship-error')) document.getElementById('dash-pd-ship-error').innerText = finalAvgShipError;
+        const elShipError = document.getElementById('dash-pd-ship-error');
+        if (elShipError) elShipError.innerText = finalAvgShipError;
         
-        if (document.getElementById('dash-pd-workload')) {
+        const elWorkload = document.getElementById('dash-pd-workload');
+        if (elWorkload) {
             if (window.teamMembers && window.teamMembers.length > 0) {
                 let workLoadVal = (stats.finalMd / (window.teamMembers.length * 240) * 100).toFixed(1);
-                document.getElementById('dash-pd-workload').innerText = workLoadVal + '%';
+                elWorkload.innerText = workLoadVal + '%';
             } else {
-                document.getElementById('dash-pd-workload').innerText = '0%';
+                elWorkload.innerText = '0%';
             }
         }
 
         window.renderCharts(stats, monthlyCompleted, annualPlanData, annualActData);
-        if (window.processPeriodData) window.processPeriodData();
+        
+        if (window.processPeriodData) {
+            window.processPeriodData();
+        }
 
-    } catch(e) { console.error("연간 데이터 연산 오류:", e); }
+    } catch(e) { 
+        console.error("연간 데이터 연산 오류:", e); 
+    }
 };
 
 // ============================================================
-// 💡 리퀘스트 대시보드 처리
+// 💡 리퀘스트 대시보드 처리 로직 (년/월 필터 추가됨)
 // ============================================================
 window.processRequestDashboardData = function() {
     try {
-        // [방어 코드] DOM 요소가 렌더링되기 전에 호출되면 100ms 대기 후 재실행 (SPA 화면전환 대비)
-        if (!document.getElementById('dash-req-total') || !document.getElementById('reqStatusChart')) {
-            setTimeout(window.processRequestDashboardData, 100);
-            return;
-        }
-
+        // 1. 연도 Select 데이터 동적 생성 (요청이 등록된 연도 목록 파악)
         let reqYears = new Set();
         reqYears.add(new Date().getFullYear());
         
         (window.allDashRequests || []).forEach(req => {
-            const ms = getSafeMillis(req.createdAt);
-            if (ms > 0) reqYears.add(new Date(ms).getFullYear());
+            if (req.createdAt) {
+                reqYears.add(new Date(req.createdAt).getFullYear());
+            }
         });
 
         const reqYearSelect = document.getElementById('req-dash-year-select');
-        if (reqYearSelect && reqYearSelect.options.length <= 1) { 
+        if (reqYearSelect && reqYearSelect.options.length <= 1) { // 최초 1회만 옵션 생성
             const currentVal = reqYearSelect.value;
             reqYearSelect.innerHTML = '<option value="">All Years</option>';
             Array.from(reqYears).sort((a,b) => b - a).forEach(y => {
@@ -243,6 +276,7 @@ window.processRequestDashboardData = function() {
             if (currentVal) reqYearSelect.value = currentVal;
         }
 
+        // 2. 필터 값 가져오기
         const typeSelect = document.getElementById('req-dash-type-select');
         const monthSelect = document.getElementById('req-dash-month-select');
 
@@ -254,31 +288,37 @@ window.processRequestDashboardData = function() {
         let typeCounts = { collab: 0, purchase: 0, repair: 0 };
 
         (window.allDashRequests || []).forEach(req => {
+            // 타입 필터 적용
             if (filterType !== 'all' && req.type !== filterType) return;
 
+            // 연/월 필터 적용
             if (filterYear || filterMonth) {
-                const ms = getSafeMillis(req.createdAt);
-                if (ms === 0) return;
-                const d = new Date(ms);
+                if (!req.createdAt) return;
+                const d = new Date(req.createdAt);
                 if (filterYear && d.getFullYear().toString() !== filterYear) return;
                 if (filterMonth && String(d.getMonth() + 1).padStart(2, '0') !== filterMonth) return;
             }
 
             total++;
+            
+            // 상태 집계
             if (req.status === 'completed') completed++;
             else if (req.status === 'progress' || req.status === 'inspecting') progress++;
             else pending++;
 
+            // 타입별 집계
             if (req.type === 'collab') typeCounts.collab++;
             else if (req.type === 'purchase') typeCounts.purchase++;
             else if (req.type === 'repair') typeCounts.repair++;
         });
 
-        document.getElementById('dash-req-total').innerText = total;
-        document.getElementById('dash-req-pending').innerText = pending;
-        document.getElementById('dash-req-progress').innerText = progress;
-        document.getElementById('dash-req-completed').innerText = completed;
+        // DOM 업데이트
+        if (document.getElementById('dash-req-total')) document.getElementById('dash-req-total').innerText = total;
+        if (document.getElementById('dash-req-pending')) document.getElementById('dash-req-pending').innerText = pending;
+        if (document.getElementById('dash-req-progress')) document.getElementById('dash-req-progress').innerText = progress;
+        if (document.getElementById('dash-req-completed')) document.getElementById('dash-req-completed').innerText = completed;
 
+        // 차트 렌더링
         window.renderRequestCharts(pending, progress, completed, typeCounts);
 
     } catch(e) {
@@ -291,15 +331,12 @@ window.renderRequestCharts = function(pending, progress, completed, typeCounts) 
         const canvas = document.getElementById(id); 
         if (!canvas) return;
         
-        // 차트 표시 및 '준비중' 텍스트 숨김 처리
         canvas.classList.remove('hidden');
-        if(canvas.nextElementSibling && canvas.nextElementSibling.tagName === 'SPAN') {
-            canvas.nextElementSibling.classList.add('hidden');
+        if(canvas.nextElementSibling) canvas.nextElementSibling.classList.add('hidden');
+
+        if (chartInstances[id]) {
+            chartInstances[id].destroy();
         }
-
-        if (typeof window.Chart === 'undefined') return console.warn("Chart.js 라이브러리를 불러오지 못했습니다.");
-
-        if (chartInstances[id]) chartInstances[id].destroy();
         chartInstances[id] = new window.Chart(canvas.getContext('2d'), { type: type, data: data, options: options });
     };
 
@@ -350,20 +387,38 @@ window.renderCharts = function(stats, monthlyCompleted, planData, actData) {
         chartInstances[id] = new window.Chart(canvas.getContext('2d'), { type: type, data: data, options: options });
     };
 
+    let pendingCnt = stats.pending || 0;
+    let progressCnt = stats.progress || 0;
+    let inspectingCnt = stats.inspecting || 0;
+    let completedCnt = stats.completed || 0;
+    let rejectedCnt = stats.rejected || 0;
+
     createChart('projPieChart', 'doughnut', {
         labels: ['대기/보류', '제작중', '검수중', '완료', '불가'],
         datasets: [{ 
-            data: [stats.pending||0, stats.progress||0, stats.inspecting||0, stats.completed||0, stats.rejected||0], 
+            data: [pendingCnt, progressCnt, inspectingCnt, completedCnt, rejectedCnt], 
             backgroundColor: ['#94a3b8', '#3b82f6', '#f59e0b', '#10b981', '#f43f5e'], 
-            borderWidth: 2, borderColor: '#ffffff', borderRadius: 4, hoverOffset: 4 
+            borderWidth: 2, 
+            borderColor: '#ffffff', 
+            borderRadius: 4, 
+            hoverOffset: 4 
         }]
-    }, { cutout: '65%', maintainAspectRatio: false, layout: { padding: 15 }, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 15, font: {size: 11} } } } });
+    }, { 
+        cutout: '65%', 
+        maintainAspectRatio: false, 
+        layout: { padding: 15 },
+        plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 15, font: {size: 11} } } } 
+    });
 
     const months = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
     createChart('projMonthlyChart', 'bar', { 
         labels: months, 
         datasets: [{ label: '출하 완료', data: monthlyCompleted, backgroundColor: '#10b981', borderRadius: 6, maxBarThickness: 30 }] 
-    }, { maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { stepSize: 1 }, border: { dash: [4, 4] } } }, plugins: { legend: { display: false } } });
+    }, { 
+        maintainAspectRatio: false, 
+        scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { stepSize: 1 }, border: { dash: [4, 4] } } }, 
+        plugins: { legend: { display: false } } 
+    });
 
     const ctxElement = document.getElementById('annualPlanVsActualChart');
     const ctx = ctxElement ? ctxElement.getContext('2d') : null;
@@ -382,12 +437,18 @@ window.renderCharts = function(stats, monthlyCompleted, planData, actData) {
             { label: '계획 MD', data: planData, borderColor: '#cbd5e1', backgroundColor: gradPlan, fill: true, tension: 0.4, borderWidth: 3, pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: '#fff', pointBorderWidth: 2 }, 
             { label: '실적(최종) MD', data: actData, borderColor: '#6366f1', backgroundColor: gradAct, fill: true, tension: 0.4, borderWidth: 3, pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: '#fff', pointBorderWidth: 2 }
         ] 
-    }, { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, border: { dash: [4, 4] } } }, plugins: { legend: { position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 8 } } } });
+    }, { 
+        maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, 
+        scales: { x: { grid: { display: false } }, y: { beginAtZero: true, border: { dash: [4, 4] } } }, 
+        plugins: { legend: { position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 8 } } } 
+    });
 };
 
 window.changePeriodType = function() {
     const typeSelect = document.getElementById('period-type-select');
-    let type = typeSelect ? typeSelect.value : 'month';
+    let type = 'month';
+    if (typeSelect) type = typeSelect.value;
+    
     const mInput = document.getElementById('period-value-month');
     const wInput = document.getElementById('period-value-week');
     
@@ -396,7 +457,8 @@ window.changePeriodType = function() {
         if (wInput) wInput.classList.add('hidden'); 
         if (mInput && !mInput.value) { 
             const d = new Date();
-            let monthStr = String(d.getMonth() + 1).padStart(2, '0');
+            let monthStr = String(d.getMonth() + 1);
+            if (monthStr.length === 1) monthStr = '0' + monthStr;
             mInput.value = d.getFullYear() + '-' + monthStr; 
         } 
     } else { 
@@ -411,7 +473,9 @@ window.changePeriodType = function() {
 
 window.processPeriodData = function() {
     const typeSelect = document.getElementById('period-type-select');
-    let type = typeSelect ? typeSelect.value : 'month';
+    let type = 'month';
+    if (typeSelect) type = typeSelect.value;
+    
     let valInput = type === 'month' ? document.getElementById('period-value-month') : document.getElementById('period-value-week');
     let val = valInput ? valInput.value : '';
     
@@ -441,15 +505,20 @@ window.processPeriodData = function() {
         const status = getSafeString(p.status);
         const shipEn = getSafeString(p.d_shipEn);
         const shipEst = getSafeString(p.d_shipEst);
+        
         const fMd = parseFloat(p.finalMd) || 0;
         const oMd = parseFloat(p.outMd) || 0;
         
         let isTargetThisPeriod = false;
 
         if (status === 'completed') {
-            if (shipEn >= start && shipEn <= end) isTargetThisPeriod = true;
+            if (shipEn >= start && shipEn <= end) {
+                isTargetThisPeriod = true;
+            }
         } else {
-            if (shipEst >= start && shipEst <= end) isTargetThisPeriod = true;
+            if (shipEst >= start && shipEst <= end) {
+                isTargetThisPeriod = true;
+            }
         }
 
         if (!isTargetThisPeriod) return;
@@ -480,16 +549,30 @@ window.processPeriodData = function() {
     const labelPeriodMd = document.getElementById('label-period-md');
     const thPeriodMd = document.getElementById('th-period-md');
     if (labelPeriodMd && thPeriodMd) {
-        if (type === 'month') { labelPeriodMd.innerText = "월간 총 투입(최종) 공수"; thPeriodMd.innerText = "최종MD"; } 
-        else { labelPeriodMd.innerText = "주간 총 투입(최종) 공수"; thPeriodMd.innerText = "최종MD"; }
+        if (type === 'month') { 
+            labelPeriodMd.innerText = "월간 총 투입(최종) 공수"; thPeriodMd.innerText = "최종MD"; 
+        } else { 
+            labelPeriodMd.innerText = "주간 총 투입(최종) 공수"; thPeriodMd.innerText = "최종MD"; 
+        }
     }
 
-    if (document.getElementById('pd-period-completed')) document.getElementById('pd-period-completed').innerText = periodCompleted;
-    if (document.getElementById('pd-period-pending')) document.getElementById('pd-period-pending').innerText = pending; 
-    if (document.getElementById('pd-period-progress')) document.getElementById('pd-period-progress').innerText = progress; 
-    if (document.getElementById('pd-period-urgent')) document.getElementById('pd-period-urgent').innerText = urgent;
-    if (document.getElementById('pd-period-total-md')) document.getElementById('pd-period-total-md').innerText = periodFinalMdTotal.toFixed(1);
-    if (document.getElementById('pd-period-out-md')) document.getElementById('pd-period-out-md').innerText = periodOutMdTotal.toFixed(1);
+    const elPeriodCompleted = document.getElementById('pd-period-completed');
+    if (elPeriodCompleted) elPeriodCompleted.innerText = periodCompleted;
+
+    const elPeriodPending = document.getElementById('pd-period-pending');
+    if (elPeriodPending) elPeriodPending.innerText = pending; 
+    
+    const elPeriodProgress = document.getElementById('pd-period-progress');
+    if (elPeriodProgress) elPeriodProgress.innerText = progress; 
+    
+    const elPeriodUrgent = document.getElementById('pd-period-urgent');
+    if (elPeriodUrgent) elPeriodUrgent.innerText = urgent;
+    
+    const elPeriodTotalMd = document.getElementById('pd-period-total-md');
+    if (elPeriodTotalMd) elPeriodTotalMd.innerText = periodFinalMdTotal.toFixed(1);
+
+    const elPeriodOutMd = document.getElementById('pd-period-out-md');
+    if (elPeriodOutMd) elPeriodOutMd.innerText = periodOutMdTotal.toFixed(1);
 
     const elPeriodWorkload = document.getElementById('pd-period-workload');
     if (elPeriodWorkload) {
@@ -540,7 +623,8 @@ window.processPeriodData = function() {
             tbody.innerHTML = htmlStr;
         }
         
-        if (document.getElementById('period-table-count')) document.getElementById('period-table-count').innerText = '총 ' + list.length + '건';
+        const countLabel = document.getElementById('period-table-count');
+        if (countLabel) countLabel.innerText = '총 ' + list.length + '건';
     }
     
     renderPeriodCharts(type, val, list, mgrCounts, periodFinalMdTotal);
@@ -622,12 +706,13 @@ window.exportDashboardExcel = async function() {
     try {
         if (window.showToast) window.showToast("엑셀 현황 보고서를 생성 중입니다...", "success");
         const wb = new window.ExcelJS.Workbook();
+
         const ws1 = wb.addWorksheet('대시보드_요약', { views: [{ showGridLines: false }] });
 
         ws1.columns = [
-            { width: 2 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 2 },
-            { width: 15 }, { width: 15 }, { width: 15 }, { width: 2 },
-            { width: 15 }, { width: 15 }, { width: 15 },
+            { width: 2 },   { width: 15 },  { width: 15 },  { width: 15 },  { width: 2 },
+            { width: 15 },  { width: 15 },  { width: 15 },  { width: 2 },
+            { width: 15 },  { width: 15 },  { width: 15 },
         ];
 
         ws1.mergeCells('B2:L3');
@@ -686,6 +771,7 @@ window.exportDashboardExcel = async function() {
         createKPICard(11, 'F', 14, 'H', '총 투입 공수 (최종)', `${parseFloat(window.currentDashStats.finalMd).toFixed(1)} MD`, '타겟 프로젝트 합산', 'FFF5F3FF', 'FF8B5CF6', 'FF6D28D9'); 
         let varianceVal = window.currentDashStats.estMd > 0 ? ((window.currentDashStats.finalMd - window.currentDashStats.estMd) / window.currentDashStats.estMd * 100).toFixed(1) : 0;
         createKPICard(11, 'J', 14, 'L', '계획대비 편차율', `${varianceVal}%`, '(최종 - 예정) / 예정', 'FFFFFBEB', 'FFF59E0B', 'FFD97706'); 
+
 
         const typeSelect = document.getElementById('period-type-select');
         let periodTypeStr = '';
