@@ -6,6 +6,7 @@ let currentWeeklyLogUnsubscribe = null;
 let currentScheduleUnsubscribe = null;
 let noticeUnsubscribe = null;
 let monthlySchUnsubscribe = null;
+let myMonthlySchUnsubscribe = null;
 
 window.currentWeeklyLogList = [];
 window.allSchedules = []; 
@@ -13,8 +14,13 @@ window.currentScheduleList = [];
 window.draftTasks = []; 
 window.wlInvolvedProjects = []; 
 window.activeWeeklyTab = 'team'; 
+
 window.schCalDate = new Date();
 window.schViewMode = 'kanban'; 
+
+window.mySchCalDate = new Date();
+window.mySchViewMode = 'kanban'; 
+window.myMonthlySchedules = [];
 
 // 💡 한국 공휴일 데이터 세팅 (2024년 ~ 2027년)
 const WEEKLY_KR_HOLIDAYS = {
@@ -51,6 +57,7 @@ window.switchWeeklyTab = function(tabName) {
     } else if (tabName === 'my') {
         if (btnMy) btnMy.className = activeClass;
         if (viewMy) viewMy.classList.remove('hidden');
+        if (window.mySchViewMode === 'calendar') window.loadMyMonthlySchedules();
     } else if (tabName === 'team-sch') {
         if (btnTeamSch) btnTeamSch.className = activeClass;
         if (viewTeamSch) viewTeamSch.classList.remove('hidden');
@@ -170,9 +177,6 @@ window.closeTeamModal = function() {
     }
 };
 
-// ==========================================
-// 🔔 공지사항 관련 로직
-// ==========================================
 window.editNotice = function() {
     const rawEl = document.getElementById('weekly-notice-raw-text');
     let currentText = rawEl ? rawEl.value : ''; 
@@ -306,6 +310,9 @@ window.loadWeeklyLogsData = function() {
             
             if(window.schViewMode === 'calendar') {
                 window.loadMonthlySchedules();
+            }
+            if(window.mySchViewMode === 'calendar') {
+                window.loadMyMonthlySchedules();
             }
         });
     }
@@ -644,7 +651,6 @@ window.removeWeeklyTaskRow = function(taskId) {
     window.renderDraftTasks();
 };
 
-// 💡 작성된 업무 내역에서 바로 상태를 바꿀 수 있는 함수 
 window.updateWeeklyTaskStatus = function(taskId, newStatus) {
     let task = window.draftTasks.find(t => String(t.id) === String(taskId));
     if (task) {
@@ -678,7 +684,6 @@ window.renderDraftTasks = function() {
             timeBadge = '<span class="text-[9px] text-slate-400 ml-2 font-mono tracking-tighter">' + t.createdAtTime.split(' ')[1] + '</span>';
         }
 
-        // 💡 텍스트가 아닌 Select 드롭다운 형태로 렌더링 (편집 가능)
         let statusSelect = `<select onchange="window.updateWeeklyTaskStatus('${t.id}', this.value)" class="text-[10px] font-bold border px-1.5 py-0.5 rounded shrink-0 w-[64px] text-center ${statusClass} outline-none cursor-pointer">
             <option value="완료" ${t.status === '완료' ? 'selected' : ''}>✅ 완료</option>
             <option value="진행 중" ${t.status === '진행 중' ? 'selected' : ''} class="text-blue-600">▶ 진행</option>
@@ -1076,7 +1081,9 @@ window.renderTeamKanbanBoard = function() {
     }).join('');
 };
 
-// 💡 [달력 뷰 관련 스크립트 기능 추가]
+// ==========================================
+// 💡 팀 일정 달력 뷰 관련 로직
+// ==========================================
 window.setSchViewMode = function(mode) {
     window.schViewMode = mode;
     const btnK = document.getElementById('btn-sch-kanban');
@@ -1201,13 +1208,11 @@ window.renderTeamCalendarBoard = function(year, month) {
         const dStr = `${year}-${String(month).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
         let isToday = dStr === window.getLocalDateStr(new Date());
         
-        // 💡 요일 및 공휴일 식별
         let dObj = new Date(year, month - 1, date);
         let isSunday = dObj.getDay() === 0;
         let isSaturday = dObj.getDay() === 6;
         let holidayName = WEEKLY_KR_HOLIDAYS[dStr];
         
-        // 💡 날짜 색상 반영 (공휴일 & 일요일 = 빨강, 토요일 = 파랑, 평일 = 검정)
         let txtClass = 'text-slate-700';
         if (isSunday || holidayName) {
             txtClass = 'text-rose-500';
@@ -1235,7 +1240,6 @@ window.renderTeamCalendarBoard = function(year, month) {
             `;
         }).join('');
 
-        // 💡 공휴일일 경우 날짜 하단에 빨간색 배경 뱃지로 이름 출력
         html += `
             <div class="bg-white p-1.5 min-h-[120px] hover:bg-slate-50 transition-colors relative flex flex-col border-t-2 ${isToday ? 'border-t-indigo-500' : 'border-t-transparent'}">
                 <div class="text-[11px] font-black text-center mb-1 ${dateClass} shrink-0">${date}</div>
@@ -1250,7 +1254,153 @@ window.renderTeamCalendarBoard = function(year, month) {
 };
 
 // ==========================================
-// 💡 개인 일정 관련 로직
+// 💡 개인 일정 달력 뷰 관련 로직
+// ==========================================
+window.setMySchViewMode = function(mode) {
+    window.mySchViewMode = mode;
+    const btnK = document.getElementById('btn-my-sch-kanban');
+    const btnC = document.getElementById('btn-my-sch-calendar');
+    const viewK = document.getElementById('weekly-kanban-board');
+    const viewC = document.getElementById('weekly-my-calendar-board');
+    
+    const calPrev = document.getElementById('btn-my-cal-prev');
+    const calNext = document.getElementById('btn-my-cal-next');
+    const calMonth = document.getElementById('my-sch-cal-month-display');
+
+    if (mode === 'kanban') {
+        if(btnK) btnK.className = 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap';
+        if(btnC) btnC.className = 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-1.5 bg-transparent whitespace-nowrap';
+        if(viewK) viewK.classList.remove('hidden');
+        if(viewC) { viewC.classList.add('hidden'); viewC.classList.remove('flex'); }
+        
+        if(calPrev) calPrev.classList.add('hidden');
+        if(calNext) calNext.classList.add('hidden');
+        if(calMonth) calMonth.classList.add('hidden');
+    } else {
+        if(btnC) btnC.className = 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap';
+        if(btnK) btnK.className = 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-1.5 bg-transparent whitespace-nowrap';
+        if(viewK) viewK.classList.add('hidden');
+        if(viewC) { viewC.classList.remove('hidden'); viewC.classList.add('flex'); }
+        
+        if(calPrev) calPrev.classList.remove('hidden');
+        if(calNext) calNext.classList.remove('hidden');
+        if(calMonth) calMonth.classList.remove('hidden');
+        
+        window.loadMyMonthlySchedules();
+    }
+};
+
+window.changeMyCalMonth = function(offset) {
+    window.mySchCalDate.setMonth(window.mySchCalDate.getMonth() + offset);
+    window.loadMyMonthlySchedules();
+};
+
+window.loadMyMonthlySchedules = async function() {
+    const year = window.mySchCalDate.getFullYear();
+    const month = window.mySchCalDate.getMonth() + 1;
+    const monthDisplay = document.getElementById('my-sch-cal-month-display');
+    if (monthDisplay) monthDisplay.innerText = `${year}년 ${month}월`;
+
+    const weeks = getWeeksInMonth(year, month);
+    if(weeks.length === 0) return;
+
+    if (myMonthlySchUnsubscribe) myMonthlySchUnsubscribe();
+    
+    const q = query(collection(db, "weekly_schedules"), where("week", "in", weeks), where("authorUid", "==", window.currentUser.uid));
+    myMonthlySchUnsubscribe = onSnapshot(q, function(s) {
+        window.myMonthlySchedules = [];
+        s.forEach(d => {
+            window.myMonthlySchedules.push(Object.assign({ id: d.id }, d.data()));
+        });
+        window.renderMyCalendarBoard(year, month);
+    });
+};
+
+window.renderMyCalendarBoard = function(year, month) {
+    const grid = document.getElementById('weekly-my-calendar-board');
+    if (!grid) return;
+
+    const firstDay = new Date(year, month - 1, 1).getDay();
+    const lastDate = new Date(year, month, 0).getDate();
+
+    let html = `
+        <div class="grid grid-cols-7 gap-px bg-slate-200 border-b border-slate-200">
+            <div class="p-2 text-center text-xs font-black text-rose-500 bg-slate-50">일</div>
+            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">월</div>
+            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">화</div>
+            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">수</div>
+            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">목</div>
+            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">금</div>
+            <div class="p-2 text-center text-xs font-black text-blue-500 bg-slate-50">토</div>
+        </div>
+        <div class="grid grid-cols-7 gap-px bg-slate-200 flex-1">
+    `;
+
+    for (let i = 0; i < firstDay; i++) {
+        html += `<div class="bg-slate-50 min-h-[120px]"></div>`;
+    }
+
+    const catMap = {
+        "휴가/연차": { icon: "fa-mug-hot", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+        "휴가/오전": { icon: "fa-sun", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+        "휴가/오후": { icon: "fa-moon", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+        "회의": { icon: "fa-users", bg: "bg-purple-50 text-purple-700 border-purple-200" },
+        "사내(작업)": { icon: "fa-headphones", bg: "bg-blue-50 text-blue-700 border-blue-200" },
+        "사내(공통)": { icon: "fa-building", bg: "bg-blue-50 text-blue-700 border-blue-200" },
+        "출장(국내)": { icon: "fa-car", bg: "bg-orange-50 text-orange-700 border-orange-200" },
+        "출장(국외)": { icon: "fa-plane", bg: "bg-orange-50 text-orange-700 border-orange-200" },
+        "기타": { icon: "fa-thumbtack", bg: "bg-slate-100 text-slate-700 border-slate-300" }
+    };
+
+    for (let date = 1; date <= lastDate; date++) {
+        const dStr = `${year}-${String(month).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
+        let isToday = dStr === window.getLocalDateStr(new Date());
+        
+        let dObj = new Date(year, month - 1, date);
+        let isSunday = dObj.getDay() === 0;
+        let isSaturday = dObj.getDay() === 6;
+        let holidayName = WEEKLY_KR_HOLIDAYS[dStr];
+        
+        let txtClass = 'text-slate-700';
+        if (isSunday || holidayName) {
+            txtClass = 'text-rose-500';
+        } else if (isSaturday) {
+            txtClass = 'text-blue-500';
+        }
+        
+        let dateClass = isToday ? 'bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center mx-auto shadow-md' : txtClass;
+
+        let dayEvents = (window.myMonthlySchedules || []).filter(s => {
+            let sDate = getActualDateFromWeekDay(s.week, s.day);
+            return sDate === dStr;
+        });
+
+        let eventsHtml = dayEvents.map(s => {
+            const style = catMap[s.category] || catMap["기타"];
+            const safeTitle = String(s.title || s.content || '제목 없음').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const completedClass = s.isCompleted ? 'line-through opacity-50 grayscale' : '';
+            return `
+                <div class="text-[10px] font-bold border px-1.5 py-0.5 rounded mb-0.5 truncate cursor-pointer hover:shadow-sm transition-all ${style.bg} ${completedClass}" onclick="window.editSchedule('${s.id}')" title="${safeTitle}">
+                    ${safeTitle}
+                </div>
+            `;
+        }).join('');
+
+        html += `
+            <div class="bg-white p-1.5 min-h-[120px] hover:bg-slate-50 transition-colors relative flex flex-col border-t-2 ${isToday ? 'border-t-indigo-500' : 'border-t-transparent'}">
+                <div class="text-[11px] font-black text-center mb-1 ${dateClass} shrink-0">${date}</div>
+                ${holidayName ? `<div class="text-[9px] font-bold text-rose-500 bg-rose-50 rounded text-center mb-1 leading-tight py-0.5 shrink-0 border border-rose-100">${holidayName}</div>` : ''}
+                <div class="flex-1 flex flex-col gap-0.5 overflow-hidden">${eventsHtml}</div>
+            </div>
+        `;
+    }
+
+    html += `</div>`;
+    grid.innerHTML = html;
+};
+
+// ==========================================
+// 💡 개인 일정 추가/편집 관련 로직
 // ==========================================
 window.openScheduleModal = function(day) {
     if (!day) day = '월요일';
