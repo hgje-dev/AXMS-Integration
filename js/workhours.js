@@ -33,7 +33,7 @@ window.matchString = function(q, t) {
     return false;
 };
 
-// 💡 "YYYY년 M월 W주" 형식 포맷터 (팀장님이 요청하신 직관적 형식)
+// 💡 "YYYY년 M월 W주차" 형식 포맷터 (팀장님이 요청하신 직관적 형식)
 window.formatWeekToKorean = function(weekStr) {
     if(!weekStr) return "주 선택";
     const { start } = window.getDatesFromWeek(weekStr);
@@ -47,8 +47,22 @@ window.formatWeekToKorean = function(weekStr) {
     if(offset === -1) offset = 6;
     const weekNum = Math.ceil((thu.getDate() + offset) / 7);
     
-    return `${year}년 ${month}월 ${weekNum}주`;
+    return `${year}년 ${month}월 ${weekNum}주차`;
 };
+
+// 💡 특정 월에 속한 모든 주차(Week) 문자열 배열 반환 유틸리티
+function getWeeksInMonthForPlan(year, month) {
+    let weeks = new Set();
+    let d = new Date(year, month - 1, 1);
+    let lastDate = new Date(year, month, 0);
+    while(d <= lastDate) {
+        if(window.getWeekString) {
+            weeks.add(window.getWeekString(d));
+        }
+        d.setDate(d.getDate() + 1);
+    }
+    return Array.from(weeks);
+}
 
 let worklogsUnsubscribe = null;
 let workplansUnsubscribe = null;
@@ -230,7 +244,6 @@ function fetchWorkLogsForContext() {
     
     let startStr, endStr;
     
-    // 💡 연간/월간/주간 동적 패치
     if (window.whStatMode === 'year') {
         const y = start.getFullYear();
         startStr = `${y}-01-01`;
@@ -243,7 +256,6 @@ function fetchWorkLogsForContext() {
     } else {
         const y = start.getFullYear();
         const m = start.getMonth();
-        // 월초/월말 경계 여유
         startStr = window.getLocalDateStr(new Date(y, m - 1, 1));
         endStr = window.getLocalDateStr(new Date(y, m + 2, 0));
     }
@@ -266,7 +278,6 @@ function fetchWorkPlansForContext() {
     const { start } = window.getDatesFromWeek(picker.value);
     const targetYear = start.getFullYear().toString();
     
-    // year 필드 기반으로 해당 연도의 모든 계획 가져오기
     const q = query(collection(db, "work_plans"), where("year", "==", targetYear));
     
     workplansUnsubscribe = onSnapshot(q, (snapshot) => {
@@ -518,7 +529,7 @@ window.updateWhDashboard = function() {
 
     let totalHours = 0;
     let personMap = {}, typeMap = {}, trendMap = {}, locMap = {}, pjtMap = {};
-    let dailyWorkers = new Set(); // 💡 실적 인원수 계산을 위한 Set (date_authorName)
+    let dailyWorkers = new Set(); // 💡 실적 인원수 계산을 위한 Set
 
     baseData.forEach(log => {
         let h = parseFloat(log.hours) || 0;
@@ -540,7 +551,7 @@ window.updateWhDashboard = function() {
             const d = new Date(log.date);
             let wStr = window.getWeekString ? window.getWeekString(d).split('-')[1] : '';
             trendKey = wStr ? wStr.replace('W', '') + '주차' : log.date;
-        } else { // year
+        } else {
             const d = new Date(log.date);
             trendKey = `${d.getMonth() + 1}월`;
         }
@@ -593,11 +604,12 @@ window.updateWhDashboard = function() {
     }
 
     planData.forEach(p => {
-        // 단일 row가 아닌 daily 합산이 필요함
         if(p.daily) {
             for(let date in p.daily) {
-                totalPlanHc += parseFloat(p.daily[date].hc) || 0;
-                totalPlanMd += parseFloat(p.daily[date].md) || 0;
+                if (date >= tStartStr && date <= tEndStr) {
+                    totalPlanHc += parseFloat(p.daily[date].hc) || 0;
+                    totalPlanMd += parseFloat(p.daily[date].md) || 0;
+                }
             }
         }
     });
@@ -658,7 +670,6 @@ window.updateWhDashboard = function() {
     renderCustomPersonUI(personMap);
     renderCustomTypeUI(typeMap, totalMD);
     
-    // 제목 수정
     let cTitle = '일자별 투입 추이 (MD)';
     if(window.whStatMode === 'month') cTitle = '주차별 투입 추이 (MD)';
     if(window.whStatMode === 'year') cTitle = '월별 투입 추이 (MD)';
@@ -690,7 +701,6 @@ function renderWhChart(canvasId, type, dataMap, unit, isHorizontal) {
     let sortedData = Object.entries(dataMap);
     if (isHorizontal) sortedData.sort((a,b)=>b[1]-a[1]);
     else {
-        // 월 정렬 로직 보강
         if(window.whStatMode === 'year') {
             sortedData.sort((a,b) => parseInt(a[0]) - parseInt(b[0]));
         } else {
@@ -1151,7 +1161,7 @@ window.whShowPjtAuto = function(input) {
         drop.style.position = 'fixed';
         drop.style.left = `${rect.left}px`;
         drop.style.top = `${rect.bottom + 4}px`;
-        drop.style.width = `${Math.max(rect.width, 300)}px`;
+        drop.style.width = `${Math.max(rect.width, 300)}px`; 
 
         drop.innerHTML = matches.map(m => {
             let sName = m.name ? m.name.replace(/'/g,"\\'").replace(/"/g,'&quot;') : '';
@@ -1495,6 +1505,7 @@ window.loadWhPlans = function() {
         weekDates.push(dStr);
         let isHoliday = isWhHoliday(d);
         let txtClass = isHoliday ? 'text-rose-400' : 'text-slate-200';
+        if (d.getDay() === 0) txtClass = 'text-rose-400'; 
         if (d.getDay() === 6) txtClass = 'text-blue-400';
         
         headerHtml += `<th class="p-2 min-w-[100px] text-center border-r border-slate-600 ${txtClass}"><div class="text-xs font-bold">${dayNames[i]}</div><div class="text-[9px] font-normal opacity-70">${dStr.substring(5).replace('-','/')}</div></th>`;
@@ -1668,6 +1679,7 @@ document.addEventListener('click', function(e) {
     }
 });
 
+// 💡 계획 저장 함수 (오직 주간 단위로만 저장)
 window.saveWhPlans = async function(targetStatus) {
     const currentPeriod = document.getElementById('wh-plan-week').value;
     const yearStr = currentPeriod.split('-')[0];
@@ -1714,6 +1726,7 @@ window.saveWhPlans = async function(targetStatus) {
     try {
         const batch = writeBatch(db);
         
+        // 해당 "주"의 기존 계획 삭제 후 덮어쓰기
         const q = query(collection(db, "work_plans"), where("period", "==", currentPeriod));
         const existingSnap = await getDocs(q);
         existingSnap.forEach(docSnap => batch.delete(docSnap.ref));
@@ -1728,6 +1741,7 @@ window.saveWhPlans = async function(targetStatus) {
         await batch.commit();
         window.showToast(targetStatus === 'confirmed' ? "계획이 확정되어 대시보드에 반영됩니다." : "임시 저장되었습니다.");
         
+        // 다시 로드하여 메인 대시보드 UI 갱신
         fetchWorkPlansForContext(); 
         window.closeWhPlanModal();
     } catch(e) {
