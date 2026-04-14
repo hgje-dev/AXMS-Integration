@@ -27,6 +27,7 @@ window.appRoutes = {
     'weekly-log': { url: './views/weekly.html', init: () => { document.getElementById('weekly-log-filter-week').value = window.getWeekString(new Date()); if(window.loadWeeklyLogsData) window.loadWeeklyLogsData(); } },
     
     'product-cost': { url: './views/product-cost.html', init: () => { if(window.initProductCost) window.initProductCost(); } },
+    'mfg-cost': { url: './views/제조 Cost.html', init: () => { if(window.initMfgCost) window.initMfgCost(); } },
     'ncr-dashboard': { url: './views/ncr-dashboard.html', init: () => { if(window.initNcrDashboard) window.initNcrDashboard(); } },
 
     'simulation': { url: './views/simulation.html', init: () => { if(window.handleTypeChange) window.handleTypeChange(); if(window.setupAutoSaveTriggers) window.setupAutoSaveTriggers(); } },
@@ -42,7 +43,7 @@ window.openApp = async function(viewId, title) {
     let permissionKey = routeKey;
     if (permissionKey.startsWith('project-status')) permissionKey = 'project-status'; 
     
-    const bypassPerms = ['dashboard-home', 'dashboard-proj', 'simulation', 'workhours', 'completion-report', 'product-cost', 'ncr-dashboard'];
+    const bypassPerms = ['dashboard-home', 'dashboard-proj', 'simulation', 'workhours', 'completion-report', 'product-cost', 'mfg-cost', 'ncr-dashboard'];
     if (!bypassPerms.includes(permissionKey) && window.userProfile && window.userProfile.permissions && !window.userProfile.permissions[permissionKey]) {
         if(window.showToast) window.showToast("접근 권한이 없습니다.", "error"); return;
     }
