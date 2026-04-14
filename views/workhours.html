@@ -1,5 +1,4 @@
 <div class="flex flex-col gap-6 h-full min-h-[80vh] relative pb-20">
-    <!-- 헤더 -->
     <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-5 flex flex-wrap gap-4 items-center justify-between z-20 sticky top-0">
         <div class="flex items-center gap-3">
             <h2 class="text-lg font-black text-slate-800 flex items-center gap-2">
@@ -58,7 +57,6 @@
         </div>
     </div>
 
-    <!-- 대시보드 및 통계 영역 -->
     <div class="bg-slate-50 rounded-3xl border border-slate-200 p-6 flex flex-col gap-6 transition-all duration-300">
         <div class="flex justify-between items-center flex-wrap gap-4">
             <div class="flex gap-2 bg-slate-200/50 p-1 rounded-full border border-slate-200">
@@ -72,7 +70,8 @@
             <div class="flex items-center gap-3 w-full md:w-auto flex-1 md:flex-none justify-end">
                 <div class="relative w-full md:w-72">
                     <i class="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                    <input type="text" id="wh-search-pjt" oninput="window.updateWhDashboard()" placeholder="PJT 코드/명칭 (초성) 검색..." class="w-full border border-slate-300 rounded-full pl-10 pr-4 py-2 text-xs font-bold text-indigo-700 outline-indigo-500 shadow-sm bg-white focus:ring-2 focus:ring-indigo-100 transition-all">
+                    <input type="text" id="wh-search-pjt" oninput="window.whShowDashPjtAuto(this); window.updateWhDashboard();" autocomplete="off" placeholder="PJT 코드/명칭 (초성) 검색..." class="w-full border border-slate-300 rounded-full pl-10 pr-4 py-2 text-xs font-bold text-indigo-700 outline-indigo-500 shadow-sm bg-white focus:ring-2 focus:ring-indigo-100 transition-all">
+                    <ul id="wh-dash-pjt-autocomplete" class="hidden absolute z-[50] bg-white border border-indigo-200 shadow-xl rounded-2xl max-h-60 overflow-y-auto text-sm w-full custom-scrollbar py-2 mt-2 top-full left-0"></ul>
                 </div>
                 <button onclick="window.toggleWhDashboard()" id="wh-dash-toggle-btn" class="bg-white border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-300 px-4 py-2 rounded-full text-[11px] font-bold shadow-sm transition-all whitespace-nowrap flex items-center gap-1.5">
                     대시보드 숨기기 <i class="fa-solid fa-chevron-up"></i>
@@ -124,7 +123,6 @@
         </div>
     </div>
 
-    <!-- 보기 필터 -->
     <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap gap-3 items-center">
         <span class="text-[11px] font-black text-slate-700 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
             <i class="fa-solid fa-filter text-slate-400 mr-1"></i> 
@@ -167,7 +165,6 @@
         </button>
     </div>
 
-    <!-- 뷰 영역: 현황판(Grid - 주간) -->
     <div id="wh-view-grid" class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex-1 flex flex-col relative select-none">
         <div class="px-4 py-2 bg-indigo-50/50 border-b border-indigo-100 flex justify-between items-center text-[10px] font-bold text-indigo-700">
             <span>
@@ -186,7 +183,6 @@
         </div>
     </div>
 
-    <!-- 뷰 영역: 달력(Calendar - 월간) -->
     <div id="wh-view-calendar" class="hidden bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex-1 flex flex-col">
         <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center z-10">
             <h3 class="text-sm font-black text-slate-700" id="wh-calendar-title"></h3>
@@ -204,7 +200,6 @@
         <div id="wh-calendar-grid" class="grid grid-cols-7 gap-px bg-slate-200 flex-1"></div>
     </div>
 
-    <!-- 하단 플로팅 일괄 승인 바 -->
     <div id="wh-floating-bar" class="hidden fixed bottom-8 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white px-6 py-3 rounded-full shadow-2xl z-50 flex items-center gap-4 border border-slate-700 animate-[bounce_1s_ease-in-out_infinite]">
         <span class="text-sm font-bold">
             <span id="wh-selected-count" class="text-indigo-400 font-black text-lg">0</span>개 항목 선택됨
@@ -216,10 +211,8 @@
     </div>
 </div>
 
-<!-- 글로벌 자동완성 드롭다운 -->
 <ul id="wh-pjt-autocomplete" class="hidden fixed z-[99999] bg-white/95 backdrop-blur-md border border-slate-200 shadow-2xl rounded-2xl max-h-56 overflow-y-auto text-sm custom-scrollbar py-2"></ul>
 
-<!-- 프리미엄 디자인 다중 데이터 입력 모달 -->
 <div id="wh-input-modal" class="fixed inset-0 z-[300] hidden items-center justify-center bg-slate-900/60 backdrop-blur-md py-10 transition-opacity">
     <div class="bg-slate-50 rounded-[2rem] shadow-2xl w-full max-w-6xl flex flex-col h-[750px] md:h-[85vh] overflow-hidden transform transition-all border border-white/20">
         
@@ -259,7 +252,7 @@
                     <thead class="bg-slate-50/80 border-b border-slate-200 text-slate-500 text-[11px] uppercase tracking-wider">
                         <tr>
                             <th class="p-4 text-center w-12 font-black rounded-tl-2xl">#</th>
-                            <th class="p-4 w-64 text-left font-black">PJT 코드 검색 (초성 전용)</th>
+                            <th class="p-4 w-64 text-left font-black">PJT 코드 검색 (초성/명칭 연동)</th>
                             <th class="p-4 w-32 text-left font-black">작업 구분</th>
                             <th class="p-4 w-28 text-left font-black">장소</th>
                             <th class="p-4 w-28 text-center font-black text-indigo-600">시간 (h)</th>
@@ -269,8 +262,7 @@
                         </tr>
                     </thead>
                     <tbody id="wh-input-tbody" class="divide-y divide-slate-100 bg-white">
-                        <!-- 동적 로우 추가 위치 -->
-                    </tbody>
+                        </tbody>
                 </table>
             </div>
             <p class="text-[11px] text-rose-400 font-bold text-right mt-2 mr-2">* 시간(h)이 비어있거나 코드가 없는 행은 저장 시 자동 무시(삭제)됩니다.</p>
