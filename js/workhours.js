@@ -5,11 +5,31 @@ let worklogsUnsubscribe = null;
 window.currentWorkLogs = [];
 window.whStatMode = 'week';
 window.whViewMode = 'grid';
+window.whMemberMode = 'all'; 
 window.whPjtSearch = '';
 window.whFilters = { text: '', loc: '', type: '', status: '' };
 window.whSelectedCells = new Set();
 window.isWhDragging = false;
 window.whCharts = {};
+window.whIsDirty = false; 
+window.todayBadgeInitialized = false;
+let myTodayLogUnsubscribe = null;
+
+window.whDragDist = 0;
+window.whDragStartX = 0;
+window.whDragStartY = 0;
+
+document.addEventListener('mousedown', e => {
+    window.whDragDist = 0;
+    window.whDragStartX = e.clientX;
+    window.whDragStartY = e.clientY;
+});
+
+document.addEventListener('mousemove', e => {
+    if (window.whDragStartX) {
+        window.whDragDist = Math.abs(e.clientX - window.whDragStartX) + Math.abs(e.clientY - window.whDragStartY);
+    }
+});
 
 const WH_TYPES = ['조립', '검수', '설치', 'Setup', '협업', '공통', '기타'];
 const WH_LOCS = ['사내', '국내', '해외'];
@@ -25,6 +45,69 @@ function isWhHoliday(d) {
     if (d.getDay() === 0 || d.getDay() === 6) return true;
     return KR_HOLIDAYS.has(window.getLocalDateStr(d));
 }
+
+window.initTodayBadge = function() {
+    if (!window.userProfile || !window.userProfile.name) return;
+    const todayStr = window.getLocalDateStr(new Date());
+    const q = query(collection(db, "work_logs"), where("date", "==", todayStr), where("authorName", "==", window.userProfile.name));
+    
+    if (myTodayLogUnsubscribe) myTodayLogUnsubscribe();
+    myTodayLogUnsubscribe = onSnapshot(q, (snapshot) => {
+        let totalHours = 0;
+        snapshot.forEach(doc => {
+            totalHours += parseFloat(doc.data().hours) || 0;
+        });
+        window.updateTodayBadgeUI(totalHours > 0);
+    });
+};
+
+window.updateTodayBadgeUI = function(isCompleted) {
+    const badge = document.getElementById('wh-today-badge');
+    if (!badge) return;
+    if (isCompleted) {
+        badge.innerHTML = `<i class="fa-solid fa-circle-check"></i> 오늘 작성완료`;
+        badge.className = "cursor-pointer ml-2 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-600 border border-emerald-200 shadow-sm hover:bg-emerald-200 transition-colors flex items-center gap-1 hidden sm:flex";
+        badge.classList.remove('animate-pulse');
+    } else {
+        badge.innerHTML = `<i class="fa-solid fa-pen"></i> 오늘 미작성`;
+        badge.className = "cursor-pointer ml-2 text-[11px] font-bold px-2.5 py-1 rounded-full bg-rose-50 text-rose-500 border border-rose-200 shadow-sm hover:bg-rose-100 transition-colors flex items-center gap-1 animate-pulse hidden sm:flex";
+    }
+};
+
+window.openTodayWhModal = function() {
+    const todayStr = window.getLocalDateStr(new Date());
+    const myName = window.userProfile ? window.userProfile.name : '';
+    const todayWeekStr = window.getWeekString(new Date());
+    const picker = document.getElementById('wh-week-picker');
+
+    if (picker && picker.value !== todayWeekStr) {
+        picker.value = todayWeekStr;
+        window.updateWhWeekDisplay(picker.value);
+        window.loadWorkhoursData();
+        setTimeout(() => {
+            window.openWhInputModal(todayStr, myName);
+        }, 300);
+    } else {
+        window.openWhInputModal(todayStr, myName);
+    }
+};
+
+window.setWhMemberMode = function(mode) {
+    window.whMemberMode = mode;
+    const btnAll = document.getElementById('wh-btn-member-all');
+    const btnMe = document.getElementById('wh-btn-member-me');
+    
+    if (mode === 'all') {
+        if (btnAll) btnAll.className = 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all whitespace-nowrap';
+        if (btnMe) btnMe.className = 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all bg-transparent whitespace-nowrap';
+    } else {
+        if (btnMe) btnMe.className = 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all whitespace-nowrap';
+        if (btnAll) btnAll.className = 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all bg-transparent whitespace-nowrap';
+    }
+    
+    window.updateWhDashboard();
+    window.renderWhView();
+};
 
 window.updateWhWeekDisplay = function(weekStr) {
     if(!weekStr) return;
@@ -68,6 +151,11 @@ window.loadWorkhoursData = function() {
     
     window.updateWhWeekDisplay(picker.value);
     fetchWorkLogsForContext();
+    
+    if (!window.todayBadgeInitialized && window.userProfile) {
+        window.initTodayBadge();
+        window.todayBadgeInitialized = true;
+    }
 };
 
 window.changeWhWeek = function(offset) {
@@ -78,7 +166,7 @@ window.changeWhWeek = function(offset) {
     if (parts.length === 2) {
         const year = parseInt(parts[0]);
         const week = parseInt(parts[1]);
-        const d = new Date(year, 0, (week + offset - 1) * 7 + 1);
+        const d = new Date(year, 0, (parseInt(week) + offset - 1) * 7 + 1);
         if (window.getWeekString) {
             picker.value = window.getWeekString(d);
             window.updateWhWeekDisplay(picker.value);
@@ -91,7 +179,7 @@ function fetchWorkLogsForContext() {
     if (worklogsUnsubscribe) worklogsUnsubscribe();
 
     const picker = document.getElementById('wh-week-picker');
-    const { start } = window.getDatesFromWeek(picker.value);
+    const { start, end } = window.getDatesFromWeek(picker.value);
     
     const y = start.getFullYear();
     const m = start.getMonth();
@@ -121,12 +209,12 @@ window.setWhStatMode = function(mode) {
         if(btnW) btnW.className = 'px-4 py-1.5 text-xs font-bold bg-indigo-600 text-white shadow-sm rounded-full transition-all';
         if(btnM) btnM.className = 'px-4 py-1.5 text-xs font-bold text-slate-600 bg-transparent transition-all hover:bg-slate-100 rounded-full';
         document.getElementById('wh-dash-period-label').innerHTML = '주간 총 투입 <span class="text-[9px] font-normal">(승인완료)</span>';
-        document.getElementById('wh-chart-trend-title').innerText = '일자별 투입 추이 (MD)';
+        document.getElementById('wh-chart-trend-title').innerText = '일자별 투입 추이';
     } else {
         if(btnM) btnM.className = 'px-4 py-1.5 text-xs font-bold bg-indigo-600 text-white shadow-sm rounded-full transition-all';
         if(btnW) btnW.className = 'px-4 py-1.5 text-xs font-bold text-slate-600 bg-transparent transition-all hover:bg-slate-100 rounded-full';
         document.getElementById('wh-dash-period-label').innerHTML = '월간 총 투입 <span class="text-[9px] font-normal">(승인완료)</span>';
-        document.getElementById('wh-chart-trend-title').innerText = '주차별 투입 추이 (MD)';
+        document.getElementById('wh-chart-trend-title').innerText = '주차별 투입 추이';
     }
     window.updateWhDashboard();
 };
@@ -169,6 +257,92 @@ window.resetWhFilters = function() {
     window.applyWhFilters();
 };
 
+// 💡 스크롤 리스트 UI 렌더링 함수 추가
+function renderCustomPersonUI(personMap) {
+    const container = document.getElementById('wh-ui-person');
+    const titleEl = document.getElementById('wh-ui-person-title');
+    if (!container) return;
+
+    let sortedData = Object.entries(personMap).map(([name, hours]) => ({ name, md: hours / 8 })).sort((a, b) => b.md - a.md);
+    if (titleEl) titleEl.innerText = `인원별 누적 투입 (전체 ${sortedData.length}명)`;
+
+    if (sortedData.length === 0) {
+        container.innerHTML = '<div class="text-[10px] text-slate-400 text-center py-4 font-bold">데이터 없음</div>';
+        return;
+    }
+
+    const maxMd = Math.max(...sortedData.map(d => d.md), 0.1); 
+    let html = '<div class="flex flex-col gap-3">';
+    sortedData.forEach(d => {
+        const pct = (d.md / maxMd) * 100;
+        // background-image로 점선(분절형) 느낌 구현
+        html += `
+        <div class="flex flex-col gap-1">
+            <div class="flex justify-between items-end text-[11px] font-bold text-slate-700">
+                <span>${d.name}</span>
+                <span class="text-indigo-600">${d.md.toFixed(1)} MD</span>
+            </div>
+            <div class="w-full h-2.5 bg-slate-100 rounded-sm overflow-hidden flex">
+                <div class="h-full bg-indigo-400 rounded-sm transition-all duration-500" style="width: ${pct}%; background-image: repeating-linear-gradient(to right, transparent, transparent 4px, rgba(255,255,255,0.7) 4px, rgba(255,255,255,0.7) 6px);"></div>
+            </div>
+        </div>`;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+// 💡 비율/스택 바 UI 렌더링 함수 추가
+function renderCustomTypeUI(typeMap, totalMDStr) {
+    const container = document.getElementById('wh-ui-type');
+    const titleEl = document.getElementById('wh-ui-type-title');
+    if (!container) return;
+
+    let sortedData = Object.entries(typeMap).map(([type, hours]) => ({ type, md: hours / 8 })).sort((a, b) => b.md - a.md);
+    let totalMD = parseFloat(totalMDStr) || 1;
+
+    if (titleEl) titleEl.innerText = `작업 구분별 비율 (${sortedData.length}개 항목)`;
+
+    if (sortedData.length === 0) {
+        container.innerHTML = '<div class="text-[10px] text-slate-400 text-center py-4 font-bold">데이터 없음</div>';
+        return;
+    }
+
+    const colors = ['bg-indigo-500', 'bg-purple-500', 'bg-sky-500', 'bg-teal-500', 'bg-blue-500', 'bg-rose-500', 'bg-amber-500', 'bg-slate-500'];
+    const textColors = ['text-indigo-600', 'text-purple-600', 'text-sky-600', 'text-teal-600', 'text-blue-600', 'text-rose-600', 'text-amber-600', 'text-slate-600'];
+
+    // 1. Stacked Bar
+    let stackedBarHtml = '<div class="w-full h-3 rounded-full flex overflow-hidden mb-5 shadow-sm mt-2">';
+    sortedData.forEach((d, i) => {
+        const pct = (d.md / totalMD) * 100;
+        const color = colors[i % colors.length];
+        stackedBarHtml += `<div class="h-full ${color} transition-all duration-500" style="width: ${pct}%; border-right: 1px solid white;"></div>`;
+    });
+    stackedBarHtml += '</div>';
+
+    // 2. Grid Legend
+    let gridHtml = '<div class="grid grid-cols-2 gap-y-3 gap-x-2">';
+    sortedData.forEach((d, i) => {
+        const pct = ((d.md / totalMD) * 100).toFixed(0);
+        const bgColor = colors[i % colors.length];
+        const textColor = textColors[i % textColors.length];
+        
+        gridHtml += `
+        <div class="flex items-start gap-1.5">
+            <div class="w-2 h-2 rounded-full ${bgColor} mt-[3px] shrink-0"></div>
+            <div class="flex flex-col">
+                <span class="text-[10px] font-bold text-slate-600 leading-tight">${d.type}</span>
+                <div class="flex items-baseline gap-1 mt-0.5">
+                    <span class="text-xs font-black ${textColor}">${pct}%</span>
+                    <span class="text-[9px] font-medium text-slate-400">(${d.md.toFixed(1)})</span>
+                </div>
+            </div>
+        </div>`;
+    });
+    gridHtml += '</div>';
+
+    container.innerHTML = stackedBarHtml + gridHtml;
+}
+
 window.updateWhDashboard = function() {
     window.whPjtSearch = document.getElementById('wh-search-pjt')?.value.toLowerCase() || '';
     
@@ -190,12 +364,19 @@ window.updateWhDashboard = function() {
 
     let baseData = window.currentWorkLogs.filter(l => l.isConfirmed && l.date >= tStartStr && l.date <= tEndStr);
     
+    if (window.whMemberMode === 'me' && window.userProfile) {
+        baseData = baseData.filter(l => l.authorName === window.userProfile.name);
+    }
+    
     if (window.whPjtSearch) {
         baseData = baseData.filter(l => {
-            const pName = (l.projectName || '').toLowerCase();
             const pCode = (l.projectCode || '').toLowerCase();
-            const search = window.whPjtSearch;
-            return pName.includes(search) || pCode.includes(search) || (window.matchString && window.matchString(search, pName)) || (window.matchString && window.matchString(search, pCode));
+            const pName = (l.projectName || '').toLowerCase();
+            const search = window.whPjtSearch.trim();
+            
+            return pCode.includes(search) || pName.includes(search) || 
+                   (window.matchString && window.matchString(search, pCode)) || 
+                   (window.matchString && window.matchString(search, pName));
         });
     }
 
@@ -217,7 +398,6 @@ window.updateWhDashboard = function() {
             trendKey = `${d.getDate()}일(${days[d.getDay()]})`;
         } else {
             const d = new Date(log.date);
-            // 💡 1. "W15주차" -> "15주차" 로 W 제거 로직 추가
             let wStr = window.getWeekString ? window.getWeekString(d).split('-')[1] : '';
             if (wStr) {
                 trendKey = wStr.replace('W', '') + '주차';
@@ -231,32 +411,42 @@ window.updateWhDashboard = function() {
         if (!locMap[loc]) locMap[loc] = new Set();
         locMap[loc].add(log.authorName);
 
-        let pName = log.projectName || log.projectCode || '분류 안됨';
-        pjtMap[pName] = (pjtMap[pName] || 0) + h;
+        let pNameKey = log.projectCode ? `[${log.projectCode}] ${log.projectName||''}` : (log.projectName || '미분류');
+        pjtMap[pNameKey] = (pjtMap[pNameKey] || 0) + h;
         datesSet.add(log.date);
     });
 
     const totalMD = (totalHours / 8).toFixed(1);
     document.getElementById('wh-dash-total-md').innerText = totalMD;
 
-    const pjtInfoContainer = document.getElementById('wh-dash-pjt-info');
-    const pjtDateEl = document.getElementById('wh-dash-pjt-date');
-    const pjtDaysEl = document.getElementById('wh-dash-pjt-days');
-
-    if (window.whPjtSearch && datesSet.size > 0) {
-        let sortedDates = Array.from(datesSet).sort();
-        let sD = sortedDates[0], eD = sortedDates[sortedDates.length-1];
-        let diffDays = Math.ceil((new Date(eD) - new Date(sD)) / (1000 * 60 * 60 * 24)) + 1;
+    // 💡 3. 대시보드 내 PJT별 MD 리스트 렌더링
+    const breakdownEl = document.getElementById('wh-dash-pjt-breakdown');
+    if (breakdownEl) {
+        let breakdownHtml = '';
+        let sortedPjts = Object.entries(pjtMap).sort((a,b)=>b[1]-a[1]);
         
-        pjtDateEl.innerText = `${sD} ~ ${eD}`;
-        pjtDaysEl.innerText = `총 작업일수: ${datesSet.size}일 (기간: ${diffDays}일)`;
-        pjtInfoContainer.classList.remove('hidden');
-    } else {
-        pjtInfoContainer.classList.add('hidden');
+        sortedPjts.forEach(p => {
+            breakdownHtml += `
+                <div class="flex justify-between items-center text-[11px] mb-1 group">
+                    <span class="text-slate-500 font-bold truncate pr-2 group-hover:text-indigo-600 transition-colors" title="${p[0]}"><i class="fa-solid fa-folder-open text-indigo-300 mr-1 group-hover:text-indigo-500"></i>${p[0]}</span>
+                    <span class="text-indigo-600 font-black shrink-0 bg-indigo-50 px-1.5 py-0.5 rounded shadow-sm">${(p[1]/8).toFixed(1)}</span>
+                </div>
+            `;
+        });
+        if(sortedPjts.length === 0) {
+            breakdownHtml = '<div class="text-[10px] text-slate-400 text-center py-2 font-bold">집계된 데이터 없음</div>';
+        }
+        breakdownEl.innerHTML = breakdownHtml;
     }
 
-    renderWhChart('wh-chart-person', 'bar', personMap, 'MD', true);
-    renderWhChart('wh-chart-type', 'bar', typeMap, 'MD', true);
+    const pjtInfoContainer = document.getElementById('wh-dash-pjt-info');
+    if (pjtInfoContainer) pjtInfoContainer.classList.add('hidden');
+
+    // 💡 Chart.js 대신 커스텀 UI 렌더링 함수 호출!
+    renderCustomPersonUI(personMap);
+    renderCustomTypeUI(typeMap, totalMD);
+
+    // 추이는 Chart.js 유지
     renderWhChart('wh-chart-trend', window.whStatMode === 'week' ? 'bar' : 'line', trendMap, 'MD', false);
 
     let extraHtml = '';
@@ -319,9 +509,7 @@ function renderWhChart(canvasId, type, dataMap, unit, isHorizontal) {
             indexAxis: isHorizontal ? 'y' : 'x',
             responsive: true,
             maintainAspectRatio: false,
-            layout: {
-                padding: { bottom: 10 } 
-            },
+            layout: { padding: { bottom: 10 } },
             plugins: { 
                 legend: { display: false },
                 tooltip: { callbacks: { label: (ctx) => `${ctx.raw} ${unit}` } }
@@ -341,15 +529,19 @@ window.renderWhView = function() {
 
 function getFilteredLogs() {
     return window.currentWorkLogs.filter(log => {
+        if (window.whMemberMode === 'me' && log.authorName !== window.userProfile?.name) {
+            return false;
+        }
         if (window.whFilters.status) {
             const isConf = String(!!log.isConfirmed) === window.whFilters.status;
             if (!isConf) return false;
         }
         if (window.whFilters.loc && log.location !== window.whFilters.loc) return false;
         if (window.whFilters.type && log.workType !== window.whFilters.type) return false;
+        
         if (window.whFilters.text) {
-            const s = window.whFilters.text;
-            const fullStr = `${log.authorName} ${log.projectName} ${log.projectCode} ${log.content}`.toLowerCase();
+            const s = window.whFilters.text.trim();
+            const fullStr = `${log.authorName} ${log.projectCode} ${log.projectName} ${log.content}`.toLowerCase();
             if (!fullStr.includes(s) && !window.matchString(s, fullStr)) return false;
         }
         return true;
@@ -390,7 +582,16 @@ function renderWhGrid() {
     const filteredLogs = getFilteredLogs();
     
     let bodyHtml = '';
-    (window.teamMembers || []).forEach(member => {
+    
+    let targetMembers = window.teamMembers || [];
+    if (window.whMemberMode === 'me') {
+        targetMembers = targetMembers.filter(m => m.name === window.userProfile?.name);
+        if (targetMembers.length === 0 && window.userProfile) {
+            targetMembers = [{ name: window.userProfile.name }];
+        }
+    }
+
+    targetMembers.forEach(member => {
         bodyHtml += `<tr class="hover:bg-slate-50/50 transition-colors group">`;
         bodyHtml += `<td class="p-3 text-center font-bold text-slate-700 border-r border-slate-200 sticky left-0 bg-white group-hover:bg-slate-50 z-10 shadow-[2px_0_4px_rgba(0,0,0,0.05)]">${member.name}</td>`;
         
@@ -410,23 +611,22 @@ function renderWhGrid() {
                 let confClass = log.isConfirmed ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-white border-slate-200 text-slate-700 hover:border-indigo-300';
                 let selClass = window.whSelectedCells.has(log.id) ? 'ring-2 ring-indigo-500 shadow-md transform scale-[1.02]' : '';
                 
-                bodyHtml += `<div class="p-1.5 rounded-lg border ${confClass} ${opacityClass} ${selClass} text-[10px] mb-1.5 cursor-pointer transition-all duration-200" data-logid="${log.id}" onclick="window.openWhInputModal('${dateStr}', '${member.name}'); event.stopPropagation();">
-                    <div class="font-bold truncate text-[11px]" title="${log.projectName||''}"><span class="text-slate-400 font-medium mr-0.5">[${log.location||'사내'}]</span>${log.projectName||'PJT미지정'}</div>
+                bodyHtml += `<div class="p-1.5 rounded-lg border ${confClass} ${opacityClass} ${selClass} text-[10px] mb-1.5 cursor-pointer transition-all duration-200" data-logid="${log.id}" onclick="if(window.whDragDist < 5) window.openWhInputModal('${dateStr}', '${member.name}'); event.stopPropagation();">
+                    <div class="font-bold truncate text-[11px]" title="${log.projectName||''}"><span class="text-slate-400 font-medium mr-0.5">[${log.location||'사내'}]</span>${log.projectCode||'PJT미지정'}</div>
                     <div class="flex justify-between items-center mt-1 pt-1 border-t border-slate-100/50"><span class="font-medium text-slate-500">${log.workType}</span><span class="font-black text-indigo-600 bg-white/50 px-1.5 py-0.5 rounded shadow-sm">${log.hours}h</span></div>
                 </div>`;
             });
-            bodyHtml += `<div class="absolute inset-0 z-0 h-full w-full opacity-0 hover:opacity-100 cursor-pointer bg-indigo-50/50 flex items-center justify-center text-indigo-400 text-xl transition-opacity" onclick="window.openWhInputModal('${dateStr}', '${member.name}')" style="${rawLogs.length > 0 ? 'display:none;' : ''}"><i class="fa-solid fa-plus"></i></div></td>`;
+            bodyHtml += `<div class="absolute inset-0 z-0 h-full w-full opacity-0 hover:opacity-100 cursor-pointer bg-indigo-50/50 flex items-center justify-center text-indigo-400 text-xl transition-opacity" onclick="if(window.whDragDist < 5) window.openWhInputModal('${dateStr}', '${member.name}')" style="${rawLogs.length > 0 ? 'display:none;' : ''}"><i class="fa-solid fa-plus"></i></div></td>`;
         }
         bodyHtml += `</tr>`;
     });
     
-    if(!window.teamMembers || window.teamMembers.length === 0) {
-        bodyHtml = `<tr><td colspan="8" class="p-10 text-center text-slate-400 font-bold">등록된 팀원이 없습니다. 팀원 관리에서 추가해주세요.</td></tr>`;
+    if(targetMembers.length === 0) {
+        bodyHtml = `<tr><td colspan="8" class="p-10 text-center text-slate-400 font-bold">등록된 팀원 또는 현황이 없습니다.</td></tr>`;
     }
     tbody.innerHTML = bodyHtml;
 }
 
-// 💡 2. 달력 뷰(Calendar) 개편: 3개 이상이면 +N개 버튼 제공, 높이 제한 적용
 function renderWhCalendar() {
     const grid = document.getElementById('wh-calendar-grid');
     const titleEl = document.getElementById('wh-calendar-title');
@@ -465,11 +665,10 @@ function renderWhCalendar() {
         displayLogs.forEach(log => {
             let confClass = log.isConfirmed ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-white text-slate-700 border-slate-200';
             logsHtml += `<div class="text-[10px] ${confClass} border px-1.5 py-1 rounded mb-1 truncate cursor-pointer hover:shadow-md transition-shadow shadow-sm" onclick="window.openWhInputModal('${dateStr}', '${log.authorName}')">
-                <span class="font-black text-indigo-700 bg-indigo-50 px-1 rounded mr-1">${log.authorName}</span>${log.projectName||'미지정'} <span class="font-bold text-slate-500">(${log.hours}h)</span>
+                <span class="font-black text-indigo-700 bg-indigo-50 px-1 rounded mr-1">${log.authorName}</span>${log.projectCode||'미지정'} <span class="font-bold text-slate-500">(${log.hours}h)</span>
             </div>`;
         });
 
-        // 💡 3개 초과일 경우 "+N개 더보기" 텍스트 렌더링
         if (logs.length > MAX_DISPLAY) {
             logsHtml += `<div class="text-[10px] font-bold text-slate-400 text-center hover:text-indigo-500 cursor-pointer mt-1 bg-slate-50 py-1 rounded" onclick="window.openWhInputModal('${dateStr}', '')">+${logs.length - MAX_DISPLAY}개 더보기</div>`;
         }
@@ -487,39 +686,39 @@ function renderWhCalendar() {
 
 window.whCellMouseDown = function(e, cell) {
     if(e.button !== 0) return; 
-    if(e.target.tagName === 'I' || e.target.tagName === 'BUTTON' || e.target.closest('div[data-logid]')) return;
-
-    window.isWhDragging = true;
-    window.whClearSelection();
-    toggleCellSelection(cell);
     
+    window.isWhDragging = true;
+    if (!e.shiftKey && !e.ctrlKey) {
+        window.whClearSelection();
+    }
+    
+    const logs = cell.querySelectorAll('div[data-logid]');
+    logs.forEach(logDiv => {
+        const id = logDiv.dataset.logid;
+        window.whSelectedCells.add(id);
+        logDiv.classList.add('ring-2', 'ring-indigo-500', 'shadow-md', 'transform', 'scale-[1.02]');
+    });
+    
+    updateWhFloatingBar();
     document.addEventListener('mouseup', window.whCellMouseUp);
 };
 
 window.whCellMouseEnter = function(e, cell) {
-    if(window.isWhDragging) toggleCellSelection(cell);
+    if(window.isWhDragging) {
+        const logs = cell.querySelectorAll('div[data-logid]');
+        logs.forEach(logDiv => {
+            const id = logDiv.dataset.logid;
+            window.whSelectedCells.add(id);
+            logDiv.classList.add('ring-2', 'ring-indigo-500', 'shadow-md', 'transform', 'scale-[1.02]');
+        });
+        updateWhFloatingBar();
+    }
 };
 
 window.whCellMouseUp = function() {
     window.isWhDragging = false;
     document.removeEventListener('mouseup', window.whCellMouseUp);
-    updateWhFloatingBar();
 };
-
-function toggleCellSelection(cell) {
-    const logs = cell.querySelectorAll('div[data-logid]');
-    logs.forEach(logDiv => {
-        const id = logDiv.dataset.logid;
-        if(window.whSelectedCells.has(id)) {
-            window.whSelectedCells.delete(id);
-            logDiv.classList.remove('ring-2', 'ring-indigo-500', 'shadow-md', 'transform', 'scale-[1.02]');
-        } else {
-            window.whSelectedCells.add(id);
-            logDiv.classList.add('ring-2', 'ring-indigo-500', 'shadow-md', 'transform', 'scale-[1.02]');
-        }
-    });
-    updateWhFloatingBar();
-}
 
 window.whClearSelection = function() {
     window.whSelectedCells.clear();
@@ -568,6 +767,7 @@ window.openWhInputModal = function(dateStr, authorName) {
 
     const tbody = document.getElementById('wh-input-tbody');
     tbody.innerHTML = '';
+    window.whIsDirty = false;
 
     const logs = window.currentWorkLogs.filter(l => l.date === dateStr && l.authorName === authorName);
     
@@ -582,16 +782,29 @@ window.openWhInputModal = function(dateStr, authorName) {
     document.addEventListener('keydown', handleWhModalKeydown);
 };
 
+window.attemptCloseWhModal = function() {
+    if (window.whIsDirty) {
+        if (!confirm("작성/수정 중인 내용이 있습니다. 저장하지 않고 창을 닫으시겠습니까?")) {
+            return;
+        }
+    }
+    window.closeWhInputModal();
+};
+
 window.closeWhInputModal = function() {
     document.getElementById('wh-input-modal').classList.add('hidden');
     document.getElementById('wh-input-modal').classList.remove('flex');
     document.removeEventListener('keydown', handleWhModalKeydown);
-    const drop = document.getElementById('wh-pjt-autocomplete');
-    if(drop) drop.classList.add('hidden');
+    
+    document.querySelectorAll('.pjt-auto-drop').forEach(el => el.remove());
+    window.whIsDirty = false;
 };
 
 function handleWhModalKeydown(e) {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        window.attemptCloseWhModal();
+    } else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
         window.saveWhInputData();
     }
@@ -601,6 +814,7 @@ window.whAddInputRow = function() {
     const tbody = document.getElementById('wh-input-tbody');
     const rowCount = tbody.querySelectorAll('tr').length + 1;
     appendWhInputRow(null, rowCount);
+    window.whIsDirty = true;
 };
 
 function appendWhInputRow(logData = null, index = 1) {
@@ -610,7 +824,7 @@ function appendWhInputRow(logData = null, index = 1) {
     
     const uniqueId = 'wh-pjt-input-' + Date.now() + '-' + index;
     const pName = logData ? (logData.projectName || '') : '';
-    const pCode = logData ? (logData.projectCode || '') : '';
+    const pCode = logData ? (logData.projectCode || pName || '') : ''; 
     const pId = logData ? (logData.projectId || '') : '';
 
     let typeOptions = WH_TYPES.map(t => `<option value="${t}" ${logData && logData.workType === t ? 'selected' : ''}>${t}</option>`).join('');
@@ -621,27 +835,31 @@ function appendWhInputRow(logData = null, index = 1) {
     let confDisabled = isAdmin ? '' : 'disabled';
     
     let idInput = logData ? `<input type="hidden" class="row-id" value="${logData.id}">` : `<input type="hidden" class="row-id" value="">`;
+    let pNameHidden = `<input type="hidden" class="row-pjt-name-hidden" value="${pName}">`;
 
     tr.innerHTML = `
         <td class="p-3 text-center text-slate-400 font-bold text-xs bg-slate-50">${index}${idInput}</td>
         <td class="p-2 relative">
-            <input type="text" id="${uniqueId}" class="row-pjt-name w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-indigo-700 placeholder-slate-400" value="${pName}" placeholder="PJT 코드 검색 또는 직접 입력" oninput="window.whShowPjtAuto(this)">
+            <input type="text" id="${uniqueId}" class="row-pjt-name w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-indigo-700 placeholder-slate-400" value="${pCode}" placeholder="PJT 코드 검색 (초성 전용)" oninput="window.whIsDirty=true; window.whShowPjtAuto(this)" autocomplete="off">
             <input type="hidden" class="row-pjt-id" value="${pId}">
             <input type="hidden" class="row-pjt-code" value="${pCode}">
+            ${pNameHidden}
         </td>
-        <td class="p-2"><select class="row-type w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-slate-700 cursor-pointer">${typeOptions}</select></td>
-        <td class="p-2"><select class="row-loc w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-slate-700 cursor-pointer">${locOptions}</select></td>
-        <td class="p-2"><input type="number" step="0.5" min="0" class="row-hours w-full border border-indigo-200 bg-indigo-50 rounded-lg px-3 py-2 text-sm font-black text-center outline-indigo-500 text-indigo-700 shadow-inner" value="${logData ? logData.hours : ''}" placeholder="0.0"></td>
-        <td class="p-2"><input type="text" class="row-content w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-medium" value="${logData ? logData.content || '' : ''}" placeholder="작업 상세 내용 (선택)"></td>
-        <td class="p-2 text-center"><input type="checkbox" class="row-conf accent-emerald-500 w-5 h-5 rounded cursor-pointer shadow-sm" ${isConf} ${confDisabled}></td>
-        <td class="p-2 text-center"><button onclick="this.closest('tr').remove()" class="text-slate-300 hover:bg-rose-50 hover:text-rose-500 w-8 h-8 rounded-lg flex items-center justify-center mx-auto transition-colors"><i class="fa-solid fa-trash-can"></i></button></td>
+        <td class="p-2"><select class="row-type w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-slate-700 cursor-pointer" onchange="window.whIsDirty=true;">${typeOptions}</select></td>
+        <td class="p-2"><select class="row-loc w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-bold text-slate-700 cursor-pointer" onchange="window.whIsDirty=true;">${locOptions}</select></td>
+        <td class="p-2"><input type="number" step="0.5" min="0" class="row-hours w-full border border-indigo-200 bg-indigo-50 rounded-lg px-3 py-2 text-sm font-black text-center outline-indigo-500 text-indigo-700 shadow-inner" value="${logData ? logData.hours : ''}" placeholder="0.0" oninput="window.whIsDirty=true;"></td>
+        <td class="p-2"><input type="text" class="row-content w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-indigo-500 bg-white shadow-sm font-medium" value="${logData ? logData.content || '' : ''}" placeholder="작업 상세 내용 (선택)" oninput="window.whIsDirty=true;"></td>
+        <td class="p-2 text-center"><input type="checkbox" class="row-conf accent-emerald-500 w-5 h-5 rounded cursor-pointer shadow-sm" ${isConf} ${confDisabled} onchange="window.whIsDirty=true;"></td>
+        <td class="p-2 text-center"><button onclick="window.whIsDirty=true; this.closest('tr').remove()" class="text-slate-300 hover:bg-rose-50 hover:text-rose-500 w-8 h-8 rounded-lg flex items-center justify-center mx-auto transition-colors"><i class="fa-solid fa-trash-can"></i></button></td>
     `;
     tbody.appendChild(tr);
 }
 
 window.whShowPjtAuto = function(input) {
     const val = input.value.trim().toLowerCase();
-    const drop = document.getElementById('wh-pjt-autocomplete');
+    
+    let drop = document.getElementById('wh-pjt-autocomplete');
+    if (!drop) return;
     
     const tr = input.closest('tr');
     tr.querySelector('.row-pjt-id').value = '';
@@ -649,20 +867,21 @@ window.whShowPjtAuto = function(input) {
 
     if(!val) { drop.classList.add('hidden'); return; }
 
-    let matches = (window.currentProjectStatusList || []).filter(p => {
-        if(p.status === 'completed' || p.status === 'rejected') return false;
+    let matches = (window.pjtCodeMasterList || []).filter(p => {
         let code = (p.code || '').toLowerCase();
         return code.includes(val) || (window.matchString && window.matchString(val, p.code));
     });
 
     if(matches.length > 0) {
         const rect = input.getBoundingClientRect();
-        drop.style.left = `${rect.left + window.scrollX}px`;
-        drop.style.top = `${rect.bottom + window.scrollY + 2}px`;
-        drop.style.width = `${rect.width}px`;
+        drop.style.position = 'fixed';
+        drop.style.left = `${rect.left}px`;
+        drop.style.top = `${rect.bottom + 2}px`;
+        drop.style.width = `${rect.width + 50}px`; 
+
         drop.innerHTML = matches.map(m => {
             let sName = m.name.replace(/'/g,"\\'").replace(/"/g,'&quot;');
-            return `<li class="px-3 py-2 hover:bg-indigo-50 cursor-pointer text-xs font-bold text-slate-700 border-b border-slate-50 truncate transition-colors" onmousedown="window.whSelectPjt('${input.id}', '${m.id}', '${m.code||''}', '${sName}')"><span class="text-indigo-600">[${m.code||'-'}]</span> ${m.name}</li>`;
+            return `<li class="px-3 py-2 hover:bg-indigo-50 cursor-pointer text-xs font-black text-slate-700 border-b border-slate-50 truncate transition-colors flex items-center gap-1.5" onmousedown="window.whSelectPjt('${input.id}', '${m.id}', '${m.code||''}', '${sName}')"><span class="text-indigo-600">[${m.code||'-'}]</span></li>`;
         }).join('');
         drop.classList.remove('hidden');
     } else {
@@ -673,17 +892,21 @@ window.whShowPjtAuto = function(input) {
 window.whSelectPjt = function(inputId, pId, pCode, pName) {
     const input = document.getElementById(inputId);
     if(input) {
-        input.value = pName;
+        input.value = pCode; 
         const tr = input.closest('tr');
         tr.querySelector('.row-pjt-id').value = pId;
         tr.querySelector('.row-pjt-code').value = pCode;
+        tr.querySelector('.row-pjt-name-hidden').value = pName; 
     }
-    document.getElementById('wh-pjt-autocomplete').classList.add('hidden');
+    
+    window.whIsDirty = true;
+    const drop = document.getElementById('wh-pjt-autocomplete');
+    if (drop) drop.classList.add('hidden');
 };
 
 document.addEventListener('click', function(e) {
     const d = document.getElementById('wh-pjt-autocomplete');
-    if (d && !d.classList.contains('hidden') && !e.target.closest('#wh-pjt-autocomplete') && !e.target.classList.contains('row-pjt-name')) {
+    if (d && !d.classList.contains('hidden') && !e.target.closest('#wh-pjt-autocomplete') && !e.target.closest('.row-pjt-name')) {
         d.classList.add('hidden');
     }
 });
@@ -697,9 +920,10 @@ window.saveWhInputData = async function() {
 
     rows.forEach(tr => {
         const id = tr.querySelector('.row-id').value;
-        const projectName = tr.querySelector('.row-pjt-name').value.trim();
+        const projectCodeInput = tr.querySelector('.row-pjt-name').value.trim(); 
         const projectId = tr.querySelector('.row-pjt-id').value;
-        const projectCode = tr.querySelector('.row-pjt-code').value;
+        const projectCode = tr.querySelector('.row-pjt-code').value || projectCodeInput; 
+        const projectName = tr.querySelector('.row-pjt-name-hidden').value || '';
         
         const workType = tr.querySelector('.row-type').value;
         const location = tr.querySelector('.row-loc').value;
@@ -707,7 +931,7 @@ window.saveWhInputData = async function() {
         const content = tr.querySelector('.row-content').value.trim();
         const isConfirmed = tr.querySelector('.row-conf').checked;
 
-        if (hours > 0 && (projectName || content)) {
+        if (hours > 0 && (projectCodeInput || content)) {
             toSave.push({ 
                 id, 
                 date: dateStr, 
@@ -740,6 +964,7 @@ window.saveWhInputData = async function() {
         });
 
         await batch.commit();
+        window.whIsDirty = false; 
         window.showToast("투입공수가 저장되었습니다.");
         window.closeWhInputModal();
     } catch(e) {
@@ -772,13 +997,18 @@ window.exportWorkhoursExcel = async function(isDriveUpload = false, driveFolderI
         ws1.getCell('B4').font = { size: 10, color: { argb: 'FF64748B' } };
 
         let monthlyLogs = window.currentWorkLogs.filter(l => l.date.startsWith(`${yStr}-${mStr}`) && l.isConfirmed);
+        
+        if (window.whMemberMode === 'me' && window.userProfile) {
+            monthlyLogs = monthlyLogs.filter(l => l.authorName === window.userProfile.name);
+        }
+
         let tMd = 0; let pMap = {}; let pjtMap = {};
         
         monthlyLogs.forEach(l => {
             let md = l.hours / 8;
             tMd += md;
             pMap[l.authorName] = (pMap[l.authorName] || 0) + md;
-            let pName = l.projectName || l.projectCode || '미분류';
+            let pName = l.projectCode || l.projectName || '미분류';
             pjtMap[pName] = (pjtMap[pName] || 0) + md;
         });
 
@@ -827,12 +1057,15 @@ window.exportWorkhoursExcel = async function(isDriveUpload = false, driveFolderI
         hr.alignment = { vertical: 'middle', horizontal: 'center' };
 
         let sortedLogs = window.currentWorkLogs.slice().sort((a,b) => a.date.localeCompare(b.date) || a.authorName.localeCompare(b.authorName));
+        if (window.whMemberMode === 'me' && window.userProfile) {
+            sortedLogs = sortedLogs.filter(l => l.authorName === window.userProfile.name);
+        }
         
         sortedLogs.forEach(l => {
             let row = ws2.addRow({
                 date: l.date,
                 name: l.authorName,
-                pjt: l.projectCode ? `[${l.projectCode}] ${l.projectName}` : (l.projectName || '프로젝트 미지정'),
+                pjt: l.projectCode ? `[${l.projectCode}] ${l.projectName||''}` : (l.projectName || '프로젝트 미지정'),
                 type: l.workType,
                 loc: l.location || '사내',
                 hrs: l.hours,
@@ -853,7 +1086,8 @@ window.exportWorkhoursExcel = async function(isDriveUpload = false, driveFolderI
         });
 
         const buffer = await wb.xlsx.writeBuffer();
-        const fileName = `AXBIS_투입공수보고서_${yStr}년${mStr}월.xlsx`;
+        const modeStr = window.whMemberMode === 'me' ? '_개인' : '';
+        const fileName = `AXBIS_투입공수보고서_${yStr}년${mStr}월${modeStr}.xlsx`;
 
         if (isDriveUpload && driveFolderId) {
             return { buffer: buffer, name: fileName }; 
@@ -918,3 +1152,9 @@ window.saveWorkhoursToDrive = async function() {
         window.showToast("드라이브 저장에 실패했습니다. (콘솔 확인)", "error");
     }
 };
+
+}
+
+{
+type: uploaded file
+fileName: image_d86dd3.png
