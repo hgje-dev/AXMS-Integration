@@ -115,7 +115,7 @@ window.showToast = function(msg, type) {
     const c = document.getElementById('toast-container'); 
     if(!c) return; 
     const t = document.createElement('div'); 
-    let bgClass = type === "success" ? "bg-emerald-600" : "bg-rose-600";
+    let bgClass = type === "success" ? "bg-emerald-600" : (type === "warning" ? "bg-amber-500" : "bg-rose-600");
     t.className = "toast text-white px-6 py-3 rounded-xl shadow-lg text-sm font-bold z-[9999] flex items-center gap-2 " + bgClass; 
     let iconHtml = type === "success" ? '<i class="fa-solid fa-circle-check"></i> ' : '<i class="fa-solid fa-triangle-exclamation"></i> ';
     t.innerHTML = iconHtml + msg; 
@@ -215,7 +215,7 @@ window.formatMentions = function(text) {
 };
 
 // ==========================================
-// 🔔 알림 및 멘션 시스템 로직
+// 🔔 알림 및 멘션 시스템 로직 (개별 삭제 / 모달 오픈 연동 추가)
 // ==========================================
 window.toggleNotifications = function(event) { 
     if(event) event.stopPropagation(); 
@@ -267,10 +267,16 @@ window.loadNotifications = function() {
                     let opacityClass = n.isRead ? 'opacity-50' : 'bg-indigo-50/40';
                     let typeText = n.type || '알림';
                     let dateText = window.getDateTimeStr ? window.getDateTimeStr(new Date(n.createdAt)) : new Date(n.createdAt).toLocaleString();
-                    htmlStr += `<div class="p-3 hover:bg-slate-50 cursor-pointer transition-colors ${opacityClass}" onclick="window.readNotification('${n.id}')">`;
-                    htmlStr += `<div class="text-[11px] font-bold text-indigo-600 mb-1">${typeText}</div>`;
-                    htmlStr += `<div class="text-xs text-slate-700 font-bold leading-relaxed break-words">${n.message}</div>`;
-                    htmlStr += `<div class="text-[10px] text-slate-400 mt-1.5">${dateText}</div>`;
+                    
+                    let pId = n.projectId ? `'${n.projectId}'` : 'null';
+                    let tDesc = n.type ? `'${n.type}'` : 'null';
+
+                    // 개별 삭제 버튼 및 클릭 시 모달창 오픈 로직 연동
+                    htmlStr += `<div class="p-3 hover:bg-slate-50 cursor-pointer transition-colors border-b border-slate-50 group relative ${opacityClass}" onclick="window.readNotification('${n.id}', ${pId}, ${tDesc})">`;
+                    htmlStr += `  <button onclick="window.deleteNotification(event, '${n.id}')" class="absolute top-2 right-2 text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"><i class="fa-solid fa-xmark"></i></button>`;
+                    htmlStr += `  <div class="text-[11px] font-bold text-indigo-600 mb-1 pr-6">${typeText}</div>`;
+                    htmlStr += `  <div class="text-xs text-slate-700 font-bold leading-relaxed break-words">${n.message}</div>`;
+                    htmlStr += `  <div class="text-[10px] text-slate-400 mt-1.5">${dateText}</div>`;
                     htmlStr += `</div>`;
                 });
                 listEl.innerHTML = htmlStr;
@@ -279,7 +285,45 @@ window.loadNotifications = function() {
     });
 };
 
-window.readNotification = async function(id) { try { await setDoc(doc(db, "notifications", id), { isRead: true }, { merge: true }); } catch(e) { console.error(e); } };
+// 💡 1. 알림 클릭 시 해당하는 모달창 오픈 로직 처리
+window.readNotification = async function(id, projectId, type) { 
+    try { 
+        await setDoc(doc(db, "notifications", id), { isRead: true }, { merge: true }); 
+        
+        if (projectId) {
+            const n = document.getElementById('notification-dropdown'); 
+            if (n) n.classList.add('hidden');
+
+            const safeType = type || '';
+            let title = "상세 보기"; 
+            
+            // 알림 타입에 따라 관련된 모달을 엽니다.
+            if (safeType.includes('코멘트')) {
+                if(window.openCommentModal) window.openCommentModal(projectId, title);
+            } else if (safeType.includes('이슈')) {
+                if(window.openIssueModal) window.openIssueModal(projectId, title);
+            } else if (safeType.includes('생산일지')) {
+                if(window.openDailyLogModal) window.openDailyLogModal(projectId);
+            } else if (safeType.includes('투입MD')) {
+                if(window.openMdLogModal) window.openMdLogModal(projectId, title, 0);
+            } else if (safeType.includes('요청서') || safeType.includes('의뢰서')) {
+                 if(window.openWriteModal) window.openWriteModal(projectId);
+            }
+        }
+    } catch(e) { console.error(e); } 
+};
+
+// 💡 3. 알림 개별 삭제 함수
+window.deleteNotification = async function(e, id) {
+    if (e) e.stopPropagation();
+    if (!confirm("이 알림을 삭제하시겠습니까?")) return;
+    try {
+        await deleteDoc(doc(db, "notifications", id));
+    } catch(e) {
+        console.error(e);
+    }
+};
+
 window.markAllNotificationsRead = async function() { if(!window.currentUser) return; try { const q = query(collection(db, "notifications"), where("targetUid", "==", window.currentUser.uid), where("isRead", "==", false)); const snapshot = await getDocs(q); const batch = writeBatch(db); snapshot.forEach(function(d) { batch.update(d.ref, { isRead: true }); }); await batch.commit(); } catch(e) { console.error(e); } };
 window.deleteAllNotifications = async function() { if(!window.currentUser) return; if(!confirm("모든 알림을 삭제하시겠습니까?")) return; try { const q = query(collection(db, "notifications"), where("targetUid", "==", window.currentUser.uid)); const snapshot = await getDocs(q); const batch = writeBatch(db); snapshot.forEach(function(d) { batch.delete(d.ref); }); await batch.commit(); window.showToast("알림이 모두 삭제되었습니다."); } catch(e) { console.error(e); } };
 
@@ -328,6 +372,7 @@ window.insertMention = function(textareaId, name, startIndex, endIndex) {
     if (drop) drop.classList.add('hidden');
 };
 
+// 💡 2. 구글 연동이 안 되어 있을 시 경고를 띄워주어 메일이 왜 안 가는지 안내합니다.
 window.notifyUser = async function(targetName, content, projectId, typeDesc) {
     if (!targetName) return false;
     const users = window.allSystemUsers || [];
@@ -339,6 +384,7 @@ window.notifyUser = async function(targetName, content, projectId, typeDesc) {
         let sysName = window.userProfile ? window.userProfile.name : '시스템';
         let msgTitle = `📢 ${sysName}님이 [${typeDesc}] 을(를) 남겼습니다.`;
         
+        // Firestore 알림(내부 DB)은 무조건 저장
         await addDoc(collection(db, "notifications"), {
             targetUid: targetUser.uid,
             senderName: sysName,
@@ -349,29 +395,35 @@ window.notifyUser = async function(targetName, content, projectId, typeDesc) {
             createdAt: Date.now()
         });
 
-        if (targetUser.email && window.googleAccessToken) {
-            const subject = `[AXBIS 알림] ${msgTitle}`;
-            const bodyHtml = `
-                <div style="font-family: sans-serif; padding: 20px; background: #f8fafc; border-radius: 10px;">
-                    <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
-                        <h3 style="color: #4f46e5; margin-top:0;">${msgTitle}</h3>
-                        <p><strong>작성자:</strong> ${sysName}</p>
-                        <p><strong>내용:</strong></p>
-                        <div style="background: #f1f5f9; padding: 15px; border-radius: 8px; color: #334155; font-size: 14px;">
-                            ${String(content).replace(/\n/g, '<br>')}
+        // 타겟 유저에게 이메일이 있고 작성자가 구글 연동을 한 경우에만 메일 발송
+        if (targetUser.email) {
+            if (window.googleAccessToken) {
+                const subject = `[AXBIS 알림] ${msgTitle}`;
+                const bodyHtml = `
+                    <div style="font-family: sans-serif; padding: 20px; background: #f8fafc; border-radius: 10px;">
+                        <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                            <h3 style="color: #4f46e5; margin-top:0;">${msgTitle}</h3>
+                            <p><strong>작성자:</strong> ${sysName}</p>
+                            <p><strong>내용:</strong></p>
+                            <div style="background: #f1f5f9; padding: 15px; border-radius: 8px; color: #334155; font-size: 14px;">
+                                ${String(content).replace(/\n/g, '<br>')}
+                            </div>
+                            <p style="margin-top: 20px;"><a href="https://axbis-portal.web.app" style="background: #4f46e5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">포털 바로가기</a></p>
                         </div>
-                        <p style="margin-top: 20px;"><a href="https://axbis-portal.web.app" style="background: #4f46e5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">포털 바로가기</a></p>
-                    </div>
-                </div>`;
+                    </div>`;
+                    
+                const emailRaw = `To: ${targetUser.email}\r\nSubject: =?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=\r\nContent-Type: text/html; charset="UTF-8"\r\n\r\n${bodyHtml}`;
+                const encodedEmail = btoa(unescape(encodeURIComponent(emailRaw))).replace(/\+/g, '-').replace(/\//g, '_');
                 
-            const emailRaw = `To: ${targetUser.email}\r\nSubject: =?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=\r\nContent-Type: text/html; charset="UTF-8"\r\n\r\n${bodyHtml}`;
-            const encodedEmail = btoa(unescape(encodeURIComponent(emailRaw))).replace(/\+/g, '-').replace(/\//g, '_');
-            
-            fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
-                method: 'POST',
-                headers: { 'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ raw: encodedEmail })
-            }).catch(e => console.log("메일 발송 에러(무시가능):", e));
+                fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ raw: encodedEmail })
+                }).catch(e => console.log("메일 발송 에러(무시가능):", e));
+            } else {
+                // 구글 연동 안 함. 사용자에게 최초 1회 경고해 줄 수도 있음 (토스트 알림)
+                if (window.showToast) window.showToast("구글 계정이 연동되지 않아 알림 메일은 발송되지 않았습니다. 상단 우측 버튼으로 연동을 권장합니다.", "warning");
+            }
         }
         return true;
     } catch(e) { 
