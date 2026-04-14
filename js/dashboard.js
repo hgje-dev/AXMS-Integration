@@ -3,10 +3,12 @@ import { db } from './firebase.js';
 import { collection, query, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 let homeProjSnapshotUnsubscribe = null;
+let homeReqSnapshotUnsubscribe = null; // 리퀘스트 구독용 변수 추가
 let chartInstances = {};
 
 window.currentDashStats = {};
 window.currentPeriodProjects = [];
+window.allDashRequests = []; // 리퀘스트 데이터 저장용 배열 추가
 
 const getSafeString = function(val) {
     if (val === null || val === undefined) {
@@ -22,6 +24,7 @@ window.loadHomeDashboards = function() {
             exportBtn.classList.remove('hidden');
         }
 
+        // 1. 프로젝트 현황 데이터 구독
         if (homeProjSnapshotUnsubscribe) homeProjSnapshotUnsubscribe();
         
         homeProjSnapshotUnsubscribe = onSnapshot(collection(db, "projects_status"), function(snapshot) { 
@@ -33,6 +36,26 @@ window.loadHomeDashboards = function() {
             }); 
             if (window.processDashboardData) window.processDashboardData(); 
         });
+
+        // 2. 리퀘스트 데이터 구독 (추가된 부분)
+        if (homeReqSnapshotUnsubscribe) homeReqSnapshotUnsubscribe();
+        
+        homeReqSnapshotUnsubscribe = onSnapshot(collection(db, "requests"), function(snapshot) {
+            window.allDashRequests = [];
+            snapshot.forEach(function(docSnap) {
+                let data = docSnap.data();
+                data.id = docSnap.id;
+                window.allDashRequests.push(data);
+            });
+            if (window.processRequestDashboardData) window.processRequestDashboardData();
+        });
+
+        // 이벤트 리스너 바인딩 (리퀘스트 타입 셀렉트)
+        const reqTypeSelect = document.getElementById('req-dash-type-select');
+        if (reqTypeSelect) {
+            reqTypeSelect.removeEventListener('change', window.processRequestDashboardData);
+            reqTypeSelect.addEventListener('change', window.processRequestDashboardData);
+        }
 
         setTimeout(function() { 
             const periodMonthInput = document.getElementById('period-value-month');
@@ -95,26 +118,22 @@ window.processDashboardData = function() {
                 const shipEst = getSafeString(data.d_shipEst);
                 const status = getSafeString(data.status);
                 
-                // 투입 공수 합산 기준을 finalMd(최종)와 outMd(외주)로 변경
                 const fMd = parseFloat(data.finalMd) || 0;
                 const eMd = parseFloat(data.estMd) || 0;
                 const oMd = parseFloat(data.outMd) || 0;
                 
                 let isTargetThisYear = false;
                 
-                // 완료된 건은 실제 출하일 기준으로만 판단
                 if (status === 'completed') {
                     if (shipEn.startsWith(year)) {
                         isTargetThisYear = true;
                     }
                 } else {
-                    // 미완료 건들은 예정일 기준으로 판단
                     if (shipEst.startsWith(year)) {
                         isTargetThisYear = true;
                     }
                 }
 
-                // 해당 연도 타겟 프로젝트가 아니면 아예 합산하지 않음
                 if (!isTargetThisYear) return;
                 
                 if (stats[status] !== undefined) {
@@ -123,25 +142,22 @@ window.processDashboardData = function() {
                     stats[status] = 1;
                 }
                 
-                // 총 예정/최종/외주 공수에 프로젝트 합산
                 stats.estMd += eMd;
                 stats.finalMd += fMd;
                 stats.outMd += oMd;
 
-                // 월별 차트 데이터 세팅
                 let targetMonthStr = (status === 'completed') ? shipEn : shipEst;
                 if (targetMonthStr.startsWith(year)) {
                     let mIdx = parseInt(targetMonthStr.split('-')[1]) - 1;
                     if (mIdx >= 0 && mIdx < 12) {
                         annualPlanData[mIdx] += eMd;
-                        annualActData[mIdx] += fMd; // 차트의 실적 MD도 최종 MD로 그림
+                        annualActData[mIdx] += fMd; 
                         if (status === 'completed') {
                             monthlyCompleted[mIdx]++;
                         }
                     }
                 }
                 
-                // 목표 대비 출하 오차 계산 (해당 연도 완료건에 대해서만)
                 if (status === 'completed' && shipEn && shipEst) {
                     const enD = new Date(shipEn);
                     const estD = new Date(shipEst);
@@ -184,18 +200,15 @@ window.processDashboardData = function() {
         const elEstMd = document.getElementById('dash-pd-estMd');
         if (elEstMd) elEstMd.innerText = stats.estMd.toFixed(1);
         
-        // 총 투입(최종) 공수 업데이트
         const elCurMd = document.getElementById('dash-pd-curMd');
         if (elCurMd) elCurMd.innerText = stats.finalMd.toFixed(1);
 
-        // 총 외주 공수 업데이트
         const elOutMd = document.getElementById('dash-pd-outMd');
         if (elOutMd) elOutMd.innerText = stats.outMd.toFixed(1);
         
         const elVariance = document.getElementById('dash-pd-variance');
         if (elVariance) {
             if (stats.estMd > 0) {
-                // 편차율도 최종 MD 기준으로 계산
                 let varianceVal = ((stats.finalMd - stats.estMd) / stats.estMd * 100).toFixed(1);
                 elVariance.innerText = varianceVal + '%';
             } else {
@@ -209,7 +222,6 @@ window.processDashboardData = function() {
         const elWorkload = document.getElementById('dash-pd-workload');
         if (elWorkload) {
             if (window.teamMembers && window.teamMembers.length > 0) {
-                // 부하율도 최종 MD 기준으로 계산
                 let workLoadVal = (stats.finalMd / (window.teamMembers.length * 240) * 100).toFixed(1);
                 elWorkload.innerText = workLoadVal + '%';
             } else {
@@ -227,6 +239,102 @@ window.processDashboardData = function() {
         console.error("연간 데이터 연산 오류:", e); 
     }
 };
+
+// ============================================================
+// 💡 리퀘스트 대시보드 처리 로직 추가
+// ============================================================
+window.processRequestDashboardData = function() {
+    try {
+        const typeSelect = document.getElementById('req-dash-type-select');
+        const filterType = typeSelect ? typeSelect.value : 'all';
+
+        let total = 0, pending = 0, progress = 0, completed = 0;
+        let typeCounts = { collab: 0, purchase: 0, repair: 0 };
+
+        (window.allDashRequests || []).forEach(req => {
+            // 필터 적용
+            if (filterType !== 'all' && req.type !== filterType) return;
+
+            total++;
+            
+            // 상태 집계
+            if (req.status === 'completed') completed++;
+            else if (req.status === 'progress' || req.status === 'inspecting') progress++;
+            else pending++; // draft, pending 등 모두 대기로 처리
+
+            // 타입별 집계
+            if (req.type === 'collab') typeCounts.collab++;
+            else if (req.type === 'purchase') typeCounts.purchase++;
+            else if (req.type === 'repair') typeCounts.repair++;
+        });
+
+        // DOM 업데이트
+        if (document.getElementById('dash-req-total')) document.getElementById('dash-req-total').innerText = total;
+        if (document.getElementById('dash-req-pending')) document.getElementById('dash-req-pending').innerText = pending;
+        if (document.getElementById('dash-req-progress')) document.getElementById('dash-req-progress').innerText = progress;
+        if (document.getElementById('dash-req-completed')) document.getElementById('dash-req-completed').innerText = completed;
+
+        // 차트 렌더링
+        window.renderRequestCharts(pending, progress, completed, typeCounts);
+
+    } catch(e) {
+        console.error("리퀘스트 대시보드 데이터 연산 오류:", e);
+    }
+};
+
+window.renderRequestCharts = function(pending, progress, completed, typeCounts) {
+    const createChart = function(id, type, data, options) {
+        const canvas = document.getElementById(id); 
+        if (!canvas) return;
+        
+        // 캔버스 보이기 및 준비중 텍스트 숨기기
+        canvas.classList.remove('hidden');
+        if(canvas.nextElementSibling) canvas.nextElementSibling.classList.add('hidden');
+
+        if (chartInstances[id]) {
+            chartInstances[id].destroy();
+        }
+        chartInstances[id] = new window.Chart(canvas.getContext('2d'), { type: type, data: data, options: options });
+    };
+
+    // 1. Status Overview 차트 (Doughnut)
+    createChart('reqStatusChart', 'doughnut', {
+        labels: ['대기/임시저장', '진행 중', '작업 완료'],
+        datasets: [{
+            data: [pending, progress, completed],
+            backgroundColor: ['#f59e0b', '#3b82f6', '#10b981'], // amber, blue, emerald
+            borderWidth: 2,
+            borderColor: '#ffffff',
+            borderRadius: 4,
+            hoverOffset: 4
+        }]
+    }, {
+        cutout: '65%',
+        maintainAspectRatio: false,
+        layout: { padding: 15 },
+        plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 15, font: {size: 11} } } }
+    });
+
+    // 2. Requests by Type 차트 (Bar)
+    createChart('reqTypeChart', 'bar', {
+        labels: ['협업/조립', '구매의뢰', '수리/점검'],
+        datasets: [{
+            label: '요청 건수',
+            data: [typeCounts.collab, typeCounts.purchase, typeCounts.repair],
+            backgroundColor: ['#6366f1', '#10b981', '#f43f5e'], // indigo, emerald, rose
+            borderRadius: 6,
+            maxBarThickness: 40
+        }]
+    }, {
+        maintainAspectRatio: false,
+        scales: {
+            x: { grid: { display: false } },
+            y: { beginAtZero: true, ticks: { stepSize: 1 }, border: { dash: [4, 4] } }
+        },
+        plugins: { legend: { display: false } }
+    });
+};
+// ============================================================
 
 window.renderCharts = function(stats, monthlyCompleted, planData, actData) {
     const createChart = function(id, type, data, options) {
@@ -357,13 +465,11 @@ window.processPeriodData = function() {
         const shipEn = getSafeString(p.d_shipEn);
         const shipEst = getSafeString(p.d_shipEst);
         
-        // 투입 공수 합산 기준을 finalMd와 outMd로 변경
         const fMd = parseFloat(p.finalMd) || 0;
         const oMd = parseFloat(p.outMd) || 0;
         
         let isTargetThisPeriod = false;
 
-        // 기간별 분석도 "타겟" 프로젝트만 출력 (완료는 출하일 기준, 나머지는 예정일 기준)
         if (status === 'completed') {
             if (shipEn >= start && shipEn <= end) {
                 isTargetThisPeriod = true;
@@ -376,7 +482,6 @@ window.processPeriodData = function() {
 
         if (!isTargetThisPeriod) return;
 
-        // 타겟 프로젝트의 최종 MD와 외주 MD를 누적
         periodFinalMdTotal += fMd;
         periodOutMdTotal += oMd;
 
@@ -422,7 +527,6 @@ window.processPeriodData = function() {
     const elPeriodUrgent = document.getElementById('pd-period-urgent');
     if (elPeriodUrgent) elPeriodUrgent.innerText = urgent;
     
-    // 하단 미니대시보드 총 투입MD(최종) 및 외주MD 업데이트
     const elPeriodTotalMd = document.getElementById('pd-period-total-md');
     if (elPeriodTotalMd) elPeriodTotalMd.innerText = periodFinalMdTotal.toFixed(1);
 
@@ -434,7 +538,6 @@ window.processPeriodData = function() {
         let teamCount = window.teamMembers ? window.teamMembers.length : 0;
         if (teamCount > 0) {
             let workingDays = (type === 'month') ? 20 : 5;
-            // 부하율도 최종 MD 기준으로 계산
             let pWorkload = (periodFinalMdTotal / (teamCount * workingDays)) * 100;
             elPeriodWorkload.innerText = pWorkload.toFixed(1) + '%';
         } else {
@@ -549,7 +652,6 @@ function renderPeriodCharts(type, val, projects, mgrCounts, periodFinalMdTotal) 
     }, { indexAxis: 'y', maintainAspectRatio: false, scales: { x: { beginAtZero: true, ticks: { stepSize: 1 }, border: { dash: [4, 4] } }, y: { grid: { display: false } } }, plugins: { legend: { display: false } } });
 }
 
-// 엑셀 출력 기능 고도화 (대시보드 리포트 & 데이터 시트)
 window.exportDashboardExcel = async function() {
     if (window.userProfile && window.userProfile.role !== 'admin') {
         if (window.showToast) window.showToast('보고서 다운로드는 관리자만 가능합니다.', 'error');
@@ -564,33 +666,20 @@ window.exportDashboardExcel = async function() {
         if (window.showToast) window.showToast("엑셀 현황 보고서를 생성 중입니다...", "success");
         const wb = new window.ExcelJS.Workbook();
 
-        // 1. 대시보드 요약 시트
         const ws1 = wb.addWorksheet('대시보드_요약', { views: [{ showGridLines: false }] });
 
-        // 열 너비 설정 (그리드 레이아웃용)
         ws1.columns = [
-            { width: 2 },   // A: 여백
-            { width: 15 },  // B
-            { width: 15 },  // C
-            { width: 15 },  // D
-            { width: 2 },   // E: 여백
-            { width: 15 },  // F
-            { width: 15 },  // G
-            { width: 15 },  // H
-            { width: 2 },   // I: 여백
-            { width: 15 },  // J
-            { width: 15 },  // K
-            { width: 15 },  // L
+            { width: 2 },   { width: 15 },  { width: 15 },  { width: 15 },  { width: 2 },
+            { width: 15 },  { width: 15 },  { width: 15 },  { width: 2 },
+            { width: 15 },  { width: 15 },  { width: 15 },
         ];
 
-        // 타이틀
         ws1.mergeCells('B2:L3');
         const titleCell = ws1.getCell('B2');
         titleCell.value = `AXBIS 프로젝트 통합 대시보드 현황 보고서 (${window.currentDashStats.year}년)`;
         titleCell.font = { name: '맑은 고딕', size: 20, bold: true, color: { argb: 'FF1E293B' } };
         titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
 
-        // 기본 정보
         ws1.mergeCells('B4:D4');
         ws1.getCell('B4').value = `출력일시: ${new Date().toLocaleString()}`;
         ws1.getCell('B4').font = { size: 10, color: { argb: 'FF64748B' } };
@@ -599,7 +688,6 @@ window.exportDashboardExcel = async function() {
         ws1.getCell('F4').value = `출력자: ${window.userProfile.name} (${window.userProfile.team})`;
         ws1.getCell('F4').font = { size: 10, color: { argb: 'FF64748B' } };
 
-        // KPI 카드 생성 헬퍼 함수
         const createKPICard = (startRow, startCol, endRow, endCol, title, value, subtext, bgColor, titleColor, valColor) => {
             ws1.mergeCells(`${startCol}${startRow}:${endCol}${startRow}`);
             ws1.mergeCells(`${startCol}${startRow+1}:${endCol}${endRow-1}`);
@@ -634,19 +722,16 @@ window.exportDashboardExcel = async function() {
             sCell.alignment = { vertical: 'middle', horizontal: 'center' };
         };
 
-        // 1열 (건수/오차)
-        createKPICard(6, 'B', 9, 'D', '완료 (출하)', `${window.currentDashStats.completed} 건`, '해당 연도 출하 기준', 'FFF0FDF4', 'FF10B981', 'FF059669'); // Emerald
-        createKPICard(6, 'F', 9, 'H', '진행 및 검수중', `${window.currentDashStats.progress + window.currentDashStats.inspecting} 건`, '제작 및 검수 진행중', 'FFEFF6FF', 'FF3B82F6', 'FF1D4ED8'); // Blue
-        createKPICard(6, 'J', 9, 'L', '목표대비 출하 평균 오차', `${window.currentDashStats.avgShipError} 일`, '출하완료 PJT 평균', 'FFF0F9FF', 'FF0EA5E9', 'FF0284C7'); // Sky
+        createKPICard(6, 'B', 9, 'D', '완료 (출하)', `${window.currentDashStats.completed} 건`, '해당 연도 출하 기준', 'FFF0FDF4', 'FF10B981', 'FF059669'); 
+        createKPICard(6, 'F', 9, 'H', '진행 및 검수중', `${window.currentDashStats.progress + window.currentDashStats.inspecting} 건`, '제작 및 검수 진행중', 'FFEFF6FF', 'FF3B82F6', 'FF1D4ED8'); 
+        createKPICard(6, 'J', 9, 'L', '목표대비 출하 평균 오차', `${window.currentDashStats.avgShipError} 일`, '출하완료 PJT 평균', 'FFF0F9FF', 'FF0EA5E9', 'FF0284C7'); 
 
-        // 2열 (MD/효율성)
-        createKPICard(11, 'B', 14, 'D', '총 예정 공수', `${parseFloat(window.currentDashStats.estMd).toFixed(1)} MD`, '타겟 프로젝트 합산', 'FFEEF2FF', 'FF6366F1', 'FF4338CA'); // Indigo
-        createKPICard(11, 'F', 14, 'H', '총 투입 공수 (최종)', `${parseFloat(window.currentDashStats.finalMd).toFixed(1)} MD`, '타겟 프로젝트 합산', 'FFF5F3FF', 'FF8B5CF6', 'FF6D28D9'); // Purple
+        createKPICard(11, 'B', 14, 'D', '총 예정 공수', `${parseFloat(window.currentDashStats.estMd).toFixed(1)} MD`, '타겟 프로젝트 합산', 'FFEEF2FF', 'FF6366F1', 'FF4338CA'); 
+        createKPICard(11, 'F', 14, 'H', '총 투입 공수 (최종)', `${parseFloat(window.currentDashStats.finalMd).toFixed(1)} MD`, '타겟 프로젝트 합산', 'FFF5F3FF', 'FF8B5CF6', 'FF6D28D9'); 
         let varianceVal = window.currentDashStats.estMd > 0 ? ((window.currentDashStats.finalMd - window.currentDashStats.estMd) / window.currentDashStats.estMd * 100).toFixed(1) : 0;
-        createKPICard(11, 'J', 14, 'L', '계획대비 편차율', `${varianceVal}%`, '(최종 - 예정) / 예정', 'FFFFFBEB', 'FFF59E0B', 'FFD97706'); // Amber
+        createKPICard(11, 'J', 14, 'L', '계획대비 편차율', `${varianceVal}%`, '(최종 - 예정) / 예정', 'FFFFFBEB', 'FFF59E0B', 'FFD97706'); 
 
 
-        // 2. 조회기간 프로젝트 상세 시트
         const typeSelect = document.getElementById('period-type-select');
         let periodTypeStr = '';
         if (typeSelect && typeSelect.value === 'month') {
@@ -659,18 +744,9 @@ window.exportDashboardExcel = async function() {
 
         const ws2 = wb.addWorksheet('조회기간_프로젝트상세', { views: [{ showGridLines: false }] });
         ws2.columns = [
-            { width: 12 }, // 파트
-            { width: 18 }, // PJT 코드
-            { width: 45 }, // 프로젝트명
-            { width: 15 }, // 현재상태
-            { width: 12 }, // 진행률
-            { width: 15 }, // 예정출하일
-            { width: 15 }, // 실제출하일
-            { width: 12 }, // 예정MD
-            { width: 12 }, // 실투입MD
-            { width: 12 }, // 외주MD
-            { width: 12 }, // 최종MD
-            { width: 12 }  // 편차
+            { width: 12 }, { width: 18 }, { width: 45 }, { width: 15 }, { width: 12 },
+            { width: 15 }, { width: 15 }, { width: 12 }, { width: 12 }, { width: 12 },
+            { width: 12 }, { width: 12 }
         ];
 
         ws2.mergeCells('A1:L2');
@@ -700,18 +776,8 @@ window.exportDashboardExcel = async function() {
             let variance = (fMd - eMd).toFixed(1);
 
             let row = ws2.addRow([
-                p.part || '-',
-                p.code || '-',
-                p.name || '-',
-                safeStatus,
-                (parseFloat(p.progress) || 0) / 100, // 백분율 처리를 위해 100으로 나눔
-                p.d_shipEst || '-',
-                p.d_shipEn || '-',
-                eMd,
-                cMd,
-                oMd,
-                fMd, // 문자열이 아닌 숫자로 입력
-                parseFloat(variance) // 문자열이 아닌 숫자로 입력
+                p.part || '-', p.code || '-', p.name || '-', safeStatus, (parseFloat(p.progress) || 0) / 100, 
+                p.d_shipEst || '-', p.d_shipEn || '-', eMd, cMd, oMd, fMd, parseFloat(variance) 
             ]);
 
             row.eachCell(function(c, colNumber) {
@@ -719,7 +785,7 @@ window.exportDashboardExcel = async function() {
                 c.alignment = { vertical: 'middle', horizontal: (colNumber === 3) ? 'left' : 'center' };
 
                 if (colNumber === 5) {
-                    c.numFmt = '0%'; // 엑셀의 백분율 포맷 적용
+                    c.numFmt = '0%'; 
                 } else if (colNumber >= 8) {
                     c.numFmt = '#,##0.0';
                     if (colNumber === 12) { 
@@ -731,26 +797,16 @@ window.exportDashboardExcel = async function() {
             });
         });
 
-
-        // 3. 전체 데이터 Raw 시트
         const ws3 = wb.addWorksheet('전체_Raw_Data');
         ws3.columns = [
-            { header: 'ID', key: 'id', width: 20 },
-            { header: '카테고리', key: 'category', width: 12 },
-            { header: '파트', key: 'part', width: 12 },
-            { header: '상태', key: 'status', width: 12 },
-            { header: 'PJT코드', key: 'code', width: 18 },
-            { header: '프로젝트명', key: 'name', width: 40 },
-            { header: '고객사', key: 'company', width: 20 },
-            { header: '담당자', key: 'manager', width: 15 },
-            { header: '예정MD', key: 'estMd', width: 10 },
-            { header: '실투입MD', key: 'currentMd', width: 10 },
-            { header: '외주MD', key: 'outMd', width: 10 },
-            { header: '최종MD', key: 'finalMd', width: 10 },
-            { header: '총투입인원', key: 'totPers', width: 10 },
-            { header: '조립예정일', key: 'd_asmEst', width: 15 },
-            { header: '출하예정일', key: 'd_shipEst', width: 15 },
-            { header: '출하실제일', key: 'd_shipEn', width: 15 },
+            { header: 'ID', key: 'id', width: 20 }, { header: '카테고리', key: 'category', width: 12 },
+            { header: '파트', key: 'part', width: 12 }, { header: '상태', key: 'status', width: 12 },
+            { header: 'PJT코드', key: 'code', width: 18 }, { header: '프로젝트명', key: 'name', width: 40 },
+            { header: '고객사', key: 'company', width: 20 }, { header: '담당자', key: 'manager', width: 15 },
+            { header: '예정MD', key: 'estMd', width: 10 }, { header: '실투입MD', key: 'currentMd', width: 10 },
+            { header: '외주MD', key: 'outMd', width: 10 }, { header: '최종MD', key: 'finalMd', width: 10 },
+            { header: '총투입인원', key: 'totPers', width: 10 }, { header: '조립예정일', key: 'd_asmEst', width: 15 },
+            { header: '출하예정일', key: 'd_shipEst', width: 15 }, { header: '출하실제일', key: 'd_shipEn', width: 15 },
         ];
 
         let rawHeader = ws3.getRow(1);
@@ -759,22 +815,11 @@ window.exportDashboardExcel = async function() {
 
         (window.allDashProjects || []).forEach(p => {
             ws3.addRow({
-                id: p.id,
-                category: p.category,
-                part: p.part,
-                status: sMap[p.status] || p.status,
-                code: p.code,
-                name: p.name,
-                company: p.company,
-                manager: p.manager,
-                estMd: parseFloat(p.estMd) || 0,
-                currentMd: parseFloat(p.currentMd) || 0,
-                outMd: parseFloat(p.outMd) || 0,
-                finalMd: parseFloat(p.finalMd) || 0,
-                totPers: parseInt(p.totPers) || 0,
-                d_asmEst: p.d_asmEst,
-                d_shipEst: p.d_shipEst,
-                d_shipEn: p.d_shipEn
+                id: p.id, category: p.category, part: p.part, status: sMap[p.status] || p.status,
+                code: p.code, name: p.name, company: p.company, manager: p.manager,
+                estMd: parseFloat(p.estMd) || 0, currentMd: parseFloat(p.currentMd) || 0,
+                outMd: parseFloat(p.outMd) || 0, finalMd: parseFloat(p.finalMd) || 0,
+                totPers: parseInt(p.totPers) || 0, d_asmEst: p.d_asmEst, d_shipEst: p.d_shipEst, d_shipEn: p.d_shipEn
             });
         });
 
