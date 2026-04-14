@@ -57,7 +57,7 @@ window.loadHomeDashboards = function() {
 
         setTimeout(() => {
             // 리퀘스트 이벤트 바인딩
-            ['req-dash-type-select', 'req-period-type-select'].forEach(id => {
+            ['req-dash-type-select', 'req-dash-year-select', 'req-dash-month-select'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) {
                     el.removeEventListener('change', window.processRequestDashboardData);
@@ -65,18 +65,12 @@ window.loadHomeDashboards = function() {
                 }
             });
 
-            // 초기값 세팅
+            if (window.processRequestDashboardData) window.processRequestDashboardData();
+            
             const periodMonthInput = document.getElementById('period-value-month');
             if (periodMonthInput && !periodMonthInput.value) {
                 window.changePeriodType(); 
             }
-            
-            const reqPeriodMonthInput = document.getElementById('req-period-value-month');
-            if (reqPeriodMonthInput && !reqPeriodMonthInput.value) {
-                window.changeReqPeriodType(); 
-            }
-
-            if (window.processRequestDashboardData) window.processRequestDashboardData();
         }, 100);
 
     } catch(e) { 
@@ -342,11 +336,14 @@ window.renderRequestCharts = function(pending, progress, completed, typeCounts) 
         cutout: '65%',
         maintainAspectRatio: false,
         layout: { padding: 15 },
-        plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 15, font: {size: 11} } } }
+        plugins: { 
+            legend: { position: 'bottom', labels: { usePointStyle: true, padding: 15, font: {size: 11} } },
+            datalabels: { display: false } // 숫자가 표시되지 않도록 강제
+        }
     });
 
     createChart('reqTypeChart', 'bar', {
-        labels: ['협업/조립', '구매의뢰', '수리/점검'],
+        labels: ['Collab', 'Purchase', 'Repair'],
         datasets: [{
             label: '요청 건수',
             data: [typeCounts.collab, typeCounts.purchase, typeCounts.repair],
@@ -360,7 +357,10 @@ window.renderRequestCharts = function(pending, progress, completed, typeCounts) 
             x: { grid: { display: false } },
             y: { beginAtZero: true, ticks: { stepSize: 1 }, border: { dash: [4, 4] } }
         },
-        plugins: { legend: { display: false } }
+        plugins: { 
+            legend: { display: false },
+            datalabels: { display: false } // 숫자가 표시되지 않도록 강제
+        }
     });
 };
 // ============================================================
@@ -382,13 +382,28 @@ window.renderCharts = function(stats, monthlyCompleted, planData, actData) {
             backgroundColor: ['#94a3b8', '#3b82f6', '#f59e0b', '#10b981', '#f43f5e'], 
             borderWidth: 2, borderColor: '#ffffff', borderRadius: 4, hoverOffset: 4 
         }]
-    }, { cutout: '65%', maintainAspectRatio: false, layout: { padding: 15 }, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 15, font: {size: 11} } } } });
+    }, { 
+        cutout: '65%', 
+        maintainAspectRatio: false, 
+        layout: { padding: 15 }, 
+        plugins: { 
+            legend: { position: 'bottom', labels: { usePointStyle: true, padding: 15, font: {size: 11} } },
+            datalabels: { display: false } // 숫자가 표시되지 않도록 강제
+        } 
+    });
 
     const months = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
     createChart('projMonthlyChart', 'bar', { 
         labels: months, 
         datasets: [{ label: '출하 완료', data: monthlyCompleted, backgroundColor: '#10b981', borderRadius: 6, maxBarThickness: 30 }] 
-    }, { maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { stepSize: 1 }, border: { dash: [4, 4] } } }, plugins: { legend: { display: false } } });
+    }, { 
+        maintainAspectRatio: false, 
+        scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { stepSize: 1 }, border: { dash: [4, 4] } } }, 
+        plugins: { 
+            legend: { display: false },
+            datalabels: { display: false } // 숫자가 표시되지 않도록 강제
+        } 
+    });
 
     const ctxElement = document.getElementById('annualPlanVsActualChart');
     const ctx = ctxElement ? ctxElement.getContext('2d') : null;
@@ -407,7 +422,14 @@ window.renderCharts = function(stats, monthlyCompleted, planData, actData) {
             { label: '계획 MD', data: planData, borderColor: '#cbd5e1', backgroundColor: gradPlan, fill: true, tension: 0.4, borderWidth: 3, pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: '#fff', pointBorderWidth: 2 }, 
             { label: '실적(최종) MD', data: actData, borderColor: '#6366f1', backgroundColor: gradAct, fill: true, tension: 0.4, borderWidth: 3, pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: '#fff', pointBorderWidth: 2 }
         ] 
-    }, { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, border: { dash: [4, 4] } } }, plugins: { legend: { position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 8 } } } });
+    }, { 
+        maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, 
+        scales: { x: { grid: { display: false } }, y: { beginAtZero: true, border: { dash: [4, 4] } } }, 
+        plugins: { 
+            legend: { position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 8 } },
+            datalabels: { display: false } // 숫자가 표시되지 않도록 강제
+        } 
+    });
 };
 
 window.changePeriodType = function() {
@@ -611,7 +633,14 @@ function renderPeriodCharts(type, val, projects, mgrCounts, periodFinalMdTotal) 
     createChart('periodChart1', 'line', { 
         labels: labels1, 
         datasets: [{ label: '완료 건수', data: data1, borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.2)', fill: true, tension: 0.4, borderWidth: 3, pointRadius: 4, pointBackgroundColor: '#fff', pointBorderWidth: 2 }] 
-    }, { maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { stepSize: 1 }, border: { dash: [4, 4] } } }, plugins: { legend: { display: false } } });
+    }, { 
+        maintainAspectRatio: false, 
+        scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { stepSize: 1 }, border: { dash: [4, 4] } } }, 
+        plugins: { 
+            legend: { display: false },
+            datalabels: { display: false } // 숫자가 표시되지 않도록 강제
+        } 
+    });
     
     let estTotal = 0; 
     projects.forEach(function(p) { estTotal += parseFloat(p.estMd) || 0; });
@@ -622,7 +651,14 @@ function renderPeriodCharts(type, val, projects, mgrCounts, periodFinalMdTotal) 
             { label: '계획 MD', data: [estTotal], backgroundColor: '#cbd5e1', borderRadius: 6, maxBarThickness: 60 }, 
             { label: '실적(최종) MD', data: [periodFinalMdTotal], backgroundColor: '#6366f1', borderRadius: 6, maxBarThickness: 60 }
         ] 
-    }, { maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, border: { dash: [4, 4] } } }, plugins: { legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8 } } } });
+    }, { 
+        maintainAspectRatio: false, 
+        scales: { x: { grid: { display: false } }, y: { beginAtZero: true, border: { dash: [4, 4] } } }, 
+        plugins: { 
+            legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8 } },
+            datalabels: { display: false } // 숫자가 표시되지 않도록 강제
+        } 
+    });
 
     let mgrL = Object.keys(mgrCounts); let mgrD = Object.values(mgrCounts);
     let chartLabels = mgrL.length > 0 ? mgrL : ['없음'];
@@ -631,7 +667,15 @@ function renderPeriodCharts(type, val, projects, mgrCounts, periodFinalMdTotal) 
     createChart('periodChart3', 'bar', { 
         labels: chartLabels, 
         datasets: [{ label: '진행중 PJT', data: chartData, backgroundColor: '#8b5cf6', borderRadius: 6 }] 
-    }, { indexAxis: 'y', maintainAspectRatio: false, scales: { x: { beginAtZero: true, ticks: { stepSize: 1 }, border: { dash: [4, 4] } }, y: { grid: { display: false } } }, plugins: { legend: { display: false } } });
+    }, { 
+        indexAxis: 'y', 
+        maintainAspectRatio: false, 
+        scales: { x: { beginAtZero: true, ticks: { stepSize: 1 }, border: { dash: [4, 4] } }, y: { grid: { display: false } } }, 
+        plugins: { 
+            legend: { display: false },
+            datalabels: { display: false } // 숫자가 표시되지 않도록 강제
+        } 
+    });
 }
 
 window.exportDashboardExcel = async function() {
