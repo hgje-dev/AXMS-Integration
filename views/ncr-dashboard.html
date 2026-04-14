@@ -31,6 +31,10 @@
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
     }
+
+    /* 스크롤바 커스텀 (가로 스크롤 허용) */
+    .hide-scroll::-webkit-scrollbar { display: none; }
+    .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
 </style>
 
 <div class="max-w-[1600px] mx-auto pb-20 space-y-8 antialiased">
@@ -111,59 +115,59 @@
     </div>
 
     <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-5">
-        <div class="ultra-card p-6 relative overflow-hidden group">
-            <div class="absolute right-0 top-0 w-24 h-24 bg-blue-50 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
+        <div class="ultra-card p-5 relative overflow-hidden group border-b-4 border-b-slate-200">
+            <div class="absolute right-0 top-0 w-20 h-20 bg-blue-50 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
             <div class="flex justify-between items-start mb-2 relative z-10">
-                <span class="text-[11px] font-black text-slate-400 uppercase tracking-wider">Total Qty</span>
-                <i class="fa-solid fa-cubes-stacked text-blue-500 text-xl"></i>
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Total Qty</span>
+                <i class="fa-solid fa-cubes-stacked text-blue-500 text-lg"></i>
             </div>
-            <div class="text-sm font-bold text-slate-500 mb-1 relative z-10">부적합 수량</div>
-            <div class="text-4xl font-black text-slate-800 relative z-10 mt-auto pt-2" id="kpi-qty">0</div>
+            <div class="text-xs font-bold text-slate-500 mb-1 relative z-10">부적합 수량</div>
+            <div class="text-3xl font-black text-slate-800 relative z-10 mt-auto pt-1" id="kpi-qty">0</div>
         </div>
-        <div class="ultra-card p-6 relative overflow-hidden group">
-            <div class="absolute right-0 top-0 w-24 h-24 bg-rose-50 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
+        <div class="ultra-card p-5 relative overflow-hidden group border-b-4 border-b-slate-200">
+            <div class="absolute right-0 top-0 w-20 h-20 bg-rose-50 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
             <div class="flex justify-between items-start mb-2 relative z-10">
-                <span class="text-[11px] font-black text-slate-400 uppercase tracking-wider">Total Cases</span>
-                <i class="fa-solid fa-triangle-exclamation text-rose-500 text-xl"></i>
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Total Cases</span>
+                <i class="fa-solid fa-triangle-exclamation text-rose-500 text-lg"></i>
             </div>
-            <div class="text-sm font-bold text-slate-500 mb-1 relative z-10">부적합 건수</div>
-            <div class="text-4xl font-black text-slate-800 relative z-10 mt-auto pt-2" id="kpi-count">0</div>
+            <div class="text-xs font-bold text-slate-500 mb-1 relative z-10">부적합 건수</div>
+            <div class="text-3xl font-black text-slate-800 relative z-10 mt-auto pt-1" id="kpi-count">0</div>
         </div>
-        <div class="ultra-card p-6 relative overflow-hidden group">
-            <div class="absolute right-0 top-0 w-24 h-24 bg-emerald-50 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
+        <div class="ultra-card p-5 relative overflow-hidden group border-b-4 border-b-slate-200">
+            <div class="absolute right-0 top-0 w-20 h-20 bg-emerald-50 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
             <div class="flex justify-between items-start mb-2 relative z-10">
-                <span class="text-[11px] font-black text-slate-400 uppercase tracking-wider">Supplier Rate</span>
-                <i class="fa-solid fa-truck-fast text-emerald-500 text-xl"></i>
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Supplier Rate</span>
+                <i class="fa-solid fa-truck-fast text-emerald-500 text-lg"></i>
             </div>
-            <div class="text-sm font-bold text-slate-500 mb-1 relative z-10">협력사 불량률</div>
-            <div class="text-4xl font-black text-emerald-600 relative z-10 mt-auto pt-2" id="kpi-supplier-rate">0.0%</div>
+            <div class="text-xs font-bold text-slate-500 mb-1 relative z-10">협력사 불량률</div>
+            <div class="text-3xl font-black text-emerald-600 relative z-10 mt-auto pt-1" id="kpi-supplier-rate">0.0%</div>
         </div>
-        <div class="ultra-card p-6 relative overflow-hidden group">
+        <div class="ultra-card p-5 relative overflow-hidden group border-b-4 border-b-slate-200">
+            <div class="absolute right-0 top-0 w-20 h-20 bg-indigo-50 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
+            <div class="flex justify-between items-start mb-2 relative z-10">
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Design Rate</span>
+                <i class="fa-solid fa-compass-drafting text-indigo-500 text-lg"></i>
+            </div>
+            <div class="text-xs font-bold text-slate-500 mb-1 relative z-10">설계 불량률</div>
+            <div class="text-3xl font-black text-indigo-600 relative z-10 mt-auto pt-1" id="kpi-design-rate">0.0%</div>
+        </div>
+        <div class="ultra-card p-5 relative overflow-hidden group border-b-4 border-b-slate-200">
+            <div class="absolute right-0 top-0 w-20 h-20 bg-teal-50 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
+            <div class="flex justify-between items-start mb-2 relative z-10">
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Resolved Rate</span>
+                <i class="fa-solid fa-clipboard-check text-teal-500 text-lg"></i>
+            </div>
+            <div class="text-xs font-bold text-slate-500 mb-1 relative z-10">조치 완료율</div>
+            <div class="text-3xl font-black text-teal-500 relative z-10 mt-auto pt-1" id="kpi-resolution-rate">0.0%</div>
+        </div>
+        <div class="ultra-card p-5 relative overflow-hidden group border-l-4 border-l-indigo-500">
             <div class="absolute right-0 top-0 w-24 h-24 bg-indigo-50 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
             <div class="flex justify-between items-start mb-2 relative z-10">
-                <span class="text-[11px] font-black text-slate-400 uppercase tracking-wider">Design Rate</span>
-                <i class="fa-solid fa-compass-drafting text-indigo-500 text-xl"></i>
+                <span class="text-[10px] font-black text-indigo-400 uppercase tracking-wider">Quality Cost</span>
+                <span class="bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded text-[9px] font-bold border border-indigo-100">총 불량률 <span id="kpi-total-rate">3.1%</span></span>
             </div>
-            <div class="text-sm font-bold text-slate-500 mb-1 relative z-10">설계 불량률</div>
-            <div class="text-4xl font-black text-indigo-600 relative z-10 mt-auto pt-2" id="kpi-design-rate">0.0%</div>
-        </div>
-        <div class="ultra-card p-6 relative overflow-hidden group">
-            <div class="absolute right-0 top-0 w-24 h-24 bg-teal-50 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
-            <div class="flex justify-between items-start mb-2 relative z-10">
-                <span class="text-[11px] font-black text-slate-400 uppercase tracking-wider">Resolved Rate</span>
-                <i class="fa-solid fa-clipboard-check text-teal-500 text-xl"></i>
-            </div>
-            <div class="text-sm font-bold text-slate-500 mb-1 relative z-10">조치 완료율</div>
-            <div class="text-4xl font-black text-teal-500 relative z-10 mt-auto pt-2" id="kpi-resolution-rate">0.0%</div>
-        </div>
-        <div class="ultra-card p-6 relative overflow-hidden group bg-slate-900 border-none">
-            <div class="absolute right-0 bottom-0 w-32 h-32 bg-indigo-500 rounded-full blur-2xl opacity-20 transition-transform group-hover:scale-150"></div>
-            <div class="flex justify-between items-start mb-2 relative z-10">
-                <span class="text-[11px] font-black text-indigo-300 uppercase tracking-wider">Quality Cost</span>
-                <span class="bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded text-[10px] font-bold border border-indigo-500/30">총 불량률 <span id="kpi-total-rate">3.1%</span></span>
-            </div>
-            <div class="text-sm font-bold text-slate-400 mb-1 relative z-10">Q-COST (품질 비용)</div>
-            <div class="text-2xl lg:text-3xl font-black text-white relative z-10 mt-auto pt-2 truncate" id="kpi-qcost">₩0</div>
+            <div class="text-xs font-bold text-slate-500 mb-1 relative z-10">Q-COST (품질 비용)</div>
+            <div class="text-2xl lg:text-3xl font-black text-slate-800 relative z-10 mt-auto pt-1 truncate" id="kpi-qcost">₩0</div>
         </div>
     </div>
 
