@@ -379,6 +379,60 @@ function renderCustomTypeUI(typeMap, totalMDStr) {
     container.innerHTML = stackedBarHtml + gridHtml;
 }
 
+// 💡 대시보드 전용 프로젝트 자동완성 (초성 검색 반영)
+window.whShowDashPjtAuto = function(input) {
+    const val = input.value.trim().toLowerCase();
+    const drop = document.getElementById('wh-dash-pjt-autocomplete');
+    if (!drop) return;
+
+    if(!val) { drop.classList.add('hidden'); return; }
+
+    let searchPool = [];
+    let seenCodes = new Set();
+
+    (window.pjtCodeMasterList || []).forEach(p => {
+        if (p.code && !seenCodes.has(p.code)) {
+            seenCodes.add(p.code);
+            searchPool.push(p);
+        }
+    });
+    (window.currentWorkLogs || []).forEach(l => {
+        if (l.projectCode && !seenCodes.has(l.projectCode)) {
+            seenCodes.add(l.projectCode);
+            searchPool.push({code: l.projectCode, name: l.projectName || ''});
+        }
+    });
+
+    let matches = searchPool.filter(p => {
+        let code = (p.code || '').toLowerCase();
+        let name = (p.name || '').toLowerCase();
+        return code.includes(val) || name.includes(val) || 
+               (window.matchString && window.matchString(val, p.code)) || 
+               (window.matchString && window.matchString(val, p.name));
+    });
+
+    if(matches.length > 0) {
+        drop.innerHTML = matches.map(m => {
+            let sName = m.name ? m.name.replace(/'/g,"\\'").replace(/"/g,'&quot;') : '';
+            let sCode = m.code ? m.code.replace(/'/g,"\\'").replace(/"/g,'&quot;') : '-';
+            return `<li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-xs font-bold text-slate-700 border-b border-slate-50 last:border-0 transition-colors flex items-center gap-2" onmousedown="window.whSelectDashPjt('${sCode}')"><span class="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-md font-black tracking-wide shrink-0">[${sCode}]</span><span class="truncate flex-1">${sName}</span></li>`;
+        }).join('');
+        drop.classList.remove('hidden');
+    } else {
+        drop.classList.add('hidden');
+    }
+};
+
+window.whSelectDashPjt = function(code) {
+    const input = document.getElementById('wh-search-pjt');
+    if(input) {
+        input.value = code; 
+        window.updateWhDashboard();
+    }
+    const drop = document.getElementById('wh-dash-pjt-autocomplete');
+    if (drop) drop.classList.add('hidden');
+};
+
 window.updateWhDashboard = function() {
     window.whPjtSearch = document.getElementById('wh-search-pjt')?.value.toLowerCase() || '';
     
@@ -883,7 +937,7 @@ function appendWhInputRow(logData = null, index = 1) {
         <td class="p-3 relative">
             <div class="relative flex items-center">
                 <i class="fa-solid fa-magnifying-glass absolute left-3 text-indigo-300 text-xs"></i>
-                <input type="text" id="${uniqueId}" class="row-pjt-name w-full border border-slate-200 rounded-xl pl-8 pr-3 py-2.5 text-sm font-bold text-indigo-700 placeholder-slate-400 bg-slate-50 hover:bg-slate-100 focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none" value="${pCode}" placeholder="코드 검색" oninput="window.whIsDirty=true; window.whShowPjtAuto(this)" autocomplete="off">
+                <input type="text" id="${uniqueId}" class="row-pjt-name w-full border border-slate-200 rounded-xl pl-8 pr-3 py-2.5 text-sm font-bold text-indigo-700 placeholder-slate-400 bg-slate-50 hover:bg-slate-100 focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none" value="${pCode}" placeholder="코드/명칭 검색 (초성 연동)" oninput="window.whIsDirty=true; window.whShowPjtAuto(this)" autocomplete="off">
             </div>
             <input type="hidden" class="row-pjt-id" value="${pId}">
             <input type="hidden" class="row-pjt-code" value="${pCode}">
