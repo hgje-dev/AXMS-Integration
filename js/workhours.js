@@ -15,6 +15,7 @@ window.whIsDirty = false;
 window.todayBadgeInitialized = false;
 let myTodayLogUnsubscribe = null;
 
+// 💡 드래그 거리 판별용
 window.whDragDist = 0;
 window.whDragStartX = 0;
 window.whDragStartY = 0;
@@ -94,16 +95,20 @@ window.openTodayWhModal = function() {
 
 window.setWhMemberMode = function(mode) {
     window.whMemberMode = mode;
-    const btnAll = document.getElementById('wh-btn-member-all');
-    const btnMe = document.getElementById('wh-btn-member-me');
+    const btnsAll = document.querySelectorAll('#wh-btn-member-all');
+    const btnsMe = document.querySelectorAll('#wh-btn-member-me');
     
-    if (mode === 'all') {
-        if (btnAll) btnAll.className = 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all whitespace-nowrap';
-        if (btnMe) btnMe.className = 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all bg-transparent whitespace-nowrap';
-    } else {
-        if (btnMe) btnMe.className = 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all whitespace-nowrap';
-        if (btnAll) btnAll.className = 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all bg-transparent whitespace-nowrap';
-    }
+    btnsAll.forEach(btn => {
+        btn.className = mode === 'all' 
+            ? 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all whitespace-nowrap' 
+            : 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all bg-transparent whitespace-nowrap';
+    });
+    
+    btnsMe.forEach(btn => {
+        btn.className = mode === 'me' 
+            ? 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all whitespace-nowrap' 
+            : 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all bg-transparent whitespace-nowrap';
+    });
     
     window.updateWhDashboard();
     window.renderWhView();
@@ -209,12 +214,12 @@ window.setWhStatMode = function(mode) {
         if(btnW) btnW.className = 'px-4 py-1.5 text-xs font-bold bg-indigo-600 text-white shadow-sm rounded-full transition-all';
         if(btnM) btnM.className = 'px-4 py-1.5 text-xs font-bold text-slate-600 bg-transparent transition-all hover:bg-slate-100 rounded-full';
         document.getElementById('wh-dash-period-label').innerHTML = '주간 총 투입 <span class="text-[9px] font-normal">(승인완료)</span>';
-        document.getElementById('wh-chart-trend-title').innerText = '일자별 투입 추이';
+        document.getElementById('wh-chart-trend-title').innerText = '일자별 투입 추이 (MD)';
     } else {
         if(btnM) btnM.className = 'px-4 py-1.5 text-xs font-bold bg-indigo-600 text-white shadow-sm rounded-full transition-all';
         if(btnW) btnW.className = 'px-4 py-1.5 text-xs font-bold text-slate-600 bg-transparent transition-all hover:bg-slate-100 rounded-full';
         document.getElementById('wh-dash-period-label').innerHTML = '월간 총 투입 <span class="text-[9px] font-normal">(승인완료)</span>';
-        document.getElementById('wh-chart-trend-title').innerText = '주차별 투입 추이';
+        document.getElementById('wh-chart-trend-title').innerText = '주차별 투입 추이 (MD)';
     }
     window.updateWhDashboard();
 };
@@ -257,7 +262,7 @@ window.resetWhFilters = function() {
     window.applyWhFilters();
 };
 
-// 💡 스크롤 리스트 UI 렌더링 함수 추가
+// 💡 1. 커스텀 인원 UI 렌더링
 function renderCustomPersonUI(personMap) {
     const container = document.getElementById('wh-ui-person');
     const titleEl = document.getElementById('wh-ui-person-title');
@@ -275,7 +280,6 @@ function renderCustomPersonUI(personMap) {
     let html = '<div class="flex flex-col gap-3">';
     sortedData.forEach(d => {
         const pct = (d.md / maxMd) * 100;
-        // background-image로 점선(분절형) 느낌 구현
         html += `
         <div class="flex flex-col gap-1">
             <div class="flex justify-between items-end text-[11px] font-bold text-slate-700">
@@ -291,7 +295,7 @@ function renderCustomPersonUI(personMap) {
     container.innerHTML = html;
 }
 
-// 💡 비율/스택 바 UI 렌더링 함수 추가
+// 💡 2. 커스텀 작업 비율 UI 렌더링
 function renderCustomTypeUI(typeMap, totalMDStr) {
     const container = document.getElementById('wh-ui-type');
     const titleEl = document.getElementById('wh-ui-type-title');
@@ -310,7 +314,6 @@ function renderCustomTypeUI(typeMap, totalMDStr) {
     const colors = ['bg-indigo-500', 'bg-purple-500', 'bg-sky-500', 'bg-teal-500', 'bg-blue-500', 'bg-rose-500', 'bg-amber-500', 'bg-slate-500'];
     const textColors = ['text-indigo-600', 'text-purple-600', 'text-sky-600', 'text-teal-600', 'text-blue-600', 'text-rose-600', 'text-amber-600', 'text-slate-600'];
 
-    // 1. Stacked Bar
     let stackedBarHtml = '<div class="w-full h-3 rounded-full flex overflow-hidden mb-5 shadow-sm mt-2">';
     sortedData.forEach((d, i) => {
         const pct = (d.md / totalMD) * 100;
@@ -319,7 +322,6 @@ function renderCustomTypeUI(typeMap, totalMDStr) {
     });
     stackedBarHtml += '</div>';
 
-    // 2. Grid Legend
     let gridHtml = '<div class="grid grid-cols-2 gap-y-3 gap-x-2">';
     sortedData.forEach((d, i) => {
         const pct = ((d.md / totalMD) * 100).toFixed(0);
@@ -373,7 +375,6 @@ window.updateWhDashboard = function() {
             const pCode = (l.projectCode || '').toLowerCase();
             const pName = (l.projectName || '').toLowerCase();
             const search = window.whPjtSearch.trim();
-            
             return pCode.includes(search) || pName.includes(search) || 
                    (window.matchString && window.matchString(search, pCode)) || 
                    (window.matchString && window.matchString(search, pName));
@@ -419,7 +420,6 @@ window.updateWhDashboard = function() {
     const totalMD = (totalHours / 8).toFixed(1);
     document.getElementById('wh-dash-total-md').innerText = totalMD;
 
-    // 💡 3. 대시보드 내 PJT별 MD 리스트 렌더링
     const breakdownEl = document.getElementById('wh-dash-pjt-breakdown');
     if (breakdownEl) {
         let breakdownHtml = '';
@@ -442,11 +442,10 @@ window.updateWhDashboard = function() {
     const pjtInfoContainer = document.getElementById('wh-dash-pjt-info');
     if (pjtInfoContainer) pjtInfoContainer.classList.add('hidden');
 
-    // 💡 Chart.js 대신 커스텀 UI 렌더링 함수 호출!
     renderCustomPersonUI(personMap);
     renderCustomTypeUI(typeMap, totalMD);
-
-    // 추이는 Chart.js 유지
+    
+    document.getElementById('wh-chart-trend-title').innerText = window.whStatMode === 'week' ? '일자별 투입 추이 (MD)' : '주차별 투입 추이 (MD)';
     renderWhChart('wh-chart-trend', window.whStatMode === 'week' ? 'bar' : 'line', trendMap, 'MD', false);
 
     let extraHtml = '';
@@ -859,7 +858,12 @@ window.whShowPjtAuto = function(input) {
     const val = input.value.trim().toLowerCase();
     
     let drop = document.getElementById('wh-pjt-autocomplete');
-    if (!drop) return;
+    if (!drop) {
+        drop = document.createElement('ul');
+        drop.id = 'wh-pjt-autocomplete';
+        drop.className = 'fixed z-[99999] bg-white border border-indigo-400 shadow-2xl rounded-xl max-h-48 overflow-y-auto text-sm custom-scrollbar py-1 hidden';
+        document.body.appendChild(drop);
+    }
     
     const tr = input.closest('tr');
     tr.querySelector('.row-pjt-id').value = '';
@@ -867,21 +871,37 @@ window.whShowPjtAuto = function(input) {
 
     if(!val) { drop.classList.add('hidden'); return; }
 
-    let matches = (window.pjtCodeMasterList || []).filter(p => {
+    let searchPool = [];
+    let seenCodes = new Set();
+
+    (window.pjtCodeMasterList || []).forEach(p => {
+        if (p.code && !seenCodes.has(p.code)) {
+            seenCodes.add(p.code);
+            searchPool.push(p);
+        }
+    });
+    (window.currentProjectStatusList || []).forEach(p => {
+        if (p.code && !seenCodes.has(p.code)) {
+            seenCodes.add(p.code);
+            searchPool.push(p);
+        }
+    });
+
+    let matches = searchPool.filter(p => {
         let code = (p.code || '').toLowerCase();
         return code.includes(val) || (window.matchString && window.matchString(val, p.code));
     });
 
     if(matches.length > 0) {
         const rect = input.getBoundingClientRect();
-        drop.style.position = 'fixed';
         drop.style.left = `${rect.left}px`;
-        drop.style.top = `${rect.bottom + 2}px`;
-        drop.style.width = `${rect.width + 50}px`; 
+        drop.style.top = `${rect.bottom + 4}px`;
+        drop.style.width = `${Math.max(rect.width, 150)}px`; 
 
         drop.innerHTML = matches.map(m => {
-            let sName = m.name.replace(/'/g,"\\'").replace(/"/g,'&quot;');
-            return `<li class="px-3 py-2 hover:bg-indigo-50 cursor-pointer text-xs font-black text-slate-700 border-b border-slate-50 truncate transition-colors flex items-center gap-1.5" onmousedown="window.whSelectPjt('${input.id}', '${m.id}', '${m.code||''}', '${sName}')"><span class="text-indigo-600">[${m.code||'-'}]</span></li>`;
+            let sName = m.name ? m.name.replace(/'/g,"\\'").replace(/"/g,'&quot;') : '';
+            let sCode = m.code ? m.code.replace(/'/g,"\\'").replace(/"/g,'&quot;') : '-';
+            return `<li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-xs font-black text-indigo-700 border-b border-slate-50 truncate transition-colors flex items-center gap-1.5" onmousedown="window.whSelectPjt('${input.id}', '${m.id}', '${sCode}', '${sName}')">${sCode}</li>`;
         }).join('');
         drop.classList.remove('hidden');
     } else {
@@ -931,7 +951,7 @@ window.saveWhInputData = async function() {
         const content = tr.querySelector('.row-content').value.trim();
         const isConfirmed = tr.querySelector('.row-conf').checked;
 
-        if (hours > 0 && (projectCodeInput || content)) {
+        if (hours > 0 && (projectCodeInput || projectName || content)) {
             toSave.push({ 
                 id, 
                 date: dateStr, 
@@ -1152,9 +1172,3 @@ window.saveWorkhoursToDrive = async function() {
         window.showToast("드라이브 저장에 실패했습니다. (콘솔 확인)", "error");
     }
 };
-
-}
-
-{
-type: uploaded file
-fileName: image_d86dd3.png
