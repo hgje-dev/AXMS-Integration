@@ -1,4 +1,148 @@
-<div id="weekly-my-view" class="hidden space-y-6">
+<div class="space-y-6 max-w-7xl mx-auto pb-10">
+    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+        <div class="px-6 py-4 flex flex-col md:flex-row justify-between items-center bg-white gap-4">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner">
+                    <i class="fa-solid fa-calendar-check text-2xl"></i>
+                </div>
+                <div>
+                    <h2 class="text-xl font-black text-slate-800 flex items-center gap-2">
+                        주간 업무 일지 
+                        <span id="top-my-submit-status" class="text-[10px] px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 font-bold ml-1 shadow-sm">확인중</span>
+                    </h2>
+                    <div class="mt-2 flex flex-col gap-1">
+                        <div class="text-[11px] text-slate-500 font-bold bg-slate-50 px-2 py-1 rounded w-fit border border-slate-100">보고 기간: <span id="weekly-period-text" class="text-slate-700 ml-1"></span></div>
+                        <div class="text-[11px] text-rose-500 font-bold bg-rose-50 px-2 py-1 rounded w-fit border border-rose-100">보고 마감: <span id="weekly-deadline-text" class="text-rose-600 font-black ml-1"></span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex bg-slate-100 p-1.5 rounded-xl">
+                <button id="tab-team-btn" onclick="window.switchWeeklyTab('team')" class="px-5 py-2 text-sm font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-users"></i> 업무 현황
+                </button>
+                <button id="tab-team-sch-btn" onclick="window.switchWeeklyTab('team-sch')" class="px-5 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-users-viewfinder"></i> 팀 일정
+                </button>
+                <button id="tab-my-btn" onclick="window.switchWeeklyTab('my')" class="px-5 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-regular fa-calendar-user"></i> 나의 일정
+                </button>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <button onclick="window.openTeamModal()" class="text-[11px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-2 rounded-xl transition-colors border border-indigo-100 flex items-center gap-1.5 whitespace-nowrap hidden sm:flex">
+                    <i class="fa-solid fa-users-gear"></i> 팀원 관리
+                </button>
+                
+                <div class="flex items-center bg-white border border-slate-200 rounded-xl p-1 shadow-sm relative shrink-0">
+                    <button onclick="window.changeWeeklyWeek(-1)" class="px-3 py-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-all z-10"><i class="fa-solid fa-chevron-left"></i></button>
+                    
+                    <div class="relative flex items-center justify-center px-4 cursor-pointer z-10 group min-w-[140px] h-full" onclick="document.getElementById('weekly-log-filter-week').showPicker()">
+                        <span id="weekly-display-text" class="text-sm font-black text-slate-700 group-hover:text-indigo-600 transition-colors">데이터 로드중...</span>
+                        <i class="fa-regular fa-calendar ml-2 text-slate-400 group-hover:text-indigo-500 transition-colors"></i>
+                        <input type="week" id="weekly-log-filter-week" class="absolute w-0 h-0 opacity-0 -z-10" onchange="window.handleWeekChange(this.value)">
+                    </div>
+                    
+                    <button onclick="window.changeWeeklyWeek(1)" class="px-3 py-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-all z-10"><i class="fa-solid fa-chevron-right"></i></button>
+                </div>
+
+                <button id="btn-export-weekly" onclick="window.exportWeeklyLogsExcel()" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md transition-colors items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-file-excel"></i> 엑셀 다운로드
+                </button>
+
+                <button onclick="window.openWeeklyLogWriteModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-plus"></i> 일지 작성
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-indigo-50/50 rounded-2xl border border-indigo-100 p-5 shadow-sm relative group">
+        <div class="flex justify-between items-center mb-2">
+            <h3 class="text-sm font-black text-indigo-800 flex items-center gap-2"><i class="fa-solid fa-bullhorn text-indigo-500"></i> 이번 주 공지사항</h3>
+            <button onclick="window.editNotice()" class="text-xs font-bold text-indigo-400 hover:text-indigo-600 hidden group-hover:block transition-colors admin-only"><i class="fa-solid fa-pen"></i> 수정</button>
+        </div>
+        <input type="hidden" id="weekly-notice-raw-text">
+        <p id="weekly-notice-text" class="text-sm text-slate-700 font-medium ml-6 leading-relaxed">공지사항을 불러오는 중입니다...</p>
+    </div>
+
+    <div id="weekly-team-view" class="space-y-6 block">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-center">
+                <div class="flex justify-between items-start mb-2"><span class="text-[11px] font-bold text-slate-500">제출된 일지</span><i class="fa-regular fa-calendar-check text-slate-300 text-lg"></i></div>
+                <p class="text-3xl font-black text-slate-800"><span id="stat-submitted">0</span><span class="text-sm text-slate-500 ml-1 font-bold">건</span></p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 border border-emerald-200 shadow-sm flex flex-col justify-center relative overflow-hidden">
+                <div class="absolute -right-4 -bottom-4 opacity-5"><i class="fa-solid fa-circle-check text-8xl text-emerald-500"></i></div>
+                <div class="flex justify-between items-start mb-2 relative z-10"><span class="text-[11px] font-bold text-emerald-600">완료된 업무</span><div class="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-500"><i class="fa-solid fa-check text-xs"></i></div></div>
+                <p class="text-3xl font-black text-emerald-600 relative z-10"><span id="stat-completed">0</span><span class="text-sm ml-1 font-bold">건</span></p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 border border-blue-200 shadow-sm flex flex-col justify-center">
+                <div class="flex justify-between items-start mb-2"><span class="text-[11px] font-bold text-blue-600">진행 중</span><div class="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-500"><i class="fa-regular fa-clock text-xs"></i></div></div>
+                <p class="text-3xl font-black text-blue-600"><span id="stat-progress">0</span><span class="text-sm ml-1 font-bold">건</span></p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 border border-rose-200 shadow-sm flex flex-col justify-center">
+                <div class="flex justify-between items-start mb-2"><span class="text-[11px] font-bold text-rose-600">이슈/지연</span><div class="w-6 h-6 rounded-full bg-rose-100 flex items-center justify-center text-rose-500"><i class="fa-solid fa-exclamation text-xs"></i></div></div>
+                <p class="text-3xl font-black text-rose-600"><span id="stat-issue">0</span><span class="text-sm ml-1 font-bold">건</span></p>
+            </div>
+        </div>
+
+        <div id="missing-members-card" class="bg-[#fff7ed] border border-[#ffedd5] rounded-2xl p-4 flex items-center justify-between shadow-sm hidden">
+            <div class="flex items-center gap-4">
+                <div class="w-10 h-10 bg-orange-100 text-orange-500 rounded-full flex items-center justify-center text-lg"><i class="fa-solid fa-user-clock"></i></div>
+                <div>
+                    <h4 class="text-sm font-bold text-orange-800">미작성 팀원 (<span id="missing-count">0</span>명)</h4>
+                    <p class="text-[11px] text-orange-600 mt-0.5">아직 이번 주 업무 일지를 제출하지 않았습니다.</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <div id="missing-members-list" class="flex gap-2 flex-wrap max-w-md justify-end"></div>
+                <button onclick="window.urgeMissingMembers()" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition-colors whitespace-nowrap ml-2"><i class="fa-regular fa-bell mr-1"></i> 작성 독려하기</button>
+            </div>
+        </div>
+
+        <div class="flex gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex-wrap md:flex-nowrap">
+            <div class="relative flex-1 w-full md:max-w-xs">
+                <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                <input type="text" id="weekly-search-name" placeholder="팀원 이름..." class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-indigo-500 font-bold" oninput="window.filterWeeklyLogs()">
+            </div>
+            <div class="relative flex-1 w-full">
+                <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                <input type="text" id="weekly-search-content" placeholder="업무 내용, 이슈 등 검색어 입력..." class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-indigo-500 font-bold" oninput="window.filterWeeklyLogs()">
+            </div>
+        </div>
+
+        <div id="weekly-log-feed" class="space-y-6"></div>
+    </div>
+
+    <div id="weekly-team-sch-view" class="hidden space-y-6">
+        <div class="flex flex-wrap justify-between items-center bg-white p-4 rounded-2xl border border-slate-200 shadow-sm gap-4">
+            <div class="flex items-center gap-4">
+                <h3 class="text-base font-black text-slate-800 whitespace-nowrap"><i class="fa-solid fa-users-viewfinder text-indigo-500 mr-2"></i> 이번 주 팀 전체 일정</h3>
+                <div class="flex bg-slate-100 p-1 rounded-xl">
+                    <button id="btn-sch-kanban" onclick="window.setSchViewMode('kanban')" class="px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap">
+                        <i class="fa-solid fa-columns"></i> 칸반 뷰
+                    </button>
+                    <button id="btn-sch-calendar" onclick="window.setSchViewMode('calendar')" class="px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-1.5 bg-transparent whitespace-nowrap">
+                        <i class="fa-regular fa-calendar-days"></i> 달력 뷰
+                    </button>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="flex items-center gap-1">
+                    <button id="btn-cal-prev" onclick="window.changeCalMonth(-1)" class="hidden p-1.5 text-slate-400 hover:bg-slate-100 rounded transition-colors"><i class="fa-solid fa-chevron-left"></i></button>
+                    <span id="sch-cal-month-display" class="hidden text-sm font-bold text-indigo-700 mx-2"></span>
+                    <button id="btn-cal-next" onclick="window.changeCalMonth(1)" class="hidden p-1.5 text-slate-400 hover:bg-slate-100 rounded transition-colors"><i class="fa-solid fa-chevron-right"></i></button>
+                </div>
+                <span class="text-xs text-slate-500 font-bold ml-2 hidden sm:block">휴가 및 기타 공통 일정 현황</span>
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-2 md:grid-cols-7 gap-4" id="weekly-team-kanban-board"></div>
+        <div class="hidden bg-white rounded-2xl border border-slate-200 overflow-hidden flex-col shadow-sm" id="weekly-team-calendar-board"></div>
+    </div>
+
+    <div id="weekly-my-view" class="hidden space-y-6">
         <div class="flex flex-wrap justify-between items-center bg-white p-4 rounded-2xl border border-slate-200 shadow-sm gap-4">
             <div class="flex items-center gap-4">
                 <h3 class="text-base font-black text-slate-800 whitespace-nowrap"><i class="fa-regular fa-calendar-user text-indigo-500 mr-2"></i> 이번 주 개인 일정</h3>
@@ -23,3 +167,183 @@
         <div class="grid grid-cols-2 md:grid-cols-7 gap-4" id="weekly-kanban-board"></div>
         <div class="hidden bg-white rounded-2xl border border-slate-200 overflow-hidden flex-col shadow-sm" id="weekly-my-calendar-board"></div>
     </div>
+</div>
+
+<div id="weekly-log-write-modal" class="fixed inset-0 z-[200] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl flex flex-col h-[750px] md:h-[90vh] overflow-hidden">
+        <div class="px-6 py-4 border-b flex justify-between items-start bg-white">
+            <div>
+                <h2 class="text-xl font-black text-slate-800 flex items-center gap-2">나의 주간 업무 일지 <span id="write-status-badge" class="bg-indigo-100 text-indigo-600 text-[10px] px-2 py-0.5 rounded-full font-bold ml-2 shadow-sm">작성 중</span></h2>
+                <p class="text-xs text-slate-500 mt-1 font-medium">매일 일별로 기록하고, 주말에 한 번에 최종 제출하세요.</p>
+            </div>
+            <button onclick="window.closeWeeklyLogWriteModal()" class="text-slate-400 hover:text-rose-500 p-1"><i class="fa-solid fa-xmark text-xl"></i></button>
+        </div>
+        
+        <div class="p-6 bg-slate-50 flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-6">
+            <input type="hidden" id="weekly-draft-id">
+            
+            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                <h4 class="text-xs font-bold text-slate-700 mb-3">새 업무 기록하기</h4>
+                <div class="flex flex-wrap gap-2 mb-3">
+                    <select id="wl-new-day" class="border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:border-indigo-500 bg-white shadow-sm cursor-pointer">
+                        <option value="주간 공통">📌 주간 공통</option>
+                        <option value="월요일">🕒 월요일</option>
+                        <option value="화요일">🕒 화요일</option>
+                        <option value="수요일">🕒 수요일</option>
+                        <option value="목요일">🕒 목요일</option>
+                        <option value="금요일">🕒 금요일</option>
+                        <option value="토요일">🕒 토요일</option>
+                        <option value="일요일">🕒 일요일</option>
+                    </select>
+                    <select id="wl-new-status" class="border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold text-emerald-600 outline-none focus:border-indigo-500 bg-white shadow-sm cursor-pointer">
+                        <option value="완료">✅ 완료</option>
+                        <option value="진행 중" class="text-blue-600">▶ 진행 중</option>
+                        <option value="보류" class="text-slate-500">⏸ 보류</option>
+                    </select>
+                    
+                    <select id="wl-new-loc" class="border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold text-slate-600 outline-none focus:border-indigo-500 bg-white shadow-sm cursor-pointer">
+                        <option value="사내">🏢 사내</option>
+                        <option value="국내(출장)">🚗 국내(출장)</option>
+                        <option value="해외">✈️ 해외</option>
+                    </select>
+                </div>
+                <div class="flex gap-2 items-end">
+                    <textarea id="wl-new-content" placeholder="진행한 업무를 상세히 입력하세요.&#10;(@ 멘션 가능, Enter로 추가, Shift+Enter로 줄바꿈)" oninput="window.handleMention(this)" onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); window.addWeeklyTaskRow(); }" class="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-indigo-500 h-20 resize-none custom-scrollbar shadow-inner bg-slate-50 focus:bg-white transition-colors"></textarea>
+                    <button onclick="window.addWeeklyTaskRow()" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-4 py-3 rounded-xl text-sm font-bold h-20 transition-colors whitespace-nowrap shadow-sm">추가</button>
+                </div>
+            </div>
+
+            <div id="wl-task-list" class="space-y-3"></div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-white p-5 rounded-2xl border border-orange-200 shadow-sm relative">
+                    <h4 class="text-[11px] font-bold text-orange-600 mb-2 flex items-center gap-1"><i class="fa-regular fa-comment-dots"></i> 요청사항 및 이슈 (선택)</h4>
+                    <textarea id="wl-issues" oninput="window.handleMention(this)" placeholder="팀원들에게 공유할 이슈나 타 부서에 요청할 사항을 상세히 적어주세요." class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-orange-500 h-[104px] resize-none custom-scrollbar"></textarea>
+                </div>
+                <div class="space-y-4">
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative">
+                        <h4 class="text-[11px] font-bold text-slate-500 mb-2">관여한 프로젝트 (선택)</h4>
+                        
+                        <div class="flex gap-2 mb-3">
+                            <div class="relative flex-1">
+                                <input type="text" id="wl-pjt-input" placeholder="프로젝트명 검색..." oninput="window.showAutocomplete(this, 'wl-temp-pjt-code', '', true)" onkeydown="if(event.key==='Enter') { event.preventDefault(); window.addWlProject(); }" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-indigo-500 font-bold bg-slate-50">
+                                <input type="hidden" id="wl-temp-pjt-code">
+                            </div>
+                            <button onclick="window.addWlProject()" class="bg-slate-800 hover:bg-slate-700 text-white px-4 rounded-xl text-xs font-bold transition-colors shadow-sm shrink-0">추가</button>
+                        </div>
+                        
+                        <div id="wl-pjt-tags" class="flex flex-wrap gap-2 empty:hidden mt-2"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="px-6 py-4 border-t border-slate-200 bg-white flex justify-between items-center">
+            <span class="text-[11px] text-slate-400 font-medium">작성 중 창을 닫아도 내용은 자동 유지됩니다.</span>
+            <div class="flex gap-2">
+                <button onclick="window.saveWeeklyLog(false)" class="bg-white border border-slate-300 hover:bg-slate-50 text-slate-600 px-5 py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm flex items-center gap-2"><i class="fa-regular fa-floppy-disk"></i> 임시 저장 후 닫기</button>
+                <button onclick="window.saveWeeklyLog(true)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2"><i class="fa-regular fa-paper-plane"></i> 주간 일지 최종 제출</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="notice-modal" class="fixed inset-0 z-[300] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10 transition-opacity">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-indigo-50">
+            <h2 class="text-base font-extrabold text-indigo-800 flex items-center gap-2">
+                <i class="fa-solid fa-bullhorn text-indigo-500"></i> 주간 공지사항 작성
+            </h2>
+            <button onclick="window.closeNoticeModal()" class="text-indigo-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
+        </div>
+        <div class="p-6 bg-slate-50/50 flex flex-col gap-4">
+            <textarea id="notice-text-input" placeholder="이번 주 공지사항을 입력하세요. (@멘션, 자동 링크 변환, 줄바꿈 기능 지원)" class="w-full h-40 border border-slate-300 px-4 py-3 rounded-xl text-sm outline-indigo-500 resize-none custom-scrollbar bg-white" oninput="window.handleMention(this)"></textarea>
+            <div class="flex items-center gap-2 mt-2 bg-indigo-50/50 px-4 py-3 rounded-xl border border-indigo-100">
+                <input type="checkbox" id="notice-email-send" class="accent-indigo-600 w-4 h-4 cursor-pointer rounded border-slate-300" checked>
+                <label for="notice-email-send" class="text-[12px] font-bold text-slate-700 cursor-pointer select-none">저장 시 전체 팀원에게 알림 메일 자동 발송</label>
+            </div>
+        </div>
+        <div class="px-6 py-4 border-t bg-white flex justify-end gap-2">
+            <button onclick="window.closeNoticeModal()" class="px-5 py-2.5 bg-slate-100 border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 transition-colors">취소</button>
+            <button onclick="window.saveNotice()" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors"><i class="fa-solid fa-check mr-1"></i> 저장 및 전송</button>
+        </div>
+    </div>
+</div>
+
+<div id="schedule-modal" class="fixed inset-0 z-[200] hidden items-center justify-center bg-slate-900/50 backdrop-blur-sm py-10">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden transform transition-all">
+        <div class="px-5 py-4 border-b flex justify-between items-center bg-white">
+            <h2 class="text-base font-black text-slate-800 flex items-center gap-2"><i class="fa-regular fa-calendar text-indigo-500"></i> 개인 일정 <span id="sch-modal-title">추가</span></h2>
+            <button onclick="window.closeScheduleModal()" class="text-slate-400 hover:text-rose-500 p-1"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="p-6 space-y-4 bg-slate-50/50">
+            <input type="hidden" id="sch-id">
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 mb-1">요일</label>
+                    <select id="sch-day" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 bg-white outline-indigo-500">
+                        <option value="월요일">월요일</option>
+                        <option value="화요일">화요일</option>
+                        <option value="수요일">수요일</option>
+                        <option value="목요일">목요일</option>
+                        <option value="금요일">금요일</option>
+                        <option value="토요일">토요일</option>
+                        <option value="일요일">일요일</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 mb-1">시간 (선택)</label>
+                    <input type="text" id="sch-time" placeholder="예: 종일, 14:00" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-indigo-500 bg-white">
+                </div>
+            </div>
+            <div>
+                <label class="block text-[11px] font-bold text-slate-500 mb-1">분류</label>
+                <select id="sch-category" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 bg-white outline-indigo-500">
+                    <option value="휴가/연차">☕ 휴가/연차</option>
+                    <option value="휴가/오전">☕ 휴가/오전</option>
+                    <option value="휴가/오후">☕ 휴가/오후</option>
+                    <option value="회의">🗣 회의</option>
+                    <option value="출장(국내)">🚗 출장(국내)</option>
+                    <option value="출장(국외)">✈️ 출장(국외)</option>
+                    <option value="사내(작업)">💻 사내(작업)</option>
+                    <option value="사내(공통)">🏢 사내(공통)</option>
+                    <option value="기타">📌 기타</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-[11px] font-bold text-slate-500 mb-1">일정 제목 (필수)</label>
+                <input type="text" id="sch-title" placeholder="일정의 핵심 제목 (예: 오후 반차)" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold outline-indigo-500 bg-white">
+            </div>
+            <div>
+                <label class="block text-[11px] font-bold text-slate-500 mb-1">상세 내용 (선택)</label>
+                <textarea id="sch-content" oninput="window.handleMention(this)" placeholder="회의 안건, 상세 목적 등 (@멘션 가능, 줄바꿈 Shift+Enter)" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm outline-indigo-500 bg-white h-20 resize-none custom-scrollbar"></textarea>
+            </div>
+            <div class="flex items-center gap-2 mt-4 pt-4 border-t border-slate-200">
+                <input type="checkbox" id="sch-is-shared" checked class="accent-indigo-600 w-4 h-4 cursor-pointer rounded border-slate-300">
+                <label for="sch-is-shared" class="text-xs font-bold text-slate-600 cursor-pointer select-none">팀 일정표에 이 일정을 공유합니다.</label>
+            </div>
+        </div>
+        <div class="px-5 py-4 border-t bg-white flex justify-end gap-2">
+            <button onclick="window.closeScheduleModal()" class="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-colors">취소</button>
+            <button onclick="window.saveSchedule()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors">저장 완료</button>
+        </div>
+    </div>
+</div>
+
+<div id="schedule-view-modal" class="fixed inset-0 z-[250] hidden items-center justify-center bg-slate-900/50 backdrop-blur-sm py-10">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden transform transition-all">
+        <div class="px-5 py-4 border-b flex justify-between items-center bg-white">
+            <h2 class="text-base font-black text-slate-800 flex items-center gap-2"><i class="fa-regular fa-calendar-check text-indigo-500"></i> 일정 상세 정보</h2>
+            <button onclick="window.closeScheduleViewModal()" class="text-slate-400 hover:text-rose-500 p-1"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="p-6 space-y-4 bg-slate-50/50">
+            <div class="flex items-center gap-2 mb-2">
+                <span id="sv-author" class="text-[10px] font-black text-white bg-indigo-500 px-2 py-0.5 rounded shadow-sm">작성자</span>
+                <span id="sv-category" class="text-[10px] font-black px-2 py-0.5 rounded shadow-sm">분류</span>
+            </div>
+            <h3 id="sv-title" class="text-lg font-black text-slate-800">제목</h3>
+            <div class="text-[11px] text-slate-500 font-bold flex items-center gap-1.5 border-b pb-3"><i class="fa-regular fa-clock"></i> <span id="sv-time">시간</span></div>
+            <div id="sv-content" class="text-sm font-medium text-slate-700 whitespace-pre-wrap leading-relaxed min-h-[60px] custom-scrollbar max-h-40 overflow-y-auto">내용</div>
+        </div>
+    </div>
+</div>
