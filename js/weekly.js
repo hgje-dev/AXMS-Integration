@@ -5,6 +5,7 @@ import { collection, doc, setDoc, addDoc, deleteDoc, query, onSnapshot, where, g
 let currentWeeklyLogUnsubscribe = null;
 let currentScheduleUnsubscribe = null;
 let noticeUnsubscribe = null;
+let monthlySchUnsubscribe = null;
 
 window.currentWeeklyLogList = [];
 window.allSchedules = []; 
@@ -12,6 +13,16 @@ window.currentScheduleList = [];
 window.draftTasks = []; 
 window.wlInvolvedProjects = []; 
 window.activeWeeklyTab = 'team'; 
+window.schCalDate = new Date();
+window.schViewMode = 'kanban'; 
+
+// 💡 한국 공휴일 데이터 세팅 (2024년 ~ 2027년)
+const WEEKLY_KR_HOLIDAYS = {
+    '2024-01-01': '신정', '2024-02-09': '설연휴', '2024-02-12': '대체공휴일', '2024-03-01': '삼일절', '2024-04-10': '국회의원선거', '2024-05-06': '대체공휴일', '2024-05-15': '부처님오신날', '2024-06-06': '현충일', '2024-08-15': '광복절', '2024-09-16': '추석연휴', '2024-09-17': '추석', '2024-09-18': '추석연휴', '2024-10-03': '개천절', '2024-10-09': '한글날', '2024-12-25': '성탄절',
+    '2025-01-01': '신정', '2025-01-28': '설연휴', '2025-01-29': '설날', '2025-01-30': '설연휴', '2025-03-01': '삼일절', '2025-03-03': '대체공휴일', '2025-05-05': '어린이날', '2025-05-06': '부처님오신날', '2025-06-06': '현충일', '2025-08-15': '광복절', '2025-10-03': '개천절', '2025-10-06': '추석연휴', '2025-10-07': '추석', '2025-10-09': '한글날', '2025-12-25': '성탄절',
+    '2026-01-01': '신정', '2026-02-16': '설연휴', '2026-02-17': '설날', '2026-02-18': '설연휴', '2026-03-01': '삼일절', '2026-03-02': '대체공휴일', '2026-05-05': '어린이날', '2026-05-24': '부처님오신날', '2026-05-25': '대체공휴일', '2026-06-06': '현충일', '2026-08-15': '광복절', '2026-09-24': '추석연휴', '2026-09-25': '추석', '2026-09-26': '추석연휴', '2026-10-03': '개천절', '2026-10-05': '대체공휴일', '2026-10-09': '한글날', '2026-12-25': '성탄절',
+    '2027-01-01': '신정', '2027-02-06': '설연휴', '2027-02-07': '설날', '2027-02-08': '설연휴', '2027-02-09': '대체공휴일', '2027-03-01': '삼일절', '2027-05-05': '어린이날', '2027-05-13': '부처님오신날', '2027-06-06': '현충일', '2027-08-15': '광복절', '2027-08-16': '대체공휴일', '2027-09-14': '추석연휴', '2027-09-15': '추석', '2027-09-16': '추석연휴', '2027-10-03': '개천절', '2027-10-09': '한글날', '2027-10-11': '대체공휴일', '2027-12-25': '성탄절'
+};
 
 window.switchWeeklyTab = function(tabName) {
     window.activeWeeklyTab = tabName;
@@ -43,6 +54,7 @@ window.switchWeeklyTab = function(tabName) {
     } else if (tabName === 'team-sch') {
         if (btnTeamSch) btnTeamSch.className = activeClass;
         if (viewTeamSch) viewTeamSch.classList.remove('hidden');
+        if (window.schViewMode === 'calendar') window.loadMonthlySchedules();
     }
 };
 
@@ -158,57 +170,47 @@ window.closeTeamModal = function() {
     }
 };
 
-window.addTeamMember = async function() {
-    const sel = document.getElementById('new-team-name');
-    const partSel = document.getElementById('new-team-part');
-    if (!sel || !sel.value) { 
-        if (window.showToast) window.showToast("사용자를 선택하세요.", "error"); 
-        return; 
-    }
+// ==========================================
+// 🔔 공지사항 관련 로직
+// ==========================================
+window.editNotice = function() {
+    const rawEl = document.getElementById('weekly-notice-raw-text');
+    let currentText = rawEl ? rawEl.value : ''; 
     
-    const uid = sel.options[sel.selectedIndex].dataset.uid;
-    const name = sel.value;
-    const part = partSel.value;
-    const members = window.teamMembers || [];
-    
-    const exists = members.find(function(t) { return t.name === name; });
-    if (exists) {
-        if (window.showToast) window.showToast("이미 등록된 팀원입니다.", "error"); 
-        return;
-    }
-    
-    try {
-        await addDoc(collection(db, "team_members"), { uid: uid, name: name, part: part, createdAt: Date.now() });
-        if (window.showToast) window.showToast("팀원이 추가되었습니다.");
-        window.openTeamModal(); 
-    } catch (e) { 
-        if (window.showToast) window.showToast("추가 실패", "error"); 
-    }
+    document.getElementById('notice-text-input').value = currentText;
+    const modal = document.getElementById('notice-modal');
+    if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
 };
 
-window.deleteTeamMember = async function(id) {
-    if (!confirm("이 팀원을 삭제하시겠습니까?")) return;
-    try {
-        await deleteDoc(doc(db, "team_members", id));
-        if (window.showToast) window.showToast("삭제되었습니다.");
-        window.openTeamModal(); 
-    } catch (e) { 
-        if (window.showToast) window.showToast("삭제 실패", "error"); 
-    }
+window.closeNoticeModal = function() {
+    const modal = document.getElementById('notice-modal');
+    if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
 };
 
-window.editNotice = async function() {
-    const el = document.getElementById('weekly-notice-text');
-    const currentText = el ? el.innerText : '';
-    const newText = prompt("이번 주 공지사항을 입력하세요:", currentText.includes("공지사항을 불러오는") ? '' : currentText);
+window.saveNotice = async function() {
+    const newText = document.getElementById('notice-text-input').value.trim();
+    const sendEmail = document.getElementById('notice-email-send').checked;
     
-    if (newText !== null) {
-        try {
-            await setDoc(doc(db, "settings", "weekly_notice"), { text: newText.trim(), updatedAt: Date.now() }, { merge: true });
-            if(window.showToast) window.showToast("공지사항이 수정되었습니다.");
-        } catch (e) {
-            if(window.showToast) window.showToast("수정 실패", "error");
+    try {
+        await setDoc(doc(db, "settings", "weekly_notice"), { text: newText, updatedAt: Date.now() }, { merge: true });
+        if(window.showToast) window.showToast("공지사항이 정상적으로 수정되었습니다.");
+        window.closeNoticeModal();
+        
+        if (sendEmail && newText) {
+            let recipients = window.teamMembers || window.allSystemUsers || [];
+            let count = 0;
+            for (let i = 0; i < recipients.length; i++) {
+                if (recipients[i].name && recipients[i].name !== window.userProfile?.name) {
+                    if (window.notifyUser) {
+                        await window.notifyUser(recipients[i].name, newText, null, "이번 주 공지사항");
+                        count++;
+                    }
+                }
+            }
+            if(window.showToast && count > 0) window.showToast(`팀원 ${count}명에게 공지 알림이 발송되었습니다.`);
         }
+    } catch (e) {
+        if(window.showToast) window.showToast("공지사항 수정 실패", "error");
     }
 };
 
@@ -222,10 +224,18 @@ window.loadWeeklyLogsData = function() {
     if (!noticeUnsubscribe) {
         noticeUnsubscribe = onSnapshot(doc(db, "settings", "weekly_notice"), (docSnap) => {
             const el = document.getElementById('weekly-notice-text');
+            const rawEl = document.getElementById('weekly-notice-raw-text');
+            
             if (el) {
                 if (docSnap.exists() && docSnap.data().text) {
-                    el.innerText = docSnap.data().text;
+                    let rawText = docSnap.data().text;
+                    if(rawEl) rawEl.value = rawText;
+                    
+                    let formatted = rawText.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+                    if(window.formatMentions) formatted = window.formatMentions(formatted);
+                    el.innerHTML = formatted;
                 } else {
+                    if(rawEl) rawEl.value = '';
                     el.innerText = "등록된 공지사항이 없습니다.";
                 }
             }
@@ -293,6 +303,10 @@ window.loadWeeklyLogsData = function() {
             
             window.renderKanbanBoard();
             window.renderTeamKanbanBoard();
+            
+            if(window.schViewMode === 'calendar') {
+                window.loadMonthlySchedules();
+            }
         });
     }
 };
@@ -630,6 +644,15 @@ window.removeWeeklyTaskRow = function(taskId) {
     window.renderDraftTasks();
 };
 
+// 💡 작성된 업무 내역에서 바로 상태를 바꿀 수 있는 함수 
+window.updateWeeklyTaskStatus = function(taskId, newStatus) {
+    let task = window.draftTasks.find(t => String(t.id) === String(taskId));
+    if (task) {
+        task.status = newStatus;
+        window.renderDraftTasks(); 
+    }
+};
+
 window.renderDraftTasks = function() {
     const listEl = document.getElementById('wl-task-list');
     if (!listEl) return;
@@ -655,7 +678,14 @@ window.renderDraftTasks = function() {
             timeBadge = '<span class="text-[9px] text-slate-400 ml-2 font-mono tracking-tighter">' + t.createdAtTime.split(' ')[1] + '</span>';
         }
 
-        return '<div class="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm group"><span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded w-16 text-center shrink-0">' + t.day + '</span><span class="text-[10px] font-bold border px-1.5 py-0.5 rounded shrink-0 w-12 text-center ' + statusClass + '">' + t.status + '</span><div class="text-sm font-medium text-slate-700 flex-1 truncate" title="' + String(t.content).replace(/"/g, '&quot;') + '">' + safeContent + ' <span class="text-[9px] bg-slate-100 text-slate-500 px-1 py-0.5 rounded ml-1">' + t.loc + '</span>' + timeBadge + '</div><button onclick="window.removeWeeklyTaskRow(\'' + t.id + '\')" class="text-slate-300 hover:text-rose-500 w-6 h-6 rounded flex items-center justify-center transition-colors"><i class="fa-solid fa-xmark"></i></button></div>';
+        // 💡 텍스트가 아닌 Select 드롭다운 형태로 렌더링 (편집 가능)
+        let statusSelect = `<select onchange="window.updateWeeklyTaskStatus('${t.id}', this.value)" class="text-[10px] font-bold border px-1.5 py-0.5 rounded shrink-0 w-[64px] text-center ${statusClass} outline-none cursor-pointer">
+            <option value="완료" ${t.status === '완료' ? 'selected' : ''}>✅ 완료</option>
+            <option value="진행 중" ${t.status === '진행 중' ? 'selected' : ''} class="text-blue-600">▶ 진행</option>
+            <option value="보류" ${t.status === '보류' ? 'selected' : ''} class="text-slate-500">⏸ 보류</option>
+        </select>`;
+
+        return '<div class="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm group"><span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded w-16 text-center shrink-0">' + t.day + '</span>' + statusSelect + '<div class="text-sm font-medium text-slate-700 flex-1 truncate" title="' + String(t.content).replace(/"/g, '&quot;') + '">' + safeContent + ' <span class="text-[9px] bg-slate-100 text-slate-500 px-1 py-0.5 rounded ml-1">' + t.loc + '</span>' + timeBadge + '</div><button onclick="window.removeWeeklyTaskRow(\'' + t.id + '\')" class="text-slate-300 hover:text-rose-500 w-6 h-6 rounded flex items-center justify-center transition-colors"><i class="fa-solid fa-xmark"></i></button></div>';
     }).join('');
 };
 
@@ -736,7 +766,6 @@ window.deleteWeeklyLog = async function(id) {
     } 
 };
 
-// 관리자용 주간업무일지 엑셀 다운로드 함수 고도화 (이모지 제거 및 요약 내용 추가 적용 완료)
 window.exportWeeklyLogsExcel = async function() {
     if (typeof window.ExcelJS === 'undefined') return window.showToast("ExcelJS 모듈을 불러오는 데 실패했습니다.", "error");
 
@@ -747,7 +776,6 @@ window.exportWeeklyLogsExcel = async function() {
         const weekInput = document.getElementById('weekly-log-filter-week');
         let wStr = weekInput ? weekInput.value : '';
         
-        // 통계 계산
         let submittedCount = 0;
         let completedCount = 0;
         let progressCount = 0;
@@ -756,7 +784,6 @@ window.exportWeeklyLogsExcel = async function() {
         let submittedLogs = window.currentWeeklyLogList.filter(l => l.isSubmitted);
         submittedCount = submittedLogs.length;
         
-        // 요약을 위한 데이터 추출
         let compTasks = [];
         let progTasks = [];
         let issueList = [];
@@ -785,7 +812,6 @@ window.exportWeeklyLogsExcel = async function() {
 
         let totalTeamCount = window.teamMembers ? window.teamMembers.length : 0;
 
-        // 1. 요약 시트 생성
         const ws1 = wb.addWorksheet('주간_업무_요약', { views: [{ showGridLines: false }] });
         ws1.columns = [
             { width: 2 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 2 },
@@ -843,12 +869,10 @@ window.exportWeeklyLogsExcel = async function() {
             sCell.alignment = { vertical: 'middle', horizontal: 'center' };
         };
 
-        // KPI 정보 세팅 
         createKPICard(6, 'B', 9, 'D', '제출된 일지', `${submittedCount} 명`, `전체 팀원: ${totalTeamCount}명`, 'FFF1F5F9', 'FF475569', 'FF334155'); 
         createKPICard(6, 'F', 9, 'H', '완료된 업무', `${completedCount} 건`, '금주 완료 처리됨', 'FFF0FDF4', 'FF10B981', 'FF059669'); 
         createKPICard(6, 'J', 9, 'L', '이슈 및 지연', `${issueCount} 건`, '이슈가 등록된 일지 수', 'FFFFF1F2', 'FFF43F5E', 'FFE11D48'); 
 
-        // 주간 내용 요약 블록 추가
         let summaryStartRow = 11;
         ws1.mergeCells(`B${summaryStartRow}:L${summaryStartRow}`);
         let secTitle = ws1.getCell(`B${summaryStartRow}`);
@@ -884,17 +908,14 @@ window.exportWeeklyLogsExcel = async function() {
                     currentRow++;
                 });
             }
-            currentRow++; // 블록 간 여백
+            currentRow++; 
         };
 
-        addSummaryBlock('완료된 주요 업무', compTasks, 'FF059669', 'FFF0FDF4'); // Emerald
-        addSummaryBlock('진행 중인 주요 업무', progTasks, 'FF1D4ED8', 'FFEFF6FF'); // Blue
-        addSummaryBlock('주요 이슈 및 지연 사항', issueList, 'FFE11D48', 'FFFFF1F2'); // Rose
+        addSummaryBlock('완료된 주요 업무', compTasks, 'FF059669', 'FFF0FDF4'); 
+        addSummaryBlock('진행 중인 주요 업무', progTasks, 'FF1D4ED8', 'FFEFF6FF'); 
+        addSummaryBlock('주요 이슈 및 지연 사항', issueList, 'FFE11D48', 'FFFFF1F2'); 
 
-
-        // 2. 상세 내역 시트 생성
         const ws2 = wb.addWorksheet('주간_상세_내역', { views: [{ showGridLines: false }] });
-
         ws2.columns = [
             { header: '소속 팀', key: 'team', width: 15 },
             { header: '작성자', key: 'name', width: 12 },
@@ -944,7 +965,6 @@ window.exportWeeklyLogsExcel = async function() {
                         cell.alignment = { vertical: 'top', wrapText: true };
                         if (colNumber <= 6) cell.alignment.horizontal = 'center';
                         
-                        // 상태 열 색상 강조
                         if (colNumber === 5) {
                             if (t.status === '완료') cell.font = { color: { argb: 'FF059669' }, bold: true };
                             else if (t.status === '진행 중') cell.font = { color: { argb: 'FF2563EB' }, bold: true };
@@ -1056,7 +1076,182 @@ window.renderTeamKanbanBoard = function() {
     }).join('');
 };
 
+// 💡 [달력 뷰 관련 스크립트 기능 추가]
+window.setSchViewMode = function(mode) {
+    window.schViewMode = mode;
+    const btnK = document.getElementById('btn-sch-kanban');
+    const btnC = document.getElementById('btn-sch-calendar');
+    const viewK = document.getElementById('weekly-team-kanban-board');
+    const viewC = document.getElementById('weekly-team-calendar-board');
+    
+    const calPrev = document.getElementById('btn-cal-prev');
+    const calNext = document.getElementById('btn-cal-next');
+    const calMonth = document.getElementById('sch-cal-month-display');
 
+    if (mode === 'kanban') {
+        if(btnK) btnK.className = 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap';
+        if(btnC) btnC.className = 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-1.5 bg-transparent whitespace-nowrap';
+        if(viewK) viewK.classList.remove('hidden');
+        if(viewC) { viewC.classList.add('hidden'); viewC.classList.remove('flex'); }
+        
+        if(calPrev) calPrev.classList.add('hidden');
+        if(calNext) calNext.classList.add('hidden');
+        if(calMonth) calMonth.classList.add('hidden');
+    } else {
+        if(btnC) btnC.className = 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap';
+        if(btnK) btnK.className = 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-1.5 bg-transparent whitespace-nowrap';
+        if(viewK) viewK.classList.add('hidden');
+        if(viewC) { viewC.classList.remove('hidden'); viewC.classList.add('flex'); }
+        
+        if(calPrev) calPrev.classList.remove('hidden');
+        if(calNext) calNext.classList.remove('hidden');
+        if(calMonth) calMonth.classList.remove('hidden');
+        
+        window.loadMonthlySchedules();
+    }
+};
+
+window.changeCalMonth = function(offset) {
+    window.schCalDate.setMonth(window.schCalDate.getMonth() + offset);
+    window.loadMonthlySchedules();
+};
+
+window.loadMonthlySchedules = async function() {
+    const year = window.schCalDate.getFullYear();
+    const month = window.schCalDate.getMonth() + 1;
+    const monthDisplay = document.getElementById('sch-cal-month-display');
+    if (monthDisplay) monthDisplay.innerText = `${year}년 ${month}월`;
+
+    const weeks = getWeeksInMonth(year, month);
+    if(weeks.length === 0) return;
+
+    if (monthlySchUnsubscribe) monthlySchUnsubscribe();
+    
+    const q = query(collection(db, "weekly_schedules"), where("week", "in", weeks));
+    monthlySchUnsubscribe = onSnapshot(q, function(s) {
+        window.monthlySchedules = [];
+        s.forEach(d => {
+            window.monthlySchedules.push(Object.assign({ id: d.id }, d.data()));
+        });
+        window.renderTeamCalendarBoard(year, month);
+    });
+};
+
+function getWeeksInMonth(year, month) {
+    let weeks = new Set();
+    let d = new Date(year, month - 1, 1);
+    let lastDate = new Date(year, month, 0);
+    while(d <= lastDate) {
+        if(window.getWeekString) {
+            weeks.add(window.getWeekString(d));
+        }
+        d.setDate(d.getDate() + 1);
+    }
+    return Array.from(weeks);
+}
+
+function getActualDateFromWeekDay(weekStr, dayStr) {
+    if(!window.getDatesFromWeek) return null;
+    const { start } = window.getDatesFromWeek(weekStr);
+    const dayMap = {"월요일":0, "화요일":1, "수요일":2, "목요일":3, "금요일":4, "토요일":5, "일요일":6};
+    let offset = dayMap[dayStr];
+    if (offset === undefined) return null;
+    let d = new Date(start);
+    d.setDate(d.getDate() + offset);
+    return window.getLocalDateStr(d);
+}
+
+window.renderTeamCalendarBoard = function(year, month) {
+    const grid = document.getElementById('weekly-team-calendar-board');
+    if (!grid) return;
+
+    const firstDay = new Date(year, month - 1, 1).getDay();
+    const lastDate = new Date(year, month, 0).getDate();
+
+    let html = `
+        <div class="grid grid-cols-7 gap-px bg-slate-200 border-b border-slate-200">
+            <div class="p-2 text-center text-xs font-black text-rose-500 bg-slate-50">일</div>
+            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">월</div>
+            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">화</div>
+            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">수</div>
+            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">목</div>
+            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">금</div>
+            <div class="p-2 text-center text-xs font-black text-blue-500 bg-slate-50">토</div>
+        </div>
+        <div class="grid grid-cols-7 gap-px bg-slate-200 flex-1">
+    `;
+
+    for (let i = 0; i < firstDay; i++) {
+        html += `<div class="bg-slate-50 min-h-[120px]"></div>`;
+    }
+
+    const catMap = {
+        "휴가/연차": { icon: "fa-mug-hot", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+        "휴가/오전": { icon: "fa-sun", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+        "휴가/오후": { icon: "fa-moon", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+        "회의": { icon: "fa-users", bg: "bg-purple-50 text-purple-700 border-purple-200" },
+        "사내(작업)": { icon: "fa-headphones", bg: "bg-blue-50 text-blue-700 border-blue-200" },
+        "사내(공통)": { icon: "fa-building", bg: "bg-blue-50 text-blue-700 border-blue-200" },
+        "출장(국내)": { icon: "fa-car", bg: "bg-orange-50 text-orange-700 border-orange-200" },
+        "출장(국외)": { icon: "fa-plane", bg: "bg-orange-50 text-orange-700 border-orange-200" },
+        "기타": { icon: "fa-thumbtack", bg: "bg-slate-100 text-slate-700 border-slate-300" }
+    };
+
+    for (let date = 1; date <= lastDate; date++) {
+        const dStr = `${year}-${String(month).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
+        let isToday = dStr === window.getLocalDateStr(new Date());
+        
+        // 💡 요일 및 공휴일 식별
+        let dObj = new Date(year, month - 1, date);
+        let isSunday = dObj.getDay() === 0;
+        let isSaturday = dObj.getDay() === 6;
+        let holidayName = WEEKLY_KR_HOLIDAYS[dStr];
+        
+        // 💡 날짜 색상 반영 (공휴일 & 일요일 = 빨강, 토요일 = 파랑, 평일 = 검정)
+        let txtClass = 'text-slate-700';
+        if (isSunday || holidayName) {
+            txtClass = 'text-rose-500';
+        } else if (isSaturday) {
+            txtClass = 'text-blue-500';
+        }
+        
+        let dateClass = isToday ? 'bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center mx-auto shadow-md' : txtClass;
+
+        let dayEvents = (window.monthlySchedules || []).filter(s => {
+            if (s.isShared === false) return false;
+            let sDate = getActualDateFromWeekDay(s.week, s.day);
+            return sDate === dStr;
+        });
+
+        let eventsHtml = dayEvents.map(s => {
+            const style = catMap[s.category] || catMap["기타"];
+            const safeTitle = String(s.title || s.content || '제목 없음').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const authorName = String(s.authorName || '팀원');
+            const completedClass = s.isCompleted ? 'line-through opacity-50 grayscale' : '';
+            return `
+                <div class="text-[10px] font-bold border px-1.5 py-0.5 rounded mb-0.5 truncate cursor-pointer hover:shadow-sm transition-all ${style.bg} ${completedClass}" onclick="window.viewSchedule('${s.id}')" title="${safeTitle}">
+                    <span class="bg-white/70 px-1 rounded mr-1">${authorName}</span>${safeTitle}
+                </div>
+            `;
+        }).join('');
+
+        // 💡 공휴일일 경우 날짜 하단에 빨간색 배경 뱃지로 이름 출력
+        html += `
+            <div class="bg-white p-1.5 min-h-[120px] hover:bg-slate-50 transition-colors relative flex flex-col border-t-2 ${isToday ? 'border-t-indigo-500' : 'border-t-transparent'}">
+                <div class="text-[11px] font-black text-center mb-1 ${dateClass} shrink-0">${date}</div>
+                ${holidayName ? `<div class="text-[9px] font-bold text-rose-500 bg-rose-50 rounded text-center mb-1 leading-tight py-0.5 shrink-0 border border-rose-100">${holidayName}</div>` : ''}
+                <div class="flex-1 flex flex-col gap-0.5 overflow-hidden">${eventsHtml}</div>
+            </div>
+        `;
+    }
+
+    html += `</div>`;
+    grid.innerHTML = html;
+};
+
+// ==========================================
+// 💡 개인 일정 관련 로직
+// ==========================================
 window.openScheduleModal = function(day) {
     if (!day) day = '월요일';
     const idEl = document.getElementById('sch-id'); if (idEl) idEl.value = '';
