@@ -3,7 +3,7 @@
 let ncrChartInstances = {};
 let ncrFilteredData = [];
 
-// 💡 [핵심 추가] 독립적인 초성 검색 유틸리티 함수 내장
+// 💡 독립적인 초성 검색 유틸리티 함수 내장
 function ncrGetChosung(str) {
     const cho = ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
     let res = "";
@@ -19,19 +19,15 @@ function ncrMatchString(query, target) {
     if (!query) return true;
     if (!target) return false;
     
-    // 공백 제거 및 소문자화
     let q = query.toLowerCase().replace(/\s/g, '');
     let t = target.toLowerCase().replace(/\s/g, '');
     
-    // 1. 단순 포함 여부 검사
     if (t.includes(q)) return true;
 
-    // 2. 초성 포함 여부 검사
     let choT = ncrGetChosung(t);
     let choQ = ncrGetChosung(q);
     if (choT.includes(choQ)) return true;
 
-    // 3. 영어 자판으로 한글 쳤을 때 보정 (예: r -> ㄱ)
     const enToKr = {'q':'ㅂ','w':'ㅈ','e':'ㄷ','r':'ㄱ','t':'ㅅ','y':'ㅛ','u':'ㅕ','i':'ㅑ','o':'ㅐ','p':'ㅔ','a':'ㅁ','s':'ㄴ','d':'ㅇ','f':'ㄹ','g':'ㅎ','h':'ㅗ','j':'ㅓ','k':'ㅏ','l':'ㅣ','z':'ㅋ','x':'ㅌ','c':'ㅊ','v':'ㅍ','b':'ㅠ','n':'ㅜ','m':'ㅡ'};
     let korQ = "";
     for(let i = 0; i < q.length; i++) korQ += enToKr[q[i]] || q[i];
@@ -70,7 +66,6 @@ window.initNcrDashboard = function(forceReload = false) {
     }
     
     const initProcess = () => {
-        // 차트 글로벌 기본 설정
         Chart.defaults.font.family = "'Pretendard', sans-serif";
         Chart.defaults.color = '#94a3b8'; 
         Chart.defaults.scale.grid.color = '#f1f5f9'; 
@@ -84,7 +79,6 @@ window.initNcrDashboard = function(forceReload = false) {
             });
         }
 
-        // 데이터 페칭 및 렌더링
         if (forceReload || !window.ncrData || window.ncrData.length === 0) {
             if (window.loadNcrData) {
                 window.loadNcrData().then(() => {
@@ -136,11 +130,19 @@ function populateNcrFilters() {
     }
 }
 
-// 💡 PJT 초성 검색 자동완성 로직 (내장된 ncrMatchString 사용)
+// 💡 [핵심수정] 잘림 방지를 위해 Body 최상단에 동적 팝업 렌더링
 window.ncrShowPjtAuto = function(input) {
     const val = input.value.trim().toLowerCase();
-    const drop = document.getElementById('ncr-pjt-autocomplete');
-    if (!drop) return;
+    let drop = document.getElementById('ncr-pjt-autocomplete-dynamic');
+    
+    // 팝업 엘리먼트가 없으면 Body에 생성 (overflow 잘림 원천 방지)
+    if (!drop) {
+        drop = document.createElement('ul');
+        drop.id = 'ncr-pjt-autocomplete-dynamic';
+        // fixed 속성을 주어 화면 기준 절대 좌표 적용
+        drop.className = 'fixed z-[99999] bg-white border border-indigo-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm min-w-[220px] custom-scrollbar py-1';
+        document.body.appendChild(drop);
+    }
 
     if(!val) {
         drop.classList.add('hidden');
@@ -151,7 +153,6 @@ window.ncrShowPjtAuto = function(input) {
     let searchPool = [];
     let seenCodes = new Set();
 
-    // 1. 마스터 리스트에서 가져오기
     if (window.pjtCodeMasterList) {
         window.pjtCodeMasterList.forEach(p => {
             if (p.code && !seenCodes.has(p.code)) {
@@ -161,7 +162,6 @@ window.ncrShowPjtAuto = function(input) {
         });
     }
 
-    // 2. 혹시 마스터엔 없지만 NCR 데이터엔 있는 코드가 있을 경우 방어 로직
     (window.ncrData || []).forEach(d => {
         if (d.pjtCode && !seenCodes.has(d.pjtCode)) {
             seenCodes.add(d.pjtCode);
@@ -169,16 +169,21 @@ window.ncrShowPjtAuto = function(input) {
         }
     });
 
-    // 💡 내장된 초성 검색 함수(ncrMatchString) 사용!
     let matches = searchPool.filter(p => {
         return ncrMatchString(val, p.code) || ncrMatchString(val, p.name);
     });
 
     if(matches.length > 0) {
+        // 인풋 박스의 화면상 위치 계산
+        const rect = input.getBoundingClientRect();
+        drop.style.left = `${rect.left}px`;
+        drop.style.top = `${rect.bottom + 4}px`;
+        drop.style.width = `${Math.max(rect.width, 220)}px`;
+
         drop.innerHTML = matches.map(m => {
             let sCode = m.code ? m.code.replace(/'/g,"\\'").replace(/"/g,'&quot;') : '-';
-            let sName = m.name ? `<span class="text-[10px] text-slate-400 truncate w-full block">${m.name}</span>` : '';
-            return `<li class="px-3 py-2 hover:bg-indigo-50 cursor-pointer border-b border-slate-50 last:border-0 transition-colors flex flex-col" onmousedown="window.ncrSelectPjt('${sCode}')">
+            let sName = m.name ? `<span class="text-[10px] text-slate-400 truncate w-full block mt-0.5">${m.name}</span>` : '';
+            return `<li class="px-4 py-2 hover:bg-indigo-50 cursor-pointer border-b border-slate-50 last:border-0 transition-colors flex flex-col" onmousedown="window.ncrSelectPjt('${sCode}')">
                         <span class="text-indigo-600 font-bold text-xs">${sCode}</span>${sName}
                     </li>`;
         }).join('');
@@ -194,7 +199,7 @@ window.ncrSelectPjt = function(code) {
     const input = document.getElementById('ncr-filter-pjt-code');
     if(input) input.value = code;
     
-    const drop = document.getElementById('ncr-pjt-autocomplete');
+    const drop = document.getElementById('ncr-pjt-autocomplete-dynamic');
     if(drop) drop.classList.add('hidden');
     
     window.filterNcrDashboard(); 
@@ -202,12 +207,11 @@ window.ncrSelectPjt = function(code) {
 
 // 외부 클릭 시 드롭다운 닫기
 document.addEventListener('click', function(e) {
-    const drop = document.getElementById('ncr-pjt-autocomplete');
-    if (drop && !drop.classList.contains('hidden') && !e.target.closest('#ncr-filter-pjt-code') && !e.target.closest('#ncr-pjt-autocomplete')) {
+    const drop = document.getElementById('ncr-pjt-autocomplete-dynamic');
+    if (drop && !drop.classList.contains('hidden') && !e.target.closest('#ncr-filter-pjt-code') && !e.target.closest('#ncr-pjt-autocomplete-dynamic')) {
         drop.classList.add('hidden');
     }
 });
-
 
 // 필터 적용 및 재렌더링
 window.filterNcrDashboard = function() {
@@ -229,7 +233,7 @@ window.filterNcrDashboard = function() {
         if (month && (!d.date || d.date.split('-')[1] !== month)) match = false;
         if (pjt && d.pjtCode !== pjt) match = false;
         
-        // PJT 코드 전용 초성 검색 매칭 (내장 함수 사용)
+        // PJT 코드 전용 초성 검색 매칭
         if (pjtCodeSearch) {
             let isCodeMatch = false;
             const targetCode = (d.pjtCode || '');
@@ -275,6 +279,7 @@ function renderPremiumNcrDashboard() {
         if(document.getElementById('kpi-resolved')) document.getElementById('kpi-resolved').innerHTML = `0 <span class="text-[12px] font-bold text-[#64748b] ml-1 tracking-tight">건 완료</span>`;
         if(document.getElementById('kpi-pending')) document.getElementById('kpi-pending').innerHTML = `0 <span class="text-[12px] font-bold text-[#fb7185] ml-1 tracking-tight">건 조치중</span>`;
         if(document.getElementById('recent-ncr-list')) document.getElementById('recent-ncr-list').innerHTML = '<div class="text-sm font-bold text-slate-400">조건에 맞는 데이터가 없습니다.</div>';
+        if(document.getElementById('worst-top3-list')) document.getElementById('worst-top3-list').innerHTML = '<span class="text-[10px] font-bold text-rose-300">데이터 없음</span>';
         
         ['pareto', 'donut', 'monthly', 'pjtBar', 'supplierTop'].forEach(id => destroyChart(id));
         return;
@@ -321,7 +326,6 @@ function renderPremiumNcrDashboard() {
     let pendingCount = totalCount - resolvedCount;
     let resolvedRate = ((resolvedCount / totalCount) * 100).toFixed(1);
 
-    // KPI 업데이트
     if(document.getElementById('kpi-qty')) document.getElementById('kpi-qty').innerText = (totalCount * 4.38).toFixed(0); 
     if(document.getElementById('kpi-count')) document.getElementById('kpi-count').innerText = totalCount;
     if(document.getElementById('kpi-supplier-rate')) document.getElementById('kpi-supplier-rate').innerText = ((typeCounts['협력사/가공'] / totalCount) * 100).toFixed(1) + '%';
@@ -334,6 +338,7 @@ function renderPremiumNcrDashboard() {
     if(document.getElementById('kpi-pending')) document.getElementById('kpi-pending').innerHTML = `${pendingCount} <span class="text-[12px] font-bold text-[#fb7185] ml-1 tracking-tight">건 조치중</span>`;
 
     drawRecentNcrs(data);
+    drawWorstTop3(pjtCounts, totalCount);
 
     drawParetoChart(paretoData);
     drawDonutChart(typeCounts);
@@ -343,7 +348,7 @@ function renderPremiumNcrDashboard() {
 }
 
 // ---------------------------------------------------------
-// 0. 최근 업데이트 내역 렌더링 (슬림 버전)
+// 0-1. 최근 업데이트 내역 렌더링
 // ---------------------------------------------------------
 function drawRecentNcrs(dataList) {
     const container = document.getElementById('recent-ncr-list');
@@ -392,6 +397,37 @@ function drawRecentNcrs(dataList) {
                     <span class="text-[11px] font-bold text-slate-700 truncate group-hover:text-indigo-600 transition-colors">${item.content || '내용 없음'}</span>
                 </div>
                 ${statusBadge}
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+// ---------------------------------------------------------
+// 0-2. 불량 비중 Top 3 렌더링
+// ---------------------------------------------------------
+function drawWorstTop3(pjtCounts, totalCount) {
+    const container = document.getElementById('worst-top3-list');
+    if(!container) return;
+
+    if(totalCount === 0 || Object.keys(pjtCounts).length === 0) {
+        container.innerHTML = '<span class="text-[10px] font-bold text-rose-300">데이터 없음</span>';
+        return;
+    }
+
+    let sorted = Object.entries(pjtCounts).sort((a,b)=>b[1]-a[1]).slice(0,3);
+    let html = '';
+    
+    sorted.forEach(item => {
+        let pjtCode = item[0];
+        let count = item[1];
+        let rate = ((count / totalCount) * 100).toFixed(1);
+        
+        html += `
+            <div class="flex items-center gap-1.5 bg-white px-2 py-1 rounded shadow-sm border border-rose-100/50 shrink-0">
+                <span class="truncate max-w-[90px] text-[10px] font-bold text-slate-700" title="${pjtCode}">${pjtCode}</span>
+                <span class="text-rose-600 font-black text-[11px]">${rate}%</span>
             </div>
         `;
     });
@@ -456,7 +492,6 @@ function drawParetoChart(paretoData) {
     });
 }
 
-// 도넛 차트 텍스트 중앙 완벽 정렬 커스텀 플러그인
 const donutCenterTextPlugin = {
     id: 'donutCenterText',
     beforeDraw: function(chart) {
@@ -574,7 +609,6 @@ function drawTopSupplierChart(data) {
     });
 }
 
-// Mock Data (시트 데이터가 없을 때 폴백 용도)
 function generateMockDashboard() {
     const mockData = [];
     for(let i=0; i<107; i++) {
