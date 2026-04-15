@@ -71,7 +71,7 @@ const getSafeString = (val) => {
     return (val === null || val === undefined) ? '' : String(val);
 };
 
-// 다중 파일 이름 표시 유틸 함수
+// 💡 다중 파일 이름 표시 유틸 함수
 window.updateMultiFileNames = function(inputEl, displayElId) {
     const displayEl = document.getElementById(displayElId);
     if (!displayEl) return;
@@ -549,7 +549,7 @@ window.submitCrReq = async function() {
             updatedAt: Date.now() 
         });
 
-        // 3. 품질 완료보고 데이터 생성
+        // 3. 품질 완료보고 데이터 생성 (project_completion_reports)
         const crRef = doc(collection(db, "project_completion_reports"));
         const crLessons = [];
         if(goodTxt) crLessons.push({ type: 'Good', category: '제작', item: '제조팀 코멘트', highlight: goodTxt, lowlight: '' });
@@ -569,7 +569,7 @@ window.submitCrReq = async function() {
             updatedAt: Date.now()
         });
 
-        // 4. Product Cost 리스트 추가
+        // 4. Product Cost 리스트에 데이터 추가 (product_costs)
         const costRef = doc(collection(db, "product_costs"));
         batch.set(costRef, {
             projectId: pId,
@@ -579,7 +579,7 @@ window.submitCrReq = async function() {
         
         await batch.commit();
 
-        // 5. 메일 알림 전송 (품질팀, 구매팀)
+        // 5. 메일 알림 전송 (품질팀, 구매팀 등에게)
         if (window.notifyUser) {
             const title = pjtData.name || '알수없는 프로젝트';
             const msg = `[${title}] 제조 완료 및 품질 완료보고 요청이 접수되었습니다.\n\nGood Point:\n${goodTxt}\n\nBad Point:\n${badTxt}`;
@@ -730,7 +730,9 @@ window.openPurchaseModal = function(projectId, title) {
                 item.files.forEach(f => {
                     let isImg = f.name && f.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
                     if (isImg) {
-                        mediaHtml += `<img src="${f.url}" alt="${f.name}" class="max-h-40 rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.open('${f.url}', '_blank')">`;
+                        let fileIdMatch = f.url.match(/\/d\/(.+?)\/view/);
+                        let rawUrl = fileIdMatch ? `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}` : f.url;
+                        mediaHtml += `<img src="${rawUrl}" alt="${f.name}" class="max-h-40 rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.open('${f.url}', '_blank')">`;
                     } else {
                         filesHtml += `<a href="${f.url}" target="_blank" class="text-xs text-sky-500 font-bold underline w-fit flex items-center gap-1"><i class="fa-solid fa-file-arrow-down"></i> ${f.name}</a>`;
                     }
@@ -835,7 +837,9 @@ window.openDesignModal = function(projectId, title) {
                 item.files.forEach(f => {
                     let isImg = f.name && f.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
                     if (isImg) {
-                        mediaHtml += `<img src="${f.url}" alt="${f.name}" class="max-h-40 rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.open('${f.url}', '_blank')">`;
+                        let fileIdMatch = f.url.match(/\/d\/(.+?)\/view/);
+                        let rawUrl = fileIdMatch ? `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}` : f.url;
+                        mediaHtml += `<img src="${rawUrl}" alt="${f.name}" class="max-h-40 rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.open('${f.url}', '_blank')">`;
                     } else {
                         filesHtml += `<a href="${f.url}" target="_blank" class="text-xs text-teal-500 font-bold underline w-fit flex items-center gap-1"><i class="fa-solid fa-file-arrow-down"></i> ${f.name}</a>`;
                     }
@@ -940,7 +944,9 @@ window.openPjtScheduleModal = function(projectId, title) {
                 item.files.forEach(f => {
                     let isImg = f.name && f.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
                     if (isImg) {
-                        mediaHtml += `<img src="${f.url}" alt="${f.name}" class="max-h-40 rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.open('${f.url}', '_blank')">`;
+                        let fileIdMatch = f.url.match(/\/d\/(.+?)\/view/);
+                        let rawUrl = fileIdMatch ? `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}` : f.url;
+                        mediaHtml += `<img src="${rawUrl}" alt="${f.name}" class="max-h-40 rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.open('${f.url}', '_blank')">`;
                     } else {
                         filesHtml += `<a href="${f.url}" target="_blank" class="text-xs text-fuchsia-500 font-bold underline w-fit flex items-center gap-1"><i class="fa-solid fa-file-arrow-down"></i> ${f.name}</a>`;
                     }
@@ -1603,7 +1609,9 @@ window.renderDailyLogs = function(logs) {
                 log.files.forEach(f => {
                     let isImg = f.name && f.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
                     if (isImg) {
-                        mediaHtml += `<img src="${f.url}" class="max-w-[200px] max-h-[200px] object-cover rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.open('${f.url}', '_blank')">`;
+                        let fileIdMatch = f.url.match(/\/d\/(.+?)\/view/);
+                        let rawUrl = fileIdMatch ? `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}` : f.url;
+                        mediaHtml += `<img src="${rawUrl}" alt="${f.name}" class="max-w-[200px] max-h-[200px] object-cover rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.open('${f.url}', '_blank')">`;
                     } else {
                         filesHtml += `<a href="${f.url}" target="_blank" class="text-xs text-sky-500 font-bold underline flex items-center gap-1 w-fit"><i class="fa-solid fa-paperclip"></i> ${f.name}</a>`;
                     }
@@ -2627,3 +2635,26 @@ window.renderNcrList = function(pjtCode) {
     
     const elComp = document.getElementById('ncr-comp-cnt');
     if(elComp) elComp.innerText = completed;
+    
+    if (total === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-8 text-slate-400 font-bold bg-white">등록된 부적합 내역이 없습니다.</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = list.map(n => {
+        let s = String(n.status || '');
+        const isComp = s.includes('완료') || s.includes('종결');
+        const textClass = isComp ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-700';
+        const badge = isComp ? `<span class="bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">완료</span>` : `<span class="bg-rose-50 text-rose-600 border border-rose-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">진행중</span>`;
+        
+        return `<tr class="hover:bg-slate-50 transition-colors bg-white border-b border-slate-100">
+                    <td class="p-3 text-center font-bold text-slate-500 whitespace-nowrap">${n.ncrNo || '-'}</td>
+                    <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.date || '-'}</td>
+                    <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.drawingNo || '-'}</td>
+                    <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.partName || '-'}</td>
+                    <td class="p-3 text-center whitespace-nowrap"><span class="bg-slate-100 px-2 py-1 border border-slate-200 rounded font-bold">${n.type || '-'}</span></td>
+                    <td class="p-3 font-medium ${textClass} break-all">${n.content || '-'}</td>
+                    <td class="p-3 text-center whitespace-nowrap">${badge}</td>
+                </tr>`;
+    }).join('');
+};
