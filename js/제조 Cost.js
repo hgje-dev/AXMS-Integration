@@ -1,14 +1,48 @@
 import { db } from './firebase.js';
-import { collection, doc, setDoc, addDoc, deleteDoc, query, onSnapshot, where, orderBy } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { collection, doc, setDoc, addDoc, deleteDoc, query, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 let mfgCostUnsubscribe = null;
 window.allMfgCosts = [];
 window.filteredMfgCosts = [];
 
-window.initMfgCost = function() {
-    console.log("✅ 제조 Cost 관리 페이지 초기화 완료");
+// 💡 1. 영타 오타 및 초성 지원 고급 검색 엔진
+function mfgGetChosung(str) {
+    const cho = ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
+    let res = "";
+    for (let i = 0; i < str.length; i++) {
+        let code = str.charCodeAt(i) - 44032;
+        if (code > -1 && code < 11172) res += cho[Math.floor(code / 588)];
+        else res += str.charAt(i);
+    }
+    return res;
+}
+
+function mfgMatchString(query, target) {
+    if (!query) return true;
+    if (!target) return false;
     
-    // 1. 현재 날짜를 기반으로 기본 필터 세팅
+    let q = query.toLowerCase().replace(/\s/g, '');
+    let t = target.toLowerCase().replace(/\s/g, '');
+    
+    if (t.includes(q)) return true;
+
+    let choT = mfgGetChosung(t);
+    let choQ = mfgGetChosung(q);
+    if (choT.includes(choQ)) return true;
+
+    const enToKr = {'q':'ㅂ','w':'ㅈ','e':'ㄷ','r':'ㄱ','t':'ㅅ','y':'ㅛ','u':'ㅕ','i':'ㅑ','o':'ㅐ','p':'ㅔ','a':'ㅁ','s':'ㄴ','d':'ㅇ','f':'ㄹ','g':'ㅎ','h':'ㅗ','j':'ㅓ','k':'ㅏ','l':'ㅣ','z':'ㅋ','x':'ㅌ','c':'ㅊ','v':'ㅍ','b':'ㅠ','n':'ㅜ','m':'ㅡ'};
+    let korQ = "";
+    for(let i = 0; i < q.length; i++) korQ += enToKr[q[i]] || q[i];
+    
+    if (t.includes(korQ)) return true;
+    if (choT.includes(mfgGetChosung(korQ))) return true;
+
+    return false;
+}
+
+window.initMfgCost = function() {
+    console.log("✅ 제조 Cost 관리 페이지 초기화 완료 (고급 초성엔진 탑재)");
+    
     const now = new Date();
     const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     
@@ -18,18 +52,15 @@ window.initMfgCost = function() {
     const dateInput = document.getElementById('new-mfg-date');
     if (dateInput && !dateInput.value) dateInput.value = window.getLocalDateStr(now);
 
-    // 2. 마스터 데이터(PJT 코드)가 없으면 불러오기
     if (!window.pjtCodeMasterList || window.pjtCodeMasterList.length === 0) {
         if (window.loadProjectCodeMaster) window.loadProjectCodeMaster();
     }
 
-    // 3. Firestore 데이터 실시간 구독
     loadMfgCostData();
 };
 
 function loadMfgCostData() {
     if (mfgCostUnsubscribe) mfgCostUnsubscribe();
-    
     const q = query(collection(db, "mfg_costs"));
     
     mfgCostUnsubscribe = onSnapshot(q, (snapshot) => {
@@ -37,35 +68,30 @@ function loadMfgCostData() {
         snapshot.forEach(docSnap => {
             window.allMfgCosts.push({ id: docSnap.id, ...docSnap.data() });
         });
-        
-        // 등록일 기준 최신순 정렬
         window.allMfgCosts.sort((a, b) => b.createdAt - a.createdAt);
-        
         window.filterMfgCostData();
     }, (error) => {
+        if (window.showToast) window.showToast("데이터를 불러오는 중 오류가 발생했습니다.", "error");
         console.error("데이터 로드 실패:", error);
-        window.showToast("데이터를 불러오는 중 오류가 발생했습니다.", "error");
     });
 }
 
 window.filterMfgCostData = function() {
     const partFilter = document.getElementById('mfg-cost-part-filter')?.value || 'all';
     const monthFilter = document.getElementById('mfg-cost-month-filter')?.value || '';
-    const searchKeyword = document.getElementById('mfg-cost-search-pjt')?.value.toLowerCase() || '';
+    const searchKeyword = document.getElementById('mfg-cost-search-pjt')?.value.trim() || '';
 
     window.filteredMfgCosts = window.allMfgCosts.filter(cost => {
         let match = true;
-
         if (partFilter !== 'all' && cost.part !== partFilter) match = false;
         if (monthFilter && cost.date && !cost.date.startsWith(monthFilter)) match = false;
 
         if (searchKeyword) {
-            const targetStr = `${cost.pjtCode || ''} ${cost.pjtName || ''}`.toLowerCase();
-            if (!targetStr.includes(searchKeyword) && !(window.matchString && window.matchString(searchKeyword, targetStr))) {
+            const targetStr = `${cost.pjtCode || ''} ${cost.pjtName || ''}`;
+            if (!mfgMatchString(searchKeyword, targetStr)) {
                 match = false;
             }
         }
-
         return match;
     });
 
@@ -77,9 +103,13 @@ window.resetMfgCostFilters = function() {
     const now = new Date();
     const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     
-    if(document.getElementById('mfg-cost-part-filter')) document.getElementById('mfg-cost-part-filter').value = 'all';
-    if(document.getElementById('mfg-cost-month-filter')) document.getElementById('mfg-cost-month-filter').value = currentMonthStr;
-    if(document.getElementById('mfg-cost-search-pjt')) document.getElementById('mfg-cost-search-pjt').value = '';
+    const partEl = document.getElementById('mfg-cost-part-filter');
+    const monthEl = document.getElementById('mfg-cost-month-filter');
+    const searchEl = document.getElementById('mfg-cost-search-pjt');
+    
+    if(partEl) partEl.value = 'all';
+    if(monthEl) monthEl.value = currentMonthStr;
+    if(searchEl) searchEl.value = '';
     
     window.filterMfgCostData();
 };
@@ -108,19 +138,23 @@ function renderMfgCostDashboard() {
     const totalCount = window.filteredMfgCosts.length;
     const avgCost = totalCount > 0 ? Math.round(totalCost / totalCount) : 0;
 
-    if(document.getElementById('mfg-dash-total-cost')) document.getElementById('mfg-dash-total-cost').innerText = totalCost.toLocaleString();
-    if(document.getElementById('mfg-dash-top-pjt')) document.getElementById('mfg-dash-top-pjt').innerText = topPjt;
-    if(document.getElementById('mfg-dash-top-cost')) document.getElementById('mfg-dash-top-cost').innerText = topPjtCost.toLocaleString();
-    if(document.getElementById('mfg-dash-total-count')) document.getElementById('mfg-dash-total-count').innerText = totalCount.toLocaleString();
-    if(document.getElementById('mfg-dash-avg-cost')) document.getElementById('mfg-dash-avg-cost').innerText = avgCost.toLocaleString();
+    const elTotal = document.getElementById('mfg-dash-total-cost');
+    const elTopPjt = document.getElementById('mfg-dash-top-pjt');
+    const elTopCost = document.getElementById('mfg-dash-top-cost');
+    const elCount = document.getElementById('mfg-dash-total-count');
+    const elAvg = document.getElementById('mfg-dash-avg-cost');
+    const elTableTotal = document.getElementById('mfg-table-total-cost');
+    const elTableLabel = document.getElementById('mfg-table-pjt-label');
 
-    if(document.getElementById('mfg-table-total-cost')) document.getElementById('mfg-table-total-cost').innerText = totalCost.toLocaleString();
+    if(elTotal) elTotal.innerText = totalCost.toLocaleString();
+    if(elTopPjt) elTopPjt.innerText = topPjt;
+    if(elTopCost) elTopCost.innerText = topPjtCost.toLocaleString();
+    if(elCount) elCount.innerText = totalCount.toLocaleString();
+    if(elAvg) elAvg.innerText = avgCost.toLocaleString();
+    if(elTableTotal) elTableTotal.innerText = totalCost.toLocaleString();
     
     const searchPjt = document.getElementById('mfg-cost-search-pjt')?.value;
-    const tableLabel = document.getElementById('mfg-table-pjt-label');
-    if (tableLabel) {
-        tableLabel.innerText = searchPjt ? `(${searchPjt})` : '';
-    }
+    if (elTableLabel) elTableLabel.innerText = searchPjt ? `(${searchPjt})` : '';
 }
 
 function renderMfgCostTable() {
@@ -170,7 +204,8 @@ window.saveMfgCost = async function() {
     const memoEl = document.getElementById('new-mfg-memo');
 
     if (!dateEl.value || !itemEl.value || !amtEl.value) {
-        return window.showToast("지출일, 품목명, 금액은 필수 입력 항목입니다.", "error");
+        if(window.showToast) window.showToast("지출일, 품목명, 금액은 필수 입력 항목입니다.", "error");
+        return;
     }
 
     let pjtPart = '제조'; 
@@ -189,24 +224,23 @@ window.saveMfgCost = async function() {
         amount: parseFloat(amtEl.value) || 0,
         memo: memoEl.value.trim(),
         part: pjtPart,
-        authorUid: window.currentUser.uid,
-        authorName: window.userProfile.name,
+        authorUid: window.currentUser ? window.currentUser.uid : 'guest',
+        authorName: window.userProfile ? window.userProfile.name : '알수없음',
         createdAt: Date.now()
     };
 
     try {
         await addDoc(collection(db, "mfg_costs"), payload);
-        window.showToast("지출 내역이 등록되었습니다.");
+        if(window.showToast) window.showToast("지출 내역이 등록되었습니다.");
         
         itemEl.value = '';
         qtyEl.value = '';
         amtEl.value = '';
         memoEl.value = '';
         itemEl.focus();
-
     } catch(e) {
         console.error(e);
-        window.showToast("등록 실패", "error");
+        if(window.showToast) window.showToast("등록 실패", "error");
     }
 };
 
@@ -214,16 +248,15 @@ window.deleteMfgCost = async function(id) {
     if (!confirm("이 지출 내역을 삭제하시겠습니까?")) return;
     try {
         await deleteDoc(doc(db, "mfg_costs", id));
-        window.showToast("삭제되었습니다.");
+        if(window.showToast) window.showToast("삭제되었습니다.");
     } catch(e) {
-        window.showToast("삭제 실패", "error");
+        if(window.showToast) window.showToast("삭제 실패", "error");
     }
 };
 
 // ==========================================
-// 💡 프로젝트 초성 검색 및 자동완성 로직 (스크롤 개선형 동적 렌더링)
+// 💡 2. 초성 지원 자동완성 모듈 (스크롤 최적화)
 // ==========================================
-
 function getCombinedPjtPool() {
     let pool = [];
     let seenCodes = new Set();
@@ -247,36 +280,33 @@ function getCombinedPjtPool() {
 
 // 📌 상단 필터 전용 자동완성
 window.mfgCostShowPjtAuto = function(input) {
-    const val = input.value.trim().toLowerCase();
+    const val = input.value.trim();
     let drop = document.getElementById('mfg-cost-pjt-autocomplete-dynamic');
     
-    // fixed 속성으로 body에 추가하여 상위 컨테이너에 의해 잘리지 않도록 구현
     if (!drop) {
         drop = document.createElement('ul');
         drop.id = 'mfg-cost-pjt-autocomplete-dynamic';
-        drop.className = 'fixed z-[99999] bg-white border border-amber-200 shadow-xl rounded-2xl max-h-60 overflow-y-auto text-sm custom-scrollbar py-2';
+        drop.className = 'fixed z-[99999] bg-white border border-amber-200 shadow-xl rounded-2xl max-h-56 overflow-y-auto overscroll-contain text-sm custom-scrollbar py-2';
         document.body.appendChild(drop);
     }
 
     if(!val) { 
         drop.classList.add('hidden'); 
+        window.filterMfgCostData();
         return; 
     }
 
     let searchPool = getCombinedPjtPool();
     let matches = searchPool.filter(p => {
-        let code = (p.code || '').toLowerCase();
-        let name = (p.name || '').toLowerCase();
-        return code.includes(val) || name.includes(val) || 
-               (window.matchString && window.matchString(val, p.code)) || 
-               (window.matchString && window.matchString(val, p.name));
+        const targetStr = `${p.code || ''} ${p.name || ''}`;
+        return mfgMatchString(val, targetStr);
     });
 
     if(matches.length > 0) {
         const rect = input.getBoundingClientRect();
         drop.style.left = `${rect.left}px`;
         drop.style.top = `${rect.bottom + 4}px`;
-        drop.style.width = `${rect.width}px`;
+        drop.style.width = `${Math.max(rect.width, 260)}px`;
 
         drop.innerHTML = matches.map(m => {
             let sName = m.name ? m.name.replace(/'/g,"\\'").replace(/"/g,'&quot;') : '';
@@ -290,6 +320,7 @@ window.mfgCostShowPjtAuto = function(input) {
     } else {
         drop.classList.add('hidden');
     }
+    window.filterMfgCostData();
 };
 
 window.mfgCostSelectPjtFilter = function(code) {
@@ -304,18 +335,18 @@ window.mfgCostSelectPjtFilter = function(code) {
 
 // 📌 테이블 내부 신규 입력 폼 전용 자동완성
 window.mfgCostShowInputPjtAuto = function(input) {
-    const val = input.value.trim().toLowerCase();
+    const val = input.value.trim();
     let drop = document.getElementById('mfg-input-pjt-autocomplete-dynamic');
     
-    // 테이블 내부의 가로 스크롤 레이아웃을 회피하기 위해 body에 종속
     if (!drop) {
         drop = document.createElement('ul');
         drop.id = 'mfg-input-pjt-autocomplete-dynamic';
-        drop.className = 'fixed z-[99999] bg-white border border-indigo-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm min-w-[200px] custom-scrollbar py-1';
+        drop.className = 'fixed z-[99999] bg-white border border-indigo-200 shadow-xl rounded-xl max-h-56 overflow-y-auto overscroll-contain text-sm min-w-[200px] custom-scrollbar py-1';
         document.body.appendChild(drop);
     }
 
-    document.getElementById('new-mfg-pjt-name').value = '';
+    const nameEl = document.getElementById('new-mfg-pjt-name');
+    if (nameEl) nameEl.value = '';
 
     if(!val) { 
         drop.classList.add('hidden'); 
@@ -324,11 +355,8 @@ window.mfgCostShowInputPjtAuto = function(input) {
 
     let searchPool = getCombinedPjtPool();
     let matches = searchPool.filter(p => {
-        let code = (p.code || '').toLowerCase();
-        let name = (p.name || '').toLowerCase();
-        return code.includes(val) || name.includes(val) || 
-               (window.matchString && window.matchString(val, p.code)) || 
-               (window.matchString && window.matchString(val, p.name));
+        const targetStr = `${p.code || ''} ${p.name || ''}`;
+        return mfgMatchString(val, targetStr);
     });
 
     if(matches.length > 0) {
@@ -352,16 +380,19 @@ window.mfgCostShowInputPjtAuto = function(input) {
 };
 
 window.mfgCostSelectInputPjt = function(code, name) {
-    document.getElementById('new-mfg-pjt').value = code; 
-    document.getElementById('new-mfg-pjt-name').value = name; 
+    const codeEl = document.getElementById('new-mfg-pjt');
+    const nameEl = document.getElementById('new-mfg-pjt-name');
+    if (codeEl) codeEl.value = code; 
+    if (nameEl) nameEl.value = name; 
     
     const drop = document.getElementById('mfg-input-pjt-autocomplete-dynamic');
     if (drop) drop.classList.add('hidden');
     
-    document.getElementById('new-mfg-category').focus();
+    const catEl = document.getElementById('new-mfg-category');
+    if (catEl) catEl.focus();
 };
 
-// 📌 팝업 바깥 영역 클릭 시 동적 드롭다운 닫기 처리
+// 📌 드롭다운 외부 클릭 및 페이지 스크롤 시 자동 닫기 처리
 document.addEventListener('click', function(e) {
     const d1 = document.getElementById('mfg-cost-pjt-autocomplete-dynamic');
     const d2 = document.getElementById('mfg-input-pjt-autocomplete-dynamic');
@@ -373,3 +404,10 @@ document.addEventListener('click', function(e) {
         d2.classList.add('hidden');
     }
 });
+
+window.addEventListener('scroll', function() {
+    const d1 = document.getElementById('mfg-cost-pjt-autocomplete-dynamic');
+    const d2 = document.getElementById('mfg-input-pjt-autocomplete-dynamic');
+    if (d1) d1.classList.add('hidden');
+    if (d2) d2.classList.add('hidden');
+}, true);
