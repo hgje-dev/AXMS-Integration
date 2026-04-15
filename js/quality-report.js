@@ -84,7 +84,7 @@ window.filterQrList = function() {
     window.renderQrList(filtered);
 };
 
-// 💡 상단 검색창 초성 자동완성 (PJT 마스터 기준 + 현재 리스트 기준)
+// 💡 상단 검색창 초성 자동완성 (우측 미니창 제거 후 이쪽으로 통합)
 window.qrShowPjtAuto = function(input) {
     const val = input.value.trim().toLowerCase();
     let drop = document.getElementById('qr-pjt-autocomplete-dynamic');
@@ -189,7 +189,7 @@ window.renderQrList = function(list) {
         const dateStr = r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '-';
         // '완료' 상태일 때만 품질 완료일자 표기
         const compDateStr = (r.qualityStatus === '완료' && r.qualityUpdatedAt) ? new Date(r.qualityUpdatedAt).toLocaleDateString() : '-';
-        const safeName = (r.pjtName || '').replace(/"/g, '&quot;').replace(/'/g, "\\'");
+        const safeName = r.pjtName.replace(/"/g, '&quot;').replace(/'/g, "\\'");
         
         let qStatus = r.qualityStatus || '대기중';
         let iStatus = (r.internalSch && r.internalSch.status) ? r.internalSch.status : '미진행';
