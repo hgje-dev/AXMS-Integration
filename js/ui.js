@@ -137,13 +137,28 @@ window.getChosung = function(str) {
     return res; 
 };
 
+// 💡 더욱 강력해진 초성 및 영타 대응 검색 엔진
 window.matchString = function(q, t) { 
     if(!q) return true; 
     if(!t) return false; 
-    q = q.toLowerCase(); 
-    t = t.toLowerCase(); 
-    if(t.includes(q)) return true; 
-    if(window.getChosung(t).includes(q)) return true; 
+    
+    q = q.toLowerCase().replace(/\s/g, '');
+    t = t.toLowerCase().replace(/\s/g, '');
+    
+    if (t.includes(q)) return true;
+
+    let choT = window.getChosung(t);
+    let choQ = window.getChosung(q);
+    if (choT.includes(choQ)) return true;
+
+    // 한영타 오타 변환 로직
+    const enToKr = {'q':'ㅂ','w':'ㅈ','e':'ㄷ','r':'ㄱ','t':'ㅅ','y':'ㅛ','u':'ㅕ','i':'ㅑ','o':'ㅐ','p':'ㅔ','a':'ㅁ','s':'ㄴ','d':'ㅇ','f':'ㄹ','g':'ㅎ','h':'ㅗ','j':'ㅓ','k':'ㅏ','l':'ㅣ','z':'ㅋ','x':'ㅌ','c':'ㅊ','v':'ㅍ','b':'ㅠ','n':'ㅜ','m':'ㅡ'};
+    let korQ = "";
+    for(let i = 0; i < q.length; i++) korQ += enToKr[q[i]] || q[i];
+    
+    if (t.includes(korQ)) return true;
+    if (choT.includes(window.getChosung(korQ))) return true;
+
     return false; 
 };
 
@@ -443,7 +458,6 @@ window.processMentions = async function(content, projectId, typeDesc) {
     return notifiedNames;
 };
 
-
 // ==========================================
 // 💡 팀원 풀 관리 (팀 모달) 로직 추가
 // ==========================================
@@ -457,7 +471,8 @@ window.addTeamMember = async function() {
     
     if (!name) return window.showToast("팀원을 선택해주세요.", "warning");
 
-    if (window.teamMembers && window.teamMembers.find(m => m.name === name)) {
+    const members = window.teamMembers || [];
+    if (members.find(m => m.name === name)) {
         return window.showToast("이미 등록된 팀원입니다.", "warning");
     }
 
@@ -523,11 +538,103 @@ window.populateUserDropdowns = function() {
     }
 };
 
+window.renderAdminUsers = () => {
+    const tb = document.getElementById('admin-users-tbody'); 
+    if (!tb) return;
+    
+    const users = window.allSystemUsers || [];
+    if (users.length === 0) { 
+        tb.innerHTML = '<tr><td colspan="7" class="text-center p-6 text-slate-500 font-bold">등록된 사용자가 없습니다.</td></tr>'; 
+        return; 
+    }
+    
+    let sortedUsers = [...users].sort((a, b) => { 
+        if (a.role === 'pending' && b.role !== 'pending') return -1; 
+        if (a.role !== 'pending' && b.role === 'pending') return 1; 
+        return 0; 
+    });
+    
+    const teamsList = [
+        'AXBIS', '레이저사업본부', '제조기술팀', '장비기술팀', '모듈기술팀', 
+        '제어팀', 'pm팀', '영업팀', '전략기획팀', '전략구매팀', '품질경영팀', 
+        '설계팀', '선행설계팀', '공정개발팀', 'SW팀', '선행기술팀', '피플팀', 
+        '북미법인', '기술연구소'
+    ];
+
+    let html = '';
+    const now = Date.now(); 
+
+    sortedUsers.forEach(u => {
+        const p = u.permissions || {}; 
+        const isP = u.role === 'pending';
+        const trClass = isP ? 'bg-rose-50/40 border-l-4 border-rose-500' : 'hover:bg-slate-50 transition-colors border-b border-slate-100';
+        
+        const posOptions = ['대표','본부장','그룹장','팀장','책임매니저','선임매니저','매니저'].map(pos => `<option value="${pos}" ${u.position === pos ? 'selected' : ''}>${pos}</option>`).join('');
+        const safePos = `<select class="block mt-1 border border-slate-200 rounded px-1 py-0.5 text-[10px] text-indigo-600 bg-indigo-50 font-bold focus:outline-none" onchange="window.updateUserPosition('${u.uid}', this.value)">
+                            ${u.position ? '' : '<option value="" disabled selected>직책 미지정</option>'}
+                            ${posOptions}
+                         </select>`;
+
+        const currentTeam = u.team || u.department || '';
+        const teamOpts = teamsList.map(t => `<option value="${t}" ${currentTeam === t ? 'selected' : ''}>${t}</option>`).join('');
+        const safeTeam = `<select class="border border-slate-300 rounded px-2 py-1.5 text-xs font-bold ${isP ? 'text-rose-600 bg-white' : 'text-slate-600'} w-full focus:outline-none" onchange="window.updateUserTeam('${u.uid}', this.value)">
+                            ${currentTeam ? '' : '<option value="" disabled selected>팀 미지정</option>'}
+                            ${teamOpts}
+                         </select>`;
+
+        const lastActive = u.lastActive || 0;
+        const isOnline = u.isOnline !== false && (now - lastActive < 10 * 60 * 1000);
+        
+        const statusBadge = isOnline 
+            ? `<span class="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-600 px-2 py-1 rounded-full text-[10px] font-bold border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>온라인</span>` 
+            : `<span class="inline-flex items-center gap-1.5 bg-slate-50 text-slate-500 px-2 py-1 rounded-full text-[10px] font-bold border border-slate-200"><span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>오프라인</span>`;
+        
+        const lastActiveStr = lastActive ? new Date(lastActive).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '기록 없음';
+
+        html += `<tr class="${trClass}">
+            <td class="p-3 text-center font-bold text-slate-700">${u.name}${safePos}</td>
+            <td class="p-3 text-center">${safeTeam}</td>
+            <td class="p-3 text-center text-slate-500">${u.email}</td>
+            
+            <td class="p-3 text-center" title="마지막 활동: ${lastActiveStr}">
+                ${statusBadge}
+                <div class="text-[9px] text-slate-400 mt-1">${lastActiveStr}</div>
+            </td>
+            
+            <td class="p-3 text-center">
+                <select class="border border-slate-300 rounded px-2 py-1.5 text-xs font-bold ${isP ? 'text-rose-600 bg-white' : 'text-slate-600'}" onchange="window.updateUserRole('${u.uid}', this.value)">
+                    <option value="pending" ${u.role === 'pending' ? 'selected' : ''}>승인 대기</option>
+                    <option value="user" ${u.role === 'user' ? 'selected' : ''}>일반 사용자</option>
+                    <option value="master" ${u.role === 'master' ? 'selected' : ''}>마스터</option>
+                    <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>시스템 관리자</option>
+                </select>
+            </td>
+            <td class="p-3">
+                <div class="flex flex-wrap gap-3 justify-center">
+                    <label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p.collab ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','collab',this.checked)">협업</label>
+                    <label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p.purchase ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','purchase',this.checked)">구매</label>
+                    <label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p.assembly ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','assembly',this.checked)">조립</label>
+                    <label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p.repair ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','repair',this.checked)">수리/점검</label>
+                    <label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p['project-status'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','project-status',this.checked)">PJT현황판</label>
+                    <label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p['weekly-log'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','weekly-log',this.checked)">주간업무</label>
+                </div>
+            </td>
+            <td class="p-3 text-center">
+                <div class="flex items-center justify-center gap-2">
+                    ${isP ? `<button onclick="window.approveUser('${u.uid}')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-sm transition-colors whitespace-nowrap">✅ 가입 승인</button>` : ''}
+                    <button onclick="window.deleteUser('${u.uid}')" class="bg-white border border-rose-200 text-rose-500 hover:bg-rose-500 hover:text-white px-2.5 py-1.5 rounded-lg transition-colors shadow-sm" title="계정 차단 및 삭제"><i class="fa-solid fa-trash-can"></i></button>
+                </div>
+            </td>
+        </tr>`;
+    });
+    tb.innerHTML = html;
+};
+
 // ==========================================
 // 💡 안전한 이미지 뷰어 팝업 함수
 // ==========================================
 window.openImageViewer = function(src) {
-    if (!src) return;
+    if (!src || typeof src !== 'string') return;
     
     if (src.startsWith('data:image')) {
         const win = window.open('', '_blank');
@@ -548,4 +655,69 @@ window.openImageViewer = function(src) {
     } else {
         window.open(src, '_blank');
     }
+};
+
+window.showAutocomplete = function(inputEl, targetId1, targetId2, isNameSearch) {
+    const val = inputEl.value.trim().toLowerCase(); 
+    let dropdown = document.getElementById('pjt-autocomplete-dropdown');
+    
+    if(!dropdown) { 
+        dropdown = document.createElement('ul'); 
+        dropdown.id = 'pjt-autocomplete-dropdown'; 
+        dropdown.className = 'absolute z-[9999] bg-white border border-indigo-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-full custom-scrollbar py-1 mt-1'; 
+        document.body.appendChild(dropdown); 
+    }
+    
+    if(val.length < 1) { 
+        dropdown.classList.add('hidden'); 
+        return; 
+    }
+    
+    let matches = [];
+    const masterList = window.pjtCodeMasterList || [];
+    for (let i = 0; i < masterList.length; i++) {
+        let p = masterList[i];
+        if (isNameSearch) { 
+            if ((p.name || '').toLowerCase().includes(val) || window.matchString(val, p.name)) matches.push(p); 
+        } else { 
+            if ((p.code || '').toLowerCase().includes(val) || window.matchString(val, p.code)) matches.push(p); 
+        }
+    }
+    
+    if(matches.length > 0) {
+        const rect = inputEl.getBoundingClientRect(); 
+        dropdown.style.left = (rect.left + window.scrollX) + 'px'; 
+        dropdown.style.top = (rect.bottom + window.scrollY + 5) + 'px'; 
+        dropdown.style.width = rect.width + 'px'; 
+        dropdown.classList.remove('hidden');
+        
+        let dropHtml = '';
+        matches.forEach(function(m) {
+            let safeCompany = m.company || '업체미상'; 
+            let safeName = (m.name || '').replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+            let safeCode = m.code || '-';
+            dropHtml += `<li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-slate-700 font-bold text-xs border-b border-slate-50 last:border-0 truncate transition-colors" onmousedown="window.selectAutocomplete('${safeCode}', '${safeName}', '${safeCompany}', '${inputEl.id}', '${targetId1}', '${targetId2}')"><span class="text-indigo-600">[${safeCode}]</span> ${m.name} <span class="text-[10px] text-slate-400">(${safeCompany})</span></li>`;
+        }); 
+        dropdown.innerHTML = dropHtml;
+    } else { 
+        dropdown.classList.add('hidden'); 
+    }
+};
+
+window.selectAutocomplete = function(code, name, company, sourceId, targetId1, targetId2) { 
+    const sourceEl = document.getElementById(sourceId); 
+    const t1 = document.getElementById(targetId1); 
+    const t2 = document.getElementById(targetId2); 
+    
+    if (sourceId === 'ps-code') { 
+        if (sourceEl) sourceEl.value = code; 
+        if (t1) t1.value = name; 
+        if (t2) t2.value = company; 
+    } else { 
+        if (sourceEl) sourceEl.value = name; 
+        if (t1) t1.value = code; 
+        if (t2) t2.value = company; 
+    } 
+    const drop = document.getElementById('pjt-autocomplete-dropdown'); 
+    if (drop) drop.classList.add('hidden'); 
 };
