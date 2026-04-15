@@ -630,31 +630,93 @@ window.renderAdminUsers = () => {
     tb.innerHTML = html;
 };
 
+// 소속 팀 변경 함수
+window.updateUserTeam = async (uid, team) => { 
+    try { 
+        await setDoc(doc(db, "users", uid), { team: team, department: team }, { merge: true }); 
+        if(window.showToast) window.showToast("소속 팀이 변경되었습니다."); 
+    } catch (e) { 
+        if(window.showToast) window.showToast("오류 발생", "error"); 
+    } 
+};
+
+window.updateUserPosition = async (uid, pos) => { 
+    try { await setDoc(doc(db, "users", uid), { position: pos }, { merge: true }); if(window.showToast) window.showToast("직책이 변경되었습니다."); } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } 
+};
+
+window.updateUserRole = async (uid, role) => { 
+    try { await setDoc(doc(db, "users", uid), { role: role }, { merge: true }); if(window.showToast) window.showToast("등급이 변경되었습니다."); } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } 
+};
+
+window.updateUserPerm = async (uid, key, val) => { 
+    try { const uR = doc(db, "users", uid); const uD = await getDoc(uR); if (uD.exists()) { let p = uD.data().permissions || {}; p[key] = val; await setDoc(uR, { permissions: p }, { merge: true }); if(window.showToast) window.showToast("권한이 업데이트되었습니다."); } } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } 
+};
+
+// 💡 5-1. 관리자의 사용자 가입 승인 (알림/메일 발송 제거)
+window.approveUser = async (uid) => {
+    try {
+        await setDoc(doc(db, "users", uid), { role: 'user' }, { merge: true });
+        if(window.showToast) window.showToast("계정이 정상적으로 승인되었습니다.", "success");
+    } catch(e) {
+        if(window.showToast) window.showToast("승인 처리 실패", "error");
+        console.error(e);
+    }
+};
+
+window.deleteUser = async (uid) => { 
+    if (!confirm("이 사용자를 정말 삭제하시겠습니까?\n\n삭제 시 해당 사용자의 시스템 접근이 즉시 영구 차단됩니다.\n(참고: 동일한 이메일로 다시 회원가입을 하려면 Firebase Authentication 콘솔에서도 계정을 삭제해주셔야 합니다.)")) return; 
+    try { 
+        await deleteDoc(doc(db, "users", uid)); 
+        if(window.showToast) window.showToast("계정 권한이 영구적으로 삭제(차단) 되었습니다."); 
+    } catch (e) { 
+        if(window.showToast) window.showToast("오류 발생", "error"); 
+    } 
+};
+
 // ==========================================
-// 💡 안전한 이미지 뷰어 팝업 함수
+// 💡 안전한 이미지 뷰어 팝업 함수 (완전한 모달 라이트박스 형태)
 // ==========================================
 window.openImageViewer = function(src) {
     if (!src || typeof src !== 'string') return;
     
-    if (src.startsWith('data:image')) {
-        const win = window.open('', '_blank');
-        if (win) {
-            win.document.write(`
-                <!DOCTYPE html>
-                <html>
-                <head><title>이미지 상세 보기</title></head>
-                <body style="margin:0; display:flex; justify-content:center; align-items:center; min-height:100vh; background-color:#0f172a;">
-                    <img src="${src}" style="max-width:100%; max-height:100vh; object-fit:contain;">
-                </body>
-                </html>
-            `);
-            win.document.close();
-        } else {
-            if (window.showToast) window.showToast('브라우저의 팝업 차단을 해제해주세요.', 'error');
-        }
-    } else {
-        window.open(src, '_blank');
-    }
+    // 기존에 띄워진 라이트박스가 있다면 제거
+    let existing = document.getElementById('axbis-lightbox');
+    if (existing) existing.remove();
+
+    // 모달 배경 컨테이너
+    const viewer = document.createElement('div');
+    viewer.id = 'axbis-lightbox';
+    viewer.className = 'fixed inset-0 z-[999999] flex items-center justify-center bg-slate-900/90 backdrop-blur-sm cursor-zoom-out opacity-0 transition-opacity duration-300';
+    
+    // 클릭 시 닫기
+    viewer.onclick = function() {
+        viewer.classList.remove('opacity-100');
+        setTimeout(() => viewer.remove(), 300);
+    };
+
+    // 이미지 엘리먼트
+    const img = document.createElement('img');
+    img.src = src;
+    img.className = 'max-w-[95vw] max-h-[95vh] object-contain rounded-xl shadow-2xl transform scale-95 transition-transform duration-300';
+    
+    // 이미지 클릭 시에는 안 닫히게 하려면 (선택)
+    img.onclick = function(e) { e.stopPropagation(); };
+
+    // 닫기 버튼
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'absolute top-6 right-6 text-white/70 hover:text-white text-4xl transition-colors';
+    closeBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+
+    viewer.appendChild(img);
+    viewer.appendChild(closeBtn);
+    document.body.appendChild(viewer);
+
+    // 애니메이션 실행
+    requestAnimationFrame(() => {
+        viewer.classList.add('opacity-100');
+        img.classList.remove('scale-95');
+        img.classList.add('scale-100');
+    });
 };
 
 window.showAutocomplete = function(inputEl, targetId1, targetId2, isNameSearch) {
