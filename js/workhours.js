@@ -1452,12 +1452,16 @@ window.saveWorkhoursToDrive = async function() {
 };
 
 // ==========================================
-// 💡 프로젝트별 투입 계획 관리 (팀장용) 로직
+// 💡 프로젝트별 투입 계획 관리 (팀장용) 로직 (주간 기반 캘린더 그리드)
 // ==========================================
 
-window.whPlanViewMode = 'week'; // 초기 모드 상태
+window.handleWhPlanWeekChange = function(val) {
+    if (!val) return;
+    const displayEl = document.getElementById('wh-plan-week-display');
+    if (displayEl) displayEl.innerText = window.formatWeekToKorean(val);
+    window.loadWhPlans();
+};
 
-// 모달 열기 로직 개선
 window.openWhPlanModal = function() {
     if (!window.userProfile || window.userProfile.role !== 'admin') {
         return window.showToast("팀장(관리자) 권한이 필요합니다.", "error");
@@ -1468,15 +1472,11 @@ window.openWhPlanModal = function() {
     
     if (picker && picker.value && planWeekInput) {
         planWeekInput.value = picker.value;
-        const displayEl = document.getElementById('wh-plan-week-display');
-        if (displayEl) displayEl.innerText = window.formatWeekToKorean(picker.value);
+        window.handleWhPlanWeekChange(picker.value);
     }
 
     document.getElementById('wh-plan-modal').classList.remove('hidden');
     document.getElementById('wh-plan-modal').classList.add('flex');
-    
-    // 모달 열 때 항상 '주간 계획' 모드로 초기화
-    window.setWhPlanViewMode('week');
 };
 
 window.closeWhPlanModal = function() {
@@ -1484,90 +1484,8 @@ window.closeWhPlanModal = function() {
     document.getElementById('wh-plan-modal').classList.remove('flex');
 };
 
-// 💡 뷰어 모드 토글 로직
-window.setWhPlanViewMode = function(mode) {
-    window.whPlanViewMode = mode;
-    const btnW = document.getElementById('btn-plan-week');
-    const btnM = document.getElementById('btn-plan-month');
-    const ctrlW = document.getElementById('wh-plan-week-control');
-    const ctrlM = document.getElementById('wh-plan-month-control');
-    const btnAdd = document.getElementById('wh-plan-add-btn');
-    const legend = document.getElementById('wh-plan-legend');
-    
-    const tblCont = document.getElementById('wh-plan-table-container');
-    const calCont = document.getElementById('wh-plan-calendar-container');
-
-    if (mode === 'week') {
-        btnW.className = 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all';
-        btnM.className = 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all bg-transparent';
-        ctrlW.classList.remove('hidden'); ctrlW.classList.add('flex');
-        ctrlM.classList.add('hidden'); ctrlM.classList.remove('flex');
-        
-        if(btnAdd) btnAdd.classList.remove('hidden');
-        if(legend) legend.classList.remove('hidden');
-        
-        if(tblCont) { tblCont.classList.remove('hidden'); tblCont.classList.add('flex'); }
-        if(calCont) { calCont.classList.add('hidden'); calCont.classList.remove('flex'); }
-        
-        window.loadWhPlans();
-    } else {
-        btnM.className = 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all';
-        btnW.className = 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all bg-transparent';
-        ctrlM.classList.remove('hidden'); ctrlM.classList.add('flex');
-        ctrlW.classList.add('hidden'); ctrlW.classList.remove('flex');
-        
-        if(btnAdd) btnAdd.classList.add('hidden');
-        if(legend) legend.classList.add('hidden');
-        
-        if(tblCont) { tblCont.classList.add('hidden'); tblCont.classList.remove('flex'); }
-        if(calCont) { calCont.classList.remove('hidden'); calCont.classList.add('flex'); }
-        
-        // 월 선택기가 비어있으면 현재 주차의 월로 자동 세팅
-        const monthInput = document.getElementById('wh-plan-month');
-        if (!monthInput.value) {
-            const picker = document.getElementById('wh-week-picker');
-            if (picker && picker.value) {
-                const { start } = window.getDatesFromWeek(picker.value);
-                monthInput.value = `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,'0')}`;
-            } else {
-                const now = new Date();
-                monthInput.value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-            }
-        }
-        window.loadMonthlyPlanViewer();
-    }
-};
-
-window.handleWhPlanWeekChange = function(val) {
-    if (!val) return;
-    const displayEl = document.getElementById('wh-plan-week-display');
-    if (displayEl) displayEl.innerText = window.formatWeekToKorean(val);
-    window.loadWhPlans();
-};
-
-window.handleWhPlanMonthChange = function(val) {
-    if(!val) return;
-    window.loadMonthlyPlanViewer();
-};
-
 window.calcWhPlanRow = function(inputEl) {
     const tr = inputEl.closest('tr');
-    
-    // 인원(명) 입력칸 변경 시
-    if (inputEl.classList.contains('p-day-hc')) {
-        const mdInput = inputEl.parentElement.nextElementSibling.querySelector('.p-day-md');
-        // MD칸이 비어있거나, 자동 생성된 값이거나, 기존 인원수와 값이 같을 때만 동기화
-        if (mdInput && (!mdInput.value || mdInput.dataset.autoSynced === 'true' || mdInput.value === inputEl.dataset.prevVal)) {
-            mdInput.value = inputEl.value; // 인원 값을 그대로 복사 (1명 = 1MD)
-            mdInput.dataset.autoSynced = 'true';
-        }
-        inputEl.dataset.prevVal = inputEl.value; // 이전 인원 값 기억
-    } 
-    // 공수(MD) 수동 입력 시 자동 동기화 해제
-    else if (inputEl.classList.contains('p-day-md')) {
-        inputEl.dataset.autoSynced = 'false'; 
-    }
-
     let totalHc = 0;
     let totalMd = 0;
     
@@ -1618,93 +1536,6 @@ window.loadWhPlans = function() {
         plansForPeriod.forEach(plan => appendWhPlanRow(plan, weekDates));
     } else {
         appendWhPlanRow(null, weekDates); 
-    }
-};
-
-// 💡 개선 2: 월간 조회 뷰어 (Monthly Calendar) 렌더링 로직
-window.loadMonthlyPlanViewer = function() {
-    const monthVal = document.getElementById('wh-plan-month').value;
-    if(!monthVal) return;
-    const [yearStr, monthStr] = monthVal.split('-');
-    const year = parseInt(yearStr);
-    const month = parseInt(monthStr);
-
-    const weeks = window.getWeeksInMonthForPlan(year, month);
-    const plansForMonth = window.currentWorkPlans.filter(p => weeks.includes(p.period));
-
-    const grid = document.getElementById('wh-plan-calendar-grid');
-    if(!grid) return;
-
-    const firstDay = new Date(year, month - 1, 1).getDay();
-    const lastDate = new Date(year, month, 0).getDate();
-
-    let html = '';
-    for(let i=0; i<firstDay; i++) {
-        html += `<div class="bg-slate-50 min-h-[120px]"></div>`;
-    }
-
-    for(let i=1; i<=lastDate; i++) {
-        let dateStr = `${year}-${String(month).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
-        let d = new Date(year, month - 1, i);
-        
-        let isHoliday = window.isWhHoliday && window.isWhHoliday(d);
-        let txtClass = isHoliday ? 'text-rose-500' : 'text-slate-700';
-        if (d.getDay() === 0) txtClass = 'text-rose-500';
-        if (d.getDay() === 6) txtClass = 'text-blue-500';
-
-        let isToday = dateStr === window.getLocalDateStr(new Date());
-        let dateClass = isToday ? 'bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center mx-auto shadow-md' : txtClass;
-
-        // 해당 날짜의 계획 데이터 추출
-        let dayPlans = [];
-        plansForMonth.forEach(plan => {
-            if (plan.daily && plan.daily[dateStr]) {
-                const hc = parseFloat(plan.daily[dateStr].hc) || 0;
-                const md = parseFloat(plan.daily[dateStr].md) || 0;
-                if (hc > 0 || md > 0) {
-                    dayPlans.push({
-                        code: plan.projectCode || '미분류',
-                        name: plan.projectName || '',
-                        hc: hc,
-                        md: md,
-                        status: plan.status
-                    });
-                }
-            }
-        });
-
-        let plansHtml = '';
-        dayPlans.forEach(p => {
-            let confClass = p.status === 'confirmed' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-500';
-            plansHtml += `
-            <div class="text-[10px] font-bold border px-1.5 py-1 rounded mb-1 truncate shadow-sm flex justify-between items-center ${confClass}">
-                <span class="truncate pr-1" title="${p.name}"><span class="font-black mr-1">[${p.code}]</span>${p.name}</span>
-                <span class="shrink-0 ml-1 font-black bg-white/60 px-1 rounded shadow-sm">${p.hc}인 / ${p.md}M</span>
-            </div>`;
-        });
-
-        // 빈 칸을 포함한 달력의 셀 클릭 시 해당 주차로 이동하도록 처리
-        html += `<div class="bg-white p-1.5 min-h-[120px] hover:bg-indigo-50/30 transition-colors relative group border-t-2 ${isToday ? 'border-t-indigo-500' : 'border-t-transparent'} flex flex-col cursor-pointer" onclick="window.switchToPlanWeek('${dateStr}')">
-            <div class="text-xs font-black text-center mb-1.5 ${dateClass} shrink-0">${i}</div>
-            <div class="flex-1 flex flex-col gap-0.5 overflow-hidden">${plansHtml}</div>
-            <div class="absolute inset-0 bg-indigo-50/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-indigo-600 font-black text-xs backdrop-blur-[1px] z-10 rounded-lg">
-                <i class="fa-solid fa-pen mr-1"></i> 주간 편집 열기
-            </div>
-        </div>`;
-    }
-    grid.innerHTML = html;
-};
-
-// 💡 새로운 달력 뷰에서 날짜를 클릭하면 해당 주차(week) 수정 뷰로 바로 이동하는 유틸 함수
-window.switchToPlanWeek = function(dateStr) {
-    if(!window.getWeekString) return;
-    const targetWeek = window.getWeekString(new Date(dateStr));
-    const weekInput = document.getElementById('wh-plan-week');
-    if(weekInput) {
-        weekInput.value = targetWeek;
-        window.handleWhPlanWeekChange(targetWeek);
-        window.setWhPlanViewMode('week'); 
-        if(window.showToast) window.showToast(`${dateStr} 날짜가 포함된 주차로 이동했습니다.`, "success");
     }
 };
 
@@ -1862,6 +1693,7 @@ document.addEventListener('click', function(e) {
     }
 });
 
+// 💡 계획 저장 함수 (오직 주간 단위로만 저장)
 window.saveWhPlans = async function(targetStatus) {
     const currentPeriod = document.getElementById('wh-plan-week').value;
     const yearStr = currentPeriod.split('-')[0];
