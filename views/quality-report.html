@@ -1,9 +1,173 @@
-<div class="space-y-6 max-w-[1600px] mx-auto pb-10">
-    <h2 class="text-xl font-black text-slate-800 flex items-center gap-2 mb-4">
-        <i class="fa-solid fa-file-shield text-rose-500"></i> 품질 완료보고
-    </h2>
-    <div class="bg-white p-10 rounded-3xl shadow-sm border border-slate-200 text-center">
-        <i class="fa-solid fa-person-digging text-4xl text-slate-300 mb-4"></i>
-        <p class="text-slate-500 font-bold">화면 및 기능 준비 중입니다...</p>
+<div class="space-y-6 max-w-[1600px] mx-auto pb-10 flex flex-col h-[85vh]">
+    <div class="flex flex-col md:flex-row justify-between items-end gap-4 shrink-0">
+        <div>
+            <h2 class="text-xl font-black text-slate-800 flex items-center gap-2">
+                <i class="fa-solid fa-file-shield text-rose-500"></i> 품질 완료보고 (Q-Report)
+            </h2>
+            <p class="text-xs font-bold text-slate-500 mt-1">제조팀에서 송부된 프로젝트의 품질 검수 및 최종 승인을 관리합니다.</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <div class="relative">
+                <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                <input type="text" id="qr-search" oninput="window.filterQrList()" placeholder="PJT코드, 프로젝트명 검색..." class="w-64 border border-slate-300 rounded-xl pl-8 pr-3 py-2 text-xs font-bold text-slate-600 outline-rose-500 shadow-sm bg-white">
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 flex-1 flex flex-col overflow-hidden">
+        <div class="overflow-auto custom-scrollbar flex-1 bg-slate-50/30">
+            <table class="w-full text-left border-collapse whitespace-nowrap">
+                <thead class="bg-slate-800 text-white text-[11px] sticky top-0 z-20 shadow-sm">
+                    <tr>
+                        <th class="p-3 text-center border-r border-slate-600 w-28">제조 송부일자</th>
+                        <th class="p-3 text-center border-r border-slate-600 w-32">PJT 코드</th>
+                        <th class="p-3 border-r border-slate-600 min-w-[200px]">프로젝트명</th>
+                        <th class="p-3 text-center border-r border-slate-600 w-28">내부검수</th>
+                        <th class="p-3 text-center border-r border-slate-600 w-28">고객검수</th>
+                        <th class="p-3 text-center border-r border-slate-600 w-32">품질 최종상태</th>
+                        <th class="p-3 text-center w-24">상세보기</th>
+                    </tr>
+                </thead>
+                <tbody id="qr-tbody" class="text-xs divide-y divide-slate-200 text-slate-700">
+                    </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div id="qr-detail-modal" class="fixed inset-0 z-[300] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10 transition-opacity">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-6xl flex flex-col h-[800px] md:h-[90vh] overflow-hidden transform transition-all">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-rose-50 shrink-0">
+            <h2 class="text-base font-extrabold text-rose-800 flex items-center gap-2">
+                <i class="fa-solid fa-file-shield text-rose-500"></i> 품질 검수 및 승인 처리
+            </h2>
+            <div class="flex items-center gap-3">
+                <span id="qr-status-badge" class="text-[10px] font-bold px-2 py-0.5 rounded shadow-sm border"></span>
+                <button onclick="window.closeQrModal()" class="text-rose-400 hover:text-rose-600 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+        </div>
+        
+        <div class="flex-1 overflow-hidden flex flex-col lg:flex-row bg-slate-50/50 min-h-0">
+            <div class="flex-1 p-6 overflow-y-auto custom-scrollbar border-r border-slate-200 space-y-5">
+                <h3 class="text-sm font-black text-slate-800 border-b border-slate-200 pb-2"><i class="fa-solid fa-industry text-indigo-500 mr-1"></i> 제조팀 송부 내역</h3>
+                
+                <div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
+                    <span id="qr-project-title" class="text-sm font-black text-indigo-700"></span>
+                </div>
+
+                <div class="space-y-3">
+                    <div class="bg-emerald-50/30 border border-emerald-100 rounded-xl p-4">
+                        <h4 class="text-[11px] font-bold text-emerald-700 mb-2"><i class="fa-solid fa-thumbs-up"></i> Good Point (잘된 점, 품질개선 등)</h4>
+                        <div id="qr-good-point" class="text-xs text-slate-700 font-medium whitespace-pre-wrap leading-relaxed"></div>
+                    </div>
+                    <div class="bg-rose-50/30 border border-rose-100 rounded-xl p-4">
+                        <h4 class="text-[11px] font-bold text-rose-700 mb-2"><i class="fa-solid fa-thumbs-down"></i> Bad Point (문제점, 아쉬운 점 등)</h4>
+                        <div id="qr-bad-point" class="text-xs text-slate-700 font-medium whitespace-pre-wrap leading-relaxed"></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+                        <h4 class="text-[11px] font-bold text-slate-500 mb-2">제작사양서 첨부파일</h4>
+                        <div id="qr-spec-files" class="flex flex-col gap-1.5"></div>
+                    </div>
+                    <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+                        <h4 class="text-[11px] font-bold text-slate-500 mb-2">설계개선 검토 첨부파일</h4>
+                        <div id="qr-design-files" class="flex flex-col gap-1.5"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex-1 p-6 overflow-y-auto custom-scrollbar space-y-6">
+                <h3 class="text-sm font-black text-rose-700 border-b border-rose-200 pb-2"><i class="fa-solid fa-check-double mr-1"></i> 품질팀 검수 결과 작성</h3>
+                
+                <input type="hidden" id="qr-doc-id">
+                <input type="hidden" id="qr-pjt-id">
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="space-y-3 p-4 bg-white shadow-sm rounded-xl border border-slate-200">
+                        <h4 class="text-[11px] font-bold text-indigo-600">내부 검수</h4>
+                        <div class="flex items-center gap-2">
+                            <input type="date" id="qr-int-start" class="border border-slate-300 rounded px-2 py-1.5 text-[11px] font-bold text-slate-600 flex-1 outline-indigo-500">
+                            <span class="text-slate-400">~</span>
+                            <input type="date" id="qr-int-end" class="border border-slate-300 rounded px-2 py-1.5 text-[11px] font-bold text-slate-600 flex-1 outline-indigo-500">
+                        </div>
+                        <select id="qr-int-status" class="w-full border border-slate-300 rounded px-3 py-2 text-xs font-bold outline-indigo-500">
+                            <option value="미진행">미진행</option>
+                            <option value="진행중">진행중</option>
+                            <option value="보류">보류</option>
+                            <option value="완료">완료</option>
+                        </select>
+                    </div>
+                    <div class="space-y-3 p-4 bg-white shadow-sm rounded-xl border border-slate-200">
+                        <h4 class="text-[11px] font-bold text-rose-600">고객 검수 (FAT/SAT)</h4>
+                        <div class="flex items-center gap-2">
+                            <input type="date" id="qr-ext-start" class="border border-slate-300 rounded px-2 py-1.5 text-[11px] font-bold text-slate-600 flex-1 outline-rose-500">
+                            <span class="text-slate-400">~</span>
+                            <input type="date" id="qr-ext-end" class="border border-slate-300 rounded px-2 py-1.5 text-[11px] font-bold text-slate-600 flex-1 outline-rose-500">
+                        </div>
+                        <select id="qr-ext-status" class="w-full border border-slate-300 rounded px-3 py-2 text-xs font-bold outline-rose-500">
+                            <option value="미진행">미진행</option>
+                            <option value="진행중">진행중</option>
+                            <option value="보류">보류</option>
+                            <option value="완료">완료</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <h4 class="text-[11px] font-bold text-slate-600 mb-2">품질 종합 검토 의견</h4>
+                    <textarea id="qr-comments" placeholder="검수 결과 및 승인 의견을 기재하세요." class="w-full h-24 border border-slate-300 rounded-lg p-3 text-sm outline-rose-500 custom-scrollbar resize-y"></textarea>
+                </div>
+
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <h4 class="text-[11px] font-bold text-slate-600 mb-2">품질 검사 성적서 첨부 (다중 선택 가능)</h4>
+                    <div class="border-2 border-dashed border-rose-200 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-rose-50 transition-colors relative"
+                         onclick="document.getElementById('qr-files').click()"
+                         ondragover="event.preventDefault(); this.classList.add('bg-rose-50', 'border-rose-400');"
+                         ondragleave="event.preventDefault(); this.classList.remove('bg-rose-50', 'border-rose-400');"
+                         ondrop="event.preventDefault(); this.classList.remove('bg-rose-50', 'border-rose-400'); document.getElementById('qr-files').files = event.dataTransfer.files; window.updateQrFileNames();">
+                        <i class="fa-solid fa-file-arrow-up text-2xl text-rose-300 mb-2 pointer-events-none"></i>
+                        <p class="text-[10px] font-bold text-slate-500 pointer-events-none">클릭하거나 검사성적서 파일 드래그</p>
+                        <input type="file" id="qr-files" class="hidden" multiple onchange="window.updateQrFileNames()">
+                        <div id="qr-file-names" class="text-[10px] text-rose-600 font-bold mt-2 text-center pointer-events-none"></div>
+                    </div>
+                    
+                    <div id="qr-existing-files" class="mt-3 flex flex-col gap-1.5"></div>
+                </div>
+
+                <div class="bg-rose-50/50 p-4 rounded-xl border border-rose-200 shadow-sm flex items-center justify-between">
+                    <h4 class="text-xs font-black text-rose-800">품질 최종 승인 상태</h4>
+                    <select id="qr-final-status" class="border border-rose-300 rounded-lg px-4 py-2 text-sm font-black text-rose-700 outline-none focus:ring-2 focus:ring-rose-200 shadow-sm">
+                        <option value="대기중">대기중</option>
+                        <option value="검수중">검수중</option>
+                        <option value="승인완료" class="bg-emerald-100">✅ 승인 완료</option>
+                        <option value="반려" class="bg-slate-200">❌ 반려</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <div class="px-6 py-4 border-t bg-white flex justify-end gap-2 shrink-0">
+            <button onclick="window.closeQrModal()" class="px-6 py-2.5 bg-slate-100 border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 transition-colors">닫기</button>
+            <button id="btn-qr-save" onclick="window.saveQualityReport()" class="px-8 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
+                <i class="fa-solid fa-check-double"></i> 품질보고 저장
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="upload-progress-modal" class="fixed inset-0 z-[9999] hidden items-center justify-center bg-slate-900/80 backdrop-blur-sm transition-opacity">
+    <div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm flex flex-col items-center text-center">
+        <i class="fa-solid fa-cloud-arrow-up text-4xl text-indigo-500 mb-4 animate-bounce"></i>
+        <h3 class="text-lg font-black text-slate-800 mb-2">파일 업로드 중...</h3>
+        <p id="upload-progress-filename" class="text-xs text-slate-500 mb-6 truncate w-full px-4">파일명.ext</p>
+        <div class="w-full bg-slate-100 rounded-full h-3 mb-2 overflow-hidden border border-slate-200">
+            <div id="upload-progress-bar" class="bg-indigo-500 h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+        <div class="flex justify-between w-full text-xs font-bold text-slate-600">
+            <span id="upload-progress-text">0%</span>
+            <span id="upload-progress-size">0 MB / 0 MB</span>
+        </div>
     </div>
 </div>
