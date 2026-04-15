@@ -10,6 +10,7 @@ import './workhours.js';
 import './completion-report.js';
 import './product-cost.js';
 import './ncr-dashboard.js';
+import './quality-report.js';
 import { initRouter } from './router.js';
 
 window.addEventListener('error', (e) => {
