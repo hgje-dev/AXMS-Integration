@@ -319,6 +319,14 @@ window.renderAdminUsers = () => {
         return 0; 
     });
     
+    // 전체 팀 목록 (설정 모달 기준)
+    const teamsList = [
+        'AXBIS', '레이저사업본부', '제조기술팀', '장비기술팀', '모듈기술팀', 
+        '제어팀', 'pm팀', '영업팀', '전략기획팀', '전략구매팀', '품질경영팀', 
+        '설계팀', '선행설계팀', '공정개발팀', 'SW팀', '선행기술팀', '피플팀', 
+        '북미법인', '기술연구소'
+    ];
+
     let html = '';
     sortedUsers.forEach(u => {
         const p = u.permissions || {}; 
@@ -331,9 +339,17 @@ window.renderAdminUsers = () => {
                             ${posOptions}
                          </select>`;
 
+        // 💡 관리자가 팀을 변경할 수 있도록 select 요소 적용
+        const currentTeam = u.team || u.department || '';
+        const teamOpts = teamsList.map(t => `<option value="${t}" ${currentTeam === t ? 'selected' : ''}>${t}</option>`).join('');
+        const safeTeam = `<select class="border border-slate-300 rounded px-2 py-1.5 text-xs font-bold ${isP ? 'text-rose-600 bg-white' : 'text-slate-600'} w-full focus:outline-none" onchange="window.updateUserTeam('${u.uid}', this.value)">
+                            ${currentTeam ? '' : '<option value="" disabled selected>팀 미지정</option>'}
+                            ${teamOpts}
+                         </select>`;
+
         html += `<tr class="${trClass}">
             <td class="p-3 text-center font-bold text-slate-700">${u.name}${safePos}</td>
-            <td class="p-3 text-center text-slate-600">${u.team || u.department || ''}</td>
+            <td class="p-3 text-center">${safeTeam}</td>
             <td class="p-3 text-center text-slate-500">${u.email}</td>
             <td class="p-3 text-center">
                 <select class="border border-slate-300 rounded px-2 py-1.5 text-xs font-bold ${isP ? 'text-rose-600 bg-white' : 'text-slate-600'}" onchange="window.updateUserRole('${u.uid}', this.value)">
@@ -362,6 +378,16 @@ window.renderAdminUsers = () => {
         </tr>`;
     });
     tb.innerHTML = html;
+};
+
+// 💡 5-2. 소속 팀 변경 함수 추가
+window.updateUserTeam = async (uid, team) => { 
+    try { 
+        await setDoc(doc(db, "users", uid), { team: team, department: team }, { merge: true }); 
+        if(window.showToast) window.showToast("소속 팀이 변경되었습니다."); 
+    } catch (e) { 
+        if(window.showToast) window.showToast("오류 발생", "error"); 
+    } 
 };
 
 window.updateUserPosition = async (uid, pos) => { 
