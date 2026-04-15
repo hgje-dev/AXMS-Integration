@@ -189,13 +189,14 @@ window.renderQrList = function(list) {
         const dateStr = r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '-';
         // '완료' 상태일 때만 품질 완료일자 표기
         const compDateStr = (r.qualityStatus === '완료' && r.qualityUpdatedAt) ? new Date(r.qualityUpdatedAt).toLocaleDateString() : '-';
-        const safeName = r.pjtName.replace(/"/g, '&quot;').replace(/'/g, "\\'");
+        const safeName = (r.pjtName || '').replace(/"/g, '&quot;').replace(/'/g, "\\'");
         
         let qStatus = r.qualityStatus || '대기중';
         let iStatus = (r.internalSch && r.internalSch.status) ? r.internalSch.status : '미진행';
         let cStatus = (r.customerSch && r.customerSch.status) ? r.customerSch.status : '미진행';
 
         let adminBtn = '';
+        // 최고관리자만 삭제 권한 부여
         if (window.userProfile && window.userProfile.role === 'admin') {
             adminBtn = `<button onclick="event.stopPropagation(); window.deleteQrReport('${r.id}')" class="bg-white border border-rose-200 hover:border-rose-400 hover:bg-rose-500 hover:text-white text-rose-400 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm ml-1" title="삭제"><i class="fa-solid fa-trash-can"></i></button>`;
         }
