@@ -9,7 +9,7 @@
         <div class="flex items-center gap-2">
             <div class="relative">
                 <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                <input type="text" id="qr-search" oninput="window.filterQrList()" placeholder="PJT코드, 프로젝트명 검색..." class="w-64 border border-slate-300 rounded-xl pl-8 pr-3 py-2 text-xs font-bold text-slate-600 outline-rose-500 shadow-sm bg-white">
+                <input type="text" id="qr-search" oninput="window.qrShowPjtAuto(this); window.filterQrList();" autocomplete="off" placeholder="PJT코드, 프로젝트명 검색 (초성 가능)..." class="w-72 border border-slate-300 rounded-xl pl-8 pr-3 py-2 text-xs font-bold text-slate-600 outline-rose-500 shadow-sm bg-white">
             </div>
             <button onclick="window.authenticateGoogle()" id="btn-qr-google-auth" class="text-[11px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl shadow-sm hover:bg-amber-100 transition-colors flex items-center gap-1.5">
                 <i class="fa-brands fa-google"></i> 구글 드라이브 연동
@@ -20,42 +20,27 @@
         </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 shrink-0">
-        
-        <div class="col-span-2 grid grid-cols-3 gap-4">
-            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-4 border-l-slate-300 cursor-pointer hover:bg-slate-50 transition-all" onclick="window.filterQrStatus('대기중')">
-                <div class="flex justify-between items-center mb-1">
-                    <span class="text-[11px] font-bold text-slate-500">대기중</span>
-                    <i class="fa-solid fa-pause text-slate-300 text-lg"></i>
-                </div>
-                <span class="text-3xl font-black text-slate-700" id="qr-dash-pending">0</span>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 shrink-0 mb-2">
+        <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-4 border-l-slate-300 cursor-pointer hover:bg-slate-50 transition-all" onclick="window.filterQrStatus('대기중')">
+            <div class="flex justify-between items-center mb-1">
+                <span class="text-[11px] font-bold text-slate-500">대기중</span>
+                <i class="fa-solid fa-pause text-slate-300 text-lg"></i>
             </div>
-            <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-4 border-l-blue-400 cursor-pointer hover:bg-blue-50 transition-all" onclick="window.filterQrStatus('작성중')">
-                <div class="flex justify-between items-center mb-1">
-                    <span class="text-[11px] font-bold text-blue-600">작성중</span>
-                    <i class="fa-solid fa-pen-to-square text-blue-300 text-lg"></i>
-                </div>
-                <span class="text-3xl font-black text-blue-700" id="qr-dash-writing">0</span>
-            </div>
-            <div class="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 shadow-sm flex flex-col justify-center border-l-4 border-l-emerald-500 cursor-pointer hover:bg-emerald-100 transition-all" onclick="window.filterQrStatus('승인완료')">
-                <div class="flex justify-between items-center mb-1">
-                    <span class="text-[11px] font-bold text-emerald-700">승인완료</span>
-                    <i class="fa-solid fa-check-double text-emerald-400 text-lg"></i>
-                </div>
-                <span class="text-3xl font-black text-emerald-700" id="qr-dash-completed">0</span>
-            </div>
+            <span class="text-3xl font-black text-slate-700" id="qr-dash-pending">0</span>
         </div>
-
-        <div class="col-span-1 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden h-full min-h-[110px]">
-            <div class="px-4 py-2 border-b border-slate-100 bg-slate-50 shrink-0 flex justify-between items-center">
-                <div class="relative flex-1 mr-2">
-                    <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]"></i>
-                    <input type="text" id="qr-quick-search" oninput="window.renderQrQuickList()" placeholder="프로젝트 초성 검색..." class="w-full bg-white border border-slate-200 rounded-lg pl-7 pr-3 py-1.5 text-[11px] font-bold text-slate-700 outline-rose-500 focus:ring-2 focus:ring-rose-100 transition-all">
-                </div>
-                <button onclick="window.filterQrStatus('all')" class="text-[10px] font-bold text-slate-500 hover:text-slate-700 bg-white border border-slate-200 px-2 py-1 rounded shadow-sm whitespace-nowrap">전체보기</button>
+        <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-4 border-l-blue-400 cursor-pointer hover:bg-blue-50 transition-all" onclick="window.filterQrStatus('작성중')">
+            <div class="flex justify-between items-center mb-1">
+                <span class="text-[11px] font-bold text-blue-600">작성중</span>
+                <i class="fa-solid fa-pen-to-square text-blue-300 text-lg"></i>
             </div>
-            <div class="flex-1 overflow-y-auto custom-scrollbar p-1.5" id="qr-quick-list">
-                </div>
+            <span class="text-3xl font-black text-blue-700" id="qr-dash-writing">0</span>
+        </div>
+        <div class="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 shadow-sm flex flex-col justify-center border-l-4 border-l-emerald-500 cursor-pointer hover:bg-emerald-100 transition-all" onclick="window.filterQrStatus('완료')">
+            <div class="flex justify-between items-center mb-1">
+                <span class="text-[11px] font-bold text-emerald-700">완료</span>
+                <i class="fa-solid fa-check-double text-emerald-400 text-lg"></i>
+            </div>
+            <span class="text-3xl font-black text-emerald-700" id="qr-dash-completed">0</span>
         </div>
     </div>
 
@@ -184,7 +169,7 @@
                 <select id="qr-final-status" class="border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-black text-slate-700 outline-none focus:ring-2 focus:ring-rose-200 shadow-sm bg-white cursor-pointer">
                     <option value="대기중">대기중</option>
                     <option value="작성중">작성중</option>
-                    <option value="승인완료" class="bg-emerald-100 text-emerald-800">✅ 승인 완료</option>
+                    <option value="완료" class="bg-emerald-100 text-emerald-800">✅ 완료</option>
                     <option value="반려" class="bg-rose-100 text-rose-800">❌ 반려</option>
                 </select>
             </div>
