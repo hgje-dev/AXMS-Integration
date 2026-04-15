@@ -361,7 +361,7 @@ window.renderProjectStatusList = function() {
     let displayList = window.getFilteredProjects();
     
     if(displayList.length === 0) { 
-        tbody.innerHTML = '<tr><td colspan="32" class="text-center p-6 text-slate-400 font-bold border-b border-slate-100 bg-white">프로젝트가 없습니다.</td></tr>'; 
+        tbody.innerHTML = '<tr><td colspan="33" class="text-center p-6 text-slate-400 font-bold border-b border-slate-100 bg-white">프로젝트가 없습니다.</td></tr>'; 
         return; 
     }
     
@@ -452,10 +452,117 @@ window.renderProjectStatusList = function() {
         }
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><div class="flex items-center justify-center gap-1 flex-wrap"><button onclick="window.openLinkModal('${item.id}', '${safeNameJs}')" class="text-slate-400 hover:text-teal-500 transition-colors bg-slate-50 px-1.5 py-0.5 rounded shadow-sm border border-slate-200"><i class="fa-solid fa-link"></i></button>${linksHtml}</div></td>`;
         
+        // 💡 완료보고 송부 버튼 연동
+        let crBtnHtml = '';
+        if (item.status === 'completed') {
+            crBtnHtml = `<span class="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded border border-slate-200">송부완료</span>`;
+        } else {
+            crBtnHtml = `<button onclick="event.stopPropagation(); window.openCrReqModal('${item.id}', '${safeNameJs}')" class="text-[10px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-500 hover:text-white px-2 py-1 rounded border border-rose-200 transition-colors shadow-sm whitespace-nowrap">완료요청</button>`;
+        }
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center">${crBtnHtml}</td>`;
+
         trHtml += `</tr>`;
         htmlStr += trHtml;
     });
     tbody.innerHTML = htmlStr;
+};
+
+// ==========================================
+// 💡 [새로 추가된 로직] PJT 완료보고 송부 
+// ==========================================
+window.openCrReqModal = function(id, title) {
+    document.getElementById('cr-req-pjt-id').value = id;
+    document.getElementById('cr-req-project-title').innerText = title;
+    document.getElementById('cr-req-good').value = '';
+    document.getElementById('cr-req-bad').value = '';
+    document.getElementById('cr-req-modal').classList.remove('hidden');
+    document.getElementById('cr-req-modal').classList.add('flex');
+};
+
+window.closeCrReqModal = function() {
+    document.getElementById('cr-req-modal').classList.add('hidden');
+    document.getElementById('cr-req-modal').classList.remove('flex');
+};
+
+window.submitCrReq = async function() {
+    const pId = document.getElementById('cr-req-pjt-id').value;
+    const goodTxt = document.getElementById('cr-req-good').value.trim();
+    const badTxt = document.getElementById('cr-req-bad').value.trim();
+    const btn = document.getElementById('btn-cr-req-save');
+
+    if(!goodTxt && !badTxt) {
+        return window.showToast("Good Point 또는 Bad Point를 작성해주세요.", "warning");
+    }
+    if(!confirm("완료요청을 송부하시겠습니까?\n프로젝트 상태가 '완료'로 변경되며 품질/구매팀에 전달됩니다.")) return;
+
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 처리중...';
+    btn.disabled = true;
+
+    try {
+        const batch = writeBatch(db);
+        
+        const pjtRef = doc(db, "projects_status", pId);
+        const pjtSnap = await getDoc(pjtRef);
+        const pjtData = pjtSnap.exists() ? pjtSnap.data() : {};
+        
+        // 1. 프로젝트 상태 변경
+        batch.update(pjtRef, { 
+            status: 'completed', 
+            d_shipEn: window.getLocalDateStr(new Date()),
+            updatedAt: Date.now() 
+        });
+
+        // 2. 품질 완료보고 데이터 생성 (project_completion_reports)
+        const crRef = doc(collection(db, "project_completion_reports"));
+        const crLessons = [];
+        if(goodTxt) crLessons.push({ type: 'Good', category: '제작', item: '제조팀 코멘트', highlight: goodTxt, lowlight: '' });
+        if(badTxt) crLessons.push({ type: 'Bad', category: '제작', item: '제조팀 코멘트', highlight: '', lowlight: badTxt });
+
+        batch.set(crRef, {
+            projectId: pId,
+            lessons: crLessons,
+            comments: "제조팀 완료 요청으로 자동 생성됨",
+            internalSch: { start: '', end: '', status: '미진행' },
+            customerSch: { start: '', end: '', status: '미진행' },
+            authorUid: window.currentUser?.uid || 'system',
+            authorName: window.userProfile?.name || '시스템',
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+        });
+
+        // 3. Product Cost 리스트에 데이터 추가 (product_costs)
+        const costRef = doc(collection(db, "product_costs"));
+        batch.set(costRef, {
+            projectId: pId,
+            status: '분석 대기', 
+            createdAt: Date.now()
+        });
+        
+        await batch.commit();
+
+        // 4. 메일 알림 전송 (품질팀, 구매팀 등에게)
+        if (window.notifyUser) {
+            const title = pjtData.name || '알수없는 프로젝트';
+            const msg = `[${title}] 제조 완료 및 품질 완료보고 요청이 접수되었습니다.\n\nGood Point:\n${goodTxt}\n\nBad Point:\n${badTxt}`;
+            
+            const targetTeams = ['품질경영팀', '전략구매팀'];
+            if (window.allSystemUsers) {
+                const targets = window.allSystemUsers.filter(u => targetTeams.includes(u.team));
+                for(let u of targets) {
+                    await window.notifyUser(u.name, msg, pId, "완료요청");
+                }
+            }
+        }
+
+        window.showToast("완료요청 송부 완료", "success");
+        window.closeCrReqModal();
+    } catch(e) {
+        window.showToast("송부 중 오류가 발생했습니다.", "error");
+        console.error(e);
+    } finally {
+        btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> 완료요청 송부';
+        btn.disabled = false;
+    }
 };
 
 window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
