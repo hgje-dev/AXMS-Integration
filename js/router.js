@@ -27,7 +27,7 @@ window.appRoutes = {
     'weekly-log': { url: './views/weekly.html', init: () => { document.getElementById('weekly-log-filter-week').value = window.getWeekString(new Date()); if(window.loadWeeklyLogsData) window.loadWeeklyLogsData(); } },
     
     'product-cost': { url: './views/product-cost.html', init: () => { if(window.initProductCost) window.initProductCost(); } },
-    'mfg-cost': { url: './views/제조 Cost.html', init: () => { if(window.initMfgCost) window.initMfgCost(); } },
+    'mfg-cost': { url: './views/mfg-cost.html', init: () => { if(window.initMfgCost) window.initMfgCost(); } },
     'ncr-dashboard': { url: './views/ncr-dashboard.html', init: () => { if(window.initNcrDashboard) window.initNcrDashboard(); } },
     'quality-report': { url: './views/quality-report.html', init: () => { if(window.initQualityReport) window.initQualityReport(); } },
 
