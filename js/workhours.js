@@ -777,7 +777,6 @@ function getFilteredLogs() {
     });
 }
 
-// 💡 1. 달력처럼 클릭하기 편한 현황판 뷰
 function renderWhGrid() {
     const thead = document.getElementById('wh-grid-thead');
     const tbody = document.getElementById('wh-grid-tbody');
@@ -833,7 +832,6 @@ function renderWhGrid() {
             
             let rawLogs = window.currentWorkLogs.filter(l => l.date === dateStr && l.authorName === member.name); 
             
-            // 💡 전체 셀 영역을 클릭하면 입력창이 열리도록 onclick 속성 적용
             bodyHtml += `<td class="p-1.5 border-r border-b border-slate-200 align-top ${bgClass} wh-cell relative min-w-[140px] cursor-pointer hover:bg-indigo-50/30 transition-colors" data-date="${dateStr}" data-author="${member.name}" onmousedown="window.whCellMouseDown(event, this)" onmouseenter="window.whCellMouseEnter(event, this)" onclick="if(window.whDragDist < 5) window.openWhInputModal('${dateStr}', '${member.name}');">`;
             
             rawLogs.forEach(log => {
@@ -904,10 +902,10 @@ function renderWhCalendar() {
             logsHtml += `<div class="text-[10px] font-bold text-slate-400 text-center hover:text-indigo-500 cursor-pointer mt-1 bg-slate-50 py-1 rounded" onclick="window.openWhInputModal('${dateStr}', '')">+${logs.length - MAX_DISPLAY}개 더보기</div>`;
         }
 
-        html += `<div class="bg-white p-2 min-h-[140px] hover:bg-slate-50 transition-colors relative group border-t-2 ${isToday ? 'border-t-indigo-500' : 'border-t-transparent'} flex flex-col">
+        html += `<div class="bg-white p-2 min-h-[140px] hover:bg-slate-50 transition-colors relative group border-t-2 ${isToday ? 'border-t-indigo-500' : 'border-t-transparent'} flex flex-col cursor-pointer" onclick="window.openWhInputModal('${dateStr}', '')">
             <div class="text-xs font-black text-center mb-2 ${dateClass} shrink-0">${i}</div>
             <div class="flex-1 flex flex-col">${logsHtml}</div>
-            <button onclick="window.openWhInputModal('${dateStr}', '')" class="absolute top-1 right-1 w-5 h-5 bg-white border border-slate-200 shadow-sm rounded flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-300 opacity-0 group-hover:opacity-100 transition-all z-10">
+            <button class="absolute top-1 right-1 w-5 h-5 bg-white border border-slate-200 shadow-sm rounded flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-300 opacity-0 group-hover:opacity-100 transition-all z-10">
                 <i class="fa-solid fa-plus text-[8px]"></i>
             </button>
         </div>`;
@@ -1539,6 +1537,176 @@ window.loadWhPlans = function() {
     }
 };
 
+// 💡 뷰어 모드 토글 로직
+window.setWhPlanViewMode = function(mode) {
+    window.whPlanViewMode = mode;
+    const btnW = document.getElementById('btn-plan-week');
+    const btnM = document.getElementById('btn-plan-month');
+    const ctrlW = document.getElementById('wh-plan-week-control');
+    const ctrlM = document.getElementById('wh-plan-month-control');
+    const btnAdd = document.getElementById('wh-plan-add-btn');
+    const legend = document.getElementById('wh-plan-legend');
+    
+    const tblCont = document.getElementById('wh-plan-table-container');
+    const calCont = document.getElementById('wh-plan-calendar-container');
+
+    if (mode === 'week') {
+        btnW.className = 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all';
+        btnM.className = 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all bg-transparent';
+        ctrlW.classList.remove('hidden'); ctrlW.classList.add('flex');
+        ctrlM.classList.add('hidden'); ctrlM.classList.remove('flex');
+        
+        if(btnAdd) btnAdd.classList.remove('hidden');
+        if(legend) legend.classList.remove('hidden');
+        
+        if(tblCont) { tblCont.classList.remove('hidden'); tblCont.classList.add('flex'); }
+        if(calCont) { calCont.classList.add('hidden'); calCont.classList.remove('flex'); }
+        
+        window.loadWhPlans();
+    } else {
+        btnM.className = 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all';
+        btnW.className = 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all bg-transparent';
+        ctrlM.classList.remove('hidden'); ctrlM.classList.add('flex');
+        ctrlW.classList.add('hidden'); ctrlW.classList.remove('flex');
+        
+        if(btnAdd) btnAdd.classList.add('hidden');
+        if(legend) legend.classList.add('hidden');
+        
+        if(tblCont) { tblCont.classList.add('hidden'); tblCont.classList.remove('flex'); }
+        if(calCont) { calCont.classList.remove('hidden'); calCont.classList.add('flex'); }
+        
+        // 월 선택기가 비어있으면 현재 주차의 월로 자동 세팅
+        const monthInput = document.getElementById('wh-plan-month');
+        if (!monthInput.value) {
+            const picker = document.getElementById('wh-week-picker');
+            if (picker && picker.value) {
+                const { start } = window.getDatesFromWeek(picker.value);
+                monthInput.value = `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,'0')}`;
+            } else {
+                const now = new Date();
+                monthInput.value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+            }
+        }
+        window.loadMonthlyPlanViewer();
+    }
+};
+
+window.handleWhPlanMonthChange = function(val) {
+    if(!val) return;
+    window.loadMonthlyPlanViewer();
+};
+
+// 💡 개선: 프로젝트별 고유 색상 적용된 월간 달력 뷰어
+window.loadMonthlyPlanViewer = function() {
+    const monthVal = document.getElementById('wh-plan-month').value;
+    if(!monthVal) return;
+    const [yearStr, monthStr] = monthVal.split('-');
+    const year = parseInt(yearStr);
+    const month = parseInt(monthStr);
+
+    const weeks = window.getWeeksInMonthForPlan(year, month);
+    const plansForMonth = window.currentWorkPlans.filter(p => weeks.includes(p.period));
+
+    const grid = document.getElementById('wh-plan-calendar-grid');
+    if(!grid) return;
+
+    const firstDay = new Date(year, month - 1, 1).getDay();
+    const lastDate = new Date(year, month, 0).getDate();
+
+    let html = '';
+    for(let i=0; i<firstDay; i++) {
+        html += `<div class="bg-slate-50 min-h-[120px]"></div>`;
+    }
+
+    // 💡 프로젝트별 배정할 예쁜 다색 팔레트 세팅
+    const colorPalette = [
+        { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', badge: 'bg-white text-blue-600' },
+        { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', badge: 'bg-white text-emerald-600' },
+        { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', badge: 'bg-white text-amber-600' },
+        { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700', badge: 'bg-white text-purple-600' },
+        { bg: 'bg-rose-50', border: 'border-rose-200', text: 'text-rose-700', badge: 'bg-white text-rose-600' },
+        { bg: 'bg-cyan-50', border: 'border-cyan-200', text: 'text-cyan-700', badge: 'bg-white text-cyan-600' },
+        { bg: 'bg-fuchsia-50', border: 'border-fuchsia-200', text: 'text-fuchsia-700', badge: 'bg-white text-fuchsia-600' },
+        { bg: 'bg-lime-50', border: 'border-lime-200', text: 'text-lime-700', badge: 'bg-white text-lime-600' }
+    ];
+    
+    let projectColorMap = {};
+    let colorIndex = 0;
+
+    for(let i=1; i<=lastDate; i++) {
+        let dateStr = `${year}-${String(month).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+        let d = new Date(year, month - 1, i);
+        
+        let isHoliday = window.isWhHoliday && window.isWhHoliday(d);
+        let txtClass = isHoliday ? 'text-rose-500' : 'text-slate-700';
+        if (d.getDay() === 0) txtClass = 'text-rose-500';
+        if (d.getDay() === 6) txtClass = 'text-blue-500';
+
+        let isToday = dateStr === window.getLocalDateStr(new Date());
+        let dateClass = isToday ? 'bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center mx-auto shadow-md' : txtClass;
+
+        // 해당 날짜의 계획 데이터 추출
+        let dayPlans = [];
+        plansForMonth.forEach(plan => {
+            if (plan.daily && plan.daily[dateStr]) {
+                const hc = parseFloat(plan.daily[dateStr].hc) || 0;
+                const md = parseFloat(plan.daily[dateStr].md) || 0;
+                if (hc > 0 || md > 0) {
+                    dayPlans.push({
+                        code: plan.projectCode || '미분류',
+                        name: plan.projectName || '',
+                        hc: hc,
+                        md: md,
+                        status: plan.status
+                    });
+                }
+            }
+        });
+
+        let plansHtml = '';
+        dayPlans.forEach(p => {
+            if (!projectColorMap[p.code]) {
+                projectColorMap[p.code] = colorPalette[colorIndex % colorPalette.length];
+                colorIndex++;
+            }
+            const style = projectColorMap[p.code];
+            
+            // 임시저장(draft)은 점선 및 흐릿한 회색 처리, 확정은 프로젝트 색상 부여
+            let confClass = p.status === 'confirmed' ? `${style.bg} ${style.border} ${style.text}` : 'bg-slate-50 border-slate-200 text-slate-400 opacity-80 border-dashed';
+            let badgeClass = p.status === 'confirmed' ? style.badge : 'bg-slate-100 text-slate-500';
+            
+            plansHtml += `
+            <div class="text-[10px] font-bold border px-1.5 py-1 rounded mb-1 truncate shadow-sm flex justify-between items-center ${confClass}">
+                <span class="truncate pr-1" title="${p.name}"><span class="font-black mr-1">[${p.code}]</span>${p.name}</span>
+                <span class="shrink-0 ml-1 font-black ${badgeClass} px-1 rounded shadow-sm">${p.hc}인 / ${p.md}M</span>
+            </div>`;
+        });
+
+        // 빈 칸을 포함한 달력의 셀 클릭 시 해당 주차로 이동하도록 처리
+        html += `<div class="bg-white p-1.5 min-h-[120px] hover:bg-indigo-50/30 transition-colors relative group border-t-2 ${isToday ? 'border-t-indigo-500' : 'border-t-transparent'} flex flex-col cursor-pointer" onclick="window.switchToPlanWeek('${dateStr}')">
+            <div class="text-xs font-black text-center mb-1.5 ${dateClass} shrink-0">${i}</div>
+            <div class="flex-1 flex flex-col gap-0.5 overflow-hidden">${plansHtml}</div>
+            <div class="absolute inset-0 bg-indigo-50/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-indigo-600 font-black text-xs backdrop-blur-[1px] z-10 rounded-lg">
+                <i class="fa-solid fa-pen mr-1"></i> 주간 편집 열기
+            </div>
+        </div>`;
+    }
+    grid.innerHTML = html;
+};
+
+// 💡 새로운 달력 뷰에서 날짜를 클릭하면 해당 주차(week) 수정 뷰로 바로 이동하는 유틸 함수
+window.switchToPlanWeek = function(dateStr) {
+    if(!window.getWeekString) return;
+    const targetWeek = window.getWeekString(new Date(dateStr));
+    const weekInput = document.getElementById('wh-plan-week');
+    if(weekInput) {
+        weekInput.value = targetWeek;
+        window.handleWhPlanWeekChange(targetWeek);
+        window.setWhPlanViewMode('week'); 
+        if(window.showToast) window.showToast(`${dateStr} 날짜가 포함된 주차로 이동했습니다.`, "success");
+    }
+};
+
 window.addWhPlanRow = function() {
     const currentPeriod = document.getElementById('wh-plan-week').value;
     if (!currentPeriod) return;
@@ -1588,7 +1756,6 @@ function appendWhPlanRow(planData, weekDates) {
         let hcStr = hcVal > 0 ? hcVal : '';
         let mdStr = mdVal > 0 ? mdVal : '';
 
-        // data-prev-val 데이터 속성을 추가하여 이전 인원 값을 저장 (동기화 조건에 활용)
         cellsHtml += `
         <td class="p-1.5 border-r border-slate-100 bg-slate-50/20 group-hover:bg-indigo-50/30 transition-colors align-middle">
             <div class="flex flex-col gap-1 w-full max-w-[80px] mx-auto">
@@ -1738,14 +1905,14 @@ window.saveWhPlans = async function(targetStatus) {
     });
 
     try {
-        const batch = writeBatch(db); // 수정됨: window.writeBatch -> writeBatch
+        const batch = window.writeBatch ? window.writeBatch(db) : await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(m => m.writeBatch(db));
         
-        const q = query(collection(db, "work_plans"), where("period", "==", currentPeriod)); // 수정됨: window.query -> query 등
-        const existingSnap = await getDocs(q);
+        const q = window.query(window.collection(db, "work_plans"), window.where("period", "==", currentPeriod));
+        const existingSnap = await window.getDocs(q);
         existingSnap.forEach(docSnap => batch.delete(docSnap.ref));
         
         toSave.forEach(data => {
-            const ref = doc(collection(db, "work_plans")); // 수정됨
+            const ref = window.doc(window.collection(db, "work_plans")); 
             data.createdAt = Date.now();
             delete data.id; 
             batch.set(ref, data);
@@ -1754,7 +1921,7 @@ window.saveWhPlans = async function(targetStatus) {
         await batch.commit();
         window.showToast(targetStatus === 'confirmed' ? "계획이 확정되어 대시보드에 반영됩니다." : "임시 저장되었습니다.", "success");
         
-        fetchWorkPlansForContext(); // 수정됨: window.fetchWorkPlansForContext -> fetchWorkPlansForContext
+        window.fetchWorkPlansForContext(); 
         window.closeWhPlanModal();
     } catch(e) {
         console.error(e);
