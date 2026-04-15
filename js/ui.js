@@ -215,7 +215,7 @@ window.formatMentions = function(text) {
 };
 
 // ==========================================
-// 🔔 알림 및 멘션 시스템 로직 (개별 삭제 / 모달 오픈 연동 추가)
+// 🔔 알림 및 멘션 시스템 로직
 // ==========================================
 window.toggleNotifications = function(event) { 
     if(event) event.stopPropagation(); 
@@ -271,7 +271,6 @@ window.loadNotifications = function() {
                     let pId = n.projectId ? `'${n.projectId}'` : 'null';
                     let tDesc = n.type ? `'${n.type}'` : 'null';
 
-                    // 개별 삭제 버튼 및 클릭 시 모달창 오픈 로직 연동
                     htmlStr += `<div class="p-3 hover:bg-slate-50 cursor-pointer transition-colors border-b border-slate-50 group relative ${opacityClass}" onclick="window.readNotification('${n.id}', ${pId}, ${tDesc})">`;
                     htmlStr += `  <button onclick="window.deleteNotification(event, '${n.id}')" class="absolute top-2 right-2 text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"><i class="fa-solid fa-xmark"></i></button>`;
                     htmlStr += `  <div class="text-[11px] font-bold text-indigo-600 mb-1 pr-6">${typeText}</div>`;
@@ -285,7 +284,6 @@ window.loadNotifications = function() {
     });
 };
 
-// 💡 1. 알림 클릭 시 해당하는 모달창 오픈 로직 처리
 window.readNotification = async function(id, projectId, type) { 
     try { 
         await setDoc(doc(db, "notifications", id), { isRead: true }, { merge: true }); 
@@ -297,7 +295,6 @@ window.readNotification = async function(id, projectId, type) {
             const safeType = type || '';
             let title = "상세 보기"; 
             
-            // 알림 타입에 따라 관련된 모달을 엽니다.
             if (safeType.includes('코멘트')) {
                 if(window.openCommentModal) window.openCommentModal(projectId, title);
             } else if (safeType.includes('이슈')) {
@@ -313,7 +310,6 @@ window.readNotification = async function(id, projectId, type) {
     } catch(e) { console.error(e); } 
 };
 
-// 💡 3. 알림 개별 삭제 함수
 window.deleteNotification = async function(e, id) {
     if (e) e.stopPropagation();
     if (!confirm("이 알림을 삭제하시겠습니까?")) return;
@@ -372,7 +368,6 @@ window.insertMention = function(textareaId, name, startIndex, endIndex) {
     if (drop) drop.classList.add('hidden');
 };
 
-// 💡 2. 구글 연동이 안 되어 있을 시 경고를 띄워주어 메일이 왜 안 가는지 안내합니다.
 window.notifyUser = async function(targetName, content, projectId, typeDesc) {
     if (!targetName) return false;
     const users = window.allSystemUsers || [];
@@ -384,7 +379,6 @@ window.notifyUser = async function(targetName, content, projectId, typeDesc) {
         let sysName = window.userProfile ? window.userProfile.name : '시스템';
         let msgTitle = `📢 ${sysName}님이 [${typeDesc}] 을(를) 남겼습니다.`;
         
-        // Firestore 알림(내부 DB)은 무조건 저장
         await addDoc(collection(db, "notifications"), {
             targetUid: targetUser.uid,
             senderName: sysName,
@@ -395,7 +389,6 @@ window.notifyUser = async function(targetName, content, projectId, typeDesc) {
             createdAt: Date.now()
         });
 
-        // 타겟 유저에게 이메일이 있고 작성자가 구글 연동을 한 경우에만 메일 발송
         if (targetUser.email) {
             if (window.googleAccessToken) {
                 const subject = `[AXBIS 알림] ${msgTitle}`;
@@ -421,7 +414,6 @@ window.notifyUser = async function(targetName, content, projectId, typeDesc) {
                     body: JSON.stringify({ raw: encodedEmail })
                 }).catch(e => console.log("메일 발송 에러(무시가능):", e));
             } else {
-                // 구글 연동 안 함. 사용자에게 최초 1회 경고해 줄 수도 있음 (토스트 알림)
                 if (window.showToast) window.showToast("구글 계정이 연동되지 않아 알림 메일은 발송되지 않았습니다. 상단 우측 버튼으로 연동을 권장합니다.", "warning");
             }
         }
@@ -451,264 +443,82 @@ window.processMentions = async function(content, projectId, typeDesc) {
     return notifiedNames;
 };
 
+
 // ==========================================
-// 🏷️ PJT 코드 마스터 관리 및 자동완성 로직
+// 💡 팀원 풀 관리 (팀 모달) 로직 추가
 // ==========================================
+window.addTeamMember = async function() {
+    const nameSel = document.getElementById('new-team-name');
+    const partSel = document.getElementById('new-team-part');
+    if (!nameSel || !partSel) return;
 
-window.openProjCodeMasterModal = function() {
-    const modal = document.getElementById('proj-code-master-modal');
-    if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
-    if(window.pjtCodeMasterList.length === 0) { if(window.loadProjectCodeMaster) window.loadProjectCodeMaster(); } 
-    else { if(window.renderProjectCodeMaster) window.renderProjectCodeMaster(); }
-};
-
-window.closeProjCodeMasterModal = function() {
-    const modal = document.getElementById('proj-code-master-modal');
-    if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
-};
-
-let pjtCodeMasterUnsubscribe = null;
-window.loadProjectCodeMaster = function() {
-    if (pjtCodeMasterUnsubscribe) pjtCodeMasterUnsubscribe();
-    pjtCodeMasterUnsubscribe = onSnapshot(collection(db, "pjt_code_master"), function(snapshot) {
-        window.pjtCodeMasterList = [];
-        snapshot.forEach(docSnap => { let data = docSnap.data(); data.id = docSnap.id; window.pjtCodeMasterList.push(data); });
-        window.pjtCodeMasterList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-        const modal = document.getElementById('proj-code-master-modal');
-        if(modal && !modal.classList.contains('hidden')) window.renderProjectCodeMaster();
-    });
-};
-
-window.renderProjectCodeMaster = function() {
-    const tbody = document.getElementById('pjt-code-tbody'); if(!tbody) return;
-    if(window.pjtCodeMasterList.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="text-center p-6 text-slate-400 font-bold">등록된 코드가 없습니다.</td></tr>'; return; }
+    const name = nameSel.value;
+    const part = partSel.value;
     
-    let htmlStr = '';
-    window.pjtCodeMasterList.forEach(p => {
-        htmlStr += `<tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">
-            <td class="p-3 text-center"><input type="checkbox" value="${p.id}" class="pjt-checkbox accent-indigo-500 w-4 h-4 rounded cursor-pointer" onchange="window.updatePjtSelection()"></td>
-            <td class="p-3 font-bold text-indigo-700 w-32">${p.code || '-'}</td>
-            <td class="p-3 font-bold text-slate-700">${p.name || '-'}</td>
-            <td class="p-3 text-slate-500 w-32">${p.company || '-'}</td>
-            <td class="p-3 text-center w-20"><button onclick="window.deleteProjectCode('${p.id}')" class="text-slate-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-trash-can"></i></button></td>
-        </tr>`;
-    });
-    tbody.innerHTML = htmlStr;
-    const masterCb = document.getElementById('pjt-master-checkbox'); if (masterCb) masterCb.checked = false; window.updatePjtSelection();
-};
+    if (!name) return window.showToast("팀원을 선택해주세요.", "warning");
 
-window.toggleAllPjtCheckboxes = function(checked) {
-    const checkboxes = document.querySelectorAll('.pjt-checkbox');
-    checkboxes.forEach(cb => cb.checked = checked); window.updatePjtSelection();
-};
-
-window.updatePjtSelection = function() {
-    const checkboxes = document.querySelectorAll('.pjt-checkbox');
-    let checkedCount = 0; checkboxes.forEach(cb => { if(cb.checked) checkedCount++; });
-    const btn = document.getElementById('btn-delete-selected-pjts');
-    if (btn) {
-        if (checkedCount > 0) { btn.classList.remove('hidden'); btn.innerText = `선택 삭제 (${checkedCount})`; } 
-        else btn.classList.add('hidden');
-    }
-    const masterCb = document.getElementById('pjt-master-checkbox');
-    if (masterCb && checkboxes.length > 0) masterCb.checked = (checkedCount === checkboxes.length);
-};
-
-window.deleteSelectedProjectCodes = async function() {
-    const checkedBoxes = document.querySelectorAll('.pjt-checkbox:checked'); if (checkedBoxes.length === 0) return;
-    if (!confirm(`선택한 ${checkedBoxes.length}개의 프로젝트 코드를 삭제하시겠습니까?`)) return;
-    try {
-        const batch = writeBatch(db);
-        checkedBoxes.forEach(cb => batch.delete(doc(db, "pjt_code_master", cb.value)));
-        await batch.commit(); window.showToast('삭제되었습니다.');
-        const masterCb = document.getElementById('pjt-master-checkbox'); if (masterCb) masterCb.checked = false; window.updatePjtSelection();
-    } catch(e) { window.showToast("삭제 중 오류가 발생했습니다.", "error"); }
-};
-
-window.toggleBulkPjtInput = function() {
-    const area = document.getElementById('pjt-bulk-input-area');
-    if (area) {
-        if (area.classList.contains('hidden')) { area.classList.remove('hidden'); area.classList.add('flex'); } 
-        else { area.classList.add('hidden'); area.classList.remove('flex'); }
-    }
-};
-
-window.processBulkPjtInput = async function() {
-    const textarea = document.getElementById('bulk-pjt-data'); if (!textarea) return;
-    const text = textarea.value.trim(); if (!text) return window.showToast("입력된 데이터가 없습니다.", "error");
-    
-    const lines = text.split('\n'); let successCount = 0, duplicateCount = 0;
-    try {
-        const batch = writeBatch(db); let opCount = 0;
-        let currentCodesAndNames = window.pjtCodeMasterList.map(p => `${p.code}|${p.name}`);
-        
-        for(let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim(); if(!line) continue;
-            const parts = line.split('\t'); 
-            const code = (parts[0] || '').trim(), name = (parts[1] || '').trim(), company = (parts[2] || '').trim();
-            if(!code || !name) continue; 
-            
-            const uniqueKey = `${code}|${name}`;
-            if (currentCodesAndNames.includes(uniqueKey)) { duplicateCount++; continue; }
-            
-            const newRef = doc(collection(db, "pjt_code_master"));
-            batch.set(newRef, { code, name, company, authorUid: window.currentUser?.uid || 'unknown', authorName: window.userProfile?.name || 'unknown', createdAt: Date.now() + i });
-            
-            currentCodesAndNames.push(uniqueKey); successCount++; opCount++;
-            if(opCount >= 490) { await batch.commit(); opCount = 0; }
-        }
-        if(opCount > 0) await batch.commit();
-        let msg = `${successCount}건 등록 성공.`; if(duplicateCount > 0) msg += ` (중복 제외 ${duplicateCount}건)`;
-        window.showToast(msg, successCount > 0 ? "success" : "warning"); textarea.value = ''; window.toggleBulkPjtInput();
-    } catch(e) { window.showToast("일괄 등록 중 오류가 발생했습니다.", "error"); }
-};
-
-window.addProjectCode = async function() {
-    const codeEl = document.getElementById('new-pjt-code'), nameEl = document.getElementById('new-pjt-name'), companyEl = document.getElementById('new-pjt-company');
-    if(!codeEl || !nameEl || !companyEl) return;
-    
-    const code = codeEl.value.trim(), name = nameEl.value.trim(), company = companyEl.value.trim();
-    if(!code || !name) return window.showToast("PJT 코드와 프로젝트명을 모두 입력해 주세요.", "error");
-
-    if (window.pjtCodeMasterList.some(p => p.code === code || p.name === name)) {
-        return window.showToast("🚨 이미 동일한 PJT 코드 또는 프로젝트명이 존재합니다!", "error");
+    if (window.teamMembers && window.teamMembers.find(m => m.name === name)) {
+        return window.showToast("이미 등록된 팀원입니다.", "warning");
     }
 
     try {
-        await addDoc(collection(db, "pjt_code_master"), { code, name, company, authorUid: window.currentUser?.uid || 'unknown', authorName: window.userProfile?.name || 'unknown', createdAt: Date.now() });
-        window.showToast("프로젝트 코드가 성공적으로 등록되었습니다."); codeEl.value = ''; nameEl.value = ''; companyEl.value = '';
-    } catch(e) { window.showToast("등록 실패", "error"); }
+        const selectedOption = nameSel.options[nameSel.selectedIndex];
+        const uid = selectedOption.getAttribute('data-uid') || '';
+
+        await addDoc(collection(db, "team_members"), {
+            name: name,
+            part: part,
+            uid: uid,
+            createdAt: Date.now()
+        });
+        window.showToast("팀원이 성공적으로 추가되었습니다.");
+        nameSel.value = "";
+    } catch(e) {
+        window.showToast("추가 실패: " + e.message, "error");
+    }
 };
 
-window.deleteProjectCode = async function(id) {
-    if(!confirm("이 마스터 코드를 삭제하시겠습니까? (기존에 등록된 현황 데이터는 삭제되지 않습니다)")) return;
-    try { await deleteDoc(doc(db, "pjt_code_master", id)); window.showToast("삭제되었습니다."); } catch(e) { window.showToast("삭제 실패", "error"); }
+window.deleteTeamMember = async function(id) {
+    if (!confirm("이 팀원을 목록에서 삭제하시겠습니까?")) return;
+    try {
+        await deleteDoc(doc(db, "team_members", id));
+        window.showToast("삭제되었습니다.");
+    } catch(e) {
+        window.showToast("삭제 실패", "error");
+    }
 };
 
-window.showAutocomplete = function(inputEl, targetId1, targetId2, isNameSearch) {
-    const val = inputEl.value.trim().toLowerCase();
-    let dropdown = document.getElementById('pjt-autocomplete-dropdown');
+window.renderTeamMembers = function() {
+    const tbody = document.getElementById('team-list-tbody');
+    const count = document.getElementById('team-modal-count');
+    const list = window.teamMembers || [];
     
-    if(!dropdown) {
-        dropdown = document.createElement('ul'); dropdown.id = 'pjt-autocomplete-dropdown';
-        dropdown.className = 'absolute z-[9999] bg-white border border-indigo-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-full custom-scrollbar py-1';
-        document.body.appendChild(dropdown);
-    }
-    if(val.length < 1) { dropdown.classList.add('hidden'); return; }
+    if (count) count.innerText = '총 ' + list.length + '명';
+    if (!tbody) return;
 
-    let matches = window.pjtCodeMasterList.filter(p => isNameSearch ? (p.name.toLowerCase().includes(val) || window.matchString(val, p.name)) : p.code.toLowerCase().includes(val));
-
-    if(matches.length > 0) {
-        const rect = inputEl.getBoundingClientRect();
-        dropdown.style.left = `${rect.left + window.scrollX}px`; dropdown.style.top = `${rect.bottom + window.scrollY + 5}px`; dropdown.style.width = `${rect.width}px`;
-        dropdown.classList.remove('hidden');
-
-        dropdown.innerHTML = matches.map(m => {
-            let safeName = m.name.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
-            return `<li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-slate-700 font-bold text-xs border-b border-slate-50 last:border-0 truncate transition-colors" onmousedown="window.selectAutocomplete('${m.code}', '${safeName}', '${m.company || ''}', '${inputEl.id}', '${targetId1}', '${targetId2}')"><span class="text-indigo-600">[${m.code}]</span> ${m.name} <span class="text-[10px] text-slate-400">(${m.company || '업체미상'})</span></li>`;
-        }).join('');
-    } else dropdown.classList.add('hidden');
-};
-
-window.selectAutocomplete = function(code, name, company, sourceId, targetId1, targetId2) {
-    const sourceEl = document.getElementById(sourceId), t1 = document.getElementById(targetId1), t2 = document.getElementById(targetId2);
-    if (sourceId === 'ps-code') { if (sourceEl) sourceEl.value = code; if (t1) t1.value = name; if (t2) t2.value = company; } 
-    else { if (sourceEl) sourceEl.value = name; if (t1) t1.value = code; if (t2) t2.value = company; }
-    const drop = document.getElementById('pjt-autocomplete-dropdown'); if (drop) drop.classList.add('hidden');
-};
-
-
-// ==========================================
-// 💡 상단 퀵메뉴 관련 로직
-// ==========================================
-window.availableApps = {
-    'dashboard-home': { title: '대시보드', icon: 'fa-solid fa-chart-pie', color: 'text-indigo-600' },
-    'project-status': { title: 'PJT현황', icon: 'fa-solid fa-table-list', color: 'text-slate-600' },
-    'workhours': { title: '투입 현황', icon: 'fa-solid fa-user-clock', color: 'text-slate-600' },
-    'weekly-log': { title: '주간일지', icon: 'fa-solid fa-calendar-week', color: 'text-slate-600' },
-    'collab': { title: '협업/조립', icon: 'fa-regular fa-handshake', color: 'text-blue-600' },
-    'purchase': { title: '구매의뢰', icon: 'fa-solid fa-cart-flatbed', color: 'text-emerald-600' },
-    'repair': { title: '수리/점검', icon: 'fa-solid fa-stethoscope', color: 'text-rose-600' },
-    'simulation': { title: '시뮬레이션', icon: 'fa-solid fa-bolt', color: 'text-amber-500' }
-};
-
-window.quickMenuItems = JSON.parse(localStorage.getItem('axbis_quick_menu')) || ['dashboard-home', 'project-status', 'workhours', 'weekly-log'];
-
-window.renderQuickMenu = function() {
-    const container = document.getElementById('quick-menu-container');
-    if (!container) return;
-
-    let html = '';
-    window.quickMenuItems.forEach((key, index) => {
-        const app = window.availableApps[key];
-        if (!app) return;
-        html += `
-        <div class="group relative flex items-center bg-white border border-slate-200 px-3 py-1.5 rounded-full shadow-sm cursor-pointer hover:bg-indigo-50 transition-colors shrink-0" draggable="true" ondragstart="window.dragQmStart(event, ${index})" ondragover="event.preventDefault()" ondrop="window.dragQmDrop(event, ${index})">
-            <div onclick="window.openApp('${key}', '${app.title}')" class="flex items-center gap-1.5">
-                <i class="${app.icon} ${app.color} text-[11px]"></i>
-                <span class="text-[11px] font-bold text-slate-700 whitespace-nowrap">${app.title}</span>
-            </div>
-            <button onclick="window.removeQuickMenu(event, ${index})" class="ml-2 w-4 h-4 rounded-full flex items-center justify-center text-slate-300 hover:text-white hover:bg-rose-500 opacity-0 group-hover:opacity-100 transition-all"><i class="fa-solid fa-xmark text-[9px]"></i></button>
-        </div>`;
-    });
-
-    if (window.quickMenuItems.length < 5) {
-        html += `<button onclick="window.openQuickMenuAdd(event)" class="w-7 h-7 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center hover:bg-indigo-500 hover:text-white transition-colors shrink-0 shadow-sm"><i class="fa-solid fa-plus text-xs"></i></button>`;
-    }
-
-    container.innerHTML = html;
-};
-
-window.dragQmStart = (e, index) => { window.draggedQmIndex = index; };
-window.dragQmDrop = (e, dropIndex) => {
-    e.preventDefault();
-    if (window.draggedQmIndex === undefined || window.draggedQmIndex === dropIndex) return;
-    const item = window.quickMenuItems.splice(window.draggedQmIndex, 1)[0];
-    window.quickMenuItems.splice(dropIndex, 0, item);
-    localStorage.setItem('axbis_quick_menu', JSON.stringify(window.quickMenuItems));
-    window.renderQuickMenu();
-};
-
-window.openQuickMenuAdd = function(e) {
-    if(e) e.stopPropagation();
-    const drop = document.getElementById('qm-add-dropdown');
-    if (drop.classList.contains('hidden')) {
-        drop.classList.remove('hidden');
-        let html = '';
-        for (let key in window.availableApps) {
-            if (!window.quickMenuItems.includes(key)) {
-                const app = window.availableApps[key];
-                html += `<li class="px-4 py-2 hover:bg-indigo-50 cursor-pointer text-xs font-bold text-slate-600 flex items-center gap-2 border-b border-slate-50 last:border-0 transition-colors" onclick="window.addQuickMenu('${key}')"><i class="${app.icon} ${app.color}"></i> ${app.title}</li>`;
-            }
-        }
-        if (html === '') html = '<li class="px-3 py-2 text-xs text-slate-400 text-center">추가할 메뉴가 없습니다.</li>';
-        drop.innerHTML = html;
+    if (list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center p-6 text-slate-400 font-bold">등록된 팀원이 없습니다.</td></tr>';
     } else {
-        drop.classList.add('hidden');
+        let sortedList = list.slice().sort((a,b) => (a.part||'').localeCompare(b.part||'') || (a.name||'').localeCompare(b.name||''));
+        
+        tbody.innerHTML = sortedList.map(function(t) { 
+            const partColor = t.part === '제조' ? 'text-indigo-600 bg-indigo-50 border-indigo-200' : 'text-teal-600 bg-teal-50 border-teal-200';
+            return `<tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">
+                <td class="p-3 text-center"><span class="px-2 py-1 rounded-md text-[10px] font-bold ${partColor} shadow-sm border">${t.part || '-'}</span></td>
+                <td class="p-3 font-bold text-slate-700">${t.name}</td>
+                <td class="p-3 text-center"><button onclick="window.deleteTeamMember('${t.id}')" class="text-slate-300 hover:text-rose-500 p-1.5 transition-colors"><i class="fa-solid fa-trash-can"></i></button></td>
+            </tr>`; 
+        }).join('');
     }
 };
 
-window.addQuickMenu = function(key) {
-    if (window.quickMenuItems.length >= 5) return window.showToast('최대 5개까지만 추가 가능합니다.', 'warning');
-    if (!window.quickMenuItems.includes(key)) {
-        window.quickMenuItems.push(key);
-        localStorage.setItem('axbis_quick_menu', JSON.stringify(window.quickMenuItems));
-        window.renderQuickMenu();
+window.populateUserDropdowns = function() {
+    const sel = document.getElementById('new-team-name');
+    if (sel && window.allSystemUsers) {
+        let html = '<option value="">선택</option>';
+        window.allSystemUsers.forEach(u => {
+            html += `<option value="${u.name}" data-uid="${u.uid}">${u.name} (${u.team || '소속없음'})</option>`;
+        });
+        sel.innerHTML = html;
     }
-    document.getElementById('qm-add-dropdown').classList.add('hidden');
 };
-
-window.removeQuickMenu = function(e, index) {
-    if(e) e.stopPropagation();
-    window.quickMenuItems.splice(index, 1);
-    localStorage.setItem('axbis_quick_menu', JSON.stringify(window.quickMenuItems));
-    window.renderQuickMenu();
-};
-
-// 통합 클릭 리스너 병합
-document.addEventListener('click', function(e) {
-    const n = document.getElementById('notification-dropdown'); if (n && !n.classList.contains('hidden') && !e.target.closest('.relative.cursor-pointer')) n.classList.add('hidden');
-    const m = document.getElementById('mention-dropdown'); if (m && !m.classList.contains('hidden') && !e.target.closest('#mention-dropdown')) m.classList.add('hidden');
-    const d = document.getElementById('pjt-autocomplete-dropdown'); if (d && !d.classList.contains('hidden') && !e.target.closest('#pjt-autocomplete-dropdown') && !e.target.closest('input[oninput*="showAutocomplete"]')) d.classList.add('hidden');
-    const qm = document.getElementById('qm-add-dropdown'); if (qm && !qm.classList.contains('hidden') && !e.target.closest('#qm-add-dropdown') && !e.target.closest('button[onclick*="openQuickMenuAdd"]')) qm.classList.add('hidden');
-});
