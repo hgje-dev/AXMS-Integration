@@ -1,9 +1,186 @@
-<div class="space-y-6 max-w-[1600px] mx-auto pb-10">
-    <h2 class="text-xl font-black text-slate-800 flex items-center gap-2 mb-4">
-        <i class="fa-solid fa-clipboard-check text-indigo-500"></i> 통합 완료보고
-    </h2>
-    <div class="bg-white p-10 rounded-3xl shadow-sm border border-slate-200 text-center">
-        <i class="fa-solid fa-person-digging text-4xl text-slate-300 mb-4"></i>
-        <p class="text-slate-500 font-bold">화면 및 기능 준비 중입니다...</p>
+<div class="space-y-6 max-w-[1600px] mx-auto pb-10 flex flex-col h-[85vh]">
+    <div class="flex flex-col md:flex-row justify-between items-end gap-4 shrink-0">
+        <div>
+            <h2 class="text-xl font-black text-slate-800 flex items-center gap-2">
+                <i class="fa-solid fa-file-shield text-rose-500"></i> 품질 완료보고 및 검수 관리
+            </h2>
+            <p class="text-xs font-bold text-slate-500 mt-1">프로젝트별 검수 리스트 및 완료 보고서를 작성하고 관리합니다.</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <div class="relative">
+                <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                <input type="text" id="cr-search" oninput="window.filterCrList()" placeholder="PJT코드, 프로젝트명 검색..." class="w-64 border border-slate-300 rounded-xl pl-8 pr-3 py-2 text-xs font-bold text-slate-600 outline-rose-500 shadow-sm bg-white">
+            </div>
+            <button onclick="window.authenticateGoogle()" id="btn-cr-google-auth" class="text-[11px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl shadow-sm hover:bg-amber-100 transition-colors flex items-center gap-1.5">
+                <i class="fa-brands fa-google"></i> 구글 드라이브 연동
+            </button>
+            <div id="cr-google-auth-status" class="hidden items-center gap-1.5 text-[11px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-xl shadow-sm">
+                <i class="fa-brands fa-google-drive"></i> 드라이브 연동됨
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 flex-1 flex flex-col overflow-hidden">
+        <div class="overflow-auto custom-scrollbar flex-1 bg-slate-50/30">
+            <table class="w-full text-left border-collapse whitespace-nowrap">
+                <thead class="bg-slate-800 text-white text-[11px] sticky top-0 z-20 shadow-sm">
+                    <tr>
+                        <th class="p-3 text-center border-r border-slate-600 w-24">구분</th>
+                        <th class="p-3 text-center border-r border-slate-600 w-32">PJT 코드</th>
+                        <th class="p-3 border-r border-slate-600">프로젝트명</th>
+                        <th class="p-3 text-center border-r border-slate-600 w-32">업체명</th>
+                        <th class="p-3 text-center border-r border-slate-600 w-28">상태</th>
+                        <th class="p-3 text-center border-r border-slate-600 w-28 text-emerald-300">검수리스트</th>
+                        <th class="p-3 text-center w-28 text-rose-300">완료보고</th>
+                    </tr>
+                </thead>
+                <tbody id="cr-tbody" class="text-xs divide-y divide-slate-200 text-slate-700">
+                    </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div id="cr-inspection-modal" class="fixed inset-0 z-[200] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10 transition-opacity">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col h-[600px] md:h-[85vh] overflow-hidden transform transition-all">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-emerald-50 shrink-0">
+            <h2 class="text-base font-extrabold text-emerald-800 flex items-center gap-2">
+                <i class="fa-solid fa-list-check text-emerald-500"></i> 검수 리스트 관리
+            </h2>
+            <button onclick="window.closeInspectionModal()" class="text-emerald-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
+        </div>
+        <div class="p-6 bg-slate-50/50 flex-1 flex flex-col gap-4 min-h-0">
+            <input type="hidden" id="insp-pjt-id">
+            <div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
+                <span id="insp-project-title" class="text-sm font-bold text-emerald-600"></span>
+            </div>
+            
+            <div class="flex gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative flex-col md:flex-row md:items-center shrink-0">
+                <div class="relative flex-1 w-full">
+                    <textarea id="new-insp-text" placeholder="검수 내용 및 특이사항 입력... (Enter 저장, Shift+Enter 줄바꿈)" class="w-full h-24 border px-4 py-3 rounded-lg text-sm outline-emerald-500 resize-none custom-scrollbar" onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); document.getElementById('btn-insp-save').click(); }"></textarea>
+                </div>
+                
+                <div class="w-full md:w-48 border-2 border-dashed border-emerald-200 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-emerald-50 hover:border-emerald-400 transition-colors relative"
+                     onclick="document.getElementById('new-insp-file').click()"
+                     ondragover="event.preventDefault(); this.classList.add('bg-emerald-50', 'border-emerald-400');"
+                     ondragleave="event.preventDefault(); this.classList.remove('bg-emerald-50', 'border-emerald-400');"
+                     ondrop="event.preventDefault(); this.classList.remove('bg-emerald-50', 'border-emerald-400'); document.getElementById('new-insp-file').files = event.dataTransfer.files; document.getElementById('insp-file-name').innerText = event.dataTransfer.files[0] ? event.dataTransfer.files[0].name : '';">
+                    <i class="fa-solid fa-file-arrow-up text-2xl text-emerald-300 mb-2 pointer-events-none"></i>
+                    <p class="text-[11px] font-bold text-slate-500 text-center pointer-events-none">클릭하거나 검수리스트 파일 드래그</p>
+                    <input type="file" id="new-insp-file" class="hidden" onchange="document.getElementById('insp-file-name').innerText = this.files[0] ? this.files[0].name : '';">
+                    <div id="insp-file-name" class="text-[10px] text-emerald-600 font-bold truncate mt-2 w-full text-center pointer-events-none"></div>
+                </div>
+
+                <div class="flex flex-col gap-2 w-full md:w-auto h-full justify-end">
+                    <button id="btn-insp-save" onclick="window.saveInspectionItem()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2.5 rounded-lg text-sm font-bold transition-colors shadow-sm w-full md:w-20">등록</button>
+                </div>
+            </div>
+            
+            <div id="inspection-list" class="space-y-3 flex-1 overflow-y-auto p-1 custom-scrollbar min-h-0"></div>
+        </div>
+    </div>
+</div>
+
+<div id="cr-report-modal" class="fixed inset-0 z-[200] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10 transition-opacity">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-5xl flex flex-col h-[750px] md:h-[90vh] overflow-hidden transform transition-all">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-rose-50 shrink-0">
+            <h2 class="text-base font-extrabold text-rose-800 flex items-center gap-2">
+                <i class="fa-solid fa-file-shield text-rose-500"></i> 품질 완료보고서 작성
+            </h2>
+            <button onclick="window.closeCompletionReportModal()" class="text-rose-400 hover:text-rose-600 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
+        </div>
+        
+        <div class="p-6 bg-slate-50/50 flex-1 overflow-y-auto custom-scrollbar space-y-6">
+            <input type="hidden" id="cr-rep-pjt-id">
+            <input type="hidden" id="cr-rep-doc-id">
+            
+            <div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
+                <span id="cr-rep-project-title" class="text-sm font-black text-rose-600"></span>
+            </div>
+
+            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                <h3 class="text-xs font-black text-slate-700 mb-4 border-b pb-2"><i class="fa-regular fa-calendar-check text-indigo-500 mr-1"></i> 검수 일정 및 상태</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="space-y-3 p-4 bg-indigo-50/30 rounded-xl border border-indigo-100">
+                        <h4 class="text-[11px] font-bold text-indigo-700">내부 검수</h4>
+                        <div class="flex items-center gap-2">
+                            <input type="date" id="cr-int-start" class="border border-slate-300 rounded px-2 py-1.5 text-xs font-bold text-slate-600 flex-1 outline-indigo-500">
+                            <span class="text-slate-400">~</span>
+                            <input type="date" id="cr-int-end" class="border border-slate-300 rounded px-2 py-1.5 text-xs font-bold text-slate-600 flex-1 outline-indigo-500">
+                        </div>
+                        <select id="cr-int-status" class="w-full border border-slate-300 rounded px-3 py-2 text-xs font-bold outline-indigo-500">
+                            <option value="미진행">미진행</option>
+                            <option value="진행중">진행중</option>
+                            <option value="보류">보류</option>
+                            <option value="완료">완료</option>
+                        </select>
+                    </div>
+                    <div class="space-y-3 p-4 bg-rose-50/30 rounded-xl border border-rose-100">
+                        <h4 class="text-[11px] font-bold text-rose-700">고객 검수 (FAT/SAT)</h4>
+                        <div class="flex items-center gap-2">
+                            <input type="date" id="cr-ext-start" class="border border-slate-300 rounded px-2 py-1.5 text-xs font-bold text-slate-600 flex-1 outline-rose-500">
+                            <span class="text-slate-400">~</span>
+                            <input type="date" id="cr-ext-end" class="border border-slate-300 rounded px-2 py-1.5 text-xs font-bold text-slate-600 flex-1 outline-rose-500">
+                        </div>
+                        <select id="cr-ext-status" class="w-full border border-slate-300 rounded px-3 py-2 text-xs font-bold outline-rose-500">
+                            <option value="미진행">미진행</option>
+                            <option value="진행중">진행중</option>
+                            <option value="보류">보류</option>
+                            <option value="완료">완료</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                <h3 class="text-xs font-black text-slate-700 mb-3 border-b pb-2"><i class="fa-regular fa-comment-dots text-amber-500 mr-1"></i> 종합 검수 의견</h3>
+                <textarea id="cr-comments" placeholder="검수 결과 및 종합 의견을 자유롭게 작성하세요." class="w-full h-28 border border-slate-300 rounded-xl p-3 text-sm outline-amber-500 custom-scrollbar resize-y"></textarea>
+                
+                <div class="mt-3 flex items-center gap-3">
+                    <input type="file" id="cr-comment-img" accept="image/*" class="hidden" onchange="document.getElementById('cr-img-name').innerText = this.files[0] ? this.files[0].name : '';">
+                    <button onclick="document.getElementById('cr-comment-img').click()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 border border-slate-200">
+                        <i class="fa-regular fa-image"></i> 사진 첨부
+                    </button>
+                    <span id="cr-img-name" class="text-xs font-bold text-amber-600"></span>
+                    <button onclick="document.getElementById('cr-comment-img').value=''; document.getElementById('cr-img-name').innerText='';" class="text-slate-400 hover:text-rose-500 text-xs hidden" id="btn-cr-img-clear"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div id="cr-saved-img-container" class="mt-3 hidden">
+                    <img id="cr-saved-img" src="" class="max-h-40 rounded-lg border border-slate-200 cursor-pointer" onclick="window.open(this.src)">
+                    <button onclick="window.removeSavedCrImage()" class="text-xs text-rose-500 font-bold mt-1 hover:underline">첨부 사진 삭제</button>
+                </div>
+            </div>
+
+            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                <div class="flex justify-between items-center mb-3 border-b pb-2">
+                    <h3 class="text-xs font-black text-slate-700"><i class="fa-solid fa-scale-balanced text-teal-500 mr-1"></i> Lessons Learned (Good / Bad)</h3>
+                    <button onclick="window.addCrLessonRow()" class="bg-teal-50 text-teal-600 px-3 py-1.5 rounded-lg text-[10px] font-bold hover:bg-teal-100 transition-colors border border-teal-200">+ 항목 추가</button>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs border-collapse min-w-[800px]">
+                        <thead class="bg-slate-50 text-slate-500">
+                            <tr>
+                                <th class="p-2 border border-slate-200 text-center w-24">Type</th>
+                                <th class="p-2 border border-slate-200 text-center w-28">구분</th>
+                                <th class="p-2 border border-slate-200 w-48">Item</th>
+                                <th class="p-2 border border-slate-200 w-1/3">Highlight (잘된 점 / 개선안)</th>
+                                <th class="p-2 border border-slate-200 w-1/3">Lowlight (문제점 / 아쉬운 점)</th>
+                                <th class="p-2 border border-slate-200 text-center w-12"><i class="fa-solid fa-trash-can"></i></th>
+                            </tr>
+                        </thead>
+                        <tbody id="cr-lessons-tbody">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+            
+        </div>
+        
+        <div class="px-6 py-4 border-t bg-white flex justify-end gap-2 shrink-0">
+            <button onclick="window.closeCompletionReportModal()" class="px-6 py-2.5 bg-slate-100 border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 transition-colors">취소</button>
+            <button id="btn-cr-save" onclick="window.saveCompletionReport()" class="px-8 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
+                <i class="fa-solid fa-check"></i> 보고서 저장
+            </button>
+        </div>
     </div>
 </div>
