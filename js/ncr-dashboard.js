@@ -3,6 +3,45 @@
 let ncrChartInstances = {};
 let ncrFilteredData = [];
 
+// 💡 [핵심 추가] 독립적인 초성 검색 유틸리티 함수 내장
+function ncrGetChosung(str) {
+    const cho = ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
+    let res = "";
+    for (let i = 0; i < str.length; i++) {
+        let code = str.charCodeAt(i) - 44032;
+        if (code > -1 && code < 11172) res += cho[Math.floor(code / 588)];
+        else res += str.charAt(i);
+    }
+    return res;
+}
+
+function ncrMatchString(query, target) {
+    if (!query) return true;
+    if (!target) return false;
+    
+    // 공백 제거 및 소문자화
+    let q = query.toLowerCase().replace(/\s/g, '');
+    let t = target.toLowerCase().replace(/\s/g, '');
+    
+    // 1. 단순 포함 여부 검사
+    if (t.includes(q)) return true;
+
+    // 2. 초성 포함 여부 검사
+    let choT = ncrGetChosung(t);
+    let choQ = ncrGetChosung(q);
+    if (choT.includes(choQ)) return true;
+
+    // 3. 영어 자판으로 한글 쳤을 때 보정 (예: r -> ㄱ)
+    const enToKr = {'q':'ㅂ','w':'ㅈ','e':'ㄷ','r':'ㄱ','t':'ㅅ','y':'ㅛ','u':'ㅕ','i':'ㅑ','o':'ㅐ','p':'ㅔ','a':'ㅁ','s':'ㄴ','d':'ㅇ','f':'ㄹ','g':'ㅎ','h':'ㅗ','j':'ㅓ','k':'ㅏ','l':'ㅣ','z':'ㅋ','x':'ㅌ','c':'ㅊ','v':'ㅍ','b':'ㅠ','n':'ㅜ','m':'ㅡ'};
+    let korQ = "";
+    for(let i = 0; i < q.length; i++) korQ += enToKr[q[i]] || q[i];
+    
+    if (t.includes(korQ)) return true;
+    if (choT.includes(ncrGetChosung(korQ))) return true;
+
+    return false;
+}
+
 // Chart.js DataLabels 플러그인 안전하게 동적 로드
 function loadDataLabelsPlugin(callback) {
     if (typeof ChartDataLabels !== 'undefined') {
@@ -23,7 +62,7 @@ function loadDataLabelsPlugin(callback) {
 }
 
 window.initNcrDashboard = function(forceReload = false) {
-    console.log("✅ 초격차 프리미엄 NCR 대시보드 로드 완료");
+    console.log("✅ 초격차 프리미엄 NCR 대시보드 로드 완료 (초성검색 독립 모듈 탑재)");
     
     // PJT 코드 마스터 데이터 로드 확인
     if (!window.pjtCodeMasterList || window.pjtCodeMasterList.length === 0) {
@@ -97,7 +136,7 @@ function populateNcrFilters() {
     }
 }
 
-// 💡 [핵심 추가] PJT 초성 검색 자동완성 로직
+// 💡 PJT 초성 검색 자동완성 로직 (내장된 ncrMatchString 사용)
 window.ncrShowPjtAuto = function(input) {
     const val = input.value.trim().toLowerCase();
     const drop = document.getElementById('ncr-pjt-autocomplete');
@@ -105,7 +144,7 @@ window.ncrShowPjtAuto = function(input) {
 
     if(!val) {
         drop.classList.add('hidden');
-        window.filterNcrDashboard(); // 검색어가 지워지면 필터 즉시 초기화
+        window.filterNcrDashboard(); 
         return;
     }
 
@@ -130,12 +169,9 @@ window.ncrShowPjtAuto = function(input) {
         }
     });
 
+    // 💡 내장된 초성 검색 함수(ncrMatchString) 사용!
     let matches = searchPool.filter(p => {
-        let code = (p.code || '').toLowerCase();
-        let name = (p.name || '').toLowerCase();
-        return code.includes(val) || name.includes(val) ||
-               (window.matchString && window.matchString(val, p.code)) ||
-               (window.matchString && window.matchString(val, p.name));
+        return ncrMatchString(val, p.code) || ncrMatchString(val, p.name);
     });
 
     if(matches.length > 0) {
@@ -151,7 +187,7 @@ window.ncrShowPjtAuto = function(input) {
         drop.classList.add('hidden');
     }
     
-    window.filterNcrDashboard(); // 타이핑과 동시에 필터링 반영
+    window.filterNcrDashboard(); 
 };
 
 window.ncrSelectPjt = function(code) {
@@ -161,7 +197,7 @@ window.ncrSelectPjt = function(code) {
     const drop = document.getElementById('ncr-pjt-autocomplete');
     if(drop) drop.classList.add('hidden');
     
-    window.filterNcrDashboard(); // 선택 후 최종 필터 적용
+    window.filterNcrDashboard(); 
 };
 
 // 외부 클릭 시 드롭다운 닫기
@@ -193,19 +229,18 @@ window.filterNcrDashboard = function() {
         if (month && (!d.date || d.date.split('-')[1] !== month)) match = false;
         if (pjt && d.pjtCode !== pjt) match = false;
         
-        // PJT 코드 전용 초성 검색 매칭
+        // PJT 코드 전용 초성 검색 매칭 (내장 함수 사용)
         if (pjtCodeSearch) {
             let isCodeMatch = false;
-            const targetCode = (d.pjtCode || '').toLowerCase();
+            const targetCode = (d.pjtCode || '');
             
-            if (targetCode.includes(pjtCodeSearch) || (window.matchString && window.matchString(pjtCodeSearch, targetCode))) {
+            if (ncrMatchString(pjtCodeSearch, targetCode)) {
                 isCodeMatch = true;
             } else {
                 if (window.pjtCodeMasterList && window.pjtCodeMasterList.length > 0) {
-                    const masterInfo = window.pjtCodeMasterList.find(m => (m.code || '').toLowerCase() === targetCode);
+                    const masterInfo = window.pjtCodeMasterList.find(m => m.code === targetCode);
                     if (masterInfo && masterInfo.name) {
-                        const targetName = masterInfo.name.toLowerCase();
-                        if (targetName.includes(pjtCodeSearch) || (window.matchString && window.matchString(pjtCodeSearch, targetName))) {
+                        if (ncrMatchString(pjtCodeSearch, masterInfo.name)) {
                             isCodeMatch = true;
                         }
                     }
@@ -298,7 +333,6 @@ function renderPremiumNcrDashboard() {
     if(document.getElementById('kpi-resolved')) document.getElementById('kpi-resolved').innerHTML = `${resolvedCount} <span class="text-[12px] font-bold text-[#64748b] ml-1 tracking-tight">건 완료</span>`;
     if(document.getElementById('kpi-pending')) document.getElementById('kpi-pending').innerHTML = `${pendingCount} <span class="text-[12px] font-bold text-[#fb7185] ml-1 tracking-tight">건 조치중</span>`;
 
-    // 컴포넌트 그리기 (불량 비중 Top3 함수는 삭제되었습니다)
     drawRecentNcrs(data);
 
     drawParetoChart(paretoData);
@@ -540,6 +574,7 @@ function drawTopSupplierChart(data) {
     });
 }
 
+// Mock Data (시트 데이터가 없을 때 폴백 용도)
 function generateMockDashboard() {
     const mockData = [];
     for(let i=0; i<107; i++) {
