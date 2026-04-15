@@ -11,6 +11,10 @@ import './completion-report.js';
 import './product-cost.js';
 import './ncr-dashboard.js';
 import './quality-report.js';
+
+// 💡 새롭게 변경한 파일명으로 import 추가!
+import './mfg-cost.js'; 
+
 import { initRouter } from './router.js';
 
 window.addEventListener('error', (e) => {
