@@ -1,12 +1,13 @@
 /* eslint-disable */
 import { db } from './firebase.js';
-import { collection, doc, setDoc, query, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { collection, doc, setDoc, deleteDoc, query, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 let qrUnsubscribe = null;
 let pjtUnsubscribe = null;
 
 window.qrReports = [];
 window.qrProjects = {};
+window.currentQrStatusFilter = 'all'; // 상태 필터 전역 변수
 
 const QR_DRIVE_PARENT_FOLDER = "1ae5JiICk9ZQEaPVNhR6H4TlPs_Np03kQ"; // PJT 현황 메인 폴더
 
@@ -44,16 +45,79 @@ window.loadQualityReports = function() {
     });
 };
 
+window.filterQrStatus = function(status) {
+    window.currentQrStatusFilter = status;
+    window.filterQrList();
+};
+
 window.filterQrList = function() {
     const search = document.getElementById('qr-search')?.value.toLowerCase() || '';
     
+    let pending = 0, writing = 0, completed = 0;
+
+    let filtered = window.qrReports.filter(r => {
+        // 1. 상태 카운트 계산 (전체 데이터 대상)
+        const stat = r.qualityStatus || '대기중';
+        if (stat === '대기중') pending++;
+        else if (stat === '작성중') writing++;
+        else if (stat === '승인완료') completed++;
+
+        // 2. 대시보드 상태 필터 적용
+        if (window.currentQrStatusFilter !== 'all' && stat !== window.currentQrStatusFilter) {
+            return false;
+        }
+
+        // 3. 메인 검색어 필터 적용
+        if (search) {
+            const str = `${r.pjtCode} ${r.pjtName}`.toLowerCase();
+            if(!str.includes(search) && !(window.matchString && window.matchString(search, str))) return false;
+        }
+        
+        return true;
+    });
+
+    // 대시보드 숫자 업데이트
+    if(document.getElementById('qr-dash-pending')) document.getElementById('qr-dash-pending').innerText = pending;
+    if(document.getElementById('qr-dash-writing')) document.getElementById('qr-dash-writing').innerText = writing;
+    if(document.getElementById('qr-dash-completed')) document.getElementById('qr-dash-completed').innerText = completed;
+
+    window.renderQrList(filtered);
+    window.renderQrQuickList(); // 우측 미니 스크롤 리스트도 함께 갱신
+};
+
+window.renderQrQuickList = function() {
+    const search = document.getElementById('qr-quick-search')?.value.toLowerCase() || '';
+    const listEl = document.getElementById('qr-quick-list');
+    if(!listEl) return;
+
     let filtered = window.qrReports.filter(r => {
         if (!search) return true;
         const str = `${r.pjtCode} ${r.pjtName}`.toLowerCase();
         return str.includes(search) || (window.matchString && window.matchString(search, str));
     });
 
-    window.renderQrList(filtered);
+    if (filtered.length === 0) {
+        listEl.innerHTML = '<div class="text-center text-[10px] font-bold text-slate-400 p-4">검색 결과 없음</div>';
+        return;
+    }
+
+    listEl.innerHTML = filtered.map(r => {
+        let statClass = 'text-slate-500';
+        let stat = r.qualityStatus || '대기중';
+        if(stat === '승인완료') statClass = 'text-emerald-600 bg-emerald-50 border-emerald-200';
+        else if(stat === '작성중') statClass = 'text-blue-600 bg-blue-50 border-blue-200';
+        else if(stat === '반려') statClass = 'text-rose-600 bg-rose-50 border-rose-200';
+        else statClass = 'text-slate-500 bg-slate-100 border-slate-200';
+
+        return `
+        <div class="flex justify-between items-center p-2 hover:bg-slate-100 border-b border-slate-100 cursor-pointer rounded transition-colors group" onclick="window.openQrModal('${r.id}')">
+            <div class="flex items-center gap-2 truncate">
+                <span class="text-[10px] font-black text-indigo-600 shrink-0">[${r.pjtCode}]</span>
+                <span class="text-[11px] font-bold text-slate-700 truncate group-hover:text-indigo-600">${r.pjtName}</span>
+            </div>
+            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border shrink-0 ${statClass}">${stat}</span>
+        </div>`;
+    }).join('');
 };
 
 window.renderQrList = function(list) {
@@ -61,7 +125,7 @@ window.renderQrList = function(list) {
     if (!tbody) return;
 
     if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-400 font-bold bg-white">등록된 완료보고(송부) 내역이 없습니다.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-400 font-bold bg-white">조건에 맞는 데이터가 없습니다.</td></tr>`;
         return;
     }
 
@@ -74,35 +138,56 @@ window.renderQrList = function(list) {
 
     const statusMap = {
         '대기중': '<span class="bg-slate-100 text-slate-500 border border-slate-200 px-2 py-1 rounded shadow-sm">대기중</span>',
-        '검수중': '<span class="bg-blue-50 text-blue-600 border border-blue-200 px-2 py-1 rounded shadow-sm">검수중</span>',
+        '작성중': '<span class="bg-blue-50 text-blue-600 border border-blue-200 px-2 py-1 rounded shadow-sm">작성중</span>',
         '승인완료': '<span class="bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-1 rounded shadow-sm">✅ 승인완료</span>',
         '반려': '<span class="bg-rose-50 text-rose-600 border border-rose-200 px-2 py-1 rounded shadow-sm">❌ 반려</span>'
     };
 
     tbody.innerHTML = list.map(r => {
         const dateStr = r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '-';
+        const compDateStr = (r.qualityStatus === '승인완료' && r.qualityUpdatedAt) ? new Date(r.qualityUpdatedAt).toLocaleDateString() : '-';
         const safeName = r.pjtName.replace(/"/g, '&quot;').replace(/'/g, "\\'");
         
         let qStatus = r.qualityStatus || '대기중';
         let iStatus = (r.internalSch && r.internalSch.status) ? r.internalSch.status : '미진행';
         let cStatus = (r.customerSch && r.customerSch.status) ? r.customerSch.status : '미진행';
 
+        let adminBtn = '';
+        if (window.userProfile && window.userProfile.role === 'admin') {
+            adminBtn = `<button onclick="event.stopPropagation(); window.deleteQrReport('${r.id}')" class="bg-white border border-rose-200 hover:border-rose-400 hover:bg-rose-500 hover:text-white text-rose-400 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm ml-1" title="삭제"><i class="fa-solid fa-trash-can"></i></button>`;
+        }
+
         return `
             <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100 cursor-pointer" onclick="window.openQrModal('${r.id}')">
                 <td class="p-3 text-center text-slate-500 font-medium">${dateStr}</td>
+                <td class="p-3 text-center text-emerald-600 font-bold bg-emerald-50/20">${compDateStr}</td>
                 <td class="p-3 text-center font-black text-indigo-700">${r.pjtCode}</td>
                 <td class="p-3 font-bold text-slate-700 truncate max-w-[250px]">${r.pjtName}</td>
                 <td class="p-3 text-center text-[11px]">${intExtMap[iStatus] || iStatus}</td>
                 <td class="p-3 text-center text-[11px]">${intExtMap[cStatus] || cStatus}</td>
                 <td class="p-3 text-center text-[10px] font-bold">${statusMap[qStatus] || qStatus}</td>
                 <td class="p-3 text-center">
-                    <button class="bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 text-slate-400 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm">
-                        <i class="fa-solid fa-pen-to-square"></i> 검토
-                    </button>
+                    <div class="flex items-center justify-center">
+                        <button class="bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 text-slate-500 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm">
+                            <i class="fa-solid fa-pen-to-square"></i> 검토
+                        </button>
+                        ${adminBtn}
+                    </div>
                 </td>
             </tr>
         `;
     }).join('');
+};
+
+// 최고 관리자용 품질보고 데이터 강제 삭제
+window.deleteQrReport = async function(id) {
+    if(!confirm("이 품질 완료보고 내역을 삭제하시겠습니까?\n(PJT 현황판의 프로젝트 데이터는 그대로 유지됩니다)")) return;
+    try {
+        await deleteDoc(doc(db, "project_completion_reports", id));
+        window.showToast("삭제되었습니다.", "success");
+    } catch(e) {
+        window.showToast("삭제 실패: " + e.message, "error");
+    }
 };
 
 window.openQrModal = function(docId) {
@@ -112,6 +197,7 @@ window.openQrModal = function(docId) {
     document.getElementById('qr-doc-id').value = docId;
     document.getElementById('qr-pjt-id').value = report.projectId;
     document.getElementById('qr-project-title').innerText = `[${report.pjtCode}] ${report.pjtName}`;
+    document.getElementById('qr-project-date').innerText = `송부일자: ${new Date(report.createdAt).toLocaleDateString()}`;
     
     // 검수 일정 폼
     if(report.internalSch) {
@@ -125,7 +211,7 @@ window.openQrModal = function(docId) {
         document.getElementById('qr-ext-status').value = report.customerSch.status || '미진행';
     }
     
-    // 품질 개선 및 리스크 테이블 (Item / High / Low)
+    // 품질 개선 및 리스크 테이블 (Item / High / Low) 렌더링
     document.getElementById('qr-lessons-tbody').innerHTML = '';
     if(report.qualityLessons && report.qualityLessons.length > 0) {
         report.qualityLessons.forEach(l => window.addQrLessonRow(l));
@@ -136,7 +222,7 @@ window.openQrModal = function(docId) {
     document.getElementById('qr-comments').value = report.qualityComments || '';
     document.getElementById('qr-final-status').value = report.qualityStatus || '대기중';
 
-    // 품질 첨부파일 렌더링
+    // 품질 첨부파일 초기화 및 기존 파일 렌더링
     document.getElementById('qr-files').value = '';
     document.getElementById('qr-file-names').innerText = '';
     
@@ -151,9 +237,9 @@ window.openQrModal = function(docId) {
             if (isImg) {
                 let fileIdMatch = f.url.match(/\/d\/(.+?)\/view/);
                 let rawUrl = fileIdMatch ? `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}` : f.url;
-                return `<div class="p-2 border border-slate-200 rounded-lg bg-white"><img src="${rawUrl}" alt="${f.name}" class="max-h-32 rounded cursor-pointer hover:opacity-80" onclick="window.open('${f.url}', '_blank')"></div>`;
+                return `<div class="p-2 border border-slate-200 rounded-lg bg-white w-fit"><img src="${rawUrl}" alt="${f.name}" class="max-h-32 rounded cursor-pointer hover:opacity-80" onclick="window.open('${f.url}', '_blank')"></div>`;
             } else {
-                return `<a href="${f.url}" target="_blank" class="text-xs text-rose-600 font-bold underline flex items-center gap-1 bg-white border border-slate-200 p-2 rounded-lg hover:bg-slate-50"><i class="fa-solid fa-file-arrow-down"></i> ${f.name}</a>`;
+                return `<a href="${f.url}" target="_blank" class="text-xs text-rose-600 font-bold underline flex items-center gap-1 bg-white border border-slate-200 p-2 rounded-lg hover:bg-slate-50 w-fit"><i class="fa-solid fa-file-arrow-down"></i> ${f.name}</a>`;
             }
         }).join('');
     }
@@ -162,7 +248,7 @@ window.openQrModal = function(docId) {
     const badge = document.getElementById('qr-status-badge');
     const qStat = report.qualityStatus || '대기중';
     if(qStat === '승인완료') badge.className = "text-[10px] font-bold px-2 py-0.5 rounded shadow-sm border bg-emerald-100 text-emerald-700 border-emerald-200";
-    else if(qStat === '검수중') badge.className = "text-[10px] font-bold px-2 py-0.5 rounded shadow-sm border bg-blue-100 text-blue-700 border-blue-200";
+    else if(qStat === '작성중') badge.className = "text-[10px] font-bold px-2 py-0.5 rounded shadow-sm border bg-blue-100 text-blue-700 border-blue-200";
     else if(qStat === '반려') badge.className = "text-[10px] font-bold px-2 py-0.5 rounded shadow-sm border bg-rose-100 text-rose-700 border-rose-200";
     else badge.className = "text-[10px] font-bold px-2 py-0.5 rounded shadow-sm border bg-slate-100 text-slate-500 border-slate-200";
     badge.innerText = qStat;
@@ -197,16 +283,16 @@ window.addQrLessonRow = function(data = null) {
             </select>
         </td>
         <td class="p-2 border-r border-slate-100 align-top">
-            <input type="text" class="qr-ls-item w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-teal-500" value="${itemVal}" placeholder="아이템명">
+            <input type="text" class="qr-ls-item w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-teal-500 bg-white" value="${itemVal}" placeholder="아이템명">
         </td>
         <td class="p-2 border-r border-slate-100 align-top">
-            <textarea class="qr-ls-high w-full border border-slate-300 rounded p-2 text-xs outline-rose-500 custom-scrollbar resize-y min-h-[50px] bg-rose-50/20 focus:bg-white" placeholder="하이리스크 내용">${hrVal}</textarea>
+            <textarea class="qr-ls-high w-full border border-slate-300 rounded p-2 text-xs outline-rose-500 custom-scrollbar resize-y min-h-[50px] bg-rose-50/30 focus:bg-white" placeholder="하이리스크 내용">${hrVal}</textarea>
         </td>
         <td class="p-2 border-r border-slate-100 align-top">
-            <textarea class="qr-ls-low w-full border border-slate-300 rounded p-2 text-xs outline-blue-500 custom-scrollbar resize-y min-h-[50px] bg-blue-50/20 focus:bg-white" placeholder="로우리스크 내용">${lrVal}</textarea>
+            <textarea class="qr-ls-low w-full border border-slate-300 rounded p-2 text-xs outline-blue-500 custom-scrollbar resize-y min-h-[50px] bg-blue-50/30 focus:bg-white" placeholder="로우리스크 내용">${lrVal}</textarea>
         </td>
         <td class="p-2 text-center align-middle">
-            <button onclick="this.closest('tr').remove()" class="text-slate-300 hover:text-rose-500 transition-colors p-1"><i class="fa-solid fa-trash-can"></i></button>
+            <button onclick="this.closest('tr').remove()" class="text-slate-300 hover:text-rose-500 transition-colors p-1 bg-white border border-slate-200 rounded shadow-sm hover:border-rose-200"><i class="fa-solid fa-trash-can"></i></button>
         </td>
     `;
     tbody.appendChild(tr);
@@ -341,6 +427,7 @@ window.saveQualityReport = async function() {
             });
         });
 
+        const statusVal = document.getElementById('qr-final-status').value;
         const payload = {
             internalSch: {
                 start: document.getElementById('qr-int-start').value,
@@ -354,7 +441,7 @@ window.saveQualityReport = async function() {
             },
             qualityLessons: qualityLessons,
             qualityComments: document.getElementById('qr-comments').value.trim(),
-            qualityStatus: document.getElementById('qr-final-status').value,
+            qualityStatus: statusVal,
             qualityFiles: uploadedFiles,
             qualityUpdatedBy: window.userProfile?.name || '시스템',
             qualityUpdatedAt: Date.now()
