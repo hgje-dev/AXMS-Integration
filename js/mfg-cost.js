@@ -1,5 +1,5 @@
 import { db } from './firebase.js';
-import { collection, doc, setDoc, addDoc, deleteDoc, query, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { collection, doc, setDoc, addDoc, deleteDoc, query, onSnapshot, where, orderBy } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 let mfgCostUnsubscribe = null;
 window.allMfgCosts = [];
@@ -41,7 +41,7 @@ function mfgMatchString(query, target) {
 }
 
 window.initMfgCost = function() {
-    console.log("✅ 제조 Cost 관리 페이지 초기화 완료 (고급 초성엔진 탑재)");
+    console.log("✅ 제조 Cost 관리 페이지 초기화 완료");
     
     const now = new Date();
     const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -162,13 +162,14 @@ function renderMfgCostTable() {
     if (!tbody) return;
 
     if (window.filteredMfgCosts.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" class="text-center p-8 text-slate-400 font-bold">해당 조건의 지출 내역이 없습니다.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" class="text-center p-8 text-slate-400 font-bold">해당 조건의 지출 내역이 없습니다.</td></tr>`;
         return;
     }
 
     let html = '';
     window.filteredMfgCosts.forEach(cost => {
         const amtStr = (parseFloat(cost.amount) || 0).toLocaleString();
+        const unitPriceStr = (parseFloat(cost.unitPrice) || 0).toLocaleString();
         
         let deleteBtnHtml = '';
         if (window.currentUser && (cost.authorUid === window.currentUser.uid || window.userProfile?.role === 'admin')) {
@@ -178,12 +179,14 @@ function renderMfgCostTable() {
         }
 
         html += `
-        <tr class="hover:bg-slate-50 transition-colors">
+        <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">
             <td class="p-3 text-center font-bold text-slate-500">${cost.date || '-'}</td>
+            <td class="p-3 text-center font-bold text-slate-600">${cost.part || '-'}</td>
             <td class="p-3 text-center font-bold text-indigo-600">${cost.pjtCode || '-'}</td>
             <td class="p-3 text-center"><span class="bg-slate-100 text-slate-600 px-2 py-1 rounded font-bold">${cost.category || '-'}</span></td>
             <td class="p-3 font-bold text-slate-700">${cost.itemName || '-'}</td>
             <td class="p-3 text-center font-bold text-slate-500">${cost.qty || '-'}</td>
+            <td class="p-3 text-right font-semibold text-emerald-600 pr-4">${unitPriceStr}</td>
             <td class="p-3 text-right font-black text-blue-600 pr-6">${amtStr}</td>
             <td class="p-3 text-slate-500 font-medium truncate max-w-[200px]" title="${cost.memo || ''}">${cost.memo || '-'}</td>
             <td class="p-3 text-center">${deleteBtnHtml}</td>
@@ -193,37 +196,45 @@ function renderMfgCostTable() {
     tbody.innerHTML = html;
 }
 
+// 💡 2. 수량 * 단가 실시간 자동 계산
+window.calcMfgAmount = function() {
+    const qty = parseFloat(document.getElementById('new-mfg-qty').value) || 0;
+    const price = parseFloat(document.getElementById('new-mfg-unit-price').value) || 0;
+    const amountEl = document.getElementById('new-mfg-amount');
+    
+    if(amountEl) {
+        amountEl.value = Math.round(qty * price);
+    }
+};
+
 window.saveMfgCost = async function() {
     const dateEl = document.getElementById('new-mfg-date');
+    const partEl = document.getElementById('new-mfg-part');
     const pjtCodeEl = document.getElementById('new-mfg-pjt');
     const pjtNameEl = document.getElementById('new-mfg-pjt-name');
     const catEl = document.getElementById('new-mfg-category');
     const itemEl = document.getElementById('new-mfg-item');
     const qtyEl = document.getElementById('new-mfg-qty');
+    const priceEl = document.getElementById('new-mfg-unit-price');
     const amtEl = document.getElementById('new-mfg-amount');
     const memoEl = document.getElementById('new-mfg-memo');
 
-    if (!dateEl.value || !itemEl.value || !amtEl.value) {
-        if(window.showToast) window.showToast("지출일, 품목명, 금액은 필수 입력 항목입니다.", "error");
+    if (!dateEl.value || !itemEl.value || !qtyEl.value || !priceEl.value) {
+        if(window.showToast) window.showToast("지출일, 품목명, 수량, 단가는 필수 입력 항목입니다.", "error");
         return;
-    }
-
-    let pjtPart = '제조'; 
-    if (pjtCodeEl.value && window.currentProjectStatusList) {
-        const matchedPjt = window.currentProjectStatusList.find(p => p.code === pjtCodeEl.value);
-        if (matchedPjt && matchedPjt.part) pjtPart = matchedPjt.part;
     }
 
     const payload = {
         date: dateEl.value,
+        part: partEl.value,
         pjtCode: pjtCodeEl.value.trim(),
         pjtName: pjtNameEl.value.trim(),
         category: catEl.value,
         itemName: itemEl.value.trim(),
-        qty: qtyEl.value.trim(),
+        qty: parseFloat(qtyEl.value) || 0,
+        unitPrice: parseFloat(priceEl.value) || 0,
         amount: parseFloat(amtEl.value) || 0,
         memo: memoEl.value.trim(),
-        part: pjtPart,
         authorUid: window.currentUser ? window.currentUser.uid : 'guest',
         authorName: window.userProfile ? window.userProfile.name : '알수없음',
         createdAt: Date.now()
@@ -235,9 +246,11 @@ window.saveMfgCost = async function() {
         
         itemEl.value = '';
         qtyEl.value = '';
+        priceEl.value = '';
         amtEl.value = '';
         memoEl.value = '';
         itemEl.focus();
+
     } catch(e) {
         console.error(e);
         if(window.showToast) window.showToast("등록 실패", "error");
@@ -255,7 +268,7 @@ window.deleteMfgCost = async function(id) {
 };
 
 // ==========================================
-// 💡 2. 초성 지원 자동완성 모듈 (스크롤 최적화)
+// 💡 3. 프로젝트 초성 검색 및 자동완성 로직 (스크롤 최적화)
 // ==========================================
 function getCombinedPjtPool() {
     let pool = [];
@@ -271,7 +284,7 @@ function getCombinedPjtPool() {
     (window.currentProjectStatusList || []).forEach(p => {
         if (p.code && !seenCodes.has(p.code)) {
             seenCodes.add(p.code);
-            pool.push({ code: p.code, name: p.name });
+            pool.push({ code: p.code, name: p.name, part: p.part }); // 파트 정보 포함
         }
     });
     
@@ -385,6 +398,15 @@ window.mfgCostSelectInputPjt = function(code, name) {
     if (codeEl) codeEl.value = code; 
     if (nameEl) nameEl.value = name; 
     
+    // 💡 선택된 PJT를 기반으로 파트(제조/광학) 자동 매칭
+    if (window.currentProjectStatusList) {
+        const matchedPjt = window.currentProjectStatusList.find(p => p.code === code);
+        if (matchedPjt && matchedPjt.part) {
+            const partEl = document.getElementById('new-mfg-part');
+            if (partEl) partEl.value = matchedPjt.part;
+        }
+    }
+    
     const drop = document.getElementById('mfg-input-pjt-autocomplete-dynamic');
     if (drop) drop.classList.add('hidden');
     
@@ -392,7 +414,7 @@ window.mfgCostSelectInputPjt = function(code, name) {
     if (catEl) catEl.focus();
 };
 
-// 📌 드롭다운 외부 클릭 및 페이지 스크롤 시 자동 닫기 처리
+// 📌 팝업 바깥 영역 클릭 및 화면 스크롤 시 자동 닫기 처리
 document.addEventListener('click', function(e) {
     const d1 = document.getElementById('mfg-cost-pjt-autocomplete-dynamic');
     const d2 = document.getElementById('mfg-input-pjt-autocomplete-dynamic');
