@@ -1243,7 +1243,7 @@ window.saveWhInputData = async function() {
         if (totalHours > maxLimit) {
             const dayType = isWeekend ? "주말" : "평일";
             alert(`⚠️ 하루 최대 입력 가능 시간을 초과했습니다!\n\n- ${dayType} 최대 허용 시간: ${maxLimit}시간\n- 현재 총 입력 시간: ${totalHours}시간\n\n시간을 줄여서 다시 저장해주세요.`);
-            return; // 검증 실패 시 여기서 중단 (저장 안 됨)
+            return; // 🚨 여기서 중단 (DB 저장 안됨)
         }
     }
 
@@ -1684,7 +1684,7 @@ window.loadMonthlyPlanViewer = function() {
         });
 
         // 빈 칸을 포함한 달력의 셀 클릭 시 해당 주차로 이동하도록 처리
-        html += `<div class="bg-white p-1.5 min-h-[120px] hover:bg-slate-50 transition-colors relative group border-t-2 ${isToday ? 'border-t-indigo-500' : 'border-t-transparent'} flex flex-col cursor-pointer" onclick="window.switchToPlanWeek('${dateStr}')">
+        html += `<div class="bg-white p-1.5 min-h-[120px] hover:bg-indigo-50/30 transition-colors relative group border-t-2 ${isToday ? 'border-t-indigo-500' : 'border-t-transparent'} flex flex-col cursor-pointer" onclick="window.switchToPlanWeek('${dateStr}')">
             <div class="text-xs font-black text-center mb-1.5 ${dateClass} shrink-0">${i}</div>
             <div class="flex-1 flex flex-col gap-0.5 overflow-hidden">${plansHtml}</div>
             <div class="absolute inset-0 bg-indigo-50/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-indigo-600 font-black text-xs backdrop-blur-[1px] z-10 rounded-lg">
@@ -1906,26 +1906,26 @@ window.saveWhPlans = async function(targetStatus) {
     });
 
     try {
-        const batch = window.writeBatch ? window.writeBatch(db) : await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(m => m.writeBatch(db));
+        const batch = writeBatch(db); // 수정됨: window.writeBatch -> writeBatch
         
-        const q = window.query(window.collection(db, "work_plans"), window.where("period", "==", currentPeriod));
-        const existingSnap = await window.getDocs(q);
+        const q = query(collection(db, "work_plans"), where("period", "==", currentPeriod)); // 수정됨: window.query -> query 등
+        const existingSnap = await getDocs(q);
         existingSnap.forEach(docSnap => batch.delete(docSnap.ref));
         
         toSave.forEach(data => {
-            const ref = window.doc(window.collection(db, "work_plans")); 
+            const ref = doc(collection(db, "work_plans")); // 수정됨
             data.createdAt = Date.now();
             delete data.id; 
             batch.set(ref, data);
         });
 
         await batch.commit();
-        window.showToast(targetStatus === 'confirmed' ? "계획이 확정되어 대시보드에 반영됩니다." : "임시 저장되었습니다.");
+        window.showToast(targetStatus === 'confirmed' ? "계획이 확정되어 대시보드에 반영됩니다." : "임시 저장되었습니다.", "success");
         
-        window.fetchWorkPlansForContext(); 
+        fetchWorkPlansForContext(); // 수정됨: window.fetchWorkPlansForContext -> fetchWorkPlansForContext
         window.closeWhPlanModal();
     } catch(e) {
         console.error(e);
-        window.showToast("저장 실패", "error");
+        window.showToast("저장 실패: " + e.message, "error");
     }
 };
