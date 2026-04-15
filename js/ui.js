@@ -522,3 +522,30 @@ window.populateUserDropdowns = function() {
         sel.innerHTML = html;
     }
 };
+
+// ==========================================
+// 💡 안전한 이미지 뷰어 팝업 함수
+// ==========================================
+window.openImageViewer = function(src) {
+    if (!src) return;
+    
+    if (src.startsWith('data:image')) {
+        const win = window.open('', '_blank');
+        if (win) {
+            win.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head><title>이미지 상세 보기</title></head>
+                <body style="margin:0; display:flex; justify-content:center; align-items:center; min-height:100vh; background-color:#0f172a;">
+                    <img src="${src}" style="max-width:100%; max-height:100vh; object-fit:contain;">
+                </body>
+                </html>
+            `);
+            win.document.close();
+        } else {
+            if (window.showToast) window.showToast('브라우저의 팝업 차단을 해제해주세요.', 'error');
+        }
+    } else {
+        window.open(src, '_blank');
+    }
+};
