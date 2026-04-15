@@ -1170,7 +1170,6 @@ window.deleteRequest = async function(id) {
     } 
 };
 
-// 💡 1. 2번 문제 완벽 해결: 코멘트 저장 시 멘션 없어도 담당자 및 요청자에게 무조건 알림/메일 발송
 window.saveCommentItem = async function() { 
     const projectId = document.getElementById('cmt-req-id').value; 
     const content = document.getElementById('new-cmt-text').value.trim(); 
