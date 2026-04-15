@@ -1,186 +1,407 @@
-<div class="space-y-6 max-w-[1600px] mx-auto pb-10 flex flex-col h-[85vh]">
-    <div class="flex flex-col md:flex-row justify-between items-end gap-4 shrink-0">
-        <div>
-            <h2 class="text-xl font-black text-slate-800 flex items-center gap-2">
-                <i class="fa-solid fa-file-shield text-rose-500"></i> 품질 완료보고 및 검수 관리
-            </h2>
-            <p class="text-xs font-bold text-slate-500 mt-1">프로젝트별 검수 리스트 및 완료 보고서를 작성하고 관리합니다.</p>
-        </div>
-        <div class="flex items-center gap-2">
-            <div class="relative">
-                <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                <input type="text" id="cr-search" oninput="window.filterCrList()" placeholder="PJT코드, 프로젝트명 검색..." class="w-64 border border-slate-300 rounded-xl pl-8 pr-3 py-2 text-xs font-bold text-slate-600 outline-rose-500 shadow-sm bg-white">
-            </div>
-            <button onclick="window.authenticateGoogle()" id="btn-cr-google-auth" class="text-[11px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl shadow-sm hover:bg-amber-100 transition-colors flex items-center gap-1.5">
-                <i class="fa-brands fa-google"></i> 구글 드라이브 연동
-            </button>
-            <div id="cr-google-auth-status" class="hidden items-center gap-1.5 text-[11px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-xl shadow-sm">
-                <i class="fa-brands fa-google-drive"></i> 드라이브 연동됨
-            </div>
-        </div>
-    </div>
+import { db } from './firebase.js';
+import { collection, doc, setDoc, addDoc, deleteDoc, query, onSnapshot, where, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 flex-1 flex flex-col overflow-hidden">
-        <div class="overflow-auto custom-scrollbar flex-1 bg-slate-50/30">
-            <table class="w-full text-left border-collapse whitespace-nowrap">
-                <thead class="bg-slate-800 text-white text-[11px] sticky top-0 z-20 shadow-sm">
-                    <tr>
-                        <th class="p-3 text-center border-r border-slate-600 w-24">구분</th>
-                        <th class="p-3 text-center border-r border-slate-600 w-32">PJT 코드</th>
-                        <th class="p-3 border-r border-slate-600">프로젝트명</th>
-                        <th class="p-3 text-center border-r border-slate-600 w-32">업체명</th>
-                        <th class="p-3 text-center border-r border-slate-600 w-28">상태</th>
-                        <th class="p-3 text-center border-r border-slate-600 w-28 text-emerald-300">검수리스트</th>
-                        <th class="p-3 text-center w-28 text-rose-300">완료보고</th>
-                    </tr>
-                </thead>
-                <tbody id="cr-tbody" class="text-xs divide-y divide-slate-200 text-slate-700">
-                    </tbody>
-            </table>
-        </div>
-    </div>
-</div>
+let crProjectsUnsubscribe = null;
+let currentInspUnsubscribe = null;
 
-<div id="cr-inspection-modal" class="fixed inset-0 z-[200] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10 transition-opacity">
-    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col h-[600px] md:h-[85vh] overflow-hidden transform transition-all">
-        <div class="px-6 py-4 border-b flex justify-between items-center bg-emerald-50 shrink-0">
-            <h2 class="text-base font-extrabold text-emerald-800 flex items-center gap-2">
-                <i class="fa-solid fa-list-check text-emerald-500"></i> 검수 리스트 관리
-            </h2>
-            <button onclick="window.closeInspectionModal()" class="text-emerald-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
-        </div>
-        <div class="p-6 bg-slate-50/50 flex-1 flex flex-col gap-4 min-h-0">
-            <input type="hidden" id="insp-pjt-id">
-            <div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
-                <span id="insp-project-title" class="text-sm font-bold text-emerald-600"></span>
-            </div>
-            
-            <div class="flex gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative flex-col md:flex-row md:items-center shrink-0">
-                <div class="relative flex-1 w-full">
-                    <textarea id="new-insp-text" placeholder="검수 내용 및 특이사항 입력... (Enter 저장, Shift+Enter 줄바꿈)" class="w-full h-24 border px-4 py-3 rounded-lg text-sm outline-emerald-500 resize-none custom-scrollbar" onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); document.getElementById('btn-insp-save').click(); }"></textarea>
-                </div>
-                
-                <div class="w-full md:w-48 border-2 border-dashed border-emerald-200 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-emerald-50 hover:border-emerald-400 transition-colors relative"
-                     onclick="document.getElementById('new-insp-file').click()"
-                     ondragover="event.preventDefault(); this.classList.add('bg-emerald-50', 'border-emerald-400');"
-                     ondragleave="event.preventDefault(); this.classList.remove('bg-emerald-50', 'border-emerald-400');"
-                     ondrop="event.preventDefault(); this.classList.remove('bg-emerald-50', 'border-emerald-400'); document.getElementById('new-insp-file').files = event.dataTransfer.files; document.getElementById('insp-file-name').innerText = event.dataTransfer.files[0] ? event.dataTransfer.files[0].name : '';">
-                    <i class="fa-solid fa-file-arrow-up text-2xl text-emerald-300 mb-2 pointer-events-none"></i>
-                    <p class="text-[11px] font-bold text-slate-500 text-center pointer-events-none">클릭하거나 검수리스트 파일 드래그</p>
-                    <input type="file" id="new-insp-file" class="hidden" onchange="document.getElementById('insp-file-name').innerText = this.files[0] ? this.files[0].name : '';">
-                    <div id="insp-file-name" class="text-[10px] text-emerald-600 font-bold truncate mt-2 w-full text-center pointer-events-none"></div>
-                </div>
+const CR_DRIVE_PARENT_FOLDER = "1ae5JiICk9ZQEaPVNhR6H4TlPs_Np03kQ"; // PJT 현황 메인 폴더
 
-                <div class="flex flex-col gap-2 w-full md:w-auto h-full justify-end">
-                    <button id="btn-insp-save" onclick="window.saveInspectionItem()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2.5 rounded-lg text-sm font-bold transition-colors shadow-sm w-full md:w-20">등록</button>
-                </div>
-            </div>
-            
-            <div id="inspection-list" class="space-y-3 flex-1 overflow-y-auto p-1 custom-scrollbar min-h-0"></div>
-        </div>
-    </div>
-</div>
+window.initQualityReport = function() {
+    console.log("✅ 품질 완료보고 페이지 로드 완료");
+    window.loadCrProjects();
+    if(window.initGoogleAPI) window.initGoogleAPI();
+};
 
-<div id="cr-report-modal" class="fixed inset-0 z-[200] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10 transition-opacity">
-    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-5xl flex flex-col h-[750px] md:h-[90vh] overflow-hidden transform transition-all">
-        <div class="px-6 py-4 border-b flex justify-between items-center bg-rose-50 shrink-0">
-            <h2 class="text-base font-extrabold text-rose-800 flex items-center gap-2">
-                <i class="fa-solid fa-file-shield text-rose-500"></i> 품질 완료보고서 작성
-            </h2>
-            <button onclick="window.closeCompletionReportModal()" class="text-rose-400 hover:text-rose-600 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
-        </div>
+window.loadCrProjects = function() {
+    if (crProjectsUnsubscribe) crProjectsUnsubscribe();
+    
+    // 프로젝트 현황 전체를 가져와서 프론트에서 필터링 (검색 용이성)
+    crProjectsUnsubscribe = onSnapshot(collection(db, "projects_status"), (snapshot) => {
+        window.crProjectList = [];
+        snapshot.forEach(docSnap => {
+            window.crProjectList.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        window.filterCrList();
+    });
+};
+
+window.filterCrList = function() {
+    const search = document.getElementById('cr-search')?.value.toLowerCase() || '';
+    
+    let filtered = window.crProjectList.filter(p => {
+        // 기본적으로 '완료(출하)' 상태인 것 위주로 보여주되, 원하면 진행중인 것도 검수리스트 작성이 가능하도록
+        // 일단 모든 프로젝트를 띄우되 검색으로 필터링
+        let match = true;
+        if (search) {
+            const str = `${p.code||''} ${p.name||''} ${p.company||''}`.toLowerCase();
+            match = str.includes(search) || (window.matchString && window.matchString(search, str));
+        }
+        return match;
+    });
+
+    // 상태순(완료가 위로 오게 하거나, 최신순 등 정렬)
+    filtered.sort((a,b) => {
+        if(a.status === 'completed' && b.status !== 'completed') return -1;
+        if(a.status !== 'completed' && b.status === 'completed') return 1;
+        return (b.updatedAt || 0) - (a.updatedAt || 0);
+    });
+
+    window.renderCrList(filtered);
+};
+
+window.renderCrList = function(list) {
+    const tbody = document.getElementById('cr-tbody');
+    if (!tbody) return;
+
+    if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-400 font-bold">프로젝트가 없습니다.</td></tr>`;
+        return;
+    }
+
+    const sMap = { 
+        'pending': '<span class="text-slate-500 font-bold text-[11px]">대기</span>', 
+        'progress': '<span class="text-blue-600 font-bold text-[11px]">진행(제작)</span>', 
+        'inspecting': '<span class="text-amber-600 font-bold text-[11px]">진행(검수)</span>', 
+        'completed': '<span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-black text-[11px] border border-emerald-200">완료(출하)</span>', 
+        'rejected': '<span class="text-rose-600 font-bold text-[11px]">보류</span>' 
+    };
+
+    tbody.innerHTML = list.map(p => {
+        const safeName = (p.name || '').replace(/"/g, '&quot;').replace(/'/g, "\\'");
         
-        <div class="p-6 bg-slate-50/50 flex-1 overflow-y-auto custom-scrollbar space-y-6">
-            <input type="hidden" id="cr-rep-pjt-id">
-            <input type="hidden" id="cr-rep-doc-id">
-            
-            <div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
-                <span id="cr-rep-project-title" class="text-sm font-black text-rose-600"></span>
-            </div>
-
-            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                <h3 class="text-xs font-black text-slate-700 mb-4 border-b pb-2"><i class="fa-regular fa-calendar-check text-indigo-500 mr-1"></i> 검수 일정 및 상태</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="space-y-3 p-4 bg-indigo-50/30 rounded-xl border border-indigo-100">
-                        <h4 class="text-[11px] font-bold text-indigo-700">내부 검수</h4>
-                        <div class="flex items-center gap-2">
-                            <input type="date" id="cr-int-start" class="border border-slate-300 rounded px-2 py-1.5 text-xs font-bold text-slate-600 flex-1 outline-indigo-500">
-                            <span class="text-slate-400">~</span>
-                            <input type="date" id="cr-int-end" class="border border-slate-300 rounded px-2 py-1.5 text-xs font-bold text-slate-600 flex-1 outline-indigo-500">
-                        </div>
-                        <select id="cr-int-status" class="w-full border border-slate-300 rounded px-3 py-2 text-xs font-bold outline-indigo-500">
-                            <option value="미진행">미진행</option>
-                            <option value="진행중">진행중</option>
-                            <option value="보류">보류</option>
-                            <option value="완료">완료</option>
-                        </select>
-                    </div>
-                    <div class="space-y-3 p-4 bg-rose-50/30 rounded-xl border border-rose-100">
-                        <h4 class="text-[11px] font-bold text-rose-700">고객 검수 (FAT/SAT)</h4>
-                        <div class="flex items-center gap-2">
-                            <input type="date" id="cr-ext-start" class="border border-slate-300 rounded px-2 py-1.5 text-xs font-bold text-slate-600 flex-1 outline-rose-500">
-                            <span class="text-slate-400">~</span>
-                            <input type="date" id="cr-ext-end" class="border border-slate-300 rounded px-2 py-1.5 text-xs font-bold text-slate-600 flex-1 outline-rose-500">
-                        </div>
-                        <select id="cr-ext-status" class="w-full border border-slate-300 rounded px-3 py-2 text-xs font-bold outline-rose-500">
-                            <option value="미진행">미진행</option>
-                            <option value="진행중">진행중</option>
-                            <option value="보류">보류</option>
-                            <option value="완료">완료</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                <h3 class="text-xs font-black text-slate-700 mb-3 border-b pb-2"><i class="fa-regular fa-comment-dots text-amber-500 mr-1"></i> 종합 검수 의견</h3>
-                <textarea id="cr-comments" placeholder="검수 결과 및 종합 의견을 자유롭게 작성하세요." class="w-full h-28 border border-slate-300 rounded-xl p-3 text-sm outline-amber-500 custom-scrollbar resize-y"></textarea>
-                
-                <div class="mt-3 flex items-center gap-3">
-                    <input type="file" id="cr-comment-img" accept="image/*" class="hidden" onchange="document.getElementById('cr-img-name').innerText = this.files[0] ? this.files[0].name : '';">
-                    <button onclick="document.getElementById('cr-comment-img').click()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 border border-slate-200">
-                        <i class="fa-regular fa-image"></i> 사진 첨부
+        return `
+            <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">
+                <td class="p-3 text-center text-slate-500 font-bold">${p.category || '-'}</td>
+                <td class="p-3 text-center font-black text-indigo-700">${p.code || '-'}</td>
+                <td class="p-3 font-bold text-slate-700 truncate max-w-[300px]" title="${p.name}">${p.name || '-'}</td>
+                <td class="p-3 text-center text-slate-600">${p.company || '-'}</td>
+                <td class="p-3 text-center">${sMap[p.status] || p.status}</td>
+                <td class="p-3 text-center">
+                    <button onclick="window.openInspectionModal('${p.id}', '${safeName}', '${p.code}')" class="bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-500 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm">
+                        <i class="fa-solid fa-list-check"></i> 검수리스트
                     </button>
-                    <span id="cr-img-name" class="text-xs font-bold text-amber-600"></span>
-                    <button onclick="document.getElementById('cr-comment-img').value=''; document.getElementById('cr-img-name').innerText='';" class="text-slate-400 hover:text-rose-500 text-xs hidden" id="btn-cr-img-clear"><i class="fa-solid fa-xmark"></i></button>
-                </div>
-                <div id="cr-saved-img-container" class="mt-3 hidden">
-                    <img id="cr-saved-img" src="" class="max-h-40 rounded-lg border border-slate-200 cursor-pointer" onclick="window.open(this.src)">
-                    <button onclick="window.removeSavedCrImage()" class="text-xs text-rose-500 font-bold mt-1 hover:underline">첨부 사진 삭제</button>
-                </div>
-            </div>
+                </td>
+                <td class="p-3 text-center">
+                    <button onclick="window.openCompletionReportModal('${p.id}', '${safeName}', '${p.code}')" class="bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-600 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm">
+                        <i class="fa-solid fa-file-shield"></i> 완료보고
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+};
 
-            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                <div class="flex justify-between items-center mb-3 border-b pb-2">
-                    <h3 class="text-xs font-black text-slate-700"><i class="fa-solid fa-scale-balanced text-teal-500 mr-1"></i> Lessons Learned (Good / Bad)</h3>
-                    <button onclick="window.addCrLessonRow()" class="bg-teal-50 text-teal-600 px-3 py-1.5 rounded-lg text-[10px] font-bold hover:bg-teal-100 transition-colors border border-teal-200">+ 항목 추가</button>
-                </div>
-                
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-xs border-collapse min-w-[800px]">
-                        <thead class="bg-slate-50 text-slate-500">
-                            <tr>
-                                <th class="p-2 border border-slate-200 text-center w-24">Type</th>
-                                <th class="p-2 border border-slate-200 text-center w-28">구분</th>
-                                <th class="p-2 border border-slate-200 w-48">Item</th>
-                                <th class="p-2 border border-slate-200 w-1/3">Highlight (잘된 점 / 개선안)</th>
-                                <th class="p-2 border border-slate-200 w-1/3">Lowlight (문제점 / 아쉬운 점)</th>
-                                <th class="p-2 border border-slate-200 text-center w-12"><i class="fa-solid fa-trash-can"></i></th>
-                            </tr>
-                        </thead>
-                        <tbody id="cr-lessons-tbody">
-                            </tbody>
-                    </table>
-                </div>
-            </div>
-            
-        </div>
+// ==========================================
+// 1. 검수 리스트 (Inspection List) 관리
+// ==========================================
+window.openInspectionModal = function(pId, pName, pCode) {
+    document.getElementById('insp-pjt-id').value = pId;
+    document.getElementById('insp-pjt-id').dataset.code = pCode || '';
+    document.getElementById('insp-project-title').innerText = `[${pCode||'미지정'}] ${pName}`;
+    
+    document.getElementById('new-insp-text').value = '';
+    document.getElementById('new-insp-file').value = '';
+    document.getElementById('insp-file-name').innerText = '';
+    
+    document.getElementById('cr-inspection-modal').classList.remove('hidden');
+    document.getElementById('cr-inspection-modal').classList.add('flex');
+
+    if (currentInspUnsubscribe) currentInspUnsubscribe();
+    currentInspUnsubscribe = onSnapshot(query(collection(db, "project_inspections"), where("projectId", "==", pId)), (snap) => {
+        let list = [];
+        snap.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
+        list.sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
         
-        <div class="px-6 py-4 border-t bg-white flex justify-end gap-2 shrink-0">
-            <button onclick="window.closeCompletionReportModal()" class="px-6 py-2.5 bg-slate-100 border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 transition-colors">취소</button>
-            <button id="btn-cr-save" onclick="window.saveCompletionReport()" class="px-8 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
-                <i class="fa-solid fa-check"></i> 보고서 저장
-            </button>
-        </div>
-    </div>
-</div>
+        const listEl = document.getElementById('inspection-list');
+        if(list.length === 0) {
+            listEl.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 검수리스트가 없습니다.</div>';
+            return;
+        }
+
+        listEl.innerHTML = list.map(item => {
+            let dateStr = item.createdAt ? new Date(item.createdAt).toLocaleString() : '';
+            let safeContent = String(item.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+            return `
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
+                    <div class="flex justify-between items-start">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-emerald-700 text-sm">${item.authorName || '작성자'}</span>
+                            <span class="text-[10px] text-slate-400 font-medium">${dateStr}</span>
+                        </div>
+                        <button onclick="window.deleteInspectionItem('${item.id}')" class="text-slate-300 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button>
+                    </div>
+                    <div class="text-sm text-slate-700 font-medium break-words">${safeContent}</div>
+                    ${item.fileUrl ? `<a href="${item.fileUrl}" target="_blank" class="text-xs text-emerald-600 hover:text-emerald-800 font-bold underline mt-1 w-fit"><i class="fa-solid fa-file-arrow-down"></i> 검수리스트 파일 열기</a>` : ''}
+                </div>
+            `;
+        }).join('');
+    });
+};
+
+window.closeInspectionModal = function() {
+    document.getElementById('cr-inspection-modal').classList.add('hidden');
+    document.getElementById('cr-inspection-modal').classList.remove('flex');
+    if (currentInspUnsubscribe) currentInspUnsubscribe();
+};
+
+window.saveInspectionItem = async function() {
+    const pId = document.getElementById('insp-pjt-id').value;
+    const pCode = document.getElementById('insp-pjt-id').dataset.code;
+    const title = document.getElementById('insp-project-title').innerText;
+    const content = document.getElementById('new-insp-text').value.trim();
+    const fileInput = document.getElementById('new-insp-file');
+    const btn = document.getElementById('btn-insp-save');
+
+    if (!content && fileInput.files.length === 0) {
+        return window.showToast("내용을 입력하거나 파일을 첨부하세요.", "error");
+    }
+
+    btn.innerHTML = '저장중...'; btn.disabled = true;
+
+    try {
+        let fileUrl = null;
+        if (fileInput.files.length > 0) {
+            if(!window.googleAccessToken) throw new Error("구글 인증이 필요합니다. [구글 드라이브 연동] 버튼을 클릭하세요.");
+            
+            window.showToast("파일을 드라이브에 업로드 중입니다...");
+            
+            // 1. PJT 폴더 확인/생성
+            const folderName = pCode ? pCode : title;
+            const pjtFolderId = await window.getOrCreateDriveFolder(folderName, CR_DRIVE_PARENT_FOLDER);
+            
+            // 2. '검수리스트' 하위 폴더 확인/생성
+            const inspFolderId = await window.getOrCreateDriveFolder("검수리스트", pjtFolderId);
+
+            // 3. 파일 업로드 로직 (기존 함수 재활용 혹은 직접 fetch)
+            const metadata = { name: fileInput.files[0].name, parents: [inspFolderId] };
+            const form = new FormData();
+            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+            form.append('file', fileInput.files[0]);
+            
+            const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + window.googleAccessToken },
+                body: form
+            });
+            
+            if (!res.ok) throw new Error("업로드 실패");
+            const data = await res.json();
+            fileUrl = `https://drive.google.com/file/d/${data.id}/view`;
+        }
+
+        await addDoc(collection(db, "project_inspections"), {
+            projectId: pId,
+            content: content,
+            fileUrl: fileUrl,
+            authorUid: window.currentUser?.uid || 'guest',
+            authorName: window.userProfile?.name || '알수없음',
+            createdAt: Date.now()
+        });
+
+        window.showToast("검수리스트가 등록되었습니다.");
+        document.getElementById('new-insp-text').value = '';
+        document.getElementById('new-insp-file').value = '';
+        document.getElementById('insp-file-name').innerText = '';
+
+    } catch(e) {
+        window.showToast(e.message, "error");
+    } finally {
+        btn.innerHTML = '등록'; btn.disabled = false;
+    }
+};
+
+window.deleteInspectionItem = async function(id) {
+    if(confirm("이 검수리스트를 삭제하시겠습니까?")) {
+        try {
+            await deleteDoc(doc(db, "project_inspections", id));
+            window.showToast("삭제되었습니다.");
+        } catch(e) { window.showToast("삭제 실패", "error"); }
+    }
+};
+
+
+// ==========================================
+// 2. 품질 완료보고 (Completion Report) 관리
+// ==========================================
+window.openCompletionReportModal = async function(pId, pName, pCode) {
+    document.getElementById('cr-rep-pjt-id').value = pId;
+    document.getElementById('cr-rep-project-title').innerText = `[${pCode||'미지정'}] ${pName}`;
+    
+    // 초기화
+    document.getElementById('cr-rep-doc-id').value = '';
+    ['cr-int-start', 'cr-int-end', 'cr-ext-start', 'cr-ext-end', 'cr-comments'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('cr-int-status').value = '미진행';
+    document.getElementById('cr-ext-status').value = '미진행';
+    document.getElementById('cr-lessons-tbody').innerHTML = '';
+    
+    document.getElementById('cr-comment-img').value = '';
+    document.getElementById('cr-img-name').innerText = '';
+    document.getElementById('cr-saved-img-container').classList.add('hidden');
+    document.getElementById('cr-saved-img').src = '';
+
+    document.getElementById('cr-report-modal').classList.remove('hidden');
+    document.getElementById('cr-report-modal').classList.add('flex');
+
+    try {
+        const q = query(collection(db, "project_completion_reports"), where("projectId", "==", pId));
+        const snap = await getDocs(q);
+        
+        if (!snap.empty) {
+            const docData = snap.docs[0].data();
+            document.getElementById('cr-rep-doc-id').value = snap.docs[0].id;
+            
+            if(docData.internalSch) {
+                document.getElementById('cr-int-start').value = docData.internalSch.start || '';
+                document.getElementById('cr-int-end').value = docData.internalSch.end || '';
+                document.getElementById('cr-int-status').value = docData.internalSch.status || '미진행';
+            }
+            if(docData.customerSch) {
+                document.getElementById('cr-ext-start').value = docData.customerSch.start || '';
+                document.getElementById('cr-ext-end').value = docData.customerSch.end || '';
+                document.getElementById('cr-ext-status').value = docData.customerSch.status || '미진행';
+            }
+            
+            document.getElementById('cr-comments').value = docData.comments || '';
+            
+            if(docData.commentImage) {
+                document.getElementById('cr-saved-img').src = docData.commentImage;
+                document.getElementById('cr-saved-img-container').classList.remove('hidden');
+            }
+
+            if(docData.lessons && docData.lessons.length > 0) {
+                docData.lessons.forEach(l => window.addCrLessonRow(l));
+            } else {
+                window.addCrLessonRow();
+            }
+        } else {
+            // 없으면 기본 row 1개 추가
+            window.addCrLessonRow();
+        }
+    } catch(e) { console.error(e); }
+};
+
+window.closeCompletionReportModal = function() {
+    document.getElementById('cr-report-modal').classList.add('hidden');
+    document.getElementById('cr-report-modal').classList.remove('flex');
+};
+
+window.addCrLessonRow = function(data = null) {
+    const tbody = document.getElementById('cr-lessons-tbody');
+    const tr = document.createElement('tr');
+    tr.className = "cr-lesson-row border-b border-slate-100 hover:bg-slate-50 transition-colors";
+    
+    const typeVal = data ? data.type : 'Good';
+    const catVal = data ? data.category : '품질개선';
+    const itemVal = data ? data.item : '';
+    const hlVal = data ? data.highlight : '';
+    const llVal = data ? data.lowlight : '';
+
+    tr.innerHTML = `
+        <td class="p-2 border-r border-slate-100">
+            <select class="ls-type w-full border border-slate-300 rounded px-2 py-1.5 text-xs font-bold outline-teal-500">
+                <option value="Good" ${typeVal==='Good'?'selected':''} class="text-emerald-600">Good</option>
+                <option value="Bad" ${typeVal==='Bad'?'selected':''} class="text-rose-600">Bad</option>
+            </select>
+        </td>
+        <td class="p-2 border-r border-slate-100">
+            <select class="ls-category w-full border border-slate-300 rounded px-2 py-1.5 text-xs font-bold text-slate-700 outline-teal-500">
+                <option value="품질개선" ${catVal==='품질개선'?'selected':''}>품질개선</option>
+                <option value="납기단축" ${catVal==='납기단축'?'selected':''}>납기단축</option>
+                <option value="원가절감" ${catVal==='원가절감'?'selected':''}>원가절감</option>
+                <option value="제작" ${catVal==='제작'?'selected':''}>제작</option>
+            </select>
+        </td>
+        <td class="p-2 border-r border-slate-100">
+            <input type="text" class="ls-item w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-teal-500" value="${itemVal}" placeholder="아이템명">
+        </td>
+        <td class="p-2 border-r border-slate-100">
+            <textarea class="ls-high w-full border border-slate-300 rounded p-2 text-xs outline-teal-500 resize-y min-h-[40px]" placeholder="잘된 점 / 개선안">${hlVal}</textarea>
+        </td>
+        <td class="p-2 border-r border-slate-100">
+            <textarea class="ls-low w-full border border-slate-300 rounded p-2 text-xs outline-teal-500 resize-y min-h-[40px]" placeholder="문제점 / 아쉬운 점">${llVal}</textarea>
+        </td>
+        <td class="p-2 text-center">
+            <button onclick="this.closest('tr').remove()" class="text-slate-300 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button>
+        </td>
+    `;
+    tbody.appendChild(tr);
+};
+
+window.removeSavedCrImage = async function() {
+    if(!confirm("저장된 사진을 삭제하시겠습니까?")) return;
+    document.getElementById('cr-saved-img-container').classList.add('hidden');
+    document.getElementById('cr-saved-img').src = '';
+    // 실제 저장은 save 버튼 누를때 반영됨 (또는 바로 업데이트 가능하지만 폼 일관성을 위해 뷰만 제거)
+};
+
+window.saveCompletionReport = async function() {
+    const pId = document.getElementById('cr-rep-pjt-id').value;
+    const docId = document.getElementById('cr-rep-doc-id').value;
+    const btn = document.getElementById('btn-cr-save');
+    
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 저장중...';
+    btn.disabled = true;
+
+    try {
+        let base64Image = document.getElementById('cr-saved-img').src; // 기존 이미지 유지
+        if (document.getElementById('cr-saved-img-container').classList.contains('hidden')) {
+            base64Image = null; // 사용자가 삭제 버튼을 누른 경우
+        }
+
+        const fileInput = document.getElementById('cr-comment-img');
+        if (fileInput.files.length > 0) {
+            base64Image = await new Promise((resolve) => {
+                if(window.resizeAndConvertToBase64) {
+                    window.resizeAndConvertToBase64(fileInput.files[0], res => resolve(res));
+                } else { resolve(null); }
+            });
+        }
+
+        const lessons = [];
+        document.querySelectorAll('.cr-lesson-row').forEach(tr => {
+            lessons.push({
+                type: tr.querySelector('.ls-type').value,
+                category: tr.querySelector('.ls-category').value,
+                item: tr.querySelector('.ls-item').value.trim(),
+                highlight: tr.querySelector('.ls-high').value.trim(),
+                lowlight: tr.querySelector('.ls-low').value.trim()
+            });
+        });
+
+        const payload = {
+            projectId: pId,
+            internalSch: {
+                start: document.getElementById('cr-int-start').value,
+                end: document.getElementById('cr-int-end').value,
+                status: document.getElementById('cr-int-status').value
+            },
+            customerSch: {
+                start: document.getElementById('cr-ext-start').value,
+                end: document.getElementById('cr-ext-end').value,
+                status: document.getElementById('cr-ext-status').value
+            },
+            comments: document.getElementById('cr-comments').value.trim(),
+            commentImage: base64Image,
+            lessons: lessons,
+            authorUid: window.currentUser?.uid || 'guest',
+            authorName: window.userProfile?.name || '알수없음',
+            updatedAt: Date.now()
+        };
+
+        if (docId) {
+            await setDoc(doc(db, "project_completion_reports", docId), payload, { merge: true });
+        } else {
+            payload.createdAt = Date.now();
+            await addDoc(collection(db, "project_completion_reports"), payload);
+        }
+
+        window.showToast("완료보고서가 저장되었습니다.", "success");
+        window.closeCompletionReportModal();
+
+    } catch(e) {
+        window.showToast("저장 실패: " + e.message, "error");
+    } finally {
+        btn.innerHTML = '<i class="fa-solid fa-check"></i> 보고서 저장';
+        btn.disabled = false;
+    }
+};
