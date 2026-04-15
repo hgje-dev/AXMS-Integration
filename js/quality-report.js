@@ -60,7 +60,7 @@ window.filterQrList = function() {
         const stat = r.qualityStatus || '대기중';
         if (stat === '대기중') pending++;
         else if (stat === '작성중') writing++;
-        else if (stat === '승인완료') completed++;
+        else if (stat === '완료') completed++;
 
         // 2. 대시보드 상태 필터 적용
         if (window.currentQrStatusFilter !== 'all' && stat !== window.currentQrStatusFilter) {
@@ -82,43 +82,85 @@ window.filterQrList = function() {
     if(document.getElementById('qr-dash-completed')) document.getElementById('qr-dash-completed').innerText = completed;
 
     window.renderQrList(filtered);
-    window.renderQrQuickList(); // 우측 미니 스크롤 리스트도 함께 갱신
 };
 
-window.renderQrQuickList = function() {
-    const search = document.getElementById('qr-quick-search')?.value.toLowerCase() || '';
-    const listEl = document.getElementById('qr-quick-list');
-    if(!listEl) return;
+// 💡 상단 검색창 초성 자동완성 (PJT 마스터 기준 + 현재 리스트 기준)
+window.qrShowPjtAuto = function(input) {
+    const val = input.value.trim().toLowerCase();
+    let drop = document.getElementById('qr-pjt-autocomplete-dynamic');
+    
+    if (!drop) {
+        drop = document.createElement('ul');
+        drop.id = 'qr-pjt-autocomplete-dynamic';
+        drop.className = 'fixed z-[99999] bg-white border border-indigo-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm min-w-[220px] custom-scrollbar py-1';
+        document.body.appendChild(drop);
+    }
 
-    let filtered = window.qrReports.filter(r => {
-        if (!search) return true;
-        const str = `${r.pjtCode} ${r.pjtName}`.toLowerCase();
-        return str.includes(search) || (window.matchString && window.matchString(search, str));
-    });
-
-    if (filtered.length === 0) {
-        listEl.innerHTML = '<div class="text-center text-[10px] font-bold text-slate-400 p-4">검색 결과 없음</div>';
+    if(!val) {
+        drop.classList.add('hidden');
         return;
     }
 
-    listEl.innerHTML = filtered.map(r => {
-        let statClass = 'text-slate-500';
-        let stat = r.qualityStatus || '대기중';
-        if(stat === '승인완료') statClass = 'text-emerald-600 bg-emerald-50 border-emerald-200';
-        else if(stat === '작성중') statClass = 'text-blue-600 bg-blue-50 border-blue-200';
-        else if(stat === '반려') statClass = 'text-rose-600 bg-rose-50 border-rose-200';
-        else statClass = 'text-slate-500 bg-slate-100 border-slate-200';
+    let searchPool = [];
+    let seenCodes = new Set();
 
-        return `
-        <div class="flex justify-between items-center p-2 hover:bg-slate-100 border-b border-slate-100 cursor-pointer rounded transition-colors group" onclick="window.openQrModal('${r.id}')">
-            <div class="flex items-center gap-2 truncate">
-                <span class="text-[10px] font-black text-indigo-600 shrink-0">[${r.pjtCode}]</span>
-                <span class="text-[11px] font-bold text-slate-700 truncate group-hover:text-indigo-600">${r.pjtName}</span>
-            </div>
-            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border shrink-0 ${statClass}">${stat}</span>
-        </div>`;
-    }).join('');
+    if (window.pjtCodeMasterList) {
+        window.pjtCodeMasterList.forEach(p => {
+            if (p.code && !seenCodes.has(p.code)) {
+                seenCodes.add(p.code);
+                searchPool.push({code: p.code, name: p.name || ''});
+            }
+        });
+    }
+
+    (window.qrReports || []).forEach(d => {
+        if (d.pjtCode && !seenCodes.has(d.pjtCode)) {
+            seenCodes.add(d.pjtCode);
+            searchPool.push({code: d.pjtCode, name: d.pjtName || ''}); 
+        }
+    });
+
+    let matches = searchPool.filter(p => {
+        return (window.matchString && window.matchString(val, p.code)) || (window.matchString && window.matchString(val, p.name));
+    });
+
+    if(matches.length > 0) {
+        const rect = input.getBoundingClientRect();
+        drop.style.left = `${rect.left}px`;
+        drop.style.top = `${rect.bottom + 4}px`;
+        drop.style.width = `${Math.max(rect.width, 220)}px`;
+
+        drop.innerHTML = matches.map(m => {
+            let sCode = m.code ? m.code.replace(/'/g,"\\'").replace(/"/g,'&quot;') : '-';
+            let sName = m.name ? `<span class="text-[10px] text-slate-400 truncate w-full block mt-0.5">${m.name}</span>` : '';
+            return `<li class="px-4 py-2 hover:bg-indigo-50 cursor-pointer border-b border-slate-50 last:border-0 transition-colors flex flex-col" onmousedown="window.qrSelectPjt('${sCode}')">
+                        <span class="text-indigo-600 font-bold text-xs">${sCode}</span>${sName}
+                    </li>`;
+        }).join('');
+        drop.classList.remove('hidden');
+    } else {
+        drop.classList.add('hidden');
+    }
 };
+
+window.qrSelectPjt = function(code) {
+    const input = document.getElementById('qr-search');
+    if(input) input.value = code;
+    
+    const drop = document.getElementById('qr-pjt-autocomplete-dynamic');
+    if(drop) drop.classList.add('hidden');
+    
+    window.filterQrList(); 
+};
+
+// 외부 클릭 시 드롭다운 닫기
+document.addEventListener('click', function(e) {
+    const drop = document.getElementById('qr-pjt-autocomplete-dynamic');
+    if (drop && !drop.classList.contains('hidden') && !e.target.closest('#qr-search') && !e.target.closest('#qr-pjt-autocomplete-dynamic')) {
+        drop.classList.add('hidden');
+    }
+});
+
 
 window.renderQrList = function(list) {
     const tbody = document.getElementById('qr-tbody');
@@ -139,13 +181,14 @@ window.renderQrList = function(list) {
     const statusMap = {
         '대기중': '<span class="bg-slate-100 text-slate-500 border border-slate-200 px-2 py-1 rounded shadow-sm">대기중</span>',
         '작성중': '<span class="bg-blue-50 text-blue-600 border border-blue-200 px-2 py-1 rounded shadow-sm">작성중</span>',
-        '승인완료': '<span class="bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-1 rounded shadow-sm">✅ 승인완료</span>',
+        '완료': '<span class="bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-1 rounded shadow-sm">✅ 완료</span>',
         '반려': '<span class="bg-rose-50 text-rose-600 border border-rose-200 px-2 py-1 rounded shadow-sm">❌ 반려</span>'
     };
 
     tbody.innerHTML = list.map(r => {
         const dateStr = r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '-';
-        const compDateStr = (r.qualityStatus === '승인완료' && r.qualityUpdatedAt) ? new Date(r.qualityUpdatedAt).toLocaleDateString() : '-';
+        // '완료' 상태일 때만 품질 완료일자 표기
+        const compDateStr = (r.qualityStatus === '완료' && r.qualityUpdatedAt) ? new Date(r.qualityUpdatedAt).toLocaleDateString() : '-';
         const safeName = r.pjtName.replace(/"/g, '&quot;').replace(/'/g, "\\'");
         
         let qStatus = r.qualityStatus || '대기중';
@@ -247,7 +290,7 @@ window.openQrModal = function(docId) {
     // 뱃지 업데이트
     const badge = document.getElementById('qr-status-badge');
     const qStat = report.qualityStatus || '대기중';
-    if(qStat === '승인완료') badge.className = "text-[10px] font-bold px-2 py-0.5 rounded shadow-sm border bg-emerald-100 text-emerald-700 border-emerald-200";
+    if(qStat === '완료') badge.className = "text-[10px] font-bold px-2 py-0.5 rounded shadow-sm border bg-emerald-100 text-emerald-700 border-emerald-200";
     else if(qStat === '작성중') badge.className = "text-[10px] font-bold px-2 py-0.5 rounded shadow-sm border bg-blue-100 text-blue-700 border-blue-200";
     else if(qStat === '반려') badge.className = "text-[10px] font-bold px-2 py-0.5 rounded shadow-sm border bg-rose-100 text-rose-700 border-rose-200";
     else badge.className = "text-[10px] font-bold px-2 py-0.5 rounded shadow-sm border bg-slate-100 text-slate-500 border-slate-200";
@@ -450,7 +493,7 @@ window.saveQualityReport = async function() {
         await setDoc(doc(db, "project_completion_reports", docId), payload, { merge: true });
 
         // 승인완료 알림 발송 (제조팀 담당자)
-        if (payload.qualityStatus === '승인완료' && window.notifyUser) {
+        if (payload.qualityStatus === '완료' && window.notifyUser) {
             const pjt = window.qrProjects[report.projectId];
             if (pjt && pjt.manager) {
                 const msg = `[${report.pjtName}] 품질팀 최종 검수 및 승인이 완료되었습니다.`;
