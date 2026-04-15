@@ -11,6 +11,9 @@
                 <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
                 <input type="text" id="qr-search" oninput="window.qrShowPjtAuto(this); window.filterQrList();" autocomplete="off" placeholder="PJT코드, 프로젝트명 검색 (초성 가능)..." class="w-72 border border-slate-300 rounded-xl pl-8 pr-3 py-2 text-xs font-bold text-slate-600 outline-rose-500 shadow-sm bg-white">
             </div>
+            <button onclick="window.filterQrStatus('all')" class="text-[11px] font-bold text-slate-500 hover:text-slate-700 bg-white border border-slate-300 px-3 py-2 rounded-xl shadow-sm whitespace-nowrap transition-colors">
+                <i class="fa-solid fa-rotate-right"></i> 초기화
+            </button>
             <button onclick="window.authenticateGoogle()" id="btn-qr-google-auth" class="text-[11px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl shadow-sm hover:bg-amber-100 transition-colors flex items-center gap-1.5">
                 <i class="fa-brands fa-google"></i> 구글 드라이브 연동
             </button>
@@ -20,7 +23,7 @@
         </div>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 shrink-0 mb-2">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-5 shrink-0 mb-2">
         <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-4 border-l-slate-300 cursor-pointer hover:bg-slate-50 transition-all" onclick="window.filterQrStatus('대기중')">
             <div class="flex justify-between items-center mb-1">
                 <span class="text-[11px] font-bold text-slate-500">대기중</span>
