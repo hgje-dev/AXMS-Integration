@@ -524,219 +524,28 @@ window.populateUserDropdowns = function() {
 };
 
 // ==========================================
-// 💡 PJT 코드 마스터 관리 로직
+// 💡 안전한 이미지 뷰어 팝업 함수
 // ==========================================
-
-let pjtMasterUnsubscribe = null;
-
-window.loadProjectCodeMaster = function() {
-    if (pjtMasterUnsubscribe) pjtMasterUnsubscribe();
+window.openImageViewer = function(src) {
+    if (!src) return;
     
-    const q = query(collection(db, "pjt_code_master"));
-    pjtMasterUnsubscribe = onSnapshot(q, (snapshot) => {
-        window.pjtCodeMasterList = [];
-        snapshot.forEach(docSnap => {
-            window.pjtCodeMasterList.push({ id: docSnap.id, ...docSnap.data() });
-        });
-        window.pjtCodeMasterList.sort((a, b) => (a.code || '').localeCompare(b.code || ''));
-        window.renderProjectCodeMaster();
-    }, (error) => {
-        console.error("PJT Master Load Error:", error);
-    });
-};
-
-window.openProjCodeMasterModal = function() {
-    const modal = document.getElementById('proj-code-master-modal');
-    if (modal) {
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-        window.renderProjectCodeMaster();
-    }
-};
-
-window.closeProjCodeMasterModal = function() {
-    const modal = document.getElementById('proj-code-master-modal');
-    if (modal) {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-    }
-};
-
-window.renderProjectCodeMaster = function() {
-    const tbody = document.getElementById('pjt-code-tbody');
-    if (!tbody) return;
-
-    if (!window.pjtCodeMasterList || window.pjtCodeMasterList.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-400 font-bold">등록된 PJT 코드가 없습니다.</td></tr>';
-        return;
-    }
-
-    let html = '';
-    window.pjtCodeMasterList.forEach(p => {
-        html += `
-        <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">
-            <td class="p-3 text-center">
-                <input type="checkbox" value="${p.id}" class="pjt-checkbox accent-indigo-500 w-4 h-4 rounded cursor-pointer" onchange="window.updatePjtCheckbox()">
-            </td>
-            <td class="p-3 font-black text-indigo-600 text-center">${p.code || '-'}</td>
-            <td class="p-3 font-bold text-slate-700">${p.name || '-'}</td>
-            <td class="p-3 text-center text-slate-600 font-medium">${p.company || '-'}</td>
-            <td class="p-3 text-center">
-                <button onclick="window.deleteProjectCode('${p.id}')" class="text-slate-300 hover:text-rose-500 transition-colors p-1.5"><i class="fa-solid fa-trash-can"></i></button>
-            </td>
-        </tr>`;
-    });
-    tbody.innerHTML = html;
-    window.updatePjtCheckbox();
-};
-
-window.addProjectCode = async function() {
-    const codeInput = document.getElementById('new-pjt-code');
-    const nameInput = document.getElementById('new-pjt-name');
-    const companyInput = document.getElementById('new-pjt-company');
-    
-    const code = codeInput.value.trim().toUpperCase();
-    const name = nameInput.value.trim();
-    const company = companyInput.value.trim();
-
-    if (!code || !name) {
-        return window.showToast("PJT 코드와 프로젝트명을 모두 입력해주세요.", "warning");
-    }
-
-    const isExist = window.pjtCodeMasterList.some(p => p.code === code);
-    if (isExist) {
-        return window.showToast("이미 존재하는 PJT 코드입니다.", "error");
-    }
-
-    try {
-        await addDoc(collection(db, "pjt_code_master"), {
-            code: code,
-            name: name,
-            company: company,
-            authorUid: window.currentUser?.uid || 'guest',
-            createdAt: Date.now()
-        });
-        window.showToast("PJT 코드가 등록되었습니다.", "success");
-        codeInput.value = '';
-        nameInput.value = '';
-        companyInput.value = '';
-    } catch (e) {
-        window.showToast("등록 실패: " + e.message, "error");
-    }
-};
-
-window.deleteProjectCode = async function(id) {
-    if (!confirm("해당 PJT 코드를 삭제하시겠습니까?")) return;
-    try {
-        await deleteDoc(doc(db, "pjt_code_master", id));
-        window.showToast("삭제되었습니다.");
-    } catch (e) {
-        window.showToast("삭제 실패", "error");
-    }
-};
-
-window.toggleBulkPjtInput = function() {
-    const area = document.getElementById('pjt-bulk-input-area');
-    if (area.classList.contains('hidden')) {
-        area.classList.remove('hidden');
-        area.classList.add('flex');
-    } else {
-        area.classList.add('hidden');
-        area.classList.remove('flex');
-        document.getElementById('bulk-pjt-data').value = '';
-    }
-};
-
-window.processBulkPjtInput = async function() {
-    const data = document.getElementById('bulk-pjt-data').value.trim();
-    if (!data) return window.showToast("입력된 데이터가 없습니다.", "warning");
-
-    const rows = data.split('\n');
-    const batch = writeBatch(db);
-    let addCount = 0;
-    let skipCount = 0;
-
-    rows.forEach(row => {
-        const cols = row.split('\t').map(c => c.trim());
-        if (cols.length >= 2) {
-            const code = cols[0].toUpperCase();
-            const name = cols[1];
-            const company = cols[2] || '';
-            
-            if (code === 'PJT코드' || code === 'PJT CODE') return;
-
-            if (code && name) {
-                const isExist = window.pjtCodeMasterList.some(p => p.code === code);
-                if (!isExist) {
-                    const newRef = doc(collection(db, "pjt_code_master"));
-                    batch.set(newRef, {
-                        code: code,
-                        name: name,
-                        company: company,
-                        authorUid: window.currentUser?.uid || 'guest',
-                        createdAt: Date.now()
-                    });
-                    addCount++;
-                } else {
-                    skipCount++;
-                }
-            }
-        }
-    });
-
-    if (addCount > 0) {
-        try {
-            await batch.commit();
-            window.showToast(`${addCount}건의 데이터가 일괄 등록되었습니다. (중복/스킵: ${skipCount}건)`, "success");
-            window.toggleBulkPjtInput();
-        } catch (e) {
-            window.showToast("일괄 등록 중 오류가 발생했습니다.", "error");
-            console.error(e);
-        }
-    } else {
-        window.showToast(`등록할 새 데이터가 없습니다. (중복/형식오류: ${skipCount}건)`, "warning");
-    }
-};
-
-window.toggleAllPjtCheckboxes = function(checked) {
-    const checkboxes = document.querySelectorAll('.pjt-checkbox');
-    checkboxes.forEach(cb => cb.checked = checked);
-    window.updatePjtCheckbox();
-};
-
-window.updatePjtCheckbox = function() {
-    const checkboxes = document.querySelectorAll('.pjt-checkbox:checked');
-    const btnDelete = document.getElementById('btn-delete-selected-pjts');
-    if (btnDelete) {
-        if (checkboxes.length > 0) {
-            btnDelete.classList.remove('hidden');
+    if (src.startsWith('data:image')) {
+        const win = window.open('', '_blank');
+        if (win) {
+            win.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head><title>이미지 상세 보기</title></head>
+                <body style="margin:0; display:flex; justify-content:center; align-items:center; min-height:100vh; background-color:#0f172a;">
+                    <img src="${src}" style="max-width:100%; max-height:100vh; object-fit:contain;">
+                </body>
+                </html>
+            `);
+            win.document.close();
         } else {
-            btnDelete.classList.add('hidden');
-            const mainCb = document.getElementById('pjt-master-checkbox');
-            if(mainCb) mainCb.checked = false;
+            if (window.showToast) window.showToast('브라우저의 팝업 차단을 해제해주세요.', 'error');
         }
+    } else {
+        window.open(src, '_blank');
     }
 };
-
-window.deleteSelectedProjectCodes = async function() {
-    const checkboxes = document.querySelectorAll('.pjt-checkbox:checked');
-    if (checkboxes.length === 0) return;
-
-    if (!confirm(`선택한 ${checkboxes.length}개의 PJT 코드를 삭제하시겠습니까?`)) return;
-
-    try {
-        const batch = writeBatch(db);
-        checkboxes.forEach(cb => {
-            const ref = doc(db, "pjt_code_master", cb.value);
-            batch.delete(ref);
-        });
-        await batch.commit();
-        window.showToast(`선택 항목이 삭제되었습니다.`);
-        document.getElementById('pjt-master-checkbox').checked = false;
-        window.updatePjtCheckbox();
-    } catch (e) {
-        window.showToast("일괄 삭제 실패", "error");
-    }
-};
-
-}
