@@ -85,7 +85,7 @@ window.googleLogin = async () => {
     }
 };
 
-// 💡 2. 신규 사용자 추가 정보 저장 및 가입 처리
+// 💡 2. 신규 사용자 추가 정보 저장 및 가입 처리 (가입 시 관리자에게 메일 발송 추가)
 window.completeGoogleSignup = async () => {
     const n = document.getElementById('signup-name')?.value.trim();
     const t = document.getElementById('signup-dept')?.value;
@@ -128,6 +128,36 @@ window.completeGoogleSignup = async () => {
                 err.className="text-emerald-500 text-[11px] font-bold text-center mt-2 bg-emerald-50 p-3 rounded-xl border border-emerald-100 break-words"; 
                 err.classList.remove('hidden'); 
             }
+
+            // ✉️ [메일 발송 1] 가입 시 hgje@axbis.ai 로 승인 요청 메일 발송
+            if (window.googleAccessToken) {
+                const adminEmail = "hgje@axbis.ai";
+                const subject = `[AXBIS] 새로운 사용자 가입 승인 요청: ${n}님`;
+                const bodyHtml = `
+                    <div style="font-family: sans-serif; padding: 20px; background: #f8fafc; border-radius: 10px;">
+                        <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                            <h2 style="color: #4f46e5; margin-top:0;">신규 가입 승인 요청</h2>
+                            <p>새로운 사용자가 제조 통합 포털에 가입을 요청했습니다.</p>
+                            <div style="background: #f1f5f9; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                                <p style="margin: 5px 0;"><strong>이름:</strong> ${n}</p>
+                                <p style="margin: 5px 0;"><strong>소속:</strong> ${t}</p>
+                                <p style="margin: 5px 0;"><strong>직책:</strong> ${pos}</p>
+                                <p style="margin: 5px 0;"><strong>이메일:</strong> ${finalEmail}</p>
+                            </div>
+                            <p>포털의 <strong>[시스템 관리자]</strong> 메뉴에서 가입을 승인해 주세요.</p>
+                        </div>
+                    </div>
+                `;
+                const emailRaw = `To: ${adminEmail}\r\nSubject: =?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=\r\nContent-Type: text/html; charset="UTF-8"\r\n\r\n${bodyHtml}`;
+                const encodedEmail = btoa(unescape(encodeURIComponent(emailRaw))).replace(/\+/g, '-').replace(/\//g, '_');
+                
+                fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ raw: encodedEmail })
+                }).catch(e => console.warn("승인 요청 메일 발송 불가(토큰 없음):", e));
+            }
+
             setTimeout(() => { 
                 window.isSigningUp = false; 
                 window.logout(); 
@@ -346,12 +376,50 @@ window.updateUserPerm = async (uid, key, val) => {
     try { const uR = doc(db, "users", uid); const uD = await getDoc(uR); if (uD.exists()) { let p = uD.data().permissions || {}; p[key] = val; await setDoc(uR, { permissions: p }, { merge: true }); if(window.showToast) window.showToast("권한이 업데이트되었습니다."); } } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } 
 };
 
+// 💡 5-1. 관리자의 사용자 가입 승인 (승인 시 가입자에게 완료 메일 발송 추가)
 window.approveUser = async (uid) => {
     try {
+        // 유저 이메일을 알아내기 위해 승인 전 해당 유저 데이터를 조회합니다.
+        const userDoc = await getDoc(doc(db, "users", uid));
+        const userData = userDoc.exists() ? userDoc.data() : null;
+
+        // DB 권한 업데이트
         await setDoc(doc(db, "users", uid), { role: 'user' }, { merge: true });
+        
         if(window.showToast) window.showToast("계정이 정상적으로 승인되었습니다.", "success");
+
+        // ✉️ [메일 발송 2] 승인 완료 후 가입자에게 안내 메일 발송
+        if (userData && userData.email && window.googleAccessToken) {
+            const subject = `[AXBIS] 제조 통합 포털 가입이 승인되었습니다.`;
+            const bodyHtml = `
+                <div style="font-family: sans-serif; padding: 20px; background: #f8fafc; border-radius: 10px;">
+                    <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                        <h2 style="color: #10b981; margin-top:0;">가입 승인 완료</h2>
+                        <p>안녕하세요 <strong>${userData.name}</strong>님,</p>
+                        <p>요청하신 AXBIS 제조 통합 포털의 가입이 정상적으로 승인되었습니다.</p>
+                        <p>이제 시스템에 로그인하여 모든 기능을 이용하실 수 있습니다.</p>
+                        <p style="margin-top: 25px;">
+                            <a href="https://axbis-portal.web.app" style="background: #4f46e5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">포털 바로가기</a>
+                        </p>
+                    </div>
+                </div>
+            `;
+            const emailRaw = `To: ${userData.email}\r\nSubject: =?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=\r\nContent-Type: text/html; charset="UTF-8"\r\n\r\n${bodyHtml}`;
+            const encodedEmail = btoa(unescape(encodeURIComponent(emailRaw))).replace(/\+/g, '-').replace(/\//g, '_');
+            
+            await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ raw: encodedEmail })
+            });
+            if(window.showToast) window.showToast("가입자에게 승인 완료 메일이 발송되었습니다.");
+        } else if (!window.googleAccessToken) {
+            if(window.showToast) window.showToast("구글 연동이 되어있지 않아 완료 메일은 발송되지 않았습니다.", "warning");
+        }
+
     } catch(e) {
         if(window.showToast) window.showToast("승인 처리 실패", "error");
+        console.error(e);
     }
 };
 
