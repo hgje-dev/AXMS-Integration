@@ -152,7 +152,8 @@
                         <th class="border border-slate-600 px-2 py-2 text-center bg-rose-900/80 text-rose-200">출하(최종)</th>
                         <th class="border border-slate-600 px-2 py-2 text-center bg-slate-700">Set시작</th>
                         <th class="border border-slate-600 px-2 py-2 text-center bg-slate-700">Set종료</th>
-                        <th class="border border-slate-600 px-2 py-2 text-center bg-emerald-700 text-emerald-100 min-w-[100px]">링크</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center bg-emerald-700 text-emerald-100 min-w-[80px]">링크</th>
+                        <th class="border border-slate-600 px-2 py-2 text-center bg-rose-700 text-rose-100 min-w-[80px]">완료보고</th>
                     </tr>
                 </thead>
                 <tbody id="proj-dash-tbody" class="text-[10px] text-slate-700 divide-y divide-slate-200"></tbody>
@@ -740,6 +741,39 @@
                     <tbody id="ncr-list-tbody" class="divide-y divide-slate-100 text-xs"></tbody>
                 </table>
             </div>
+        </div>
+    </div>
+</div>
+
+<div id="cr-req-modal" class="fixed inset-0 z-[300] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10 transition-opacity">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col h-auto overflow-hidden transform transition-all">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-rose-50 shrink-0">
+            <h2 class="text-base font-extrabold text-rose-800 flex items-center gap-2">
+                <i class="fa-solid fa-flag-checkered text-rose-500"></i> PJT 완료 보고 (제조)
+            </h2>
+            <button onclick="window.closeCrReqModal()" class="text-rose-400 hover:text-rose-600 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
+        </div>
+        <div class="p-6 bg-slate-50/50 flex flex-col gap-4">
+            <input type="hidden" id="cr-req-pjt-id">
+            <div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
+                <span id="cr-req-project-title" class="text-sm font-black text-rose-600"></span>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-[11px] font-bold text-emerald-600 mb-1.5"><i class="fa-solid fa-thumbs-up"></i> Good Point (잘된 점, 품질개선 등)</label>
+                    <textarea id="cr-req-good" class="w-full border border-emerald-200 rounded-xl p-3 text-sm outline-emerald-500 bg-emerald-50/30 focus:bg-white min-h-[100px]" placeholder="제작 과정에서 잘된 점을 작성하세요..."></textarea>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-rose-600 mb-1.5"><i class="fa-solid fa-thumbs-down"></i> Bad Point (문제점, 아쉬운 점 등)</label>
+                    <textarea id="cr-req-bad" class="w-full border border-rose-200 rounded-xl p-3 text-sm outline-rose-500 bg-rose-50/30 focus:bg-white min-h-[100px]" placeholder="제작 과정에서 발생한 문제점이나 아쉬운 점을 작성하세요..."></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="px-6 py-4 border-t bg-white flex justify-end gap-2 shrink-0">
+            <button onclick="window.closeCrReqModal()" class="px-6 py-2.5 bg-slate-100 border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 transition-colors">취소</button>
+            <button id="btn-cr-req-save" onclick="window.submitCrReq()" class="px-8 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
+                <i class="fa-solid fa-paper-plane"></i> 완료요청 송부
+            </button>
         </div>
     </div>
 </div>
