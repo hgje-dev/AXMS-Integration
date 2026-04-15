@@ -742,13 +742,20 @@ window.openWeeklyLogWriteModal = async function(editId) {
     window.renderWlProjects();
 
     const badge = document.getElementById('write-status-badge');
+    const tempSaveBtn = document.getElementById('btn-wl-temp-save');
+    const finalSaveBtn = document.getElementById('btn-wl-final-save');
+
     if (badge) {
         if (existingLog && existingLog.isSubmitted) {
             badge.className = "bg-emerald-100 text-emerald-600 text-[10px] px-2 py-0.5 rounded-full font-bold ml-2 shadow-sm";
             badge.innerText = "제출 완료됨";
+            if (tempSaveBtn) tempSaveBtn.classList.add('hidden');
+            if (finalSaveBtn) finalSaveBtn.innerHTML = '<i class="fa-regular fa-paper-plane"></i> 주간 일지 수정 완료';
         } else {
             badge.className = "bg-indigo-100 text-indigo-600 text-[10px] px-2 py-0.5 rounded-full font-bold ml-2 shadow-sm";
             badge.innerText = "작성 중 (임시저장됨)";
+            if (tempSaveBtn) tempSaveBtn.classList.remove('hidden');
+            if (finalSaveBtn) finalSaveBtn.innerHTML = '<i class="fa-regular fa-paper-plane"></i> 주간 일지 최종 제출';
         }
     }
 
@@ -874,9 +881,10 @@ window.saveWeeklyLog = async function(isFinalSubmit) {
     let authorUid = window.currentUser ? window.currentUser.uid : 'unknown';
     let authorName = window.userProfile ? window.userProfile.name : 'unknown';
     let authorTeam = window.userProfile ? (window.userProfile.team || window.userProfile.department || '') : '';
+    let existingLog = null;
 
     if (id) {
-        const existingLog = window.currentWeeklyLogList.find(function(l) { return l.id === id; });
+        existingLog = window.currentWeeklyLogList.find(function(l) { return l.id === id; });
         if (existingLog) {
             authorUid = existingLog.authorUid || authorUid;
             authorName = existingLog.authorName || authorName;
@@ -913,7 +921,13 @@ window.saveWeeklyLog = async function(isFinalSubmit) {
             await window.processMentions(fullTextToScan, null, "주간업무일지");
         }
 
-        if (window.showToast) window.showToast(isFinalSubmit ? "최종 제출되었습니다." : "임시 저장되었습니다."); 
+        if (window.showToast) {
+            let toastMsg = isFinalSubmit ? "최종 제출되었습니다." : "임시 저장되었습니다.";
+            if (isFinalSubmit && id && existingLog && existingLog.isSubmitted) {
+                toastMsg = "주간 일지가 수정(편집) 완료되었습니다.";
+            }
+            window.showToast(toastMsg, "success");
+        } 
         window.closeWeeklyLogWriteModal(); 
     } catch (e) {
         if (window.showToast) window.showToast("저장 실패", "error");
@@ -1721,16 +1735,5 @@ window.saveSchedule = async function() {
         window.closeScheduleModal();
     } catch (e) {
         if (window.showToast) window.showToast("저장 실패", "error");
-    }
-};
-
-window.deleteSchedule = async function(id) {
-    if (confirm("이 일정을 삭제하시겠습니까?")) {
-        try {
-            await deleteDoc(doc(db, "weekly_schedules", id));
-            if (window.showToast) window.showToast("삭제되었습니다.");
-        } catch (e) { 
-            if (window.showToast) window.showToast("삭제 실패", "error"); 
-        }
     }
 };
