@@ -1,6 +1,6 @@
 /* eslint-disable */
 import { db } from './firebase.js';
-import { collection, doc, setDoc, getDocs, query, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { collection, doc, setDoc, query, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 let qrUnsubscribe = null;
 let pjtUnsubscribe = null;
@@ -14,13 +14,11 @@ window.initQualityReport = function() {
     console.log("✅ 품질 완료보고 페이지 로드 완료");
     if(window.initGoogleAPI) window.initGoogleAPI();
     
-    // 프로젝트 정보를 먼저 매핑하기 위해 projects_status 구독
     if(pjtUnsubscribe) pjtUnsubscribe();
     pjtUnsubscribe = onSnapshot(collection(db, "projects_status"), snap => {
         window.qrProjects = {};
         snap.forEach(d => { window.qrProjects[d.id] = d.data(); });
         
-        // 프로젝트가 로드된 후 완료보고서 로드
         window.loadQualityReports();
     });
 };
@@ -28,14 +26,12 @@ window.initQualityReport = function() {
 window.loadQualityReports = function() {
     if(qrUnsubscribe) qrUnsubscribe();
     
-    // 제조팀에서 생성한 project_completion_reports 리스트 가져오기
     qrUnsubscribe = onSnapshot(collection(db, "project_completion_reports"), snap => {
         window.qrReports = [];
         snap.forEach(d => {
             let data = d.data();
             data.id = d.id;
             
-            // PJT 정보 조인 (코드, 명칭)
             let pjt = window.qrProjects[data.projectId] || {};
             data.pjtCode = pjt.code || '-';
             data.pjtName = pjt.name || '알수없는 프로젝트';
@@ -43,7 +39,6 @@ window.loadQualityReports = function() {
             window.qrReports.push(data);
         });
         
-        // 최신순 정렬
         window.qrReports.sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
         window.filterQrList();
     });
@@ -102,7 +97,7 @@ window.renderQrList = function(list) {
                 <td class="p-3 text-center text-[10px] font-bold">${statusMap[qStatus] || qStatus}</td>
                 <td class="p-3 text-center">
                     <button class="bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 text-slate-400 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm">
-                        검토
+                        <i class="fa-solid fa-pen-to-square"></i> 검토
                     </button>
                 </td>
             </tr>
@@ -118,40 +113,7 @@ window.openQrModal = function(docId) {
     document.getElementById('qr-pjt-id').value = report.projectId;
     document.getElementById('qr-project-title').innerText = `[${report.pjtCode}] ${report.pjtName}`;
     
-    // 1. 제조팀 송부 내역 렌더링
-    let goodStr = '', badStr = '';
-    if(report.lessons && report.lessons.length > 0) {
-        report.lessons.forEach(l => {
-            if(l.type === 'Good' && l.highlight) goodStr += `- ${l.highlight}\n`;
-            if(l.type === 'Bad' && l.lowlight) badStr += `- ${l.lowlight}\n`;
-        });
-    }
-    document.getElementById('qr-good-point').innerText = goodStr || '내용 없음';
-    document.getElementById('qr-bad-point').innerText = badStr || '내용 없음';
-
-    // 첨부파일 렌더링 함수
-    const renderFiles = (filesArray, containerId, iconColor) => {
-        const container = document.getElementById(containerId);
-        if(!filesArray || filesArray.length === 0) {
-            container.innerHTML = '<span class="text-[10px] text-slate-400">첨부파일 없음</span>';
-            return;
-        }
-        container.innerHTML = filesArray.map(f => {
-            let isImg = f.name && f.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
-            if (isImg) {
-                let fileIdMatch = f.url.match(/\/d\/(.+?)\/view/);
-                let rawUrl = fileIdMatch ? `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}` : f.url;
-                return `<img src="${rawUrl}" alt="${f.name}" class="max-h-24 rounded border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.open('${f.url}', '_blank')">`;
-            } else {
-                return `<a href="${f.url}" target="_blank" class="text-xs ${iconColor} font-bold underline flex items-center gap-1 hover:text-slate-800"><i class="fa-solid fa-file-arrow-down"></i> ${f.name}</a>`;
-            }
-        }).join('');
-    };
-
-    renderFiles(report.specFiles, 'qr-spec-files', 'text-indigo-600');
-    renderFiles(report.designFiles, 'qr-design-files', 'text-teal-600');
-
-    // 2. 품질팀 폼 데이터 바인딩
+    // 검수 일정 폼
     if(report.internalSch) {
         document.getElementById('qr-int-start').value = report.internalSch.start || '';
         document.getElementById('qr-int-end').value = report.internalSch.end || '';
@@ -163,13 +125,38 @@ window.openQrModal = function(docId) {
         document.getElementById('qr-ext-status').value = report.customerSch.status || '미진행';
     }
     
+    // 품질 개선 및 리스크 테이블 (Item / High / Low)
+    document.getElementById('qr-lessons-tbody').innerHTML = '';
+    if(report.qualityLessons && report.qualityLessons.length > 0) {
+        report.qualityLessons.forEach(l => window.addQrLessonRow(l));
+    } else {
+        window.addQrLessonRow(); // 없으면 빈 줄 1개 생성
+    }
+
     document.getElementById('qr-comments').value = report.qualityComments || '';
     document.getElementById('qr-final-status').value = report.qualityStatus || '대기중';
 
-    // 품질 첨부파일 초기화 및 기존 파일 렌더링
+    // 품질 첨부파일 렌더링
     document.getElementById('qr-files').value = '';
     document.getElementById('qr-file-names').innerText = '';
-    renderFiles(report.qualityFiles, 'qr-existing-files', 'text-rose-600');
+    
+    const existContainer = document.getElementById('qr-existing-files');
+    const filesArray = report.qualityFiles || [];
+    
+    if(filesArray.length === 0) {
+        existContainer.innerHTML = '<span class="text-[10px] text-slate-400">첨부된 성적서 없음</span>';
+    } else {
+        existContainer.innerHTML = filesArray.map(f => {
+            let isImg = f.name && f.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
+            if (isImg) {
+                let fileIdMatch = f.url.match(/\/d\/(.+?)\/view/);
+                let rawUrl = fileIdMatch ? `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}` : f.url;
+                return `<div class="p-2 border border-slate-200 rounded-lg bg-white"><img src="${rawUrl}" alt="${f.name}" class="max-h-32 rounded cursor-pointer hover:opacity-80" onclick="window.open('${f.url}', '_blank')"></div>`;
+            } else {
+                return `<a href="${f.url}" target="_blank" class="text-xs text-rose-600 font-bold underline flex items-center gap-1 bg-white border border-slate-200 p-2 rounded-lg hover:bg-slate-50"><i class="fa-solid fa-file-arrow-down"></i> ${f.name}</a>`;
+            }
+        }).join('');
+    }
 
     // 뱃지 업데이트
     const badge = document.getElementById('qr-status-badge');
@@ -189,6 +176,42 @@ window.closeQrModal = function() {
     document.getElementById('qr-detail-modal').classList.remove('flex');
 };
 
+// 동적 행 추가 로직
+window.addQrLessonRow = function(data = null) {
+    const tbody = document.getElementById('qr-lessons-tbody');
+    const tr = document.createElement('tr');
+    tr.className = "qr-lesson-row border-b border-slate-100 hover:bg-slate-50 transition-colors";
+    
+    const catVal = data ? data.category : '품질개선';
+    const itemVal = data ? data.item : '';
+    const hrVal = data ? data.highRisk : '';
+    const lrVal = data ? data.lowRisk : '';
+
+    tr.innerHTML = `
+        <td class="p-2 border-r border-slate-100 align-top">
+            <select class="qr-ls-category w-full border border-slate-300 rounded px-2 py-1.5 text-xs font-bold text-slate-700 outline-teal-500 bg-white">
+                <option value="품질개선" ${catVal==='품질개선'?'selected':''}>품질개선</option>
+                <option value="납기단축" ${catVal==='납기단축'?'selected':''}>납기단축</option>
+                <option value="원가절감" ${catVal==='원가절감'?'selected':''}>원가절감</option>
+                <option value="제작" ${catVal==='제작'?'selected':''}>제작</option>
+            </select>
+        </td>
+        <td class="p-2 border-r border-slate-100 align-top">
+            <input type="text" class="qr-ls-item w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-teal-500" value="${itemVal}" placeholder="아이템명">
+        </td>
+        <td class="p-2 border-r border-slate-100 align-top">
+            <textarea class="qr-ls-high w-full border border-slate-300 rounded p-2 text-xs outline-rose-500 custom-scrollbar resize-y min-h-[50px] bg-rose-50/20 focus:bg-white" placeholder="하이리스크 내용">${hrVal}</textarea>
+        </td>
+        <td class="p-2 border-r border-slate-100 align-top">
+            <textarea class="qr-ls-low w-full border border-slate-300 rounded p-2 text-xs outline-blue-500 custom-scrollbar resize-y min-h-[50px] bg-blue-50/20 focus:bg-white" placeholder="로우리스크 내용">${lrVal}</textarea>
+        </td>
+        <td class="p-2 text-center align-middle">
+            <button onclick="this.closest('tr').remove()" class="text-slate-300 hover:text-rose-500 transition-colors p-1"><i class="fa-solid fa-trash-can"></i></button>
+        </td>
+    `;
+    tbody.appendChild(tr);
+};
+
 window.updateQrFileNames = function() {
     const inputEl = document.getElementById('qr-files');
     const displayEl = document.getElementById('qr-file-names');
@@ -202,11 +225,10 @@ window.updateQrFileNames = function() {
     }
 };
 
-// 드라이브 업로드 유틸리티 (project.js의 로직과 동일)
+// 구글 드라이브 업로드 유틸리티 
 async function qrUploadToDrive(file, folderName) {
     if(!window.googleAccessToken) throw new Error("구글 인증이 필요합니다.");
     
-    // 메인 폴더 탐색
     const query1 = `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and '${QR_DRIVE_PARENT_FOLDER}' in parents and trashed=false`;
     const res1 = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query1)}`, { headers: { 'Authorization': 'Bearer ' + window.googleAccessToken } });
     const data1 = await res1.json();
@@ -222,7 +244,6 @@ async function qrUploadToDrive(file, folderName) {
         pjtFolderId = cData.id;
     }
 
-    // 품질성적서 폴더 탐색/생성
     const query2 = `name='품질성적서' and mimeType='application/vnd.google-apps.folder' and '${pjtFolderId}' in parents and trashed=false`;
     const res2 = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query2)}`, { headers: { 'Authorization': 'Bearer ' + window.googleAccessToken } });
     const data2 = await res2.json();
@@ -238,7 +259,6 @@ async function qrUploadToDrive(file, folderName) {
         qFolderId = cData2.id;
     }
 
-    // 파일 업로드
     const progressModal = document.getElementById('upload-progress-modal');
     const progressBar = document.getElementById('upload-progress-bar');
     const progressText = document.getElementById('upload-progress-text');
@@ -310,6 +330,17 @@ window.saveQualityReport = async function() {
             }
         }
 
+        // 아이템 & 리스크 테이블 데이터 추출
+        const qualityLessons = [];
+        document.querySelectorAll('.qr-lesson-row').forEach(tr => {
+            qualityLessons.push({
+                category: tr.querySelector('.qr-ls-category').value,
+                item: tr.querySelector('.qr-ls-item').value.trim(),
+                highRisk: tr.querySelector('.qr-ls-high').value.trim(),
+                lowRisk: tr.querySelector('.qr-ls-low').value.trim()
+            });
+        });
+
         const payload = {
             internalSch: {
                 start: document.getElementById('qr-int-start').value,
@@ -321,6 +352,7 @@ window.saveQualityReport = async function() {
                 end: document.getElementById('qr-ext-end').value,
                 status: document.getElementById('qr-ext-status').value
             },
+            qualityLessons: qualityLessons,
             qualityComments: document.getElementById('qr-comments').value.trim(),
             qualityStatus: document.getElementById('qr-final-status').value,
             qualityFiles: uploadedFiles,
@@ -330,7 +362,7 @@ window.saveQualityReport = async function() {
 
         await setDoc(doc(db, "project_completion_reports", docId), payload, { merge: true });
 
-        // 만약 최종 '승인완료'라면, 알림을 보낼 수도 있습니다. (제조팀 담당자 등)
+        // 승인완료 알림 발송 (제조팀 담당자)
         if (payload.qualityStatus === '승인완료' && window.notifyUser) {
             const pjt = window.qrProjects[report.projectId];
             if (pjt && pjt.manager) {
