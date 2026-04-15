@@ -26,7 +26,6 @@
             <div class="relative w-full sm:w-64">
                 <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
                 <input type="text" id="mfg-cost-search-pjt" placeholder="PJT 코드/명 (초성검색)..." class="w-full border border-slate-300 rounded-xl pl-8 pr-3 py-2 text-sm font-bold text-slate-600 outline-amber-500 shadow-sm bg-white focus:ring-2 focus:ring-amber-100 transition-all" oninput="window.mfgCostShowPjtAuto(this); window.filterMfgCostData();" autocomplete="off">
-                <ul id="mfg-cost-pjt-autocomplete" class="hidden absolute z-[50] bg-white border border-amber-200 shadow-xl rounded-2xl max-h-60 overflow-y-auto text-sm w-full custom-scrollbar py-2 mt-2 top-full left-0"></ul>
             </div>
             
             <button onclick="window.resetMfgCostFilters()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded-xl text-xs font-bold transition-colors shadow-sm">
@@ -84,17 +83,14 @@
                         <td class="p-2 relative">
                             <input type="text" id="new-mfg-pjt" placeholder="PJT 검색" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-indigo-500 font-bold text-indigo-700" oninput="window.mfgCostShowInputPjtAuto(this)" autocomplete="off">
                             <input type="hidden" id="new-mfg-pjt-name">
-                            <ul id="mfg-input-pjt-autocomplete" class="hidden absolute z-[9999] bg-white border border-indigo-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-48 custom-scrollbar py-1 mt-1 left-2"></ul>
                         </td>
                         <td class="p-2">
                             <select id="new-mfg-category" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-indigo-500 font-bold text-slate-600 cursor-pointer bg-white">
                                 <option value="공압자재">공압자재</option>
                                 <option value="볼트/부자재">볼트/부자재</option>
-                                <option value="공구">공구</option>
                                 <option value="차량/물류">차량/물류</option>
                                 <option value="포장자재">포장자재</option>
-                                <option value="크린룸자재">크린룸자재</option>
-                                <option value="측정기">측정기</option>
+                                <option value="외주가공">외주가공</option>
                                 <option value="기타">기타</option>
                             </select>
                         </td>
