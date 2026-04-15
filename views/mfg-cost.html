@@ -60,7 +60,7 @@
                 <i class="fa-solid fa-list-check text-blue-500"></i> 
                 품목별 상세 지출 내역 <span id="mfg-table-pjt-label" class="text-indigo-600 ml-1"></span>
             </h3>
-            <span class="text-[10px] font-bold text-slate-400 bg-white px-2 py-1 rounded shadow-sm border border-slate-200">발생한 모든 지출(품목, 규격, 수량, 금액)을 기록합니다.</span>
+            <span class="text-[10px] font-bold text-slate-400 bg-white px-2 py-1 rounded shadow-sm border border-slate-200">단가를 입력하면 총 금액은 자동 계산됩니다.</span>
         </div>
         
         <div class="overflow-x-auto custom-scrollbar flex-1 bg-white">
@@ -68,11 +68,13 @@
                 <thead class="bg-slate-50 text-slate-500 sticky top-0 border-b border-slate-200 shadow-sm z-10">
                     <tr>
                         <th class="p-3 font-bold text-center w-28">지출일</th>
+                        <th class="p-3 font-bold text-center w-20">파트</th>
                         <th class="p-3 font-bold text-center text-indigo-600 w-32">PJT 코드</th>
-                        <th class="p-3 font-bold text-center w-32">지출 구분</th>
-                        <th class="p-3 font-bold min-w-[200px]">품목명 (규격 포함)</th>
-                        <th class="p-3 font-bold text-center w-20">수량</th>
-                        <th class="p-3 font-bold text-center text-blue-600 w-32">금액 (원)</th>
+                        <th class="p-3 font-bold text-center w-28">지출 구분</th>
+                        <th class="p-3 font-bold min-w-[200px]">품목명 (규격 등 포함)</th>
+                        <th class="p-3 font-bold text-center w-24">수량</th>
+                        <th class="p-3 font-bold text-center text-emerald-600 w-28">단가 (원)</th>
+                        <th class="p-3 font-bold text-center text-blue-600 w-32">총 금액 (원)</th>
                         <th class="p-3 font-bold min-w-[150px]">용도 / 비고</th>
                         <th class="p-3 font-bold text-center w-16">관리</th>
                     </tr>
@@ -80,6 +82,12 @@
                 <tbody class="divide-y divide-slate-100">
                     <tr class="bg-indigo-50/30 border-b-2 border-indigo-100">
                         <td class="p-2"><input type="date" id="new-mfg-date" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-indigo-500 font-bold text-slate-600 cursor-pointer"></td>
+                        <td class="p-2">
+                            <select id="new-mfg-part" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-indigo-500 font-bold text-slate-600 cursor-pointer bg-white">
+                                <option value="제조">제조</option>
+                                <option value="광학">광학</option>
+                            </select>
+                        </td>
                         <td class="p-2 relative">
                             <input type="text" id="new-mfg-pjt" placeholder="PJT 검색" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-indigo-500 font-bold text-indigo-700" oninput="window.mfgCostShowInputPjtAuto(this)" autocomplete="off">
                             <input type="hidden" id="new-mfg-pjt-name">
@@ -97,8 +105,11 @@
                             </select>
                         </td>
                         <td class="p-2"><input type="text" id="new-mfg-item" placeholder="품목명 및 규격 입력" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-indigo-500 font-bold text-slate-700"></td>
-                        <td class="p-2"><input type="text" id="new-mfg-qty" placeholder="예: 10 Box" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-indigo-500 font-bold text-center text-slate-600"></td>
-                        <td class="p-2"><input type="number" id="new-mfg-amount" placeholder="0" class="w-full border border-indigo-300 bg-indigo-50 rounded px-2 py-1.5 text-xs outline-indigo-500 font-black text-right text-indigo-600" onkeydown="if(event.key==='Enter') window.saveMfgCost()"></td>
+                        
+                        <td class="p-2"><input type="number" id="new-mfg-qty" placeholder="0" min="0" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-indigo-500 font-black text-center text-slate-600" oninput="window.calcMfgAmount()"></td>
+                        <td class="p-2"><input type="number" id="new-mfg-unit-price" placeholder="0" min="0" class="w-full border border-emerald-300 bg-emerald-50 rounded px-2 py-1.5 text-xs outline-emerald-500 font-black text-right text-emerald-600" oninput="window.calcMfgAmount()"></td>
+                        <td class="p-2"><input type="number" id="new-mfg-amount" placeholder="0" class="w-full border border-indigo-300 bg-indigo-50 rounded px-2 py-1.5 text-xs font-black text-right text-indigo-600 outline-none cursor-not-allowed" readonly title="수량 × 단가 자동계산"></td>
+                        
                         <td class="p-2"><input type="text" id="new-mfg-memo" placeholder="용도 기재" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-indigo-500 font-bold text-slate-600" onkeydown="if(event.key==='Enter') window.saveMfgCost()"></td>
                         <td class="p-2 text-center"><button onclick="window.saveMfgCost()" class="bg-blue-600 hover:bg-blue-700 text-white w-full py-1.5 rounded text-[11px] font-bold shadow-sm transition-colors">저장</button></td>
                     </tr>
