@@ -71,6 +71,19 @@ const getSafeString = (val) => {
     return (val === null || val === undefined) ? '' : String(val);
 };
 
+// 다중 파일 이름 표시 유틸 함수
+window.updateMultiFileNames = function(inputEl, displayElId) {
+    const displayEl = document.getElementById(displayElId);
+    if (!displayEl) return;
+    if (inputEl.files.length === 0) {
+        displayEl.innerHTML = '';
+    } else if (inputEl.files.length === 1) {
+        displayEl.innerHTML = inputEl.files[0].name;
+    } else {
+        displayEl.innerHTML = `${inputEl.files[0].name} 외 ${inputEl.files.length - 1}개 파일 선택됨`;
+    }
+};
+
 window.loadCounts = function() {
     try {
         onSnapshot(collection(db, "project_comments"), (snap) => { 
@@ -475,6 +488,11 @@ window.openCrReqModal = function(id, title) {
     document.getElementById('cr-req-project-title').innerText = title;
     document.getElementById('cr-req-good').value = '';
     document.getElementById('cr-req-bad').value = '';
+    document.getElementById('cr-req-spec-file').value = '';
+    document.getElementById('cr-req-spec-names').innerText = '';
+    document.getElementById('cr-req-design-file').value = '';
+    document.getElementById('cr-req-design-names').innerText = '';
+    
     document.getElementById('cr-req-modal').classList.remove('hidden');
     document.getElementById('cr-req-modal').classList.add('flex');
 };
@@ -505,14 +523,33 @@ window.submitCrReq = async function() {
         const pjtSnap = await getDoc(pjtRef);
         const pjtData = pjtSnap.exists() ? pjtSnap.data() : {};
         
-        // 1. 프로젝트 상태 변경
+        // 1. 첨부파일 업로드 로직 (다중)
+        let specFiles = [];
+        let designFiles = [];
+        const specInput = document.getElementById('cr-req-spec-file');
+        const designInput = document.getElementById('cr-req-design-file');
+        
+        if (specInput && specInput.files.length > 0) {
+            for(let i=0; i < specInput.files.length; i++) {
+                let url = await handleDriveUploadWithProgress(specInput.files[i], pjtData.code || pjtData.name, '완료보고');
+                specFiles.push({ name: specInput.files[i].name, url: url });
+            }
+        }
+        if (designInput && designInput.files.length > 0) {
+            for(let i=0; i < designInput.files.length; i++) {
+                let url = await handleDriveUploadWithProgress(designInput.files[i], pjtData.code || pjtData.name, '완료보고');
+                designFiles.push({ name: designInput.files[i].name, url: url });
+            }
+        }
+
+        // 2. 프로젝트 상태 변경
         batch.update(pjtRef, { 
             status: 'completed', 
             d_shipEn: window.getLocalDateStr(new Date()),
             updatedAt: Date.now() 
         });
 
-        // 2. 품질 완료보고 데이터 생성 (project_completion_reports)
+        // 3. 품질 완료보고 데이터 생성
         const crRef = doc(collection(db, "project_completion_reports"));
         const crLessons = [];
         if(goodTxt) crLessons.push({ type: 'Good', category: '제작', item: '제조팀 코멘트', highlight: goodTxt, lowlight: '' });
@@ -524,13 +561,15 @@ window.submitCrReq = async function() {
             comments: "제조팀 완료 요청으로 자동 생성됨",
             internalSch: { start: '', end: '', status: '미진행' },
             customerSch: { start: '', end: '', status: '미진행' },
+            specFiles: specFiles,
+            designFiles: designFiles,
             authorUid: window.currentUser?.uid || 'system',
             authorName: window.userProfile?.name || '시스템',
             createdAt: Date.now(),
             updatedAt: Date.now()
         });
 
-        // 3. Product Cost 리스트에 데이터 추가 (product_costs)
+        // 4. Product Cost 리스트 추가
         const costRef = doc(collection(db, "product_costs"));
         batch.set(costRef, {
             projectId: pId,
@@ -540,7 +579,7 @@ window.submitCrReq = async function() {
         
         await batch.commit();
 
-        // 4. 메일 알림 전송 (품질팀, 구매팀 등에게)
+        // 5. 메일 알림 전송 (품질팀, 구매팀)
         if (window.notifyUser) {
             const title = pjtData.name || '알수없는 프로젝트';
             const msg = `[${title}] 제조 완료 및 품질 완료보고 요청이 접수되었습니다.\n\nGood Point:\n${goodTxt}\n\nBad Point:\n${badTxt}`;
@@ -588,14 +627,14 @@ window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
     }
 };
 
-async function handleDriveUploadWithProgress(fileInput, projectName, subFolderName = null) {
+// 💡 수정된 다중파일 업로드 유틸 (file 객체를 직접 받음)
+async function handleDriveUploadWithProgress(file, projectName, subFolderName = null) {
     if(!window.googleAccessToken) {
         if(window.initGoogleAPI) window.initGoogleAPI();
         if(window.authenticateGoogle && !window.googleAccessToken) window.authenticateGoogle();
         if(!window.googleAccessToken) throw new Error("구글 인증이 필요합니다. [연동하기] 버튼을 눌러주세요.");
     }
     
-    const file = fileInput.files[0];
     if (!file) throw new Error("파일이 없습니다.");
 
     let targetFolderId = await window.getOrCreateDriveFolder(projectName, TARGET_DRIVE_FOLDER);
@@ -681,6 +720,23 @@ window.openPurchaseModal = function(projectId, title) {
             let dateStr = item.createdAt ? (window.getDateTimeStr ? window.getDateTimeStr(new Date(getSafeMillis(item.createdAt))) : new Date(getSafeMillis(item.createdAt)).toLocaleString()) : '';
             let safeContent = String(item.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             if(window.formatMentions) safeContent = window.formatMentions(safeContent);
+            
+            // 다중 첨부파일 렌더링
+            let filesHtml = '';
+            let mediaHtml = '';
+            if (item.fileUrl) filesHtml += `<a href="${item.fileUrl}" target="_blank" class="text-xs text-sky-500 font-bold underline w-fit flex items-center gap-1"><i class="fa-solid fa-paperclip"></i> 첨부 일정표 확인</a>`;
+            
+            if (item.files && item.files.length > 0) {
+                item.files.forEach(f => {
+                    let isImg = f.name && f.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
+                    if (isImg) {
+                        mediaHtml += `<img src="${f.url}" alt="${f.name}" class="max-h-40 rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.open('${f.url}', '_blank')">`;
+                    } else {
+                        filesHtml += `<a href="${f.url}" target="_blank" class="text-xs text-sky-500 font-bold underline w-fit flex items-center gap-1"><i class="fa-solid fa-file-arrow-down"></i> ${f.name}</a>`;
+                    }
+                });
+            }
+
             return `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
                         <div class="flex justify-between items-start">
                             <div class="flex items-center gap-2">
@@ -692,7 +748,8 @@ window.openPurchaseModal = function(projectId, title) {
                             </div>
                         </div>
                         <div class="text-[13px] text-slate-700 font-medium break-words leading-relaxed">${safeContent}</div>
-                        ${item.fileUrl ? `<a href="${item.fileUrl}" target="_blank" class="text-xs text-sky-500 font-bold underline mt-1 w-fit"><i class="fa-solid fa-paperclip"></i> 첨부 일정표 확인하기</a>` : ''}
+                        ${mediaHtml ? `<div class="flex flex-wrap gap-2 mt-2">${mediaHtml}</div>` : ''}
+                        ${filesHtml ? `<div class="flex flex-col gap-1 mt-1">${filesHtml}</div>` : ''}
                     </div>`;
         }).join('');
     });
@@ -725,9 +782,14 @@ window.savePurchaseItem = async function() {
     
     btn.innerHTML = '저장중..'; btn.disabled = true;
     try { 
-        let fileUrl = null; 
-        if(fileInput.files.length > 0) fileUrl = await handleDriveUploadWithProgress(fileInput, folderName, '구매');
-        await addDoc(collection(db, "project_purchases"), { projectId: pId, content: content, fileUrl: fileUrl, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
+        let filesData = [];
+        if (fileInput.files.length > 0) {
+            for(let i=0; i<fileInput.files.length; i++) {
+                let url = await handleDriveUploadWithProgress(fileInput.files[i], folderName, '구매');
+                filesData.push({ name: fileInput.files[i].name, url: url });
+            }
+        }
+        await addDoc(collection(db, "project_purchases"), { projectId: pId, content: content, files: filesData, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
         window.showToast("구매 내역이 등록되었습니다."); 
         window.resetPurchaseForm(); 
     } catch(e) { 
@@ -764,6 +826,22 @@ window.openDesignModal = function(projectId, title) {
             let dateStr = item.createdAt ? (window.getDateTimeStr ? window.getDateTimeStr(new Date(getSafeMillis(item.createdAt))) : new Date(getSafeMillis(item.createdAt)).toLocaleString()) : '';
             let safeContent = String(item.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             if(window.formatMentions) safeContent = window.formatMentions(safeContent);
+
+            let filesHtml = '';
+            let mediaHtml = '';
+            if (item.fileUrl) filesHtml += `<a href="${item.fileUrl}" target="_blank" class="text-xs text-teal-500 font-bold underline w-fit flex items-center gap-1"><i class="fa-solid fa-file-arrow-down"></i> 도면 파일 확인</a>`;
+            
+            if (item.files && item.files.length > 0) {
+                item.files.forEach(f => {
+                    let isImg = f.name && f.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
+                    if (isImg) {
+                        mediaHtml += `<img src="${f.url}" alt="${f.name}" class="max-h-40 rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.open('${f.url}', '_blank')">`;
+                    } else {
+                        filesHtml += `<a href="${f.url}" target="_blank" class="text-xs text-teal-500 font-bold underline w-fit flex items-center gap-1"><i class="fa-solid fa-file-arrow-down"></i> ${f.name}</a>`;
+                    }
+                });
+            }
+
             return `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
                         <div class="flex justify-between items-start">
                             <div class="flex items-center gap-2">
@@ -775,7 +853,8 @@ window.openDesignModal = function(projectId, title) {
                             </div>
                         </div>
                         <div class="text-[13px] text-slate-700 font-medium break-words leading-relaxed">${safeContent}</div>
-                        ${item.fileUrl ? `<a href="${item.fileUrl}" target="_blank" class="text-xs text-sky-500 font-bold underline mt-1 w-fit"><i class="fa-solid fa-file-arrow-down"></i> 설계 파일 확인하기</a>` : ''}
+                        ${mediaHtml ? `<div class="flex flex-wrap gap-2 mt-2">${mediaHtml}</div>` : ''}
+                        ${filesHtml ? `<div class="flex flex-col gap-1 mt-1">${filesHtml}</div>` : ''}
                     </div>`;
         }).join('');
     });
@@ -808,9 +887,14 @@ window.saveDesignItem = async function() {
     
     btn.innerHTML = '저장중..'; btn.disabled = true;
     try { 
-        let fileUrl = null; 
-        if(fileInput.files.length > 0) fileUrl = await handleDriveUploadWithProgress(fileInput, folderName, '설계');
-        await addDoc(collection(db, "project_designs"), { projectId: pId, content: content, fileUrl: fileUrl, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
+        let filesData = [];
+        if (fileInput.files.length > 0) {
+            for(let i=0; i<fileInput.files.length; i++) {
+                let url = await handleDriveUploadWithProgress(fileInput.files[i], folderName, '설계');
+                filesData.push({ name: fileInput.files[i].name, url: url });
+            }
+        }
+        await addDoc(collection(db, "project_designs"), { projectId: pId, content: content, files: filesData, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
         window.showToast("설계 내역이 등록되었습니다."); 
         window.resetDesignForm(); 
     } catch(e) { 
@@ -847,6 +931,22 @@ window.openPjtScheduleModal = function(projectId, title) {
             let dateStr = item.createdAt ? (window.getDateTimeStr ? window.getDateTimeStr(new Date(getSafeMillis(item.createdAt))) : new Date(getSafeMillis(item.createdAt)).toLocaleString()) : '';
             let safeContent = String(item.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             if(window.formatMentions) safeContent = window.formatMentions(safeContent);
+
+            let filesHtml = '';
+            let mediaHtml = '';
+            if (item.fileUrl) filesHtml += `<a href="${item.fileUrl}" target="_blank" class="text-xs text-fuchsia-500 font-bold underline w-fit flex items-center gap-1"><i class="fa-solid fa-calendar-days"></i> 첨부 일정표 확인</a>`;
+            
+            if (item.files && item.files.length > 0) {
+                item.files.forEach(f => {
+                    let isImg = f.name && f.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
+                    if (isImg) {
+                        mediaHtml += `<img src="${f.url}" alt="${f.name}" class="max-h-40 rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.open('${f.url}', '_blank')">`;
+                    } else {
+                        filesHtml += `<a href="${f.url}" target="_blank" class="text-xs text-fuchsia-500 font-bold underline w-fit flex items-center gap-1"><i class="fa-solid fa-file-arrow-down"></i> ${f.name}</a>`;
+                    }
+                });
+            }
+
             return `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
                         <div class="flex justify-between items-start">
                             <div class="flex items-center gap-2">
@@ -858,7 +958,8 @@ window.openPjtScheduleModal = function(projectId, title) {
                             </div>
                         </div>
                         <div class="text-[13px] text-slate-700 font-medium break-words leading-relaxed">${safeContent}</div>
-                        ${item.fileUrl ? `<a href="${item.fileUrl}" target="_blank" class="text-xs text-sky-500 font-bold underline mt-1 w-fit"><i class="fa-solid fa-calendar-days"></i> PJT 일정표 확인하기</a>` : ''}
+                        ${mediaHtml ? `<div class="flex flex-wrap gap-2 mt-2">${mediaHtml}</div>` : ''}
+                        ${filesHtml ? `<div class="flex flex-col gap-1 mt-1">${filesHtml}</div>` : ''}
                     </div>`;
         }).join('');
     });
@@ -891,9 +992,14 @@ window.savePjtScheduleItem = async function() {
     
     btn.innerHTML = '저장중..'; btn.disabled = true;
     try { 
-        let fileUrl = null; 
-        if(fileInput.files.length > 0) fileUrl = await handleDriveUploadWithProgress(fileInput, folderName, '일정');
-        await addDoc(collection(db, "project_schedules"), { projectId: pId, content: content, fileUrl: fileUrl, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
+        let filesData = [];
+        if (fileInput.files.length > 0) {
+            for(let i=0; i<fileInput.files.length; i++) {
+                let url = await handleDriveUploadWithProgress(fileInput.files[i], folderName, '일정');
+                filesData.push({ name: fileInput.files[i].name, url: url });
+            }
+        }
+        await addDoc(collection(db, "project_schedules"), { projectId: pId, content: content, files: filesData, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
         window.showToast("PJT 일정 내역이 등록되었습니다."); 
         window.resetPjtScheduleForm(); 
     } catch(e) { 
@@ -1487,7 +1593,22 @@ window.renderDailyLogs = function(logs) {
         logs.forEach(function(log) { 
             let safeContent = String(log.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             if(window.formatMentions) safeContent = window.formatMentions(safeContent);
-            const imgHtml = log.imageUrl ? `<div class="mt-3 rounded-lg overflow-hidden border border-slate-200 w-fit max-w-[300px]"><img src="${log.imageUrl}" class="w-full h-auto cursor-pointer" onclick="window.open('${log.imageUrl}')"></div>` : ''; 
+            
+            // 다중 이미지 및 파일 렌더링
+            let mediaHtml = '';
+            let filesHtml = '';
+            if (log.imageUrl) mediaHtml += `<img src="${log.imageUrl}" class="max-w-[200px] max-h-[200px] object-cover rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.open('${log.imageUrl}')">`;
+            
+            if (log.files && log.files.length > 0) {
+                log.files.forEach(f => {
+                    let isImg = f.name && f.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
+                    if (isImg) {
+                        mediaHtml += `<img src="${f.url}" class="max-w-[200px] max-h-[200px] object-cover rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.open('${f.url}', '_blank')">`;
+                    } else {
+                        filesHtml += `<a href="${f.url}" target="_blank" class="text-xs text-sky-500 font-bold underline flex items-center gap-1 w-fit"><i class="fa-solid fa-paperclip"></i> ${f.name}</a>`;
+                    }
+                });
+            }
             
             let btnHtml = '';
             if (log.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin') {
@@ -1502,8 +1623,9 @@ window.renderDailyLogs = function(logs) {
                                 </div>
                                 <div class="flex gap-2">${btnHtml}</div>
                             </div>
-                            <div class="text-slate-700 font-medium text-[13px] pl-1 mt-2 break-words leading-relaxed">${safeContent}</div>
-                            ${imgHtml}
+                            <div class="text-slate-700 font-medium text-[13px] pl-1 mt-2 mb-1 break-words leading-relaxed">${safeContent}</div>
+                            ${mediaHtml ? `<div class="flex flex-wrap gap-2 mt-1">${mediaHtml}</div>` : ''}
+                            ${filesHtml ? `<div class="flex flex-col gap-1 mt-1">${filesHtml}</div>` : ''}
                         </div>`; 
         });
         list.innerHTML = listHtml;
@@ -1521,71 +1643,59 @@ window.saveDailyLogItem = async function() {
     const progressVal = parseInt(document.getElementById('log-project-progress').value) || 0; 
     const purchaseRateVal = parseInt(document.getElementById('log-project-purchase-rate').value) || 0; 
     
-    if(!date || (!content && (!fileInput || fileInput.files.length === 0))) {
+    if(!date || (!content && fileInput.files.length === 0)) {
         return window.showToast("날짜와 내용을 입력하거나 사진을 첨부하세요.", "error"); 
     }
     
     const btnSave = document.getElementById('btn-log-save');
-    if(btnSave) { 
-        btnSave.innerHTML = '저장중..'; 
-        btnSave.disabled = true; 
-    }
+    if(btnSave) { btnSave.innerHTML = '저장중..'; btnSave.disabled = true; }
     
-    const saveData = async function(base64Img) { 
-        try { 
-            const payload = { date: date, content: content, updatedAt: Date.now() }; 
-            if(base64Img) payload.imageUrl = base64Img; 
-            
-            if (logId) { 
-                await setDoc(doc(db, "daily_logs", logId), payload, { merge: true }); 
-                window.showToast("일지가 수정되었습니다."); 
-            } else { 
-                payload.projectId = projectId; 
-                payload.authorUid = window.currentUser.uid; 
-                payload.authorName = window.userProfile.name; 
-                payload.createdAt = Date.now(); 
-                await addDoc(collection(db, "daily_logs"), payload); 
-                window.showToast("일지가 등록되었습니다."); 
-            } 
-            
-            await setDoc(doc(db, "projects_status", projectId), { 
-                progress: progressVal, 
-                purchaseRate: purchaseRateVal 
-            }, { merge: true }); 
-            
-            let notified = [];
-            if(window.processMentions) {
-                notified = await window.processMentions(content, projectId, "생산일지"); 
-            }
-            
-            const proj = window.currentProjectStatusList.find(p => p.id === projectId);
-            if (proj && proj.manager && proj.manager !== window.userProfile.name && (!notified || !notified.includes(proj.manager))) {
-                if(window.notifyUser) {
-                    await window.notifyUser(proj.manager, content, projectId, "새 생산일지");
-                }
-            }
+    try { 
+        const proj = window.currentProjectStatusList.find(p => p.id === projectId);
+        const folderName = proj && proj.code ? proj.code : (proj ? proj.name : '미지정');
 
-            window.resetDailyLogForm(); 
-        } catch(e) { 
-            window.showToast("저장 중 오류 발생", "error"); 
-        } finally { 
-            if(btnSave) { 
-                btnSave.innerHTML = '등록'; 
-                btnSave.disabled = false; 
+        let filesData = [];
+        if (fileInput.files.length > 0) {
+            for(let i=0; i<fileInput.files.length; i++) {
+                let url = await handleDriveUploadWithProgress(fileInput.files[i], folderName, '생산일지');
+                filesData.push({ name: fileInput.files[i].name, url: url });
             }
-        } 
-    }; 
-    
-    if(fileInput && fileInput.files.length > 0) { 
-        if(window.resizeAndConvertToBase64) {
-            window.resizeAndConvertToBase64(fileInput.files[0], function(base64) { 
-                saveData(base64); 
-            }); 
-        } else { 
-            saveData(null); 
         }
-    } else { 
-        saveData(null); 
+
+        const payload = { date: date, content: content, updatedAt: Date.now() }; 
+        if(filesData.length > 0) payload.files = filesData; 
+        
+        if (logId) { 
+            await setDoc(doc(db, "daily_logs", logId), payload, { merge: true }); 
+            window.showToast("일지가 수정되었습니다."); 
+        } else { 
+            payload.projectId = projectId; 
+            payload.authorUid = window.currentUser.uid; 
+            payload.authorName = window.userProfile.name; 
+            payload.createdAt = Date.now(); 
+            await addDoc(collection(db, "daily_logs"), payload); 
+            window.showToast("일지가 등록되었습니다."); 
+        } 
+        
+        await setDoc(doc(db, "projects_status", projectId), { 
+            progress: progressVal, 
+            purchaseRate: purchaseRateVal 
+        }, { merge: true }); 
+        
+        let notified = [];
+        if(window.processMentions) {
+            notified = await window.processMentions(content, projectId, "생산일지"); 
+        }
+        
+        if (proj && proj.manager && proj.manager !== window.userProfile.name && (!notified || !notified.includes(proj.manager))) {
+            if(window.notifyUser) await window.notifyUser(proj.manager, content, projectId, "새 생산일지");
+        }
+
+        window.resetDailyLogForm(); 
+    } catch(e) { 
+        window.showToast("저장 중 오류 발생", "error"); 
+    } finally { 
+        if(btnSave) { btnSave.innerHTML = '등록'; btnSave.disabled = false; }
     } 
 };
 
@@ -1613,22 +1723,10 @@ window.deleteDailyLog = async function(id) {
     } 
 };
 
-window.updateDailyLogFileName = function() {
-    const input = document.getElementById('new-log-image');
-    const wrap = document.getElementById('new-log-filename-wrap');
-    const nameEl = document.getElementById('new-log-filename');
-    
-    if(input && input.files.length > 0) {
-        if(nameEl) nameEl.innerText = input.files[0].name;
-        if(wrap) wrap.classList.remove('hidden');
-    }
-};
-
 window.clearDailyLogFile = function(e) {
     if(e) e.stopPropagation();
     const input = document.getElementById('new-log-image');
     const wrap = document.getElementById('new-log-filename-wrap');
-    
     if(input) input.value = '';
     if(wrap) wrap.classList.add('hidden');
 };
@@ -2529,26 +2627,3 @@ window.renderNcrList = function(pjtCode) {
     
     const elComp = document.getElementById('ncr-comp-cnt');
     if(elComp) elComp.innerText = completed;
-    
-    if (total === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-8 text-slate-400 font-bold bg-white">등록된 부적합 내역이 없습니다.</td></tr>';
-        return;
-    }
-    
-    tbody.innerHTML = list.map(n => {
-        let s = String(n.status || '');
-        const isComp = s.includes('완료') || s.includes('종결');
-        const textClass = isComp ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-700';
-        const badge = isComp ? `<span class="bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">완료</span>` : `<span class="bg-rose-50 text-rose-600 border border-rose-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">진행중</span>`;
-        
-        return `<tr class="hover:bg-slate-50 transition-colors bg-white border-b border-slate-100">
-                    <td class="p-3 text-center font-bold text-slate-500 whitespace-nowrap">${n.ncrNo || '-'}</td>
-                    <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.date || '-'}</td>
-                    <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.drawingNo || '-'}</td>
-                    <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.partName || '-'}</td>
-                    <td class="p-3 text-center whitespace-nowrap"><span class="bg-slate-100 px-2 py-1 border border-slate-200 rounded font-bold">${n.type || '-'}</span></td>
-                    <td class="p-3 font-medium ${textClass} break-all">${n.content || '-'}</td>
-                    <td class="p-3 text-center whitespace-nowrap">${badge}</td>
-                </tr>`;
-    }).join('');
-};
