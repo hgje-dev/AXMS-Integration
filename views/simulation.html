@@ -14,7 +14,10 @@
         <div class="w-px h-4 bg-slate-300 mx-1"></div>
         <button onclick="window.openProjectModal()" class="bg-amber-50 border border-amber-200 text-amber-600 hover:text-white hover:bg-amber-500 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors flex items-center gap-1.5"><i class="fa-solid fa-folder-open"></i> 불러오기</button>
         <button onclick="window.cloneProject()" class="bg-sky-50 border border-sky-200 text-sky-600 hover:text-white hover:bg-sky-500 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors flex items-center gap-1.5"><i class="fa-solid fa-copy"></i> 복제</button>
-        <button onclick="window.saveToFirestore(false)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors flex items-center gap-1.5"><i class="fa-solid fa-cloud-arrow-up"></i> 저장</button>
+        
+        <button id="btn-save-project" onclick="window.saveToFirestore(false)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors flex items-center gap-1.5"><i class="fa-solid fa-cloud-arrow-up"></i> 저장</button>
+        <button id="btn-unlock-project" onclick="window.unlockCurrentProject()" class="hidden bg-rose-500 hover:bg-rose-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors flex items-center gap-1.5"><i class="fa-solid fa-lock"></i> 잠금해제</button>
+        
         <button onclick="window.exportToExcel()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors flex items-center gap-1.5"><i class="fa-solid fa-file-excel"></i> Excel</button>
     </div>
 </div>
@@ -102,9 +105,12 @@
         </section>
 
         <section class="bg-white rounded-3xl shadow-sm border overflow-hidden">
-            <div class="px-8 py-5 border-b flex justify-between items-center">
-                <h2 class="text-sm font-extrabold flex items-center gap-2"><i class="fa-solid fa-list-ol text-indigo-500"></i> 세부 공정 데이터</h2>
-                <button onclick="window.addProcessRow()" class="bg-indigo-50 text-indigo-600 px-4 py-1.5 rounded-xl text-xs font-bold hover:bg-indigo-100 transition-colors">+ 공정 추가</button>
+            <div class="px-8 py-5 border-b flex justify-between items-center relative">
+                <div class="flex items-center gap-3">
+                    <h2 class="text-sm font-extrabold flex items-center gap-2"><i class="fa-solid fa-list-ol text-indigo-500"></i> 세부 공정 데이터</h2>
+                    <span id="lock-indicator" class="hidden text-[10px] bg-rose-50 text-rose-600 px-2 py-0.5 rounded-full font-bold border border-rose-200"><i class="fa-solid fa-lock text-[8px] mr-1"></i>읽기 전용</span>
+                </div>
+                <button id="btn-add-process" onclick="window.addProcessRow()" class="bg-indigo-50 text-indigo-600 px-4 py-1.5 rounded-xl text-xs font-bold hover:bg-indigo-100 transition-colors">+ 공정 추가</button>
             </div>
             <div class="overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar bg-slate-50/20">
                 <table class="min-w-full divide-y divide-slate-200 border-collapse">
@@ -154,6 +160,7 @@
                 </div>
             </div>
         </section>
+
     </div>
 
     <div class="lg:col-span-5 space-y-6 lg:sticky lg:top-24">
