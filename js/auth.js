@@ -143,7 +143,14 @@ window.completeGoogleSignup = async () => {
     }
 };
 
-window.logout = async () => { await signOut(auth); location.reload(); };
+// 💡 명시적으로 오프라인 처리하며 로그아웃
+window.logout = async () => { 
+    if (window.currentUser) {
+        try { await setDoc(doc(db, "users", window.currentUser.uid), { isOnline: false, lastActive: Date.now() }, { merge: true }); } catch(e) {}
+    }
+    await signOut(auth); 
+    location.reload(); 
+};
 
 // 💡 3. 로그인 상태 감지 및 UI 렌더링
 window.initAuthListeners = () => {
@@ -184,6 +191,17 @@ window.initAuthListeners = () => {
                 for (let p in dP) { if (window.userProfile.permissions[p] === undefined) window.userProfile.permissions[p] = true; }
                 
                 window.currentUser = u;
+                
+                // 💡 접속 상태 갱신 (Heartbeat 로직)
+                const updatePresence = async () => {
+                    if(window.currentUser) {
+                        try { await setDoc(doc(db, "users", window.currentUser.uid), { isOnline: true, lastActive: Date.now() }, { merge: true }); } catch(e){}
+                    }
+                };
+                updatePresence(); // 로그인 즉시 갱신
+                if(window.presenceInterval) clearInterval(window.presenceInterval);
+                window.presenceInterval = setInterval(updatePresence, 5 * 60 * 1000); // 5분마다 상태 갱신
+
                 document.getElementById('login-modal')?.classList.add('hidden'); 
                 const pt = document.getElementById('portal-container'); if(pt) { pt.classList.remove('hidden'); pt.classList.add('flex'); }
                 
@@ -224,6 +242,9 @@ window.initAuthListeners = () => {
             // 로그아웃 상태
             window.currentUser=null; document.getElementById('login-modal')?.classList.remove('hidden'); 
             const pt=document.getElementById('portal-container'); if(pt) { pt.classList.add('hidden'); pt.classList.remove('flex'); } 
+            
+            // 타이머 정리
+            if(window.presenceInterval) clearInterval(window.presenceInterval);
         }
     });
 };
@@ -280,9 +301,10 @@ window.saveUserSettings = async () => {
 window.openAdminModal = () => { document.getElementById('admin-modal').classList.remove('hidden'); document.getElementById('admin-modal').classList.add('flex'); window.renderAdminUsers(); };
 window.closeAdminModal = () => { document.getElementById('admin-modal').classList.add('hidden'); document.getElementById('admin-modal').classList.remove('flex'); };
 
+// 💡 관리자용 유저 리스트 테이블 렌더링
 window.renderAdminUsers = () => {
     const tb = document.getElementById('admin-users-tbody'); if (!tb) return;
-    if (window.allSystemUsers.length === 0) { tb.innerHTML = '<tr><td colspan="6" class="text-center p-6 text-slate-500 font-bold">등록된 사용자가 없습니다.</td></tr>'; return; }
+    if (window.allSystemUsers.length === 0) { tb.innerHTML = '<tr><td colspan="7" class="text-center p-6 text-slate-500 font-bold">등록된 사용자가 없습니다.</td></tr>'; return; }
     
     let sortedUsers = [...window.allSystemUsers].sort((a, b) => { 
         if (a.role === 'pending' && b.role !== 'pending') return -1; 
@@ -290,7 +312,6 @@ window.renderAdminUsers = () => {
         return 0; 
     });
     
-    // 전체 팀 목록 (설정 모달 기준)
     const teamsList = [
         'AXBIS', '레이저사업본부', '제조기술팀', '장비기술팀', '모듈기술팀', 
         '제어팀', 'pm팀', '영업팀', '전략기획팀', '전략구매팀', '품질경영팀', 
@@ -299,6 +320,8 @@ window.renderAdminUsers = () => {
     ];
 
     let html = '';
+    const now = Date.now(); // 현재 시간 캐싱
+
     sortedUsers.forEach(u => {
         const p = u.permissions || {}; 
         const isP = u.role === 'pending';
@@ -310,7 +333,6 @@ window.renderAdminUsers = () => {
                             ${posOptions}
                          </select>`;
 
-        // 관리자가 팀을 변경할 수 있도록 select 요소 적용
         const currentTeam = u.team || u.department || '';
         const teamOpts = teamsList.map(t => `<option value="${t}" ${currentTeam === t ? 'selected' : ''}>${t}</option>`).join('');
         const safeTeam = `<select class="border border-slate-300 rounded px-2 py-1.5 text-xs font-bold ${isP ? 'text-rose-600 bg-white' : 'text-slate-600'} w-full focus:outline-none" onchange="window.updateUserTeam('${u.uid}', this.value)">
@@ -318,10 +340,26 @@ window.renderAdminUsers = () => {
                             ${teamOpts}
                          </select>`;
 
+        // 💡 접속 상태 판단 (10분 이내 Heartbeat가 있으면 온라인)
+        const lastActive = u.lastActive || 0;
+        const isOnline = u.isOnline !== false && (now - lastActive < 10 * 60 * 1000);
+        
+        const statusBadge = isOnline 
+            ? `<span class="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-600 px-2 py-1 rounded-full text-[10px] font-bold border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>온라인</span>` 
+            : `<span class="inline-flex items-center gap-1.5 bg-slate-50 text-slate-500 px-2 py-1 rounded-full text-[10px] font-bold border border-slate-200"><span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>오프라인</span>`;
+        
+        const lastActiveStr = lastActive ? new Date(lastActive).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '기록 없음';
+
         html += `<tr class="${trClass}">
             <td class="p-3 text-center font-bold text-slate-700">${u.name}${safePos}</td>
             <td class="p-3 text-center">${safeTeam}</td>
             <td class="p-3 text-center text-slate-500">${u.email}</td>
+            
+            <td class="p-3 text-center" title="마지막 활동: ${lastActiveStr}">
+                ${statusBadge}
+                <div class="text-[9px] text-slate-400 mt-1">${lastActiveStr}</div>
+            </td>
+            
             <td class="p-3 text-center">
                 <select class="border border-slate-300 rounded px-2 py-1.5 text-xs font-bold ${isP ? 'text-rose-600 bg-white' : 'text-slate-600'}" onchange="window.updateUserRole('${u.uid}', this.value)">
                     <option value="pending" ${u.role === 'pending' ? 'selected' : ''}>승인 대기</option>
