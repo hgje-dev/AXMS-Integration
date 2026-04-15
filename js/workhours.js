@@ -777,6 +777,7 @@ function getFilteredLogs() {
     });
 }
 
+// 💡 1. 달력처럼 클릭하기 편한 현황판 뷰
 function renderWhGrid() {
     const thead = document.getElementById('wh-grid-thead');
     const tbody = document.getElementById('wh-grid-tbody');
@@ -821,8 +822,8 @@ function renderWhGrid() {
     }
 
     targetMembers.forEach(member => {
-        bodyHtml += `<tr class="hover:bg-slate-50/50 transition-colors group">`;
-        bodyHtml += `<td class="p-3 text-center font-bold text-slate-700 border-r border-slate-200 sticky left-0 bg-white group-hover:bg-slate-50 z-10 shadow-[2px_0_4px_rgba(0,0,0,0.05)]">${member.name}</td>`;
+        bodyHtml += `<tr class="hover:bg-slate-50/50 transition-colors group h-24">`;
+        bodyHtml += `<td class="p-3 text-center font-bold text-slate-700 border-r border-b border-slate-200 sticky left-0 bg-white group-hover:bg-slate-50 z-10 shadow-[2px_0_4px_rgba(0,0,0,0.05)]">${member.name}</td>`;
         
         for (let i = 0; i < 7; i++) {
             let dateStr = weekDates[i];
@@ -832,7 +833,8 @@ function renderWhGrid() {
             
             let rawLogs = window.currentWorkLogs.filter(l => l.date === dateStr && l.authorName === member.name); 
             
-            bodyHtml += `<td class="p-1 border-r border-slate-100 align-top ${bgClass} wh-cell relative" data-date="${dateStr}" data-author="${member.name}" onmousedown="window.whCellMouseDown(event, this)" onmouseenter="window.whCellMouseEnter(event, this)">`;
+            // 💡 전체 셀 영역을 클릭하면 입력창이 열리도록 onclick 속성 적용
+            bodyHtml += `<td class="p-1.5 border-r border-b border-slate-200 align-top ${bgClass} wh-cell relative min-w-[140px] cursor-pointer hover:bg-indigo-50/30 transition-colors" data-date="${dateStr}" data-author="${member.name}" onmousedown="window.whCellMouseDown(event, this)" onmouseenter="window.whCellMouseEnter(event, this)" onclick="if(window.whDragDist < 5) window.openWhInputModal('${dateStr}', '${member.name}');">`;
             
             rawLogs.forEach(log => {
                 let isFilteredOut = !filteredLogs.includes(log);
@@ -840,12 +842,12 @@ function renderWhGrid() {
                 let confClass = log.isConfirmed ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-white border-slate-200 text-slate-700 hover:border-indigo-300';
                 let selClass = window.whSelectedCells.has(log.id) ? 'ring-2 ring-indigo-500 shadow-md transform scale-[1.02]' : '';
                 
-                bodyHtml += `<div class="p-1.5 rounded-lg border ${confClass} ${opacityClass} ${selClass} text-[10px] mb-1.5 cursor-pointer transition-all duration-200" data-logid="${log.id}" onclick="if(window.whDragDist < 5) window.openWhInputModal('${dateStr}', '${member.name}'); event.stopPropagation();">
+                bodyHtml += `<div class="p-1.5 rounded-lg border ${confClass} ${opacityClass} ${selClass} text-[10px] mb-1.5 transition-all duration-200" data-logid="${log.id}" onclick="event.stopPropagation(); if(window.whDragDist < 5) window.openWhInputModal('${dateStr}', '${member.name}');">
                     <div class="font-bold truncate text-[11px]" title="${log.projectName||''}"><span class="text-slate-400 font-medium mr-0.5">[${log.location||'사내'}]</span>${log.projectCode||'PJT미지정'}</div>
                     <div class="flex justify-between items-center mt-1 pt-1 border-t border-slate-100/50"><span class="font-medium text-slate-500">${log.workType}</span><span class="font-black text-indigo-600 bg-white/50 px-1.5 py-0.5 rounded shadow-sm">${log.hours}h</span></div>
                 </div>`;
             });
-            bodyHtml += `<div class="absolute inset-0 z-0 h-full w-full opacity-0 hover:opacity-100 cursor-pointer bg-indigo-50/50 flex items-center justify-center text-indigo-400 text-xl transition-opacity" onclick="if(window.whDragDist < 5) window.openWhInputModal('${dateStr}', '${member.name}')" style="${rawLogs.length > 0 ? 'display:none;' : ''}"><i class="fa-solid fa-plus"></i></div></td>`;
+            bodyHtml += `</td>`;
         }
         bodyHtml += `</tr>`;
     });
@@ -1191,12 +1193,14 @@ document.addEventListener('click', function(e) {
     }
 });
 
+// 💡 2. 평일 8시간 / 주말 6시간 제한 및 알림 처리
 window.saveWhInputData = async function() {
     const dateStr = document.getElementById('wh-modal-date').value;
     const authorName = document.getElementById('wh-modal-author').value;
     const rows = document.querySelectorAll('.wh-input-row');
     
     let toSave = [];
+    let totalHours = 0; // 💡 일일 총 입력 시간 저장 변수
 
     rows.forEach(tr => {
         const id = tr.querySelector('.row-id').value;
@@ -1226,8 +1230,22 @@ window.saveWhInputData = async function() {
                 isConfirmed, 
                 updatedAt: Date.now() 
             });
+            totalHours += hours; // 💡 시간 누적 합산
         }
     });
+
+    // 💡 저장 전 시간 제한 검증
+    if (dateStr) {
+        const d = new Date(dateStr);
+        const isWeekend = (d.getDay() === 0 || d.getDay() === 6); // 0:일요일, 6:토요일
+        const maxLimit = isWeekend ? 6 : 8;
+
+        if (totalHours > maxLimit) {
+            const dayType = isWeekend ? "주말" : "평일";
+            alert(`⚠️ 하루 최대 입력 가능 시간을 초과했습니다!\n\n- ${dayType} 최대 허용 시간: ${maxLimit}시간\n- 현재 총 입력 시간: ${totalHours}시간\n\n시간을 줄여서 다시 저장해주세요.`);
+            return; // 검증 실패 시 여기서 중단 (저장 안 됨)
+        }
+    }
 
     try {
         const batch = writeBatch(db);
@@ -1529,7 +1547,6 @@ window.handleWhPlanMonthChange = function(val) {
     window.loadMonthlyPlanViewer();
 };
 
-// 💡 개선 1: 인원(hc) 입력 시 MD 자동 동기화 로직 추가
 window.calcWhPlanRow = function(inputEl) {
     const tr = inputEl.closest('tr');
     
@@ -1601,7 +1618,6 @@ window.loadWhPlans = function() {
     }
 };
 
-// 💡 개선 2: 월간 조회 뷰어 (Monthly Viewer) 렌더링 로직
 window.loadMonthlyPlanViewer = function() {
     const monthVal = document.getElementById('wh-plan-month').value;
     if(!monthVal) return;
@@ -1623,7 +1639,6 @@ window.loadMonthlyPlanViewer = function() {
     const tbody = document.getElementById('wh-plan-tbody');
     tbody.innerHTML = '';
 
-    // 월간 데이터 취합 (상태가 'confirmed' 인 데이터만)
     const plansForMonth = window.currentWorkPlans.filter(p => weeks.includes(p.period) && p.status === 'confirmed');
     
     if (plansForMonth.length === 0) {
@@ -1631,7 +1646,6 @@ window.loadMonthlyPlanViewer = function() {
         return;
     }
 
-    // 프로젝트별(pjtCode 기준)로 데이터 병합
     let pjtAgg = {};
     plansForMonth.forEach(plan => {
         let code = plan.projectCode || '미분류';
@@ -1673,20 +1687,6 @@ window.loadMonthlyPlanViewer = function() {
     });
 
     tbody.innerHTML = bodyHtml;
-};
-
-// 특정 월에 속한 주차(week) 문자열 배열 반환 유틸리티 (필수)
-window.getWeeksInMonthForPlan = function(year, month) {
-    let weeks = new Set();
-    let d = new Date(year, month - 1, 1);
-    let lastDate = new Date(year, month, 0);
-    while(d <= lastDate) {
-        if(window.getWeekString) {
-            weeks.add(window.getWeekString(d));
-        }
-        d.setDate(d.getDate() + 1);
-    }
-    return Array.from(weeks).sort();
 };
 
 window.addWhPlanRow = function() {
@@ -1738,7 +1738,6 @@ function appendWhPlanRow(planData, weekDates) {
         let hcStr = hcVal > 0 ? hcVal : '';
         let mdStr = mdVal > 0 ? mdVal : '';
 
-        // data-prev-val 데이터 속성을 추가하여 이전 인원 값을 저장 (동기화 조건에 활용)
         cellsHtml += `
         <td class="p-1.5 border-r border-slate-100 bg-slate-50/20 group-hover:bg-indigo-50/30 transition-colors align-middle">
             <div class="flex flex-col gap-1 w-full max-w-[80px] mx-auto">
@@ -1836,14 +1835,6 @@ window.whSelectPlanPjt = function(inputId, pCode, pName) {
     if (drop) drop.classList.add('hidden');
 };
 
-document.addEventListener('click', function(e) {
-    const d = document.getElementById('wh-plan-pjt-autocomplete');
-    if (d && !d.classList.contains('hidden') && !e.target.closest('#wh-plan-pjt-autocomplete') && !e.target.closest('.plan-row-pjt')) {
-        d.classList.add('hidden');
-    }
-});
-
-// 💡 계획 저장 함수 (오직 주간 단위로만 저장)
 window.saveWhPlans = async function(targetStatus) {
     const currentPeriod = document.getElementById('wh-plan-week').value;
     const yearStr = currentPeriod.split('-')[0];
@@ -1888,15 +1879,14 @@ window.saveWhPlans = async function(targetStatus) {
     });
 
     try {
-        const batch = writeBatch(db);
+        const batch = window.writeBatch ? window.writeBatch(db) : await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(m => m.writeBatch(db));
         
-        // 해당 "주"의 기존 계획 삭제 후 덮어쓰기
-        const q = query(collection(db, "work_plans"), where("period", "==", currentPeriod));
-        const existingSnap = await getDocs(q);
+        const q = window.query(window.collection(db, "work_plans"), window.where("period", "==", currentPeriod));
+        const existingSnap = await window.getDocs(q);
         existingSnap.forEach(docSnap => batch.delete(docSnap.ref));
         
         toSave.forEach(data => {
-            const ref = doc(collection(db, "work_plans")); 
+            const ref = window.doc(window.collection(db, "work_plans")); 
             data.createdAt = Date.now();
             delete data.id; 
             batch.set(ref, data);
@@ -1905,10 +1895,10 @@ window.saveWhPlans = async function(targetStatus) {
         await batch.commit();
         window.showToast(targetStatus === 'confirmed' ? "계획이 확정되어 대시보드에 반영됩니다." : "임시 저장되었습니다.");
         
-        // 다시 로드하여 메인 대시보드 UI 갱신
-        fetchWorkPlansForContext(); 
+        window.fetchWorkPlansForContext(); 
         window.closeWhPlanModal();
     } catch(e) {
+        console.error(e);
         window.showToast("저장 실패", "error");
     }
 };
