@@ -729,7 +729,7 @@ window.openPurchaseModal = function(projectId, title) {
                 item.files.forEach(f => {
                     let isImg = f.name && f.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
                     if (isImg) {
-                        mediaHtml += `<img src="${f.url}" alt="${f.name}" class="max-h-40 rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.open('${f.url}', '_blank')">`;
+                        mediaHtml += `<img src="${f.url}" alt="${f.name}" class="max-h-40 rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.openImageViewer('${f.url}')">`;
                     } else {
                         filesHtml += `<a href="${f.url}" target="_blank" class="text-xs text-sky-500 font-bold underline w-fit flex items-center gap-1"><i class="fa-solid fa-file-arrow-down"></i> ${f.name}</a>`;
                     }
@@ -836,7 +836,7 @@ window.openDesignModal = function(projectId, title) {
                     if (isImg) {
                         let fileIdMatch = f.url.match(/\/d\/(.+?)\/view/);
                         let rawUrl = fileIdMatch ? `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}` : f.url;
-                        mediaHtml += `<img src="${rawUrl}" alt="${f.name}" class="max-h-40 rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.open('${f.url}', '_blank')">`;
+                        mediaHtml += `<img src="${rawUrl}" alt="${f.name}" class="max-h-40 rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.openImageViewer('${f.url}')">`;
                     } else {
                         filesHtml += `<a href="${f.url}" target="_blank" class="text-xs text-teal-500 font-bold underline w-fit flex items-center gap-1"><i class="fa-solid fa-file-arrow-down"></i> ${f.name}</a>`;
                     }
@@ -943,7 +943,7 @@ window.openPjtScheduleModal = function(projectId, title) {
                     if (isImg) {
                         let fileIdMatch = f.url.match(/\/d\/(.+?)\/view/);
                         let rawUrl = fileIdMatch ? `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}` : f.url;
-                        mediaHtml += `<img src="${rawUrl}" alt="${f.name}" class="max-h-40 rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.open('${f.url}', '_blank')">`;
+                        mediaHtml += `<img src="${rawUrl}" alt="${f.name}" class="max-h-40 rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.openImageViewer('${f.url}')">`;
                     } else {
                         filesHtml += `<a href="${f.url}" target="_blank" class="text-xs text-fuchsia-500 font-bold underline w-fit flex items-center gap-1"><i class="fa-solid fa-file-arrow-down"></i> ${f.name}</a>`;
                     }
@@ -1597,10 +1597,10 @@ window.renderDailyLogs = function(logs) {
             let safeContent = String(log.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             if(window.formatMentions) safeContent = window.formatMentions(safeContent);
             
-            // 다중 이미지 및 파일 렌더링
+            // 💡 이미지 팝업 연결 수정
             let mediaHtml = '';
             let filesHtml = '';
-            if (log.imageUrl) mediaHtml += `<img src="${log.imageUrl}" class="max-w-[200px] max-h-[200px] object-cover rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.open('${log.imageUrl}')">`;
+            if (log.imageUrl) mediaHtml += `<img src="${log.imageUrl}" class="max-w-[200px] max-h-[200px] object-cover rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.openImageViewer('${log.imageUrl}')">`;
             
             if (log.files && log.files.length > 0) {
                 log.files.forEach(f => {
@@ -1608,7 +1608,8 @@ window.renderDailyLogs = function(logs) {
                     if (isImg) {
                         let fileIdMatch = f.url.match(/\/d\/(.+?)\/view/);
                         let rawUrl = fileIdMatch ? `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}` : f.url;
-                        mediaHtml += `<img src="${rawUrl}" alt="${f.name}" class="max-w-[200px] max-h-[200px] object-cover rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.open('${f.url}', '_blank')">`;
+                        // 💡 이미지 팝업 연결 수정
+                        mediaHtml += `<img src="${rawUrl}" alt="${f.name}" class="max-w-[200px] max-h-[200px] object-cover rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.openImageViewer('${rawUrl}')">`;
                     } else {
                         filesHtml += `<a href="${f.url}" target="_blank" class="text-xs text-sky-500 font-bold underline flex items-center gap-1 w-fit"><i class="fa-solid fa-paperclip"></i> ${f.name}</a>`;
                     }
@@ -1817,7 +1818,8 @@ window.renderComments = function(topLevelComments) {
         topLevelComments.forEach(function(c) { 
             let safeContent = String(c.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             if(window.formatMentions) safeContent = window.formatMentions(safeContent);
-            const cImgHtml = c.imageUrl ? `<div class="mt-3 rounded-lg overflow-hidden border border-slate-200 w-fit max-w-[300px]"><img src="${c.imageUrl}" class="w-full h-auto cursor-pointer" onclick="window.open('${c.imageUrl}')"></div>` : ''; 
+            // 💡 이미지 팝업 연결 수정
+            const cImgHtml = c.imageUrl ? `<div class="mt-3 rounded-lg overflow-hidden border border-slate-200 w-fit max-w-[300px]"><img src="${c.imageUrl}" class="w-full h-auto cursor-pointer" onclick="window.openImageViewer('${c.imageUrl}')"></div>` : ''; 
             let repliesHtml = ''; 
             
             if(c.replies && c.replies.length > 0) { 
@@ -1825,7 +1827,8 @@ window.renderComments = function(topLevelComments) {
                 c.replies.forEach(function(r) { 
                     let safeReplyContent = String(r.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>'); 
                     if(window.formatMentions) safeReplyContent = window.formatMentions(safeReplyContent); 
-                    const rImgHtml = r.imageUrl ? `<div class="mt-2 rounded-lg overflow-hidden border border-slate-200 w-fit max-w-[200px]"><img src="${r.imageUrl}" class="w-full h-auto cursor-pointer" onclick="window.open('${r.imageUrl}')"></div>` : ''; 
+                    // 💡 이미지 팝업 연결 수정
+                    const rImgHtml = r.imageUrl ? `<div class="mt-2 rounded-lg overflow-hidden border border-slate-200 w-fit max-w-[200px]"><img src="${r.imageUrl}" class="w-full h-auto cursor-pointer" onclick="window.openImageViewer('${r.imageUrl}')"></div>` : ''; 
                     
                     let replyBtnHtml = '';
                     if (r.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin') {
@@ -2428,7 +2431,7 @@ window.showAutocomplete = function(inputEl, targetId1, targetId2, isNameSearch) 
     if(!dropdown) { 
         dropdown = document.createElement('ul'); 
         dropdown.id = 'pjt-autocomplete-dropdown'; 
-        dropdown.className = 'absolute z-[9999] bg-white border border-indigo-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-full custom-scrollbar py-1'; 
+        dropdown.className = 'absolute z-[9999] bg-white border border-indigo-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-full custom-scrollbar py-1 mt-1'; 
         document.body.appendChild(dropdown); 
     }
     
@@ -2638,3 +2641,5 @@ window.renderNcrList = function(pjtCode) {
                 </tr>`;
     }).join('');
 };
+
+}
