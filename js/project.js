@@ -481,7 +481,7 @@ window.renderProjectStatusList = function() {
 };
 
 // ==========================================
-// 💡 [새로 추가된 로직] PJT 완료보고 송부 
+// 💡 PJT 완료보고 송부 
 // ==========================================
 window.openCrReqModal = function(id, title) {
     document.getElementById('cr-req-pjt-id').value = id;
@@ -549,7 +549,7 @@ window.submitCrReq = async function() {
             updatedAt: Date.now() 
         });
 
-        // 3. 품질 완료보고 데이터 생성 (project_completion_reports)
+        // 3. 품질 완료보고 데이터 생성
         const crRef = doc(collection(db, "project_completion_reports"));
         const crLessons = [];
         if(goodTxt) crLessons.push({ type: 'Good', category: '제작', item: '제조팀 코멘트', highlight: goodTxt, lowlight: '' });
@@ -569,7 +569,7 @@ window.submitCrReq = async function() {
             updatedAt: Date.now()
         });
 
-        // 4. Product Cost 리스트에 데이터 추가 (product_costs)
+        // 4. Product Cost 리스트 추가
         const costRef = doc(collection(db, "product_costs"));
         batch.set(costRef, {
             projectId: pId,
@@ -579,7 +579,7 @@ window.submitCrReq = async function() {
         
         await batch.commit();
 
-        // 5. 메일 알림 전송 (품질팀, 구매팀 등에게)
+        // 5. 메일 알림 전송 (품질팀, 구매팀)
         if (window.notifyUser) {
             const title = pjtData.name || '알수없는 프로젝트';
             const msg = `[${title}] 제조 완료 및 품질 완료보고 요청이 접수되었습니다.\n\nGood Point:\n${goodTxt}\n\nBad Point:\n${badTxt}`;
@@ -627,7 +627,7 @@ window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
     }
 };
 
-// 💡 수정된 다중파일 업로드 유틸 (file 객체를 직접 받음)
+// 💡 수정된 다중파일 업로드 유틸
 async function handleDriveUploadWithProgress(file, projectName, subFolderName = null) {
     if(!window.googleAccessToken) {
         if(window.initGoogleAPI) window.initGoogleAPI();
@@ -721,7 +721,6 @@ window.openPurchaseModal = function(projectId, title) {
             let safeContent = String(item.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             if(window.formatMentions) safeContent = window.formatMentions(safeContent);
             
-            // 다중 첨부파일 렌더링
             let filesHtml = '';
             let mediaHtml = '';
             if (item.fileUrl) filesHtml += `<a href="${item.fileUrl}" target="_blank" class="text-xs text-sky-500 font-bold underline w-fit flex items-center gap-1"><i class="fa-solid fa-paperclip"></i> 첨부 일정표 확인</a>`;
@@ -730,9 +729,7 @@ window.openPurchaseModal = function(projectId, title) {
                 item.files.forEach(f => {
                     let isImg = f.name && f.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
                     if (isImg) {
-                        let fileIdMatch = f.url.match(/\/d\/(.+?)\/view/);
-                        let rawUrl = fileIdMatch ? `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}` : f.url;
-                        mediaHtml += `<img src="${rawUrl}" alt="${f.name}" class="max-h-40 rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.open('${f.url}', '_blank')">`;
+                        mediaHtml += `<img src="${f.url}" alt="${f.name}" class="max-h-40 rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.open('${f.url}', '_blank')">`;
                     } else {
                         filesHtml += `<a href="${f.url}" target="_blank" class="text-xs text-sky-500 font-bold underline w-fit flex items-center gap-1"><i class="fa-solid fa-file-arrow-down"></i> ${f.name}</a>`;
                     }
@@ -1683,6 +1680,13 @@ window.saveDailyLogItem = async function() {
             payload.createdAt = Date.now(); 
             await addDoc(collection(db, "daily_logs"), payload); 
             window.showToast("일지가 등록되었습니다."); 
+            
+            let notified = [];
+            if(window.processMentions) {
+                notified = await window.processMentions(content, projectId, "생산일지"); 
+            }
+            
+            // 💡 자동 발송 로직 삭제됨
         } 
         
         await setDoc(doc(db, "projects_status", projectId), { 
@@ -1690,15 +1694,6 @@ window.saveDailyLogItem = async function() {
             purchaseRate: purchaseRateVal 
         }, { merge: true }); 
         
-        let notified = [];
-        if(window.processMentions) {
-            notified = await window.processMentions(content, projectId, "생산일지"); 
-        }
-        
-        if (proj && proj.manager && proj.manager !== window.userProfile.name && (!notified || !notified.includes(proj.manager))) {
-            if(window.notifyUser) await window.notifyUser(proj.manager, content, projectId, "새 생산일지");
-        }
-
         window.resetDailyLogForm(); 
     } catch(e) { 
         window.showToast("저장 중 오류 발생", "error"); 
@@ -1919,12 +1914,7 @@ window.saveCommentItem = async function() {
                     notified = await window.processMentions(content, projectId, "코멘트");
                 }
                 
-                const proj = window.currentProjectStatusList.find(p => p.id === projectId);
-                if (proj && proj.manager && proj.manager !== window.userProfile.name && (!notified || !notified.includes(proj.manager))) {
-                    if(window.notifyUser) {
-                        await window.notifyUser(proj.manager, content, projectId, "PJT 코멘트");
-                    }
-                }
+                // 💡 자동 발송 로직 삭제됨
             } 
             
             if(window.cancelCommentAction) {
@@ -2118,12 +2108,7 @@ window.saveIssueItem = async function() {
             if(window.processMentions) {
                 notified = await window.processMentions(content, projectId, "이슈");
             }
-            const proj = window.currentProjectStatusList.find(p => p.id === projectId);
-            if (proj && proj.manager && proj.manager !== window.userProfile.name && (!notified || !notified.includes(proj.manager))) {
-                if(window.notifyUser) {
-                    await window.notifyUser(proj.manager, content, projectId, "PJT 이슈");
-                }
-            }
+            // 💡 자동 발송 로직 삭제됨
         } 
         document.getElementById('editing-issue-id').value = ''; 
         document.getElementById('new-issue-text').value = ''; 
@@ -2283,12 +2268,7 @@ window.saveMdLogItem = async function() {
             if(window.processMentions) {
                 notified = await window.processMentions(desc, projectId, "투입MD기록");
             }
-            const proj = window.currentProjectStatusList.find(p => p.id === projectId);
-            if (proj && proj.manager && proj.manager !== window.userProfile.name && (!notified || !notified.includes(proj.manager))) {
-                if(window.notifyUser) {
-                    await window.notifyUser(proj.manager, desc, projectId, "투입MD기록");
-                }
-            }
+            // 💡 자동 발송 로직 삭제됨 (요청 반영)
         } 
         
         await window.updateProjectTotalMd(projectId); 
