@@ -1,9 +1,115 @@
 <div class="space-y-6 max-w-[1600px] mx-auto pb-10">
-    <h2 class="text-xl font-black text-slate-800 flex items-center gap-2 mb-4">
-        <i class="fa-solid fa-sack-dollar text-amber-500"></i> 제조 Cost (구매 현황판)
-    </h2>
-    <div class="bg-white p-10 rounded-3xl shadow-sm border border-slate-200 text-center">
-        <i class="fa-solid fa-person-digging text-4xl text-slate-300 mb-4"></i>
-        <p class="text-slate-500 font-bold">화면 및 기능 준비 중입니다...</p>
+    <div class="flex flex-col md:flex-row justify-between items-end gap-4 border-b border-slate-200 pb-4">
+        <div>
+            <h2 class="text-xl font-black text-slate-800 flex items-center gap-2">
+                <div class="w-10 h-10 bg-amber-50 text-amber-500 rounded-xl flex items-center justify-center shadow-inner">
+                    <i class="fa-solid fa-sack-dollar text-xl"></i>
+                </div>
+                제조 Cost 관리
+            </h2>
+            <p class="text-xs text-slate-500 mt-2 font-bold">프로젝트별 소모품 및 외주 가공 비용 통합 관리</p>
+        </div>
+        
+        <div class="flex items-center gap-2 flex-wrap">
+            <select id="mfg-cost-part-filter" onchange="window.filterMfgCostData()" class="bg-white border border-slate-200 shadow-sm px-3 py-2 rounded-xl text-sm font-bold text-slate-700 outline-none cursor-pointer hover:border-amber-300 transition-colors">
+                <option value="all">전체 파트</option>
+                <option value="제조">제조</option>
+                <option value="광학">광학</option>
+            </select>
+            
+            <div class="flex items-center gap-2 bg-white border border-slate-200 shadow-sm px-3 py-1.5 rounded-xl focus-within:border-amber-400 transition-colors">
+                <i class="fa-solid fa-calendar-day text-slate-400"></i>
+                <label class="text-xs font-bold text-slate-600 ml-1">조회 기간</label>
+                <input type="month" id="mfg-cost-month-filter" class="px-2 py-1 border-0 text-sm font-black text-amber-700 bg-transparent outline-none cursor-pointer" onchange="window.filterMfgCostData()">
+            </div>
+
+            <div class="relative w-full sm:w-64">
+                <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                <input type="text" id="mfg-cost-search-pjt" placeholder="PJT 코드/명 (초성검색)..." class="w-full border border-slate-300 rounded-xl pl-8 pr-3 py-2 text-sm font-bold text-slate-600 outline-amber-500 shadow-sm bg-white focus:ring-2 focus:ring-amber-100 transition-all" oninput="window.mfgCostShowPjtAuto(this); window.filterMfgCostData();" autocomplete="off">
+                <ul id="mfg-cost-pjt-autocomplete" class="hidden absolute z-[50] bg-white border border-amber-200 shadow-xl rounded-2xl max-h-60 overflow-y-auto text-sm w-full custom-scrollbar py-2 mt-2 top-full left-0"></ul>
+            </div>
+            
+            <button onclick="window.resetMfgCostFilters()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded-xl text-xs font-bold transition-colors shadow-sm">
+                초기화
+            </button>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-2">
+        <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-amber-500">
+            <div class="flex justify-between items-start mb-1"><span class="text-[11px] font-bold text-slate-500">해당 기간 총 지출액</span><i class="fa-solid fa-coins text-amber-200 text-lg"></i></div>
+            <p class="text-2xl font-black text-amber-600 leading-tight truncate"><span id="mfg-dash-total-cost">0</span><span class="text-sm text-slate-400 ml-1">원</span></p>
+        </div>
+        <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-rose-400">
+            <div class="flex justify-between items-start mb-1"><span class="text-[11px] font-bold text-slate-500">최다 지출 프로젝트</span><i class="fa-solid fa-arrow-trend-up text-rose-200 text-lg"></i></div>
+            <p class="text-lg font-black text-slate-700 leading-tight truncate mt-1" id="mfg-dash-top-pjt">-</p>
+            <p class="text-[10px] font-bold text-rose-500 mt-1 truncate"><span id="mfg-dash-top-cost">0</span> 원</p>
+        </div>
+        <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-indigo-400">
+            <div class="flex justify-between items-start mb-1"><span class="text-[11px] font-bold text-slate-500">지출 발생 건수</span><i class="fa-solid fa-receipt text-indigo-200 text-lg"></i></div>
+            <p class="text-2xl font-black text-indigo-600 leading-tight"><span id="mfg-dash-total-count">0</span><span class="text-sm text-slate-400 ml-1">건</span></p>
+        </div>
+        <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-[4px] border-l-emerald-400">
+            <div class="flex justify-between items-start mb-1"><span class="text-[11px] font-bold text-slate-500">항목당 평균 지출</span><i class="fa-solid fa-calculator text-emerald-200 text-lg"></i></div>
+            <p class="text-2xl font-black text-emerald-600 leading-tight truncate"><span id="mfg-dash-avg-cost">0</span><span class="text-sm text-slate-400 ml-1">원</span></p>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-3xl shadow-sm border border-blue-200 overflow-hidden flex flex-col">
+        <div class="px-6 py-4 border-b border-blue-100 flex justify-between items-center bg-blue-50/30">
+            <h3 class="font-extrabold text-blue-800 text-sm flex items-center gap-2">
+                <i class="fa-solid fa-list-check text-blue-500"></i> 
+                품목별 상세 지출 내역 <span id="mfg-table-pjt-label" class="text-indigo-600 ml-1"></span>
+            </h3>
+            <span class="text-[10px] font-bold text-slate-400 bg-white px-2 py-1 rounded shadow-sm border border-slate-200">발생한 모든 지출(품목, 규격, 수량, 금액)을 기록합니다.</span>
+        </div>
+        
+        <div class="overflow-x-auto custom-scrollbar flex-1 bg-white">
+            <table class="w-full text-left border-collapse text-xs whitespace-nowrap">
+                <thead class="bg-slate-50 text-slate-500 sticky top-0 border-b border-slate-200 shadow-sm z-10">
+                    <tr>
+                        <th class="p-3 font-bold text-center w-28">지출일</th>
+                        <th class="p-3 font-bold text-center text-indigo-600 w-32">PJT 코드</th>
+                        <th class="p-3 font-bold text-center w-32">지출 구분</th>
+                        <th class="p-3 font-bold min-w-[200px]">품목명 (규격 포함)</th>
+                        <th class="p-3 font-bold text-center w-20">수량</th>
+                        <th class="p-3 font-bold text-center text-blue-600 w-32">금액 (원)</th>
+                        <th class="p-3 font-bold min-w-[150px]">용도 / 비고</th>
+                        <th class="p-3 font-bold text-center w-16">관리</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <tr class="bg-indigo-50/30 border-b-2 border-indigo-100">
+                        <td class="p-2"><input type="date" id="new-mfg-date" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-indigo-500 font-bold text-slate-600 cursor-pointer"></td>
+                        <td class="p-2 relative">
+                            <input type="text" id="new-mfg-pjt" placeholder="PJT 검색" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-indigo-500 font-bold text-indigo-700" oninput="window.mfgCostShowInputPjtAuto(this)" autocomplete="off">
+                            <input type="hidden" id="new-mfg-pjt-name">
+                            <ul id="mfg-input-pjt-autocomplete" class="hidden absolute z-[9999] bg-white border border-indigo-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-48 custom-scrollbar py-1 mt-1 left-2"></ul>
+                        </td>
+                        <td class="p-2">
+                            <select id="new-mfg-category" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-indigo-500 font-bold text-slate-600 cursor-pointer bg-white">
+                                <option value="공압자재">공압자재</option>
+                                <option value="볼트/부자재">볼트/부자재</option>
+                                <option value="차량/물류">차량/물류</option>
+                                <option value="포장자재">포장자재</option>
+                                <option value="외주가공">외주가공</option>
+                                <option value="기타">기타</option>
+                            </select>
+                        </td>
+                        <td class="p-2"><input type="text" id="new-mfg-item" placeholder="품목명 및 규격 입력" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-indigo-500 font-bold text-slate-700"></td>
+                        <td class="p-2"><input type="text" id="new-mfg-qty" placeholder="예: 10 Box" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-indigo-500 font-bold text-center text-slate-600"></td>
+                        <td class="p-2"><input type="number" id="new-mfg-amount" placeholder="0" class="w-full border border-indigo-300 bg-indigo-50 rounded px-2 py-1.5 text-xs outline-indigo-500 font-black text-right text-indigo-600" onkeydown="if(event.key==='Enter') window.saveMfgCost()"></td>
+                        <td class="p-2"><input type="text" id="new-mfg-memo" placeholder="용도 기재" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-indigo-500 font-bold text-slate-600" onkeydown="if(event.key==='Enter') window.saveMfgCost()"></td>
+                        <td class="p-2 text-center"><button onclick="window.saveMfgCost()" class="bg-blue-600 hover:bg-blue-700 text-white w-full py-1.5 rounded text-[11px] font-bold shadow-sm transition-colors">저장</button></td>
+                    </tr>
+                </tbody>
+                <tbody id="mfg-cost-tbody" class="divide-y divide-slate-100 text-slate-700"></tbody>
+            </table>
+        </div>
+        
+        <div class="px-6 py-4 border-t border-blue-100 bg-blue-50/20 flex justify-center items-center gap-4">
+            <span class="text-xs font-bold text-slate-600">현재까지 조회된 PJT 지출 총계 :</span>
+            <span class="text-xl font-black text-blue-700"><span id="mfg-table-total-cost">0</span> 원</span>
+        </div>
     </div>
 </div>
