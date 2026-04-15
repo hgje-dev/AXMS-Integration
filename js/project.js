@@ -145,7 +145,6 @@ window.filterByStatusOnly = function(status) {
     window.filterProjectStatus(status);
 };
 
-// 💡 새로 추가된 당월 완료건 필터 함수!
 window.filterByCompletedThisMonth = function() {
     window.currentCategoryFilter = 'all'; 
     window.currentYearFilter = ''; 
@@ -366,7 +365,6 @@ window.renderProjectStatusList = function() {
         return; 
     }
     
-    // 💡 진행중(제작) 글씨 짤림 방지 및 텍스트 수정 완료!
     const statusMap = { 
         'pending': '<span class="text-slate-500 bg-slate-100 px-2 py-0.5 rounded shadow-sm border border-slate-200 whitespace-nowrap">대기/보류</span>', 
         'progress': '<span class="text-blue-600 bg-blue-50 px-2 py-0.5 rounded shadow-sm border border-blue-200 whitespace-nowrap">진행(제작)</span>', 
@@ -460,7 +458,30 @@ window.renderProjectStatusList = function() {
     tbody.innerHTML = htmlStr;
 };
 
-async function handleDriveUploadWithProgress(fileInput, projectName) {
+window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
+    if (!window.googleAccessToken) return null;
+    const safeFolderName = folderName ? folderName.replace(/[\/\\]/g, '_') : '미분류 프로젝트';
+    const query = `name='${safeFolderName}' and mimeType='application/vnd.google-apps.folder' and '${parentFolderId}' in parents and trashed=false`;
+    
+    const findRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}`, {
+        headers: { 'Authorization': 'Bearer ' + window.googleAccessToken }
+    });
+    const folderData = await findRes.json();
+    
+    if (folderData.files && folderData.files.length > 0) {
+        return folderData.files[0].id;
+    } else {
+        const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: safeFolderName, mimeType: 'application/vnd.google-apps.folder', parents: [parentFolderId] })
+        });
+        const newFolderData = await createRes.json();
+        return newFolderData.id;
+    }
+};
+
+async function handleDriveUploadWithProgress(fileInput, projectName, subFolderName = null) {
     if(!window.googleAccessToken) {
         if(window.initGoogleAPI) window.initGoogleAPI();
         if(window.authenticateGoogle && !window.googleAccessToken) window.authenticateGoogle();
@@ -470,23 +491,12 @@ async function handleDriveUploadWithProgress(fileInput, projectName) {
     const file = fileInput.files[0];
     if (!file) throw new Error("파일이 없습니다.");
 
-    const safeProjectName = projectName ? projectName.replace(/[\/\\]/g, '_') : '미분류 프로젝트';
-    const findFolderRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${encodeURIComponent(safeProjectName)}' and mimeType='application/vnd.google-apps.folder' and '${TARGET_DRIVE_FOLDER}' in parents and trashed=false`, {
-        headers: { 'Authorization': 'Bearer ' + window.googleAccessToken }
-    });
-    const folderData = await findFolderRes.json();
-    
-    let targetFolderId = '';
-    if (folderData.files && folderData.files.length > 0) {
-        targetFolderId = folderData.files[0].id;
-    } else {
-        const createFolderRes = await fetch('https://www.googleapis.com/drive/v3/files', {
-            method: 'POST',
-            headers: { 'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: safeProjectName, mimeType: 'application/vnd.google-apps.folder', parents: [TARGET_DRIVE_FOLDER] })
-        });
-        const newFolderData = await createFolderRes.json();
-        targetFolderId = newFolderData.id;
+    let targetFolderId = await window.getOrCreateDriveFolder(projectName, TARGET_DRIVE_FOLDER);
+    if (!targetFolderId) throw new Error("프로젝트 폴더를 생성/조회할 수 없습니다.");
+
+    if (subFolderName) {
+        const subFolderId = await window.getOrCreateDriveFolder(subFolderName, targetFolderId);
+        if (subFolderId) targetFolderId = subFolderId;
     }
 
     const progressModal = document.getElementById('upload-progress-modal');
@@ -609,7 +619,7 @@ window.savePurchaseItem = async function() {
     btn.innerHTML = '저장중..'; btn.disabled = true;
     try { 
         let fileUrl = null; 
-        if(fileInput.files.length > 0) fileUrl = await handleDriveUploadWithProgress(fileInput, folderName);
+        if(fileInput.files.length > 0) fileUrl = await handleDriveUploadWithProgress(fileInput, folderName, '구매');
         await addDoc(collection(db, "project_purchases"), { projectId: pId, content: content, fileUrl: fileUrl, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
         window.showToast("구매 내역이 등록되었습니다."); 
         window.resetPurchaseForm(); 
@@ -692,7 +702,7 @@ window.saveDesignItem = async function() {
     btn.innerHTML = '저장중..'; btn.disabled = true;
     try { 
         let fileUrl = null; 
-        if(fileInput.files.length > 0) fileUrl = await handleDriveUploadWithProgress(fileInput, folderName);
+        if(fileInput.files.length > 0) fileUrl = await handleDriveUploadWithProgress(fileInput, folderName, '설계');
         await addDoc(collection(db, "project_designs"), { projectId: pId, content: content, fileUrl: fileUrl, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
         window.showToast("설계 내역이 등록되었습니다."); 
         window.resetDesignForm(); 
@@ -775,7 +785,7 @@ window.savePjtScheduleItem = async function() {
     btn.innerHTML = '저장중..'; btn.disabled = true;
     try { 
         let fileUrl = null; 
-        if(fileInput.files.length > 0) fileUrl = await handleDriveUploadWithProgress(fileInput, folderName);
+        if(fileInput.files.length > 0) fileUrl = await handleDriveUploadWithProgress(fileInput, folderName, '일정');
         await addDoc(collection(db, "project_schedules"), { projectId: pId, content: content, fileUrl: fileUrl, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
         window.showToast("PJT 일정 내역이 등록되었습니다."); 
         window.resetPjtScheduleForm(); 
@@ -939,6 +949,12 @@ window.saveProjStatus = async function(btn) {
             data.currentMd = 0; 
             await addDoc(collection(db, "projects_status"), data); 
             window.showToast("등록되었습니다."); 
+            
+            if (window.googleAccessToken) {
+                const folderName = data.code ? data.code : data.name;
+                window.getOrCreateDriveFolder(folderName, TARGET_DRIVE_FOLDER)
+                    .catch(e => console.warn("프로젝트 메인 폴더 자동 생성 실패", e));
+            }
         } 
         
         window.closeProjStatusWriteModal(); 
