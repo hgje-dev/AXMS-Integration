@@ -26,7 +26,12 @@ window.tempUserUid = "";
 
 const googleProvider = new GoogleAuthProvider();
 
-// 💡 1. 구글 로그인 실행 (사내 도메인 제한 적용)
+// 💡 로그인 시점에 드라이브, 지메일, 시트 연동 권한(Scope)을 한 번에 요청합니다!
+googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
+googleProvider.addScope('https://www.googleapis.com/auth/gmail.send');
+googleProvider.addScope('https://www.googleapis.com/auth/spreadsheets.readonly');
+
+// 💡 1. 구글 로그인 실행 (사내 도메인 제한 및 토큰 추출 적용)
 window.googleLogin = async () => {
     const err = document.getElementById('login-error');
     if(err) err.classList.add('hidden');
@@ -46,6 +51,14 @@ window.googleLogin = async () => {
                 err.classList.remove('hidden');
             }
             return; // 여기서 로직 종료
+        }
+
+        // 💡 로그인 성공 시, OAuth 토큰을 추출하여 로컬 저장소에 저장 (구글 API 연동 자동화)
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        if (credential && credential.accessToken) {
+            window.googleAccessToken = credential.accessToken;
+            localStorage.setItem('axmsGoogleTokenV2', credential.accessToken);
+            localStorage.setItem('axmsGoogleTokenExpiryV2', Date.now() + 3500 * 1000); // 약 1시간 유효
         }
 
         // DB에 기존 유저인지 확인
@@ -411,7 +424,6 @@ window.updateUserPerm = async (uid, key, val) => {
     try { const uR = doc(db, "users", uid); const uD = await getDoc(uR); if (uD.exists()) { let p = uD.data().permissions || {}; p[key] = val; await setDoc(uR, { permissions: p }, { merge: true }); if(window.showToast) window.showToast("권한이 업데이트되었습니다."); } } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } 
 };
 
-// 💡 5-1. 관리자의 사용자 가입 승인 (알림/메일 발송 제거)
 window.approveUser = async (uid) => {
     try {
         await setDoc(doc(db, "users", uid), { role: 'user' }, { merge: true });
