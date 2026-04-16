@@ -150,13 +150,10 @@ window.filterByStatusOnly = function(status) {
     
     const cSelect = document.getElementById('filter-category-select'); 
     if(cSelect) cSelect.value = 'all';
-    
     const ySelect = document.getElementById('filter-year-select'); 
     if(ySelect) ySelect.value = '';
-    
     const mSelect = document.getElementById('filter-month-select'); 
     if(mSelect) mSelect.value = '';
-    
     const hCb = document.getElementById('hide-completed-cb'); 
     if(hCb) hCb.checked = false;
     
@@ -174,15 +171,8 @@ window.filterByCompletedThisMonth = function() {
     
     const cSelect = document.getElementById('filter-category-select'); 
     if(cSelect) cSelect.value = 'all';
-    
-    const ySelect = document.getElementById('filter-year-select'); 
-    if(ySelect) ySelect.value = '';
-    
     const mSelect = document.getElementById('filter-month-select'); 
     if(mSelect) mSelect.value = currentMonthStr;
-    
-    const hCb = document.getElementById('hide-completed-cb'); 
-    if(hCb) hCb.checked = false;
     
     window.filterProjectStatus('completed');
 };
@@ -233,11 +223,9 @@ window.toggleHideCompleted = function(checked) {
 
 window.getFilteredProjects = function() {
     let list = window.currentProjectStatusList || [];
-    
     if (window.currentCategoryFilter && window.currentCategoryFilter !== 'all') {
         list = list.filter(item => getSafeString(item.category) === window.currentCategoryFilter);
     }
-    
     if (window.currentStatusFilter && window.currentStatusFilter !== 'all') { 
         list = list.filter(item => { 
             if (window.currentStatusFilter === 'progress') {
@@ -246,19 +234,15 @@ window.getFilteredProjects = function() {
             return item.status === window.currentStatusFilter; 
         }); 
     }
-    
     if (window.hideCompletedFilter) {
         list = list.filter(item => item.status !== 'completed');
     }
-    
     if (window.currentYearFilter) {
         list = list.filter(item => (item.d_shipEn || '').startsWith(window.currentYearFilter) || (item.d_asmEst || '').startsWith(window.currentYearFilter) || (item.d_asmEn || '').startsWith(window.currentYearFilter));
     }
-    
     if (window.currentMonthFilter) {
         list = list.filter(item => (item.d_shipEn || '').startsWith(window.currentMonthFilter) || (item.d_asmEst || '').startsWith(window.currentMonthFilter) || (item.d_asmEn || '').startsWith(window.currentMonthFilter));
     }
-    
     const priority = { 'pending': 1, 'progress': 2, 'inspecting': 2, 'rejected': 3, 'completed': 4 };
     list.sort((a,b) => (priority[a.status] || 99) - (priority[b.status] || 99) || getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
     return list;
@@ -485,8 +469,54 @@ window.renderProjectStatusList = function() {
 };
 
 // ==========================================
-// 💡 PJT 완료보고 송부 
+// 💡 엑스박스 방지, 안전한 이미지 렌더러
 // ==========================================
+window.generateMediaHtml = function(filesArray) {
+    if (!filesArray || filesArray.length === 0) return '';
+    let mediaHtml = '';
+    let filesHtml = '';
+    
+    filesArray.forEach(f => {
+        let isImg = false;
+        if (f.name && f.name.match(/\.(jpeg|jpg|gif|png|webp|bmp|heic|heif)$/i)) isImg = true;
+        if (f.url && f.url.startsWith('data:image')) isImg = true;
+        if (f.thumbBase64 && f.thumbBase64.startsWith('data:image')) isImg = true;
+
+        if (isImg) {
+            let viewUrl = f.url;
+            let fileIdMatch = f.url ? f.url.match(/\/d\/(.+?)\/view/) : null;
+            
+            if (fileIdMatch) {
+                // 구글 드라이브 전용 뷰어 링크 (클릭 시 새 창)
+                viewUrl = `https://drive.google.com/file/d/${fileIdMatch[1]}/view`;
+            }
+
+            if (f.thumbBase64 && f.thumbBase64.startsWith('data:image')) {
+                // 고속 썸네일(Base64)이 있는 경우 가장 안전하게 렌더링
+                mediaHtml += `<img src="${f.thumbBase64}" alt="${f.name || '이미지'}" class="max-w-[200px] max-h-[200px] object-cover rounded-lg border border-slate-200 shadow-sm cursor-pointer hover:opacity-80 transition-opacity" onclick="window.openImageViewer('${viewUrl}')">`;
+            } else if (f.url && f.url.startsWith('data:image')) {
+                mediaHtml += `<img src="${f.url}" alt="${f.name || '이미지'}" class="max-w-[200px] max-h-[200px] object-cover rounded-lg border border-slate-200 shadow-sm cursor-pointer hover:opacity-80 transition-opacity" onclick="window.openImageViewer('${f.url}')">`;
+            } else if (fileIdMatch) {
+                // 과거 데이터(Base64 썸네일이 없고 드라이브 링크만 있는 경우) 엑스박스 방지를 위해 버튼으로 렌더링
+                mediaHtml += `<div onclick="window.openImageViewer('${viewUrl}')" class="w-32 h-24 bg-slate-100 rounded-lg border border-slate-200 shadow-sm flex flex-col items-center justify-center cursor-pointer hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 transition-all text-slate-500" title="${f.name || '이미지 보기'}">
+                    <i class="fa-regular fa-image text-3xl mb-2"></i>
+                    <span class="text-[10px] font-bold truncate w-24 text-center px-1">사진 보기</span>
+                </div>`;
+            } else {
+                mediaHtml += `<img src="${f.url}" alt="${f.name || '이미지'}" class="max-w-[200px] max-h-[200px] object-cover rounded-lg border border-slate-200 shadow-sm cursor-pointer hover:opacity-80 transition-opacity" onclick="window.openImageViewer('${f.url}')">`;
+            }
+        } else {
+            filesHtml += `<a href="${f.url}" target="_blank" class="text-xs text-sky-500 font-bold underline flex items-center gap-1 w-fit"><i class="fa-solid fa-file-arrow-down"></i> ${f.name}</a>`;
+        }
+    });
+
+    let result = '';
+    if (mediaHtml) result += `<div class="flex flex-wrap gap-2 mt-3">${mediaHtml}</div>`;
+    if (filesHtml) result += `<div class="flex flex-col gap-1 mt-2">${filesHtml}</div>`;
+    return result;
+};
+
+
 window.openCrReqModal = function(id, title) {
     document.getElementById('cr-req-pjt-id').value = id;
     document.getElementById('cr-req-project-title').innerText = title;
@@ -625,7 +655,6 @@ window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
     }
 };
 
-// 💡 1. 개선된 다중 파일 순차 업로드 엔진
 async function handleDriveUploadWithProgress(file, projectName, subFolderName = null, fileIndex = 1, totalFiles = 1) {
     if(!window.googleAccessToken) {
         if(window.initGoogleAPI) window.initGoogleAPI();
@@ -713,38 +742,6 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
     });
 }
 
-// 💡 2. 엑스박스 완벽 방지, 썸네일 고화질 매핑 HTML 렌더러
-window.generateMediaHtml = function(filesArray) {
-    if (!filesArray || filesArray.length === 0) return '';
-    let mediaHtml = '';
-    let filesHtml = '';
-    
-    filesArray.forEach(f => {
-        let isImg = f.name && f.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
-        if (isImg) {
-            let thumbUrl = f.thumbBase64 ? f.thumbBase64 : f.url;
-            let viewUrl = f.url;
-            
-            // 구글 드라이브 파일일 경우 고품질 썸네일 및 뷰어 추출
-            let fileIdMatch = f.url.match(/\/d\/(.+?)\/view/);
-            if (fileIdMatch) {
-                if(!f.thumbBase64) thumbUrl = `https://drive.google.com/thumbnail?id=${fileIdMatch[1]}&sz=w600`;
-                viewUrl = `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}`;
-            }
-            
-            mediaHtml += `<img src="${thumbUrl}" alt="${f.name}" class="max-w-[200px] max-h-[200px] object-cover rounded-lg border border-slate-200 shadow-sm cursor-pointer hover:opacity-80 transition-opacity" onclick="window.openImageViewer('${viewUrl}')">`;
-        } else {
-            filesHtml += `<a href="${f.url}" target="_blank" class="text-xs text-sky-500 font-bold underline flex items-center gap-1 w-fit"><i class="fa-solid fa-file-arrow-down"></i> ${f.name}</a>`;
-        }
-    });
-
-    let result = '';
-    if (mediaHtml) result += `<div class="flex flex-wrap gap-2 mt-2">${mediaHtml}</div>`;
-    if (filesHtml) result += `<div class="flex flex-col gap-1 mt-1">${filesHtml}</div>`;
-    return result;
-};
-
-
 // ==========================================
 // 💡 구매 관리
 // ==========================================
@@ -772,7 +769,6 @@ window.openPurchaseModal = function(projectId, title) {
             let safeContent = String(item.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             if(window.formatMentions) safeContent = window.formatMentions(safeContent);
             
-            // 💡 파일 및 이미지 렌더링 호출
             let attachmentsHtml = window.generateMediaHtml(item.files);
 
             return `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
@@ -824,7 +820,7 @@ window.savePurchaseItem = async function() {
             let total = fileInput.files.length;
             for(let i=0; i<total; i++) {
                 let file = fileInput.files[i];
-                let isImg = file.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
+                let isImg = file.name.match(/\.(jpeg|jpg|gif|png|webp|bmp|heic)$/i);
                 
                 let thumbBase64 = null;
                 if(isImg) {
@@ -878,7 +874,6 @@ window.openDesignModal = function(projectId, title) {
             let safeContent = String(item.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             if(window.formatMentions) safeContent = window.formatMentions(safeContent);
 
-            // 💡 파일 및 이미지 렌더링 호출
             let attachmentsHtml = window.generateMediaHtml(item.files);
 
             return `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
@@ -930,7 +925,7 @@ window.saveDesignItem = async function() {
             let total = fileInput.files.length;
             for(let i=0; i<total; i++) {
                 let file = fileInput.files[i];
-                let isImg = file.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
+                let isImg = file.name.match(/\.(jpeg|jpg|gif|png|webp|bmp|heic)$/i);
                 
                 let thumbBase64 = null;
                 if(isImg) {
@@ -984,7 +979,6 @@ window.openPjtScheduleModal = function(projectId, title) {
             let safeContent = String(item.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             if(window.formatMentions) safeContent = window.formatMentions(safeContent);
 
-            // 💡 파일 및 이미지 렌더링 호출
             let attachmentsHtml = window.generateMediaHtml(item.files);
 
             return `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
@@ -1036,7 +1030,7 @@ window.savePjtScheduleItem = async function() {
             let total = fileInput.files.length;
             for(let i=0; i<total; i++) {
                 let file = fileInput.files[i];
-                let isImg = file.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
+                let isImg = file.name.match(/\.(jpeg|jpg|gif|png|webp|bmp|heic)$/i);
                 
                 let thumbBase64 = null;
                 if(isImg) {
@@ -1122,9 +1116,8 @@ window.renderDailyLogs = function(logs) {
             let safeContent = String(log.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             if(window.formatMentions) safeContent = window.formatMentions(safeContent);
             
-            // 💡 파일 및 썸네일 통합 렌더링 호출
             let legacyFiles = [];
-            if(log.imageUrl) legacyFiles.push({ name: '첨부사진.jpg', url: log.imageUrl, thumbBase64: log.imageUrl });
+            if(log.imageUrl) legacyFiles.push({ name: '첨부사진', url: log.imageUrl, thumbBase64: log.imageUrl });
             
             let allFiles = legacyFiles;
             if(log.files && log.files.length > 0) {
@@ -1183,7 +1176,7 @@ window.saveDailyLogItem = async function() {
             window.showToast(`총 ${total}개의 파일을 업로드합니다...`);
             for(let i=0; i<total; i++) {
                 let file = fileInput.files[i];
-                let isImg = file.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
+                let isImg = file.name.match(/\.(jpeg|jpg|gif|png|webp|bmp|heic)$/i);
                 
                 let thumbBase64 = null;
                 if(isImg) {
@@ -1819,6 +1812,9 @@ window.renderProjCalendar = function() {
     } catch(e) {}
 };
 
+// ==========================================
+// 💡 코멘트
+// ==========================================
 window.openCommentModal = function(projectId, title) { 
     const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
     if(!proj) return; 
@@ -1880,15 +1876,21 @@ window.renderComments = function(topLevelComments) {
         topLevelComments.forEach(function(c) { 
             let safeContent = String(c.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             if(window.formatMentions) safeContent = window.formatMentions(safeContent);
-            const cImgHtml = c.imageUrl ? `<div class="mt-3 rounded-lg overflow-hidden border border-slate-200 w-fit max-w-[300px]"><img src="${c.imageUrl}" class="w-full h-auto cursor-pointer" onclick="window.openImageViewer('${c.imageUrl}')"></div>` : ''; 
-            let repliesHtml = ''; 
             
+            let files = [];
+            if(c.imageUrl) files.push({name:'첨부사진.jpg', url: c.imageUrl, thumbBase64: c.imageUrl});
+            const cImgHtml = window.generateMediaHtml(files);
+            
+            let repliesHtml = ''; 
             if(c.replies && c.replies.length > 0) { 
                 repliesHtml += '<div class="pl-4 border-l-[3px] border-indigo-100/60 space-y-2 mt-4 pt-2 ml-2">'; 
                 c.replies.forEach(function(r) { 
                     let safeReplyContent = String(r.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>'); 
                     if(window.formatMentions) safeReplyContent = window.formatMentions(safeReplyContent); 
-                    const rImgHtml = r.imageUrl ? `<div class="mt-2 rounded-lg overflow-hidden border border-slate-200 w-fit max-w-[200px]"><img src="${r.imageUrl}" class="w-full h-auto cursor-pointer" onclick="window.openImageViewer('${r.imageUrl}')"></div>` : ''; 
+                    
+                    let rFiles = [];
+                    if(r.imageUrl) rFiles.push({name:'첨부사진.jpg', url: r.imageUrl, thumbBase64: r.imageUrl});
+                    const rImgHtml = window.generateMediaHtml(rFiles);
                     
                     let replyBtnHtml = '';
                     if (r.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin') {
@@ -1994,7 +1996,7 @@ window.saveCommentItem = async function() {
         if(window.resizeAndConvertToBase64) {
             window.resizeAndConvertToBase64(fileInput.files[0], function(base64) { 
                 saveData(base64); 
-            }); 
+            }, 800); 
         } else { 
             saveData(null); 
         }
@@ -2063,6 +2065,9 @@ window.deleteComment = async function(id) {
     } catch(e) { window.showToast("삭제 실패", "error"); } 
 };
 
+// ==========================================
+// 💡 이슈, MD로그, 등등
+// ==========================================
 window.openIssueModal = function(projectId, title) { 
     const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
     if(!proj) return; 
@@ -2213,143 +2218,483 @@ window.closeIssueModal = function() {
     } 
 };
 
-// ==========================================
-// 💡 NCR 부적합 및 데이터 통신
-// ==========================================
-window.loadNcrData = async function() {
-    try {
-        if(window.showToast) window.showToast("부적합(RAWDATA) 데이터를 가져오는 중입니다...", "success");
-        
-        const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSYwsWjs8ox503LLsRIeVRbbZ4R7eLgoq0C-ZdYIBIUACCwWyt5oYkAAtIpX9j1taqt1MQaEg1Jjom0/pub?gid=0&single=true&output=csv';
-        const separator = csvUrl.includes('?') ? '&' : '?';
-        const res = await fetch(csvUrl + separator + 't=' + Date.now());
-        
-        if (!res.ok) throw new Error("시트 데이터를 가져오지 못했습니다.");
+window.openMdLogModal = function(projectId, title, curMd) { 
+    const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
+    if(!proj) return; 
+    
+    document.getElementById('md-req-id').value = projectId; 
+    const badge = document.getElementById('md-total-badge'); 
+    if(badge) badge.innerText = '총 ' + (proj.currentMd || 0) + ' MD'; 
+    
+    window.resetMdLogForm(); 
+    document.getElementById('md-log-modal').classList.remove('hidden'); 
+    document.getElementById('md-log-modal').classList.add('flex'); 
+    window.loadMdLogs(projectId); 
+};
 
-        const csvText = await res.text();
-        if (csvText.includes('<html') || csvText.includes('<body')) {
-            throw new Error("링크 형식이 잘못되었습니다. (웹에 게시에서 .csv 링크인지 확인해주세요)");
-        }
-
-        const rows = [];
-        let row = [], col = "", quote = false;
-        
-        for (let i = 0; i < csvText.length; i++) {
-            let cc = csvText[i], nc = csvText[i+1];
-            if (cc === '"' && quote && nc === '"') { col += cc; ++i; continue; }
-            if (cc === '"') { quote = !quote; continue; }
-            if (cc === ',' && !quote) { row.push(col); col = ""; continue; }
-            if ((cc === '\r' || cc === '\n') && !quote) {
-                if (row.length > 0 || col !== "") {
-                    row.push(col); rows.push(row); row = []; col = "";
+window.loadMdLogs = function(projectId) { 
+    if (currentMdLogUnsubscribe) currentMdLogUnsubscribe(); 
+    
+    currentMdLogUnsubscribe = onSnapshot(collection(db, "project_md_logs"), function(snapshot) { 
+        try {
+            window.currentMdLogs = []; 
+            let totalMd = 0; 
+            
+            snapshot.forEach(function(docSnap) { 
+                const d = docSnap.data(); 
+                if(d.projectId === projectId || d.reqId === projectId) {
+                    d.id = docSnap.id;
+                    window.currentMdLogs.push(d); 
+                    totalMd += parseFloat(d.md) || 0; 
                 }
-                if (cc === '\r' && nc === '\n') i++;
-                continue;
+            }); 
+            
+            window.currentMdLogs.sort(function(a, b) { 
+                const dateA = a.date || ''; 
+                const dateB = b.date || ''; 
+                if (dateA !== dateB) return dateB.localeCompare(dateA); 
+                return getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt); 
+            }); 
+            
+            const badge = document.getElementById('md-total-badge'); 
+            if(badge) badge.innerText = '총 ' + totalMd.toFixed(1) + ' MD'; 
+            window.renderMdLogs(window.currentMdLogs); 
+        } catch(e) { console.error(e); }
+    }); 
+};
+
+window.renderMdLogs = function(logs) { 
+    const list = document.getElementById('md-log-list'); 
+    if(!list) return;
+    
+    if (logs.length === 0) { 
+        list.innerHTML = '<tr><td colspan="5" class="text-center p-6 text-slate-400 font-bold">등록된 투입 공수 내역이 없습니다.</td></tr>'; 
+        return; 
+    } 
+    
+    try {
+        let htmlStr = '';
+        logs.forEach(function(log) { 
+            let safeDesc = String(log.desc || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+            if(window.formatMentions) safeDesc = window.formatMentions(safeDesc);
+            
+            let btnHtml = '-';
+            if (log.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin') {
+                btnHtml = `<button onclick="window.editMdLog('${log.id}')" class="text-slate-400 hover:text-purple-500 transition-colors" title="수정"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteMdLog('${log.id}', '${log.projectId}')" class="text-slate-400 hover:text-rose-500 transition-colors" title="삭제"><i class="fa-solid fa-trash-can"></i></button>`;
             }
-            col += cc;
-        }
-        if (col !== "" || row.length > 0) { row.push(col); rows.push(row); }
-
-        let dataStartIndex = 1;
-        for (let i = 0; i < Math.min(5, rows.length); i++) {
-            if (rows[i][0] && String(rows[i][0]).includes('NCR No')) {
-                dataStartIndex = i + 1;
-                break;
-            }
-        }
-
-        window.ncrData = rows.slice(dataStartIndex).map(r => {
-            return {
-                ncrNo: r[0] ? String(r[0]).trim() : '',      
-                date: r[1] ? String(r[1]).trim() : '',       
-                pjtCode: r[2] ? String(r[2]).trim() : '',    
-                partName: r[3] ? String(r[3]).trim() : '',   
-                drawingNo: r[4] ? String(r[4]).trim() : '',  
-                type: r[12] ? String(r[12]).trim() : '',     
-                content: r[13] ? String(r[13]).trim() : '',  
-                status: r[15] ? String(r[15]).trim() : ''    
-            };
-        }).filter(n => n.pjtCode !== ''); 
-
-        if (window.ncrData.length === 0) {
-            if(window.showToast) window.showToast("RAWDATA 시트에서 데이터를 찾을 수 없습니다.", "warning");
-        } else {
-            if(window.showToast) window.showToast(`부적합(NCR) 데이터 ${window.ncrData.length}건 동기화 완료!`, "success");
-        }
-
-        window.renderProjectStatusList();
-
-        const modal = document.getElementById('ncr-modal');
-        if (modal && !modal.classList.contains('hidden')) {
-            const titleEl = document.getElementById('ncr-project-title');
-            if (titleEl && titleEl.dataset.code) {
-                window.renderNcrList(titleEl.dataset.code);
-            }
-        }
-
-    } catch(e) {
-        console.error("NCR 로드 에러:", e);
-        if(window.showToast) window.showToast(`동기화 실패: ${e.message}`, "error");
+            
+            htmlStr += `<tr class="hover:bg-purple-50/30 transition-colors">
+                            <td class="p-3 text-center text-slate-500 font-bold">${log.date}</td>
+                            <td class="p-3 text-center text-purple-700 font-black">${parseFloat(log.md).toFixed(1)}</td>
+                            <td class="p-3 text-slate-700">${safeDesc || '-'}</td>
+                            <td class="p-3 text-center text-slate-600 font-bold">${log.authorName}</td>
+                            <td class="p-3 text-center"><div class="flex justify-center gap-2">${btnHtml}</div></td>
+                        </tr>`; 
+        });
+        list.innerHTML = htmlStr;
+    } catch(e) { 
+        list.innerHTML = '<tr><td colspan="5" class="text-center p-6 text-rose-500 font-bold">렌더링 오류 발생</td></tr>'; 
     }
 };
 
-window.openNcrModal = function(pjtCode, pjtName) {
-    const titleEl = document.getElementById('ncr-project-title');
-    if (titleEl) {
-        titleEl.innerText = `[${pjtCode}] ${pjtName}`;
-        titleEl.dataset.code = pjtCode;
+window.saveMdLogItem = async function() { 
+    const projectId = document.getElementById('md-req-id').value; 
+    const logId = document.getElementById('editing-md-id').value; 
+    const date = document.getElementById('new-md-date').value; 
+    const mdVal = document.getElementById('new-md-val').value; 
+    const desc = document.getElementById('new-md-desc').value.trim(); 
+    
+    if(!date || !mdVal) return window.showToast("날짜와 투입 MD를 입력하세요.", "error"); 
+    
+    try { 
+        if (logId) { 
+            await setDoc(doc(db, "project_md_logs", logId), { 
+                date: date, 
+                md: parseFloat(mdVal), 
+                desc: desc, 
+                updatedAt: Date.now() 
+            }, { merge: true }); 
+            window.showToast("MD 내역이 수정되었습니다."); 
+        } else { 
+            await addDoc(collection(db, "project_md_logs"), { 
+                projectId: projectId, 
+                date: date, 
+                md: parseFloat(mdVal), 
+                desc: desc, 
+                authorUid: window.currentUser.uid, 
+                authorName: window.userProfile.name, 
+                createdAt: Date.now() 
+            }); 
+            window.showToast("MD 내역이 등록되었습니다."); 
+            
+            if(window.processMentions) {
+                await window.processMentions(desc, projectId, "투입MD기록");
+            }
+        } 
+        
+        await window.updateProjectTotalMd(projectId); 
+        window.resetMdLogForm(); 
+    } catch(e) { 
+        window.showToast("저장 중 오류 발생", "error"); 
+    } 
+};
+
+window.editMdLog = function(id) { 
+    const log = window.currentMdLogs.find(function(l) { return l.id === id; }); 
+    if(!log) return; 
+    
+    document.getElementById('editing-md-id').value = id; 
+    document.getElementById('new-md-date').value = log.date || window.getLocalDateStr(new Date()); 
+    document.getElementById('new-md-val').value = log.md || ''; 
+    document.getElementById('new-md-desc').value = log.desc || ''; 
+    document.getElementById('btn-md-save').innerText = '수정'; 
+    document.getElementById('btn-md-cancel').classList.remove('hidden'); 
+};
+
+window.deleteMdLog = async function(id, projectId) { 
+    if(!confirm("이 MD 내역을 삭제하시겠습니까?")) return; 
+    try { 
+        await deleteDoc(doc(db, "project_md_logs", id)); 
+        await window.updateProjectTotalMd(projectId); 
+        window.showToast("삭제되었습니다."); 
+        window.resetMdLogForm(); 
+    } catch(e) { window.showToast("삭제 실패", "error"); } 
+};
+
+window.updateProjectTotalMd = async function(projectId) { 
+    const snap = await getDocs(query(collection(db, "project_md_logs"), where("projectId", "==", projectId))); 
+    let total = 0; 
+    snap.forEach(function(docSnap) { 
+        total += parseFloat(docSnap.data().md) || 0; 
+    }); 
+    
+    const projRef = doc(db, "projects_status", projectId); 
+    const projSnap = await getDoc(projRef); 
+    if(projSnap.exists()) { 
+        const outMd = parseFloat(projSnap.data().outMd) || 0; 
+        await setDoc(projRef, { currentMd: total, finalMd: total + outMd }, { merge: true }); 
+    } 
+};
+
+window.closeMdLogModal = function() { 
+    document.getElementById('md-log-modal').classList.add('hidden'); 
+    document.getElementById('md-log-modal').classList.remove('flex'); 
+    if (currentMdLogUnsubscribe) { 
+        currentMdLogUnsubscribe(); 
+        currentMdLogUnsubscribe = null; 
+    } 
+};
+
+window.resetMdLogForm = function() { 
+    document.getElementById('editing-md-id').value = ''; 
+    document.getElementById('new-md-date').value = window.getLocalDateStr(new Date()); 
+    document.getElementById('new-md-val').value = ''; 
+    document.getElementById('new-md-desc').value = ''; 
+    document.getElementById('btn-md-save').innerText = '등록'; 
+    document.getElementById('btn-md-cancel').classList.add('hidden'); 
+};
+
+window.openLinkModal = function(projectId, title) { 
+    const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
+    if(!proj) return; 
+    
+    document.getElementById('link-req-id').value = projectId; 
+    const titleEl = document.getElementById('link-project-title'); 
+    if(titleEl) titleEl.innerText = title || proj.name || ''; 
+    
+    document.getElementById('new-link-name').value = ''; 
+    document.getElementById('new-link-url').value = ''; 
+    document.getElementById('link-modal').classList.remove('hidden'); 
+    document.getElementById('link-modal').classList.add('flex'); 
+    window.renderLinksList(projectId); 
+};
+
+window.renderLinksList = function(projectId) { 
+    try {
+        const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
+        const list = document.getElementById('link-list'); 
+        if(!list) return;
+        
+        if(!proj || !proj.links || proj.links.length === 0) { 
+            list.innerHTML = '<li class="p-8 text-center text-slate-400 font-bold text-xs bg-white rounded-xl border border-slate-200 border-dashed">등록된 문서/링크가 없습니다.</li>'; 
+            return; 
+        } 
+        
+        let htmlStr = ''; 
+        proj.links.forEach(function(lnk, idx) { 
+            htmlStr += `<li class="flex justify-between items-center p-4 bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow group">
+                            <div class="flex flex-col truncate">
+                                <span class="font-extrabold text-slate-700 text-sm mb-1">${getSafeString(lnk.name)}</span>
+                                <a href="${getSafeString(lnk.url)}" target="_blank" class="text-[11px] font-bold text-teal-600 hover:text-teal-800 hover:underline truncate flex items-center gap-1"><i class="fa-solid fa-link"></i> ${getSafeString(lnk.url)}</a>
+                            </div>
+                            <button onclick="window.deleteLinkItem('${projectId}', ${idx})" class="text-slate-300 hover:bg-rose-50 hover:text-rose-500 rounded-lg transition-all p-2.5"><i class="fa-solid fa-trash-can"></i></button>
+                        </li>`; 
+        }); 
+        list.innerHTML = htmlStr;
+    } catch(e) {}
+};
+
+window.closeLinkModal = function() { 
+    document.getElementById('link-modal').classList.add('hidden'); 
+    document.getElementById('link-modal').classList.remove('flex'); 
+};
+
+window.saveLinkItem = async function() { 
+    const projectId = document.getElementById('link-req-id').value; 
+    const name = document.getElementById('new-link-name').value.trim() || '참고 링크'; 
+    let url = document.getElementById('new-link-url').value.trim(); 
+    
+    if(!url) return window.showToast("링크 URL을 입력하세요.", "error"); 
+    
+    const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
+    let links = proj && proj.links ? proj.links.slice() : []; 
+    
+    if(!url.startsWith('http')) url = 'https://' + url; 
+    links.push({ name: name, url: url }); 
+    
+    try { 
+        await setDoc(doc(db, "projects_status", projectId), { links: links }, { merge: true }); 
+        window.showToast("링크가 추가되었습니다."); 
+        document.getElementById('new-link-name').value = ''; 
+        document.getElementById('new-link-url').value = ''; 
+        if(proj) proj.links = links; 
+        window.renderLinksList(projectId); 
+    } catch(e) { 
+        window.showToast("추가 실패", "error"); 
+    } 
+};
+
+window.deleteLinkItem = async function(projectId, index) { 
+    if(!confirm("이 링크를 삭제하시겠습니까?")) return; 
+    const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
+    if(!proj || !proj.links) return; 
+    
+    let links = proj.links.slice(); 
+    links.splice(index, 1); 
+    
+    try { 
+        await setDoc(doc(db, "projects_status", projectId), { links: links }, { merge: true }); 
+        window.showToast("링크가 삭제되었습니다."); 
+        if(proj) proj.links = links; 
+        window.renderLinksList(projectId); 
+    } catch(e) { 
+        window.showToast("삭제 실패", "error"); 
+    } 
+};
+
+// ==========================================
+// 💡 PJT 코드 마스터 관리 로직
+// ==========================================
+let pjtMasterUnsubscribe = null;
+
+window.loadProjectCodeMaster = function() {
+    if (pjtMasterUnsubscribe) pjtMasterUnsubscribe();
+    
+    const q = query(collection(db, "pjt_code_master"));
+    pjtMasterUnsubscribe = onSnapshot(q, (snapshot) => {
+        window.pjtCodeMasterList = [];
+        snapshot.forEach(docSnap => {
+            window.pjtCodeMasterList.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        window.pjtCodeMasterList.sort((a, b) => (a.code || '').localeCompare(b.code || ''));
+        if (document.getElementById('proj-code-master-modal') && !document.getElementById('proj-code-master-modal').classList.contains('hidden')) {
+            window.renderProjectCodeMaster();
+        }
+    }, (error) => {
+        console.error("PJT Master Load Error:", error);
+    });
+};
+
+window.openProjCodeMasterModal = function() {
+    const modal = document.getElementById('proj-code-master-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        window.renderProjectCodeMaster();
     }
-    document.getElementById('ncr-modal').classList.remove('hidden');
-    document.getElementById('ncr-modal').classList.add('flex');
-    window.renderNcrList(pjtCode);
 };
 
-window.closeNcrModal = function() {
-    document.getElementById('ncr-modal').classList.add('hidden');
-    document.getElementById('ncr-modal').classList.remove('flex');
+window.closeProjCodeMasterModal = function() {
+    const modal = document.getElementById('proj-code-master-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
 };
 
-window.renderNcrList = function(pjtCode) {
-    const tbody = document.getElementById('ncr-list-tbody');
+window.renderProjectCodeMaster = function() {
+    const tbody = document.getElementById('pjt-code-tbody');
     if (!tbody) return;
-    
-    const safeTargetCode = String(pjtCode).replace(/\s/g, '').toUpperCase();
-    const list = (window.ncrData || []).filter(n => String(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeTargetCode);
-    
-    let total = list.length;
-    let completed = list.filter(n => {
-        let s = String(n.status || '');
-        return s.includes('완료') || s.includes('종결');
-    }).length;
-    
-    const elTotal = document.getElementById('ncr-total-cnt');
-    if(elTotal) elTotal.innerText = total;
-    
-    const elPending = document.getElementById('ncr-pending-cnt');
-    if(elPending) elPending.innerText = total - completed;
-    
-    const elComp = document.getElementById('ncr-comp-cnt');
-    if(elComp) elComp.innerText = completed;
-    
-    if (total === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-8 text-slate-400 font-bold bg-white">등록된 부적합 내역이 없습니다.</td></tr>';
+
+    if (!window.pjtCodeMasterList || window.pjtCodeMasterList.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-400 font-bold">등록된 PJT 코드가 없습니다.</td></tr>';
         return;
     }
+
+    let html = '';
+    window.pjtCodeMasterList.forEach(p => {
+        html += `
+        <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">
+            <td class="p-3 text-center">
+                <input type="checkbox" value="${p.id}" class="pjt-checkbox accent-indigo-500 w-4 h-4 rounded cursor-pointer" onchange="window.updatePjtCheckbox()">
+            </td>
+            <td class="p-3 font-black text-indigo-600 text-center">${p.code || '-'}</td>
+            <td class="p-3 font-bold text-slate-700">${p.name || '-'}</td>
+            <td class="p-3 text-center text-slate-600 font-medium">${p.company || '-'}</td>
+            <td class="p-3 text-center">
+                <button onclick="window.deleteProjectCode('${p.id}')" class="text-slate-300 hover:text-rose-500 transition-colors p-1.5"><i class="fa-solid fa-trash-can"></i></button>
+            </td>
+        </tr>`;
+    });
+    tbody.innerHTML = html;
+    window.updatePjtCheckbox();
+};
+
+window.addProjectCode = async function() {
+    const codeInput = document.getElementById('new-pjt-code');
+    const nameInput = document.getElementById('new-pjt-name');
+    const companyInput = document.getElementById('new-pjt-company');
     
-    tbody.innerHTML = list.map(n => {
-        let s = String(n.status || '');
-        const isComp = s.includes('완료') || s.includes('종결');
-        const textClass = isComp ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-700';
-        const badge = isComp ? `<span class="bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">완료</span>` : `<span class="bg-rose-50 text-rose-600 border border-rose-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">진행중</span>`;
-        
-        return `<tr class="hover:bg-slate-50 transition-colors bg-white border-b border-slate-100">
-                    <td class="p-3 text-center font-bold text-slate-500 whitespace-nowrap">${n.ncrNo || '-'}</td>
-                    <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.date || '-'}</td>
-                    <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.drawingNo || '-'}</td>
-                    <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.partName || '-'}</td>
-                    <td class="p-3 text-center whitespace-nowrap"><span class="bg-slate-100 px-2 py-1 border border-slate-200 rounded font-bold">${n.type || '-'}</span></td>
-                    <td class="p-3 font-medium ${textClass} break-all">${n.content || '-'}</td>
-                    <td class="p-3 text-center whitespace-nowrap">${badge}</td>
-                </tr>`;
-    }).join('');
+    const code = codeInput.value.trim().toUpperCase();
+    const name = nameInput.value.trim();
+    const company = companyInput.value.trim();
+
+    if (!code || !name) {
+        return window.showToast("PJT 코드와 프로젝트명을 모두 입력해주세요.", "warning");
+    }
+
+    const isExist = window.pjtCodeMasterList.some(p => p.code === code);
+    if (isExist) {
+        return window.showToast("이미 존재하는 PJT 코드입니다.", "error");
+    }
+
+    try {
+        await addDoc(collection(db, "pjt_code_master"), {
+            code: code,
+            name: name,
+            company: company,
+            authorUid: window.currentUser?.uid || 'guest',
+            createdAt: Date.now()
+        });
+        window.showToast("PJT 코드가 등록되었습니다.", "success");
+        codeInput.value = '';
+        nameInput.value = '';
+        companyInput.value = '';
+    } catch (e) {
+        window.showToast("등록 실패: " + e.message, "error");
+    }
+};
+
+window.deleteProjectCode = async function(id) {
+    if (!confirm("해당 PJT 코드를 삭제하시겠습니까?")) return;
+    try {
+        await deleteDoc(doc(db, "pjt_code_master", id));
+        window.showToast("삭제되었습니다.");
+    } catch (e) {
+        window.showToast("삭제 실패", "error");
+    }
+};
+
+window.toggleBulkPjtInput = function() {
+    const area = document.getElementById('pjt-bulk-input-area');
+    if (area.classList.contains('hidden')) {
+        area.classList.remove('hidden');
+        area.classList.add('flex');
+    } else {
+        area.classList.add('hidden');
+        area.classList.remove('flex');
+        document.getElementById('bulk-pjt-data').value = '';
+    }
+};
+
+window.processBulkPjtInput = async function() {
+    const data = document.getElementById('bulk-pjt-data').value.trim();
+    if (!data) return window.showToast("입력된 데이터가 없습니다.", "warning");
+
+    const rows = data.split('\n');
+    const batch = writeBatch(db);
+    let addCount = 0;
+    let skipCount = 0;
+
+    rows.forEach(row => {
+        const cols = row.split('\t').map(c => c.trim());
+        if (cols.length >= 2) {
+            const code = cols[0].toUpperCase();
+            const name = cols[1];
+            const company = cols[2] || '';
+            
+            if (code === 'PJT코드' || code === 'PJT CODE') return;
+
+            if (code && name) {
+                const isExist = window.pjtCodeMasterList.some(p => p.code === code);
+                if (!isExist) {
+                    const newRef = doc(collection(db, "pjt_code_master"));
+                    batch.set(newRef, {
+                        code: code,
+                        name: name,
+                        company: company,
+                        authorUid: window.currentUser?.uid || 'guest',
+                        createdAt: Date.now()
+                    });
+                    addCount++;
+                } else {
+                    skipCount++;
+                }
+            }
+        }
+    });
+
+    if (addCount > 0) {
+        try {
+            await batch.commit();
+            window.showToast(`${addCount}건의 데이터가 일괄 등록되었습니다. (중복/스킵: ${skipCount}건)`, "success");
+            window.toggleBulkPjtInput();
+        } catch (e) {
+            window.showToast("일괄 등록 중 오류가 발생했습니다.", "error");
+            console.error(e);
+        }
+    } else {
+        window.showToast(`등록할 새 데이터가 없습니다. (중복/형식오류: ${skipCount}건)`, "warning");
+    }
+};
+
+window.toggleAllPjtCheckboxes = function(checked) {
+    const checkboxes = document.querySelectorAll('.pjt-checkbox');
+    checkboxes.forEach(cb => cb.checked = checked);
+    window.updatePjtCheckbox();
+};
+
+window.updatePjtCheckbox = function() {
+    const checkboxes = document.querySelectorAll('.pjt-checkbox:checked');
+    const btnDelete = document.getElementById('btn-delete-selected-pjts');
+    if (btnDelete) {
+        if (checkboxes.length > 0) {
+            btnDelete.classList.remove('hidden');
+        } else {
+            btnDelete.classList.add('hidden');
+            const mainCb = document.getElementById('pjt-master-checkbox');
+            if(mainCb) mainCb.checked = false;
+        }
+    }
+};
+
+window.deleteSelectedProjectCodes = async function() {
+    const checkboxes = document.querySelectorAll('.pjt-checkbox:checked');
+    if (checkboxes.length === 0) return;
+
+    if (!confirm(`선택한 ${checkboxes.length}개의 PJT 코드를 삭제하시겠습니까?`)) return;
+
+    try {
+        const batch = writeBatch(db);
+        checkboxes.forEach(cb => {
+            const ref = doc(db, "pjt_code_master", cb.value);
+            batch.delete(ref);
+        });
+        await batch.commit();
+        window.showToast(`선택 항목이 삭제되었습니다.`);
+        document.getElementById('pjt-master-checkbox').checked = false;
+        window.updatePjtCheckbox();
+    } catch (e) {
+        window.showToast("일괄 삭제 실패", "error");
+    }
 };
