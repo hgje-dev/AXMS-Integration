@@ -21,7 +21,7 @@ window.hideCompletedFilter = false;
 window.ganttTodayOffset = 0;
 window.ncrData = [];
 
-window.resizeAndConvertToBase64 = function(file, callback) {
+window.resizeAndConvertToBase64 = function(file, callback, targetMaxSize) {
     if (!file || !file.type.match(/image.*/)) {
         callback(null);
         return;
@@ -31,7 +31,7 @@ window.resizeAndConvertToBase64 = function(file, callback) {
         const image = new Image();
         image.onload = function() {
             const canvas = document.createElement('canvas');
-            const maxSize = 1200;
+            const maxSize = targetMaxSize || 1200;
             let width = image.width;
             let height = image.height;
             
@@ -470,7 +470,6 @@ window.renderProjectStatusList = function() {
         }
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><div class="flex items-center justify-center gap-1 flex-wrap"><button onclick="window.openLinkModal('${item.id}', '${safeNameJs}')" class="text-slate-400 hover:text-teal-500 transition-colors bg-slate-50 px-1.5 py-0.5 rounded shadow-sm border border-slate-200"><i class="fa-solid fa-link"></i></button>${linksHtml}</div></td>`;
         
-        // 💡 완료보고 송부 버튼 연동
         let crBtnHtml = '';
         if (item.status === 'completed') {
             crBtnHtml = `<span class="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded border border-slate-200">송부완료</span>`;
@@ -523,12 +522,10 @@ window.submitCrReq = async function() {
 
     try {
         const batch = writeBatch(db);
-        
         const pjtRef = doc(db, "projects_status", pId);
         const pjtSnap = await getDoc(pjtRef);
         const pjtData = pjtSnap.exists() ? pjtSnap.data() : {};
         
-        // 1. 첨부파일 업로드 로직 (다중)
         let specFiles = [];
         let designFiles = [];
         const specInput = document.getElementById('cr-req-spec-file');
@@ -549,14 +546,12 @@ window.submitCrReq = async function() {
             }
         }
 
-        // 2. 프로젝트 상태 변경
         batch.update(pjtRef, { 
             status: 'completed', 
             d_shipEn: window.getLocalDateStr(new Date()),
             updatedAt: Date.now() 
         });
 
-        // 3. 품질 완료보고 데이터 생성
         const crRef = doc(collection(db, "project_completion_reports"));
         const crLessons = [];
         if(goodTxt) crLessons.push({ type: 'Good', category: '제작', item: '제조팀 코멘트', highlight: goodTxt, lowlight: '' });
@@ -576,7 +571,6 @@ window.submitCrReq = async function() {
             updatedAt: Date.now()
         });
 
-        // 4. Product Cost 리스트 추가
         const costRef = doc(collection(db, "product_costs"));
         batch.set(costRef, {
             projectId: pId,
@@ -586,11 +580,9 @@ window.submitCrReq = async function() {
         
         await batch.commit();
 
-        // 5. 메일 알림 전송 (품질팀, 구매팀)
         if (window.notifyUser) {
             const title = pjtData.name || '알수없는 프로젝트';
             const msg = `[${title}] 제조 완료 및 품질 완료보고 요청이 접수되었습니다.\n\nGood Point:\n${goodTxt}\n\nBad Point:\n${badTxt}`;
-            
             const targetTeams = ['품질경영팀', '전략구매팀'];
             if (window.allSystemUsers) {
                 const targets = window.allSystemUsers.filter(u => targetTeams.includes(u.team));
@@ -604,7 +596,6 @@ window.submitCrReq = async function() {
         window.closeCrReqModal();
     } catch(e) {
         window.showToast("송부 중 오류가 발생했습니다.", "error");
-        console.error(e);
     } finally {
         btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> 완료요청 송부';
         btn.disabled = false;
@@ -634,7 +625,7 @@ window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
     }
 };
 
-// 💡 [수정됨] 다중 파일 업로드 최적화 (깜빡임 제거, 순차 상태 표시)
+// 💡 1. 개선된 다중 파일 순차 업로드 엔진
 async function handleDriveUploadWithProgress(file, projectName, subFolderName = null, fileIndex = 1, totalFiles = 1) {
     if(!window.googleAccessToken) {
         if(window.initGoogleAPI) window.initGoogleAPI();
@@ -692,7 +683,6 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
         };
 
         xhr.onload = function() {
-            // 마지막 파일일 때만 업로드 진행창 닫기 (깜빡임 현상 방지)
             if (fileIndex === totalFiles) {
                 if(progressModal) {
                     progressModal.classList.add('hidden');
@@ -723,6 +713,38 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
     });
 }
 
+// 💡 2. 엑스박스 완벽 방지, 썸네일 고화질 매핑 HTML 렌더러
+window.generateMediaHtml = function(filesArray) {
+    if (!filesArray || filesArray.length === 0) return '';
+    let mediaHtml = '';
+    let filesHtml = '';
+    
+    filesArray.forEach(f => {
+        let isImg = f.name && f.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
+        if (isImg) {
+            let thumbUrl = f.thumbBase64 ? f.thumbBase64 : f.url;
+            let viewUrl = f.url;
+            
+            // 구글 드라이브 파일일 경우 고품질 썸네일 및 뷰어 추출
+            let fileIdMatch = f.url.match(/\/d\/(.+?)\/view/);
+            if (fileIdMatch) {
+                if(!f.thumbBase64) thumbUrl = `https://drive.google.com/thumbnail?id=${fileIdMatch[1]}&sz=w600`;
+                viewUrl = `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}`;
+            }
+            
+            mediaHtml += `<img src="${thumbUrl}" alt="${f.name}" class="max-w-[200px] max-h-[200px] object-cover rounded-lg border border-slate-200 shadow-sm cursor-pointer hover:opacity-80 transition-opacity" onclick="window.openImageViewer('${viewUrl}')">`;
+        } else {
+            filesHtml += `<a href="${f.url}" target="_blank" class="text-xs text-sky-500 font-bold underline flex items-center gap-1 w-fit"><i class="fa-solid fa-file-arrow-down"></i> ${f.name}</a>`;
+        }
+    });
+
+    let result = '';
+    if (mediaHtml) result += `<div class="flex flex-wrap gap-2 mt-2">${mediaHtml}</div>`;
+    if (filesHtml) result += `<div class="flex flex-col gap-1 mt-1">${filesHtml}</div>`;
+    return result;
+};
+
+
 // ==========================================
 // 💡 구매 관리
 // ==========================================
@@ -746,26 +768,12 @@ window.openPurchaseModal = function(projectId, title) {
         }
         
         listEl.innerHTML = list.map(item => {
-            let dateStr = item.createdAt ? (window.getDateTimeStr ? window.getDateTimeStr(new Date(getSafeMillis(item.createdAt))) : new Date(getSafeMillis(item.createdAt)).toLocaleString()) : '';
+            let dateStr = item.createdAt ? window.getDateTimeStr(new Date(getSafeMillis(item.createdAt))) : '';
             let safeContent = String(item.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             if(window.formatMentions) safeContent = window.formatMentions(safeContent);
             
-            let filesHtml = '';
-            let mediaHtml = '';
-            
-            if (item.files && item.files.length > 0) {
-                item.files.forEach(f => {
-                    let isImg = f.name && f.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
-                    if (isImg) {
-                        let fileIdMatch = f.url.match(/\/d\/(.+?)\/view/);
-                        // 💡 [수정됨] 썸네일 URL을 통해 이미지가 리스트에서 정상 표시되도록 수정
-                        let thumbUrl = fileIdMatch ? `https://drive.google.com/thumbnail?id=${fileIdMatch[1]}&sz=w600` : f.url;
-                        mediaHtml += `<img src="${thumbUrl}" alt="${f.name}" class="max-w-[200px] max-h-[200px] object-cover rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.openImageViewer('${f.url}')">`;
-                    } else {
-                        filesHtml += `<a href="${f.url}" target="_blank" class="text-xs text-sky-500 font-bold underline w-fit flex items-center gap-1"><i class="fa-solid fa-file-arrow-down"></i> ${f.name}</a>`;
-                    }
-                });
-            }
+            // 💡 파일 및 이미지 렌더링 호출
+            let attachmentsHtml = window.generateMediaHtml(item.files);
 
             return `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
                         <div class="flex justify-between items-start">
@@ -778,8 +786,7 @@ window.openPurchaseModal = function(projectId, title) {
                             </div>
                         </div>
                         <div class="text-[13px] text-slate-700 font-medium break-words leading-relaxed">${safeContent}</div>
-                        ${mediaHtml ? `<div class="flex flex-wrap gap-2 mt-2">${mediaHtml}</div>` : ''}
-                        ${filesHtml ? `<div class="flex flex-col gap-1 mt-1">${filesHtml}</div>` : ''}
+                        ${attachmentsHtml}
                     </div>`;
         }).join('');
     });
@@ -797,7 +804,6 @@ window.resetPurchaseForm = function() {
     document.getElementById('pur-file-name').innerText = ''; 
 };
 
-// 💡 [수정됨] 구매 다중 파일 업로드 최적화
 window.savePurchaseItem = async function() { 
     const pId = document.getElementById('pur-req-id').value;
     const title = document.getElementById('pur-project-title').innerText;
@@ -817,8 +823,18 @@ window.savePurchaseItem = async function() {
         if (fileInput.files.length > 0) {
             let total = fileInput.files.length;
             for(let i=0; i<total; i++) {
-                let url = await handleDriveUploadWithProgress(fileInput.files[i], folderName, '구매', i+1, total);
-                filesData.push({ name: fileInput.files[i].name, url: url });
+                let file = fileInput.files[i];
+                let isImg = file.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
+                
+                let thumbBase64 = null;
+                if(isImg) {
+                    thumbBase64 = await new Promise(resolve => {
+                        window.resizeAndConvertToBase64(file, res => resolve(res), 300);
+                    });
+                }
+                
+                let url = await handleDriveUploadWithProgress(file, folderName, '구매', i+1, total);
+                filesData.push({ name: file.name, url: url, thumbBase64: thumbBase64 });
             }
         }
         await addDoc(collection(db, "project_purchases"), { projectId: pId, content: content, files: filesData, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
@@ -858,26 +874,12 @@ window.openDesignModal = function(projectId, title) {
         }
         
         listEl.innerHTML = list.map(item => {
-            let dateStr = item.createdAt ? (window.getDateTimeStr ? window.getDateTimeStr(new Date(getSafeMillis(item.createdAt))) : new Date(getSafeMillis(item.createdAt)).toLocaleString()) : '';
+            let dateStr = item.createdAt ? window.getDateTimeStr(new Date(getSafeMillis(item.createdAt))) : '';
             let safeContent = String(item.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             if(window.formatMentions) safeContent = window.formatMentions(safeContent);
 
-            let filesHtml = '';
-            let mediaHtml = '';
-            
-            if (item.files && item.files.length > 0) {
-                item.files.forEach(f => {
-                    let isImg = f.name && f.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
-                    if (isImg) {
-                        let fileIdMatch = f.url.match(/\/d\/(.+?)\/view/);
-                        // 💡 [수정됨] 썸네일 URL을 통해 이미지가 리스트에서 정상 표시되도록 수정
-                        let thumbUrl = fileIdMatch ? `https://drive.google.com/thumbnail?id=${fileIdMatch[1]}&sz=w600` : f.url;
-                        mediaHtml += `<img src="${thumbUrl}" alt="${f.name}" class="max-w-[200px] max-h-[200px] object-cover rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.openImageViewer('${f.url}')">`;
-                    } else {
-                        filesHtml += `<a href="${f.url}" target="_blank" class="text-xs text-teal-500 font-bold underline w-fit flex items-center gap-1"><i class="fa-solid fa-file-arrow-down"></i> ${f.name}</a>`;
-                    }
-                });
-            }
+            // 💡 파일 및 이미지 렌더링 호출
+            let attachmentsHtml = window.generateMediaHtml(item.files);
 
             return `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
                         <div class="flex justify-between items-start">
@@ -890,8 +892,7 @@ window.openDesignModal = function(projectId, title) {
                             </div>
                         </div>
                         <div class="text-[13px] text-slate-700 font-medium break-words leading-relaxed">${safeContent}</div>
-                        ${mediaHtml ? `<div class="flex flex-wrap gap-2 mt-2">${mediaHtml}</div>` : ''}
-                        ${filesHtml ? `<div class="flex flex-col gap-1 mt-1">${filesHtml}</div>` : ''}
+                        ${attachmentsHtml}
                     </div>`;
         }).join('');
     });
@@ -909,7 +910,6 @@ window.resetDesignForm = function() {
     document.getElementById('des-file-name').innerText = ''; 
 };
 
-// 💡 [수정됨] 설계 다중 파일 업로드 최적화
 window.saveDesignItem = async function() { 
     const pId = document.getElementById('des-req-id').value;
     const title = document.getElementById('des-project-title').innerText;
@@ -929,8 +929,18 @@ window.saveDesignItem = async function() {
         if (fileInput.files.length > 0) {
             let total = fileInput.files.length;
             for(let i=0; i<total; i++) {
-                let url = await handleDriveUploadWithProgress(fileInput.files[i], folderName, '설계', i+1, total);
-                filesData.push({ name: fileInput.files[i].name, url: url });
+                let file = fileInput.files[i];
+                let isImg = file.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
+                
+                let thumbBase64 = null;
+                if(isImg) {
+                    thumbBase64 = await new Promise(resolve => {
+                        window.resizeAndConvertToBase64(file, res => resolve(res), 300);
+                    });
+                }
+                
+                let url = await handleDriveUploadWithProgress(file, folderName, '설계', i+1, total);
+                filesData.push({ name: file.name, url: url, thumbBase64: thumbBase64 });
             }
         }
         await addDoc(collection(db, "project_designs"), { projectId: pId, content: content, files: filesData, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
@@ -970,26 +980,12 @@ window.openPjtScheduleModal = function(projectId, title) {
         }
         
         listEl.innerHTML = list.map(item => {
-            let dateStr = item.createdAt ? (window.getDateTimeStr ? window.getDateTimeStr(new Date(getSafeMillis(item.createdAt))) : new Date(getSafeMillis(item.createdAt)).toLocaleString()) : '';
+            let dateStr = item.createdAt ? window.getDateTimeStr(new Date(getSafeMillis(item.createdAt))) : '';
             let safeContent = String(item.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             if(window.formatMentions) safeContent = window.formatMentions(safeContent);
 
-            let filesHtml = '';
-            let mediaHtml = '';
-            
-            if (item.files && item.files.length > 0) {
-                item.files.forEach(f => {
-                    let isImg = f.name && f.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
-                    if (isImg) {
-                        let fileIdMatch = f.url.match(/\/d\/(.+?)\/view/);
-                        // 💡 [수정됨] 썸네일 URL을 통해 이미지가 리스트에서 정상 표시되도록 수정
-                        let thumbUrl = fileIdMatch ? `https://drive.google.com/thumbnail?id=${fileIdMatch[1]}&sz=w600` : f.url;
-                        mediaHtml += `<img src="${thumbUrl}" alt="${f.name}" class="max-w-[200px] max-h-[200px] object-cover rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.openImageViewer('${f.url}')">`;
-                    } else {
-                        filesHtml += `<a href="${f.url}" target="_blank" class="text-xs text-fuchsia-500 font-bold underline w-fit flex items-center gap-1"><i class="fa-solid fa-file-arrow-down"></i> ${f.name}</a>`;
-                    }
-                });
-            }
+            // 💡 파일 및 이미지 렌더링 호출
+            let attachmentsHtml = window.generateMediaHtml(item.files);
 
             return `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
                         <div class="flex justify-between items-start">
@@ -1002,8 +998,7 @@ window.openPjtScheduleModal = function(projectId, title) {
                             </div>
                         </div>
                         <div class="text-[13px] text-slate-700 font-medium break-words leading-relaxed">${safeContent}</div>
-                        ${mediaHtml ? `<div class="flex flex-wrap gap-2 mt-2">${mediaHtml}</div>` : ''}
-                        ${filesHtml ? `<div class="flex flex-col gap-1 mt-1">${filesHtml}</div>` : ''}
+                        ${attachmentsHtml}
                     </div>`;
         }).join('');
     });
@@ -1021,7 +1016,6 @@ window.resetPjtScheduleForm = function() {
     document.getElementById('sch-file-name').innerText = ''; 
 };
 
-// 💡 [수정됨] 일정 다중 파일 업로드 최적화
 window.savePjtScheduleItem = async function() { 
     const pId = document.getElementById('sch-req-id').value;
     const title = document.getElementById('sch-project-title').innerText;
@@ -1041,8 +1035,18 @@ window.savePjtScheduleItem = async function() {
         if (fileInput.files.length > 0) {
             let total = fileInput.files.length;
             for(let i=0; i<total; i++) {
-                let url = await handleDriveUploadWithProgress(fileInput.files[i], folderName, '일정', i+1, total);
-                filesData.push({ name: fileInput.files[i].name, url: url });
+                let file = fileInput.files[i];
+                let isImg = file.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
+                
+                let thumbBase64 = null;
+                if(isImg) {
+                    thumbBase64 = await new Promise(resolve => {
+                        window.resizeAndConvertToBase64(file, res => resolve(res), 300);
+                    });
+                }
+                
+                let url = await handleDriveUploadWithProgress(file, folderName, '일정', i+1, total);
+                filesData.push({ name: file.name, url: url, thumbBase64: thumbBase64 });
             }
         }
         await addDoc(collection(db, "project_schedules"), { projectId: pId, content: content, files: filesData, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
@@ -1058,6 +1062,234 @@ window.savePjtScheduleItem = async function() {
 window.deletePjtSchedule = async function(id) { 
     if(confirm("삭제하시겠습니까?")) await deleteDoc(doc(db, "project_schedules", id)); 
 };
+
+// ==========================================
+// 💡 생산일지 (Daily Log)
+// ==========================================
+window.openDailyLogModal = function(projectId) { 
+    const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
+    if(!proj) return; 
+    
+    document.getElementById('log-req-id').value = projectId; 
+    document.getElementById('log-project-title').innerText = proj.name || ''; 
+    document.getElementById('log-project-progress').value = proj.progress || 0; 
+    document.getElementById('log-project-purchase-rate').value = proj.purchaseRate || 0; 
+    
+    window.resetDailyLogForm(); 
+    document.getElementById('daily-log-modal').classList.remove('hidden'); 
+    document.getElementById('daily-log-modal').classList.add('flex'); 
+    window.loadDailyLogs(projectId); 
+};
+
+window.loadDailyLogs = function(projectId) { 
+    if (currentLogUnsubscribe) currentLogUnsubscribe(); 
+    
+    currentLogUnsubscribe = onSnapshot(collection(db, "daily_logs"), function(snapshot) { 
+        try {
+            window.currentDailyLogs = []; 
+            snapshot.forEach(function(doc) { 
+                const d = doc.data(); 
+                if(d.projectId === projectId || d.reqId === projectId) {
+                    d.id = doc.id;
+                    window.currentDailyLogs.push(d); 
+                }
+            }); 
+            
+            window.currentDailyLogs.sort(function(a, b) { 
+                const dateA = a.date || ''; 
+                const dateB = b.date || ''; 
+                if (dateA !== dateB) return dateB.localeCompare(dateA); 
+                return getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt); 
+            }); 
+            
+            window.renderDailyLogs(window.currentDailyLogs); 
+        } catch(e) { console.error(e); }
+    }); 
+};
+
+window.renderDailyLogs = function(logs) { 
+    const list = document.getElementById('daily-log-list'); 
+    if(!list) return;
+    
+    if (logs.length === 0) { 
+        list.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 생산일지가 없습니다.</div>'; 
+        return; 
+    } 
+    
+    try {
+        let listHtml = '';
+        logs.forEach(function(log) { 
+            let safeContent = String(log.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+            if(window.formatMentions) safeContent = window.formatMentions(safeContent);
+            
+            // 💡 파일 및 썸네일 통합 렌더링 호출
+            let legacyFiles = [];
+            if(log.imageUrl) legacyFiles.push({ name: '첨부사진.jpg', url: log.imageUrl, thumbBase64: log.imageUrl });
+            
+            let allFiles = legacyFiles;
+            if(log.files && log.files.length > 0) {
+                allFiles = [...allFiles, ...log.files];
+            }
+            
+            let attachmentsHtml = window.generateMediaHtml(allFiles);
+            
+            let btnHtml = '';
+            if (log.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin') {
+                btnHtml = `<button onclick="window.editDailyLog('${log.id}')" class="text-slate-400 hover:text-sky-500 transition-colors" title="수정"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteDailyLog('${log.id}')" class="text-slate-400 hover:text-rose-500 transition-colors" title="삭제"><i class="fa-solid fa-trash-can"></i></button>`;
+            }
+            
+            listHtml += `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1 hover:shadow-md transition-shadow">
+                            <div class="flex justify-between items-center">
+                                <div class="flex items-center gap-3">
+                                    <span class="font-bold text-sky-600 text-xs flex items-center gap-1"><i class="fa-regular fa-calendar text-sky-400"></i> ${log.date}</span>
+                                    <span class="font-black text-slate-700 text-sm">${log.authorName}</span>
+                                </div>
+                                <div class="flex gap-2">${btnHtml}</div>
+                            </div>
+                            <div class="text-slate-700 font-medium text-[13px] pl-1 mt-2 mb-1 break-words leading-relaxed">${safeContent}</div>
+                            ${attachmentsHtml}
+                        </div>`; 
+        });
+        list.innerHTML = listHtml;
+    } catch(e) { 
+        list.innerHTML = '<div class="text-center p-8 text-rose-500 font-bold">렌더링 오류 발생</div>'; 
+    }
+};
+
+window.saveDailyLogItem = async function() { 
+    const projectId = document.getElementById('log-req-id').value; 
+    const logId = document.getElementById('editing-log-id').value; 
+    const date = document.getElementById('new-log-date').value; 
+    const content = document.getElementById('new-log-text').value.trim(); 
+    const fileInput = document.getElementById('new-log-image'); 
+    const progressVal = parseInt(document.getElementById('log-project-progress').value) || 0; 
+    const purchaseRateVal = parseInt(document.getElementById('log-project-purchase-rate').value) || 0; 
+    
+    if(!date || (!content && fileInput.files.length === 0)) {
+        return window.showToast("날짜와 내용을 입력하거나 사진을 첨부하세요.", "error"); 
+    }
+    
+    const btnSave = document.getElementById('btn-log-save');
+    if(btnSave) { btnSave.innerHTML = '저장중..'; btnSave.disabled = true; }
+    
+    try { 
+        const proj = window.currentProjectStatusList.find(p => p.id === projectId);
+        const folderName = proj && proj.code ? proj.code : (proj ? proj.name : '미지정');
+
+        let filesData = [];
+        
+        if (fileInput && fileInput.files.length > 0) {
+            let total = fileInput.files.length;
+            window.showToast(`총 ${total}개의 파일을 업로드합니다...`);
+            for(let i=0; i<total; i++) {
+                let file = fileInput.files[i];
+                let isImg = file.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
+                
+                let thumbBase64 = null;
+                if(isImg) {
+                    thumbBase64 = await new Promise(resolve => {
+                        window.resizeAndConvertToBase64(file, res => resolve(res), 300);
+                    });
+                }
+                
+                let url = await handleDriveUploadWithProgress(file, folderName, '생산일지', i+1, total);
+                filesData.push({ name: file.name, url: url, thumbBase64: thumbBase64 });
+            }
+        }
+
+        const payload = { date: date, content: content, updatedAt: Date.now() }; 
+        
+        if (logId) { 
+            const existingLog = window.currentDailyLogs.find(l => l.id === logId);
+            let finalFiles = existingLog && existingLog.files ? [...existingLog.files] : [];
+            
+            if (filesData.length > 0) finalFiles = [...finalFiles, ...filesData];
+            if (finalFiles.length > 0) payload.files = finalFiles;
+            
+            await setDoc(doc(db, "daily_logs", logId), payload, { merge: true }); 
+            window.showToast("일지가 수정되었습니다."); 
+        } else { 
+            if(filesData.length > 0) payload.files = filesData; 
+            
+            payload.projectId = projectId; 
+            payload.authorUid = window.currentUser.uid; 
+            payload.authorName = window.userProfile.name; 
+            payload.createdAt = Date.now(); 
+            await addDoc(collection(db, "daily_logs"), payload); 
+            window.showToast("일지가 등록되었습니다."); 
+            
+            if(window.processMentions) {
+                await window.processMentions(content, projectId, "생산일지"); 
+            }
+        } 
+        
+        await setDoc(doc(db, "projects_status", projectId), { 
+            progress: progressVal, 
+            purchaseRate: purchaseRateVal 
+        }, { merge: true }); 
+        
+        window.resetDailyLogForm(); 
+    } catch(e) { 
+        window.showToast("저장 중 오류 발생", "error"); 
+    } finally { 
+        if(btnSave) { btnSave.innerHTML = '등록'; btnSave.disabled = false; }
+    } 
+};
+
+window.editDailyLog = function(id) { 
+    const log = window.currentDailyLogs.find(function(l) { return l.id === id; }); 
+    if(!log) return; 
+    
+    document.getElementById('editing-log-id').value = id; 
+    document.getElementById('new-log-date').value = log.date || window.getLocalDateStr(new Date()); 
+    document.getElementById('new-log-text').value = log.content || ''; 
+    
+    document.getElementById('btn-log-save').innerText = '수정'; 
+    document.getElementById('btn-log-cancel').classList.remove('hidden'); 
+    document.getElementById('new-log-text').focus(); 
+};
+
+window.deleteDailyLog = async function(id) { 
+    if(!confirm("이 일지를 삭제하시겠습니까?")) return; 
+    try { 
+        await deleteDoc(doc(db, "daily_logs", id)); 
+        window.showToast("삭제되었습니다."); 
+        window.resetDailyLogForm(); 
+    } catch(e) { 
+        window.showToast("삭제 실패", "error"); 
+    } 
+};
+
+window.clearDailyLogFile = function(e) {
+    if(e) e.stopPropagation();
+    const input = document.getElementById('new-log-image');
+    const wrap = document.getElementById('new-log-filename-wrap');
+    if(input) input.value = '';
+    if(wrap) wrap.classList.add('hidden');
+};
+
+window.closeDailyLogModal = function() { 
+    document.getElementById('daily-log-modal').classList.add('hidden'); 
+    document.getElementById('daily-log-modal').classList.remove('flex'); 
+    if (currentLogUnsubscribe) { 
+        currentLogUnsubscribe(); 
+        currentLogUnsubscribe = null; 
+    } 
+};
+
+window.resetDailyLogForm = function() { 
+    document.getElementById('editing-log-id').value = ''; 
+    document.getElementById('new-log-date').value = window.getLocalDateStr(new Date()); 
+    document.getElementById('new-log-text').value = ''; 
+    
+    const fileInput = document.getElementById('new-log-image');
+    if(fileInput) fileInput.value = '';
+    window.clearDailyLogFile(); 
+    
+    document.getElementById('btn-log-save').innerText = '등록'; 
+    document.getElementById('btn-log-cancel').classList.add('hidden'); 
+};
+
 
 // ==========================================
 // 💡 프로젝트 정보 입력 폼
@@ -1587,240 +1819,6 @@ window.renderProjCalendar = function() {
     } catch(e) {}
 };
 
-window.openDailyLogModal = function(projectId) { 
-    const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
-    if(!proj) return; 
-    
-    document.getElementById('log-req-id').value = projectId; 
-    document.getElementById('log-project-title').innerText = proj.name || ''; 
-    document.getElementById('log-project-progress').value = proj.progress || 0; 
-    document.getElementById('log-project-purchase-rate').value = proj.purchaseRate || 0; 
-    
-    window.resetDailyLogForm(); 
-    document.getElementById('daily-log-modal').classList.remove('hidden'); 
-    document.getElementById('daily-log-modal').classList.add('flex'); 
-    window.loadDailyLogs(projectId); 
-};
-
-window.loadDailyLogs = function(projectId) { 
-    if (currentLogUnsubscribe) currentLogUnsubscribe(); 
-    
-    currentLogUnsubscribe = onSnapshot(collection(db, "daily_logs"), function(snapshot) { 
-        try {
-            window.currentDailyLogs = []; 
-            snapshot.forEach(function(doc) { 
-                const d = doc.data(); 
-                if(d.projectId === projectId || d.reqId === projectId) {
-                    d.id = doc.id;
-                    window.currentDailyLogs.push(d); 
-                }
-            }); 
-            
-            window.currentDailyLogs.sort(function(a, b) { 
-                const dateA = a.date || ''; 
-                const dateB = b.date || ''; 
-                if (dateA !== dateB) return dateB.localeCompare(dateA); 
-                return getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt); 
-            }); 
-            
-            window.renderDailyLogs(window.currentDailyLogs); 
-        } catch(e) { console.error(e); }
-    }); 
-};
-
-window.renderDailyLogs = function(logs) { 
-    const list = document.getElementById('daily-log-list'); 
-    if(!list) return;
-    
-    if (logs.length === 0) { 
-        list.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 생산일지가 없습니다.</div>'; 
-        return; 
-    } 
-    
-    try {
-        let listHtml = '';
-        logs.forEach(function(log) { 
-            let safeContent = String(log.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
-            if(window.formatMentions) safeContent = window.formatMentions(safeContent);
-            
-            let mediaHtml = '';
-            let filesHtml = '';
-            
-            // 💡 [수정됨] 이미지 팝업 연결 최적화
-            if (log.imageUrl) {
-                mediaHtml += `<img src="${log.imageUrl}" class="max-w-[200px] max-h-[200px] object-cover rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.openImageViewer('${log.imageUrl}')">`;
-            }
-            
-            if (log.files && log.files.length > 0) {
-                log.files.forEach(f => {
-                    let isImg = f.name && f.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
-                    if (isImg) {
-                        let fileIdMatch = f.url.match(/\/d\/(.+?)\/view/);
-                        let thumbUrl = fileIdMatch ? `https://drive.google.com/thumbnail?id=${fileIdMatch[1]}&sz=w600` : f.url;
-                        let viewUrl = fileIdMatch ? `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}` : f.url;
-                        mediaHtml += `<img src="${thumbUrl}" alt="${f.name}" class="max-w-[200px] max-h-[200px] object-cover rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.openImageViewer('${viewUrl}')">`;
-                    } else {
-                        filesHtml += `<a href="${f.url}" target="_blank" class="text-xs text-sky-500 font-bold underline flex items-center gap-1 w-fit"><i class="fa-solid fa-paperclip"></i> ${f.name}</a>`;
-                    }
-                });
-            }
-            
-            let btnHtml = '';
-            if (log.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin') {
-                btnHtml = `<button onclick="window.editDailyLog('${log.id}')" class="text-slate-400 hover:text-sky-500 transition-colors" title="수정"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteDailyLog('${log.id}')" class="text-slate-400 hover:text-rose-500 transition-colors" title="삭제"><i class="fa-solid fa-trash-can"></i></button>`;
-            }
-            
-            listHtml += `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1 hover:shadow-md transition-shadow">
-                            <div class="flex justify-between items-center">
-                                <div class="flex items-center gap-3">
-                                    <span class="font-bold text-sky-600 text-xs flex items-center gap-1"><i class="fa-regular fa-calendar text-sky-400"></i> ${log.date}</span>
-                                    <span class="font-black text-slate-700 text-sm">${log.authorName}</span>
-                                </div>
-                                <div class="flex gap-2">${btnHtml}</div>
-                            </div>
-                            <div class="text-slate-700 font-medium text-[13px] pl-1 mt-2 mb-1 break-words leading-relaxed">${safeContent}</div>
-                            ${mediaHtml ? `<div class="flex flex-wrap gap-2 mt-1">${mediaHtml}</div>` : ''}
-                            ${filesHtml ? `<div class="flex flex-col gap-1 mt-1">${filesHtml}</div>` : ''}
-                        </div>`; 
-        });
-        list.innerHTML = listHtml;
-    } catch(e) { 
-        list.innerHTML = '<div class="text-center p-8 text-rose-500 font-bold">렌더링 오류 발생</div>'; 
-    }
-};
-
-window.saveDailyLogItem = async function() { 
-    const projectId = document.getElementById('log-req-id').value; 
-    const logId = document.getElementById('editing-log-id').value; 
-    const date = document.getElementById('new-log-date').value; 
-    const content = document.getElementById('new-log-text').value.trim(); 
-    const fileInput = document.getElementById('new-log-image'); 
-    const progressVal = parseInt(document.getElementById('log-project-progress').value) || 0; 
-    const purchaseRateVal = parseInt(document.getElementById('log-project-purchase-rate').value) || 0; 
-    
-    if(!date || (!content && fileInput.files.length === 0)) {
-        return window.showToast("날짜와 내용을 입력하거나 사진을 첨부하세요.", "error"); 
-    }
-    
-    const btnSave = document.getElementById('btn-log-save');
-    if(btnSave) { btnSave.innerHTML = '저장중..'; btnSave.disabled = true; }
-    
-    try { 
-        const proj = window.currentProjectStatusList.find(p => p.id === projectId);
-        const folderName = proj && proj.code ? proj.code : (proj ? proj.name : '미지정');
-
-        let filesData = [];
-        
-        // 💡 [수정됨] 다중 파일 순차 업로드 확실히 처리 (모달 깜빡임은 ui에서 해결됨)
-        if (fileInput && fileInput.files.length > 0) {
-            let total = fileInput.files.length;
-            window.showToast(`총 ${total}개의 파일을 업로드합니다...`);
-            for(let i=0; i<total; i++) {
-                let url = await handleDriveUploadWithProgress(fileInput.files[i], folderName, '생산일지', i+1, total);
-                filesData.push({ name: fileInput.files[i].name, url: url });
-            }
-        }
-
-        const payload = { date: date, content: content, updatedAt: Date.now() }; 
-        
-        if (logId) { 
-            // 💡 [수정됨] 기존 일지를 편집할 때 기존 첨부파일이 날아가지 않도록 병합 보존
-            const existingLog = window.currentDailyLogs.find(l => l.id === logId);
-            let finalFiles = existingLog && existingLog.files ? [...existingLog.files] : [];
-            
-            if (filesData.length > 0) {
-                finalFiles = [...finalFiles, ...filesData];
-            }
-            
-            if (finalFiles.length > 0) {
-                payload.files = finalFiles;
-            }
-            
-            await setDoc(doc(db, "daily_logs", logId), payload, { merge: true }); 
-            window.showToast("일지가 수정되었습니다."); 
-        } else { 
-            // 새 일지 작성
-            if(filesData.length > 0) payload.files = filesData; 
-            
-            payload.projectId = projectId; 
-            payload.authorUid = window.currentUser.uid; 
-            payload.authorName = window.userProfile.name; 
-            payload.createdAt = Date.now(); 
-            await addDoc(collection(db, "daily_logs"), payload); 
-            window.showToast("일지가 등록되었습니다."); 
-            
-            if(window.processMentions) {
-                await window.processMentions(content, projectId, "생산일지"); 
-            }
-        } 
-        
-        await setDoc(doc(db, "projects_status", projectId), { 
-            progress: progressVal, 
-            purchaseRate: purchaseRateVal 
-        }, { merge: true }); 
-        
-        window.resetDailyLogForm(); 
-    } catch(e) { 
-        window.showToast("저장 중 오류 발생", "error"); 
-    } finally { 
-        if(btnSave) { btnSave.innerHTML = '등록'; btnSave.disabled = false; }
-    } 
-};
-
-window.editDailyLog = function(id) { 
-    const log = window.currentDailyLogs.find(function(l) { return l.id === id; }); 
-    if(!log) return; 
-    
-    document.getElementById('editing-log-id').value = id; 
-    document.getElementById('new-log-date').value = log.date || window.getLocalDateStr(new Date()); 
-    document.getElementById('new-log-text').value = log.content || ''; 
-    
-    document.getElementById('btn-log-save').innerText = '수정'; 
-    document.getElementById('btn-log-cancel').classList.remove('hidden'); 
-    document.getElementById('new-log-text').focus(); 
-};
-
-window.deleteDailyLog = async function(id) { 
-    if(!confirm("이 일지를 삭제하시겠습니까?")) return; 
-    try { 
-        await deleteDoc(doc(db, "daily_logs", id)); 
-        window.showToast("삭제되었습니다."); 
-        window.resetDailyLogForm(); 
-    } catch(e) { 
-        window.showToast("삭제 실패", "error"); 
-    } 
-};
-
-window.clearDailyLogFile = function(e) {
-    if(e) e.stopPropagation();
-    const input = document.getElementById('new-log-image');
-    const wrap = document.getElementById('new-log-filename-wrap');
-    if(input) input.value = '';
-    if(wrap) wrap.classList.add('hidden');
-};
-
-window.closeDailyLogModal = function() { 
-    document.getElementById('daily-log-modal').classList.add('hidden'); 
-    document.getElementById('daily-log-modal').classList.remove('flex'); 
-    if (currentLogUnsubscribe) { 
-        currentLogUnsubscribe(); 
-        currentLogUnsubscribe = null; 
-    } 
-};
-
-window.resetDailyLogForm = function() { 
-    document.getElementById('editing-log-id').value = ''; 
-    document.getElementById('new-log-date').value = window.getLocalDateStr(new Date()); 
-    document.getElementById('new-log-text').value = ''; 
-    
-    const fileInput = document.getElementById('new-log-image');
-    if(fileInput) fileInput.value = '';
-    window.clearDailyLogFile(); 
-    
-    document.getElementById('btn-log-save').innerText = '등록'; 
-    document.getElementById('btn-log-cancel').classList.add('hidden'); 
-};
-
 window.openCommentModal = function(projectId, title) { 
     const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
     if(!proj) return; 
@@ -1974,9 +1972,8 @@ window.saveCommentItem = async function() {
                 await addDoc(collection(db, "project_comments"), payload); 
                 window.showToast("코멘트가 등록되었습니다."); 
                 
-                let notified = [];
                 if(window.processMentions) {
-                    notified = await window.processMentions(content, projectId, "코멘트");
+                    await window.processMentions(content, projectId, "코멘트");
                 }
             } 
             
@@ -2167,9 +2164,8 @@ window.saveIssueItem = async function() {
             }); 
             window.showToast("이슈가 등록되었습니다."); 
             
-            let notified = [];
             if(window.processMentions) {
-                notified = await window.processMentions(content, projectId, "이슈");
+                await window.processMentions(content, projectId, "이슈");
             }
         } 
         document.getElementById('editing-issue-id').value = ''; 
@@ -2217,267 +2213,143 @@ window.closeIssueModal = function() {
     } 
 };
 
-window.openMdLogModal = function(projectId, title, curMd) { 
-    const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
-    if(!proj) return; 
-    
-    document.getElementById('md-req-id').value = projectId; 
-    const badge = document.getElementById('md-total-badge'); 
-    if(badge) badge.innerText = '총 ' + (proj.currentMd || 0) + ' MD'; 
-    
-    window.resetMdLogForm(); 
-    document.getElementById('md-log-modal').classList.remove('hidden'); 
-    document.getElementById('md-log-modal').classList.add('flex'); 
-    window.loadMdLogs(projectId); 
-};
-
-window.loadMdLogs = function(projectId) { 
-    if (currentMdLogUnsubscribe) currentMdLogUnsubscribe(); 
-    
-    currentMdLogUnsubscribe = onSnapshot(collection(db, "project_md_logs"), function(snapshot) { 
-        try {
-            window.currentMdLogs = []; 
-            let totalMd = 0; 
-            
-            snapshot.forEach(function(docSnap) { 
-                const d = docSnap.data(); 
-                if(d.projectId === projectId || d.reqId === projectId) {
-                    d.id = docSnap.id;
-                    window.currentMdLogs.push(d); 
-                    totalMd += parseFloat(d.md) || 0; 
-                }
-            }); 
-            
-            window.currentMdLogs.sort(function(a, b) { 
-                const dateA = a.date || ''; 
-                const dateB = b.date || ''; 
-                if (dateA !== dateB) return dateB.localeCompare(dateA); 
-                return getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt); 
-            }); 
-            
-            const badge = document.getElementById('md-total-badge'); 
-            if(badge) badge.innerText = '총 ' + totalMd.toFixed(1) + ' MD'; 
-            window.renderMdLogs(window.currentMdLogs); 
-        } catch(e) { console.error(e); }
-    }); 
-};
-
-window.renderMdLogs = function(logs) { 
-    const list = document.getElementById('md-log-list'); 
-    if(!list) return;
-    
-    if (logs.length === 0) { 
-        list.innerHTML = '<tr><td colspan="5" class="text-center p-6 text-slate-400 font-bold">등록된 투입 공수 내역이 없습니다.</td></tr>'; 
-        return; 
-    } 
-    
+// ==========================================
+// 💡 NCR 부적합 및 데이터 통신
+// ==========================================
+window.loadNcrData = async function() {
     try {
-        let htmlStr = '';
-        logs.forEach(function(log) { 
-            let safeDesc = String(log.desc || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
-            if(window.formatMentions) safeDesc = window.formatMentions(safeDesc);
-            
-            let btnHtml = '-';
-            if (log.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin') {
-                btnHtml = `<button onclick="window.editMdLog('${log.id}')" class="text-slate-400 hover:text-purple-500 transition-colors" title="수정"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteMdLog('${log.id}', '${log.projectId}')" class="text-slate-400 hover:text-rose-500 transition-colors" title="삭제"><i class="fa-solid fa-trash-can"></i></button>`;
+        if(window.showToast) window.showToast("부적합(RAWDATA) 데이터를 가져오는 중입니다...", "success");
+        
+        const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSYwsWjs8ox503LLsRIeVRbbZ4R7eLgoq0C-ZdYIBIUACCwWyt5oYkAAtIpX9j1taqt1MQaEg1Jjom0/pub?gid=0&single=true&output=csv';
+        const separator = csvUrl.includes('?') ? '&' : '?';
+        const res = await fetch(csvUrl + separator + 't=' + Date.now());
+        
+        if (!res.ok) throw new Error("시트 데이터를 가져오지 못했습니다.");
+
+        const csvText = await res.text();
+        if (csvText.includes('<html') || csvText.includes('<body')) {
+            throw new Error("링크 형식이 잘못되었습니다. (웹에 게시에서 .csv 링크인지 확인해주세요)");
+        }
+
+        const rows = [];
+        let row = [], col = "", quote = false;
+        
+        for (let i = 0; i < csvText.length; i++) {
+            let cc = csvText[i], nc = csvText[i+1];
+            if (cc === '"' && quote && nc === '"') { col += cc; ++i; continue; }
+            if (cc === '"') { quote = !quote; continue; }
+            if (cc === ',' && !quote) { row.push(col); col = ""; continue; }
+            if ((cc === '\r' || cc === '\n') && !quote) {
+                if (row.length > 0 || col !== "") {
+                    row.push(col); rows.push(row); row = []; col = "";
+                }
+                if (cc === '\r' && nc === '\n') i++;
+                continue;
             }
-            
-            htmlStr += `<tr class="hover:bg-purple-50/30 transition-colors">
-                            <td class="p-3 text-center text-slate-500 font-bold">${log.date}</td>
-                            <td class="p-3 text-center text-purple-700 font-black">${parseFloat(log.md).toFixed(1)}</td>
-                            <td class="p-3 text-slate-700">${safeDesc || '-'}</td>
-                            <td class="p-3 text-center text-slate-600 font-bold">${log.authorName}</td>
-                            <td class="p-3 text-center"><div class="flex justify-center gap-2">${btnHtml}</div></td>
-                        </tr>`; 
-        });
-        list.innerHTML = htmlStr;
-    } catch(e) { 
-        list.innerHTML = '<tr><td colspan="5" class="text-center p-6 text-rose-500 font-bold">렌더링 오류 발생</td></tr>'; 
+            col += cc;
+        }
+        if (col !== "" || row.length > 0) { row.push(col); rows.push(row); }
+
+        let dataStartIndex = 1;
+        for (let i = 0; i < Math.min(5, rows.length); i++) {
+            if (rows[i][0] && String(rows[i][0]).includes('NCR No')) {
+                dataStartIndex = i + 1;
+                break;
+            }
+        }
+
+        window.ncrData = rows.slice(dataStartIndex).map(r => {
+            return {
+                ncrNo: r[0] ? String(r[0]).trim() : '',      
+                date: r[1] ? String(r[1]).trim() : '',       
+                pjtCode: r[2] ? String(r[2]).trim() : '',    
+                partName: r[3] ? String(r[3]).trim() : '',   
+                drawingNo: r[4] ? String(r[4]).trim() : '',  
+                type: r[12] ? String(r[12]).trim() : '',     
+                content: r[13] ? String(r[13]).trim() : '',  
+                status: r[15] ? String(r[15]).trim() : ''    
+            };
+        }).filter(n => n.pjtCode !== ''); 
+
+        if (window.ncrData.length === 0) {
+            if(window.showToast) window.showToast("RAWDATA 시트에서 데이터를 찾을 수 없습니다.", "warning");
+        } else {
+            if(window.showToast) window.showToast(`부적합(NCR) 데이터 ${window.ncrData.length}건 동기화 완료!`, "success");
+        }
+
+        window.renderProjectStatusList();
+
+        const modal = document.getElementById('ncr-modal');
+        if (modal && !modal.classList.contains('hidden')) {
+            const titleEl = document.getElementById('ncr-project-title');
+            if (titleEl && titleEl.dataset.code) {
+                window.renderNcrList(titleEl.dataset.code);
+            }
+        }
+
+    } catch(e) {
+        console.error("NCR 로드 에러:", e);
+        if(window.showToast) window.showToast(`동기화 실패: ${e.message}`, "error");
     }
 };
 
-window.saveMdLogItem = async function() { 
-    const projectId = document.getElementById('md-req-id').value; 
-    const logId = document.getElementById('editing-md-id').value; 
-    const date = document.getElementById('new-md-date').value; 
-    const mdVal = document.getElementById('new-md-val').value; 
-    const desc = document.getElementById('new-md-desc').value.trim(); 
+window.openNcrModal = function(pjtCode, pjtName) {
+    const titleEl = document.getElementById('ncr-project-title');
+    if (titleEl) {
+        titleEl.innerText = `[${pjtCode}] ${pjtName}`;
+        titleEl.dataset.code = pjtCode;
+    }
+    document.getElementById('ncr-modal').classList.remove('hidden');
+    document.getElementById('ncr-modal').classList.add('flex');
+    window.renderNcrList(pjtCode);
+};
+
+window.closeNcrModal = function() {
+    document.getElementById('ncr-modal').classList.add('hidden');
+    document.getElementById('ncr-modal').classList.remove('flex');
+};
+
+window.renderNcrList = function(pjtCode) {
+    const tbody = document.getElementById('ncr-list-tbody');
+    if (!tbody) return;
     
-    if(!date || !mdVal) return window.showToast("날짜와 투입 MD를 입력하세요.", "error"); 
+    const safeTargetCode = String(pjtCode).replace(/\s/g, '').toUpperCase();
+    const list = (window.ncrData || []).filter(n => String(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeTargetCode);
     
-    try { 
-        if (logId) { 
-            await setDoc(doc(db, "project_md_logs", logId), { 
-                date: date, 
-                md: parseFloat(mdVal), 
-                desc: desc, 
-                updatedAt: Date.now() 
-            }, { merge: true }); 
-            window.showToast("MD 내역이 수정되었습니다."); 
-        } else { 
-            await addDoc(collection(db, "project_md_logs"), { 
-                projectId: projectId, 
-                date: date, 
-                md: parseFloat(mdVal), 
-                desc: desc, 
-                authorUid: window.currentUser.uid, 
-                authorName: window.userProfile.name, 
-                createdAt: Date.now() 
-            }); 
-            window.showToast("MD 내역이 등록되었습니다."); 
-            
-            let notified = [];
-            if(window.processMentions) {
-                notified = await window.processMentions(desc, projectId, "투입MD기록");
-            }
-        } 
+    let total = list.length;
+    let completed = list.filter(n => {
+        let s = String(n.status || '');
+        return s.includes('완료') || s.includes('종결');
+    }).length;
+    
+    const elTotal = document.getElementById('ncr-total-cnt');
+    if(elTotal) elTotal.innerText = total;
+    
+    const elPending = document.getElementById('ncr-pending-cnt');
+    if(elPending) elPending.innerText = total - completed;
+    
+    const elComp = document.getElementById('ncr-comp-cnt');
+    if(elComp) elComp.innerText = completed;
+    
+    if (total === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-8 text-slate-400 font-bold bg-white">등록된 부적합 내역이 없습니다.</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = list.map(n => {
+        let s = String(n.status || '');
+        const isComp = s.includes('완료') || s.includes('종결');
+        const textClass = isComp ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-700';
+        const badge = isComp ? `<span class="bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">완료</span>` : `<span class="bg-rose-50 text-rose-600 border border-rose-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">진행중</span>`;
         
-        await window.updateProjectTotalMd(projectId); 
-        window.resetMdLogForm(); 
-    } catch(e) { 
-        window.showToast("저장 중 오류 발생", "error"); 
-    } 
-};
-
-window.editMdLog = function(id) { 
-    const log = window.currentMdLogs.find(function(l) { return l.id === id; }); 
-    if(!log) return; 
-    
-    document.getElementById('editing-md-id').value = id; 
-    document.getElementById('new-md-date').value = log.date || window.getLocalDateStr(new Date()); 
-    document.getElementById('new-md-val').value = log.md || ''; 
-    document.getElementById('new-md-desc').value = log.desc || ''; 
-    document.getElementById('btn-md-save').innerText = '수정'; 
-    document.getElementById('btn-md-cancel').classList.remove('hidden'); 
-};
-
-window.deleteMdLog = async function(id, projectId) { 
-    if(!confirm("이 MD 내역을 삭제하시겠습니까?")) return; 
-    try { 
-        await deleteDoc(doc(db, "project_md_logs", id)); 
-        await window.updateProjectTotalMd(projectId); 
-        window.showToast("삭제되었습니다."); 
-        window.resetMdLogForm(); 
-    } catch(e) { window.showToast("삭제 실패", "error"); } 
-};
-
-window.updateProjectTotalMd = async function(projectId) { 
-    const snap = await getDocs(query(collection(db, "project_md_logs"), where("projectId", "==", projectId))); 
-    let total = 0; 
-    snap.forEach(function(docSnap) { 
-        total += parseFloat(docSnap.data().md) || 0; 
-    }); 
-    
-    const projRef = doc(db, "projects_status", projectId); 
-    const projSnap = await getDoc(projRef); 
-    if(projSnap.exists()) { 
-        const outMd = parseFloat(projSnap.data().outMd) || 0; 
-        await setDoc(projRef, { currentMd: total, finalMd: total + outMd }, { merge: true }); 
-    } 
-};
-
-window.closeMdLogModal = function() { 
-    document.getElementById('md-log-modal').classList.add('hidden'); 
-    document.getElementById('md-log-modal').classList.remove('flex'); 
-    if (currentMdLogUnsubscribe) { 
-        currentMdLogUnsubscribe(); 
-        currentMdLogUnsubscribe = null; 
-    } 
-};
-
-window.resetMdLogForm = function() { 
-    document.getElementById('editing-md-id').value = ''; 
-    document.getElementById('new-md-date').value = window.getLocalDateStr(new Date()); 
-    document.getElementById('new-md-val').value = ''; 
-    document.getElementById('new-md-desc').value = ''; 
-    document.getElementById('btn-md-save').innerText = '등록'; 
-    document.getElementById('btn-md-cancel').classList.add('hidden'); 
-};
-
-window.openLinkModal = function(projectId, title) { 
-    const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
-    if(!proj) return; 
-    
-    document.getElementById('link-req-id').value = projectId; 
-    const titleEl = document.getElementById('link-project-title'); 
-    if(titleEl) titleEl.innerText = title || proj.name || ''; 
-    
-    document.getElementById('new-link-name').value = ''; 
-    document.getElementById('new-link-url').value = ''; 
-    document.getElementById('link-modal').classList.remove('hidden'); 
-    document.getElementById('link-modal').classList.add('flex'); 
-    window.renderLinksList(projectId); 
-};
-
-window.renderLinksList = function(projectId) { 
-    try {
-        const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
-        const list = document.getElementById('link-list'); 
-        if(!list) return;
-        
-        if(!proj || !proj.links || proj.links.length === 0) { 
-            list.innerHTML = '<li class="p-8 text-center text-slate-400 font-bold text-xs bg-white rounded-xl border border-slate-200 border-dashed">등록된 문서/링크가 없습니다.</li>'; 
-            return; 
-        } 
-        
-        let htmlStr = ''; 
-        proj.links.forEach(function(lnk, idx) { 
-            htmlStr += `<li class="flex justify-between items-center p-4 bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow group">
-                            <div class="flex flex-col truncate">
-                                <span class="font-extrabold text-slate-700 text-sm mb-1">${getSafeString(lnk.name)}</span>
-                                <a href="${getSafeString(lnk.url)}" target="_blank" class="text-[11px] font-bold text-teal-600 hover:text-teal-800 hover:underline truncate flex items-center gap-1"><i class="fa-solid fa-link"></i> ${getSafeString(lnk.url)}</a>
-                            </div>
-                            <button onclick="window.deleteLinkItem('${projectId}', ${idx})" class="text-slate-300 hover:bg-rose-50 hover:text-rose-500 rounded-lg transition-all p-2.5"><i class="fa-solid fa-trash-can"></i></button>
-                        </li>`; 
-        }); 
-        list.innerHTML = htmlStr;
-    } catch(e) {}
-};
-
-window.closeLinkModal = function() { 
-    document.getElementById('link-modal').classList.add('hidden'); 
-    document.getElementById('link-modal').classList.remove('flex'); 
-};
-
-window.saveLinkItem = async function() { 
-    const projectId = document.getElementById('link-req-id').value; 
-    const name = document.getElementById('new-link-name').value.trim() || '참고 링크'; 
-    let url = document.getElementById('new-link-url').value.trim(); 
-    
-    if(!url) return window.showToast("링크 URL을 입력하세요.", "error"); 
-    
-    const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
-    let links = proj && proj.links ? proj.links.slice() : []; 
-    
-    if(!url.startsWith('http')) url = 'https://' + url; 
-    links.push({ name: name, url: url }); 
-    
-    try { 
-        await setDoc(doc(db, "projects_status", projectId), { links: links }, { merge: true }); 
-        window.showToast("링크가 추가되었습니다."); 
-        document.getElementById('new-link-name').value = ''; 
-        document.getElementById('new-link-url').value = ''; 
-        if(proj) proj.links = links; 
-        window.renderLinksList(projectId); 
-    } catch(e) { 
-        window.showToast("추가 실패", "error"); 
-    } 
-};
-
-window.deleteLinkItem = async function(projectId, index) { 
-    if(!confirm("이 링크를 삭제하시겠습니까?")) return; 
-    const proj = window.currentProjectStatusList.find(function(p) { return p.id === projectId; }); 
-    if(!proj || !proj.links) return; 
-    
-    let links = proj.links.slice(); 
-    links.splice(index, 1); 
-    
-    try { 
-        await setDoc(doc(db, "projects_status", projectId), { links: links }, { merge: true }); 
-        window.showToast("링크가 삭제되었습니다."); 
-        if(proj) proj.links = links; 
-        window.renderLinksList(projectId); 
-    } catch(e) { 
-        window.showToast("삭제 실패", "error"); 
-    } 
+        return `<tr class="hover:bg-slate-50 transition-colors bg-white border-b border-slate-100">
+                    <td class="p-3 text-center font-bold text-slate-500 whitespace-nowrap">${n.ncrNo || '-'}</td>
+                    <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.date || '-'}</td>
+                    <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.drawingNo || '-'}</td>
+                    <td class="p-3 text-center text-slate-500 whitespace-nowrap">${n.partName || '-'}</td>
+                    <td class="p-3 text-center whitespace-nowrap"><span class="bg-slate-100 px-2 py-1 border border-slate-200 rounded font-bold">${n.type || '-'}</span></td>
+                    <td class="p-3 font-medium ${textClass} break-all">${n.content || '-'}</td>
+                    <td class="p-3 text-center whitespace-nowrap">${badge}</td>
+                </tr>`;
+    }).join('');
 };
