@@ -38,7 +38,6 @@ window.theChart = null;
 window.dashChartObj = null; 
 window.currentProjectId = null;
 
-// 공통 날짜 및 유틸 함수
 window.getTriangularRandom = function(min, mode, max) { 
     let u = Math.random(); 
     let F = (mode - min) / (max - min); 
@@ -137,28 +136,20 @@ window.getChosung = function(str) {
     return res; 
 };
 
-// 💡 더욱 강력해진 초성 및 영타 대응 검색 엔진
 window.matchString = function(q, t) { 
     if(!q) return true; 
     if(!t) return false; 
-    
     q = q.toLowerCase().replace(/\s/g, '');
     t = t.toLowerCase().replace(/\s/g, '');
-    
     if (t.includes(q)) return true;
-
     let choT = window.getChosung(t);
     let choQ = window.getChosung(q);
     if (choT.includes(choQ)) return true;
-
-    // 한영타 오타 변환 로직
     const enToKr = {'q':'ㅂ','w':'ㅈ','e':'ㄷ','r':'ㄱ','t':'ㅅ','y':'ㅛ','u':'ㅕ','i':'ㅑ','o':'ㅐ','p':'ㅔ','a':'ㅁ','s':'ㄴ','d':'ㅇ','f':'ㄹ','g':'ㅎ','h':'ㅗ','j':'ㅓ','k':'ㅏ','l':'ㅣ','z':'ㅋ','x':'ㅌ','c':'ㅊ','v':'ㅍ','b':'ㅠ','n':'ㅜ','m':'ㅡ'};
     let korQ = "";
     for(let i = 0; i < q.length; i++) korQ += enToKr[q[i]] || q[i];
-    
     if (t.includes(korQ)) return true;
     if (choT.includes(window.getChosung(korQ))) return true;
-
     return false; 
 };
 
@@ -183,7 +174,6 @@ window.toggleSidebar = function(forceShow) {
     const isClosed = s.classList.contains('-translate-x-full');
     let show = isClosed;
     if (typeof forceShow === 'boolean') show = forceShow;
-    
     if(show) { 
         s.classList.remove('-translate-x-full'); 
         b.classList.remove('hidden'); 
@@ -229,9 +219,6 @@ window.formatMentions = function(text) {
     return formatted;
 };
 
-// ==========================================
-// 🔔 알림 및 멘션 시스템 로직
-// ==========================================
 window.toggleNotifications = function(event) { 
     if(event) event.stopPropagation(); 
     const dropdown = document.getElementById('notification-dropdown'); 
@@ -282,7 +269,6 @@ window.loadNotifications = function() {
                     let opacityClass = n.isRead ? 'opacity-50' : 'bg-indigo-50/40';
                     let typeText = n.type || '알림';
                     let dateText = window.getDateTimeStr ? window.getDateTimeStr(new Date(n.createdAt)) : new Date(n.createdAt).toLocaleString();
-                    
                     let pId = n.projectId ? `'${n.projectId}'` : 'null';
                     let tDesc = n.type ? `'${n.type}'` : 'null';
 
@@ -302,14 +288,11 @@ window.loadNotifications = function() {
 window.readNotification = async function(id, projectId, type) { 
     try { 
         await setDoc(doc(db, "notifications", id), { isRead: true }, { merge: true }); 
-        
         if (projectId) {
             const n = document.getElementById('notification-dropdown'); 
             if (n) n.classList.add('hidden');
-
             const safeType = type || '';
             let title = "상세 보기"; 
-            
             if (safeType.includes('코멘트')) {
                 if(window.openCommentModal) window.openCommentModal(projectId, title);
             } else if (safeType.includes('이슈')) {
@@ -328,11 +311,7 @@ window.readNotification = async function(id, projectId, type) {
 window.deleteNotification = async function(e, id) {
     if (e) e.stopPropagation();
     if (!confirm("이 알림을 삭제하시겠습니까?")) return;
-    try {
-        await deleteDoc(doc(db, "notifications", id));
-    } catch(e) {
-        console.error(e);
-    }
+    try { await deleteDoc(doc(db, "notifications", id)); } catch(e) { console.error(e); }
 };
 
 window.markAllNotificationsRead = async function() { if(!window.currentUser) return; try { const q = query(collection(db, "notifications"), where("targetUid", "==", window.currentUser.uid), where("isRead", "==", false)); const snapshot = await getDocs(q); const batch = writeBatch(db); snapshot.forEach(function(d) { batch.update(d.ref, { isRead: true }); }); await batch.commit(); } catch(e) { console.error(e); } };
@@ -429,14 +408,11 @@ window.notifyUser = async function(targetName, content, projectId, typeDesc) {
                     body: JSON.stringify({ raw: encodedEmail })
                 }).catch(e => console.log("메일 발송 에러(무시가능):", e));
             } else {
-                if (window.showToast) window.showToast("구글 계정이 연동되지 않아 알림 메일은 발송되지 않았습니다. 상단 우측 버튼으로 연동을 권장합니다.", "warning");
+                if (window.showToast) window.showToast("구글 계정이 연동되지 않아 알림 메일은 발송되지 않았습니다.", "warning");
             }
         }
         return true;
-    } catch(e) { 
-        console.error("알림 생성 에러:", e); 
-        return false;
-    }
+    } catch(e) { return false; }
 };
 
 window.processMentions = async function(content, projectId, typeDesc) {
@@ -459,7 +435,7 @@ window.processMentions = async function(content, projectId, typeDesc) {
 };
 
 // ==========================================
-// 💡 팀원 풀 관리 (팀 모달) 로직 추가
+// 💡 팀원 관리 및 사용자 설정
 // ==========================================
 window.addTeamMember = async function() {
     const nameSel = document.getElementById('new-team-name');
@@ -468,29 +444,18 @@ window.addTeamMember = async function() {
 
     const name = nameSel.value;
     const part = partSel.value;
-    
     if (!name) return window.showToast("팀원을 선택해주세요.", "warning");
 
     const members = window.teamMembers || [];
-    if (members.find(m => m.name === name)) {
-        return window.showToast("이미 등록된 팀원입니다.", "warning");
-    }
+    if (members.find(m => m.name === name)) return window.showToast("이미 등록된 팀원입니다.", "warning");
 
     try {
         const selectedOption = nameSel.options[nameSel.selectedIndex];
         const uid = selectedOption.getAttribute('data-uid') || '';
-
-        await addDoc(collection(db, "team_members"), {
-            name: name,
-            part: part,
-            uid: uid,
-            createdAt: Date.now()
-        });
+        await addDoc(collection(db, "team_members"), { name: name, part: part, uid: uid, createdAt: Date.now() });
         window.showToast("팀원이 성공적으로 추가되었습니다.");
         nameSel.value = "";
-    } catch(e) {
-        window.showToast("추가 실패: " + e.message, "error");
-    }
+    } catch(e) { window.showToast("추가 실패: " + e.message, "error"); }
 };
 
 window.deleteTeamMember = async function(id) {
@@ -498,9 +463,7 @@ window.deleteTeamMember = async function(id) {
     try {
         await deleteDoc(doc(db, "team_members", id));
         window.showToast("삭제되었습니다.");
-    } catch(e) {
-        window.showToast("삭제 실패", "error");
-    }
+    } catch(e) { window.showToast("삭제 실패", "error"); }
 };
 
 window.renderTeamMembers = function() {
@@ -515,7 +478,6 @@ window.renderTeamMembers = function() {
         tbody.innerHTML = '<tr><td colspan="3" class="text-center p-6 text-slate-400 font-bold">등록된 팀원이 없습니다.</td></tr>';
     } else {
         let sortedList = list.slice().sort((a,b) => (a.part||'').localeCompare(b.part||'') || (a.name||'').localeCompare(b.name||''));
-        
         tbody.innerHTML = sortedList.map(function(t) { 
             const partColor = t.part === '제조' ? 'text-indigo-600 bg-indigo-50 border-indigo-200' : 'text-teal-600 bg-teal-50 border-teal-200';
             return `<tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">
@@ -541,7 +503,6 @@ window.populateUserDropdowns = function() {
 window.renderAdminUsers = () => {
     const tb = document.getElementById('admin-users-tbody'); 
     if (!tb) return;
-    
     const users = window.allSystemUsers || [];
     if (users.length === 0) { 
         tb.innerHTML = '<tr><td colspan="7" class="text-center p-6 text-slate-500 font-bold">등록된 사용자가 없습니다.</td></tr>'; 
@@ -584,23 +545,16 @@ window.renderAdminUsers = () => {
 
         const lastActive = u.lastActive || 0;
         const isOnline = u.isOnline !== false && (now - lastActive < 10 * 60 * 1000);
-        
         const statusBadge = isOnline 
             ? `<span class="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-600 px-2 py-1 rounded-full text-[10px] font-bold border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>온라인</span>` 
             : `<span class="inline-flex items-center gap-1.5 bg-slate-50 text-slate-500 px-2 py-1 rounded-full text-[10px] font-bold border border-slate-200"><span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>오프라인</span>`;
-        
         const lastActiveStr = lastActive ? new Date(lastActive).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '기록 없음';
 
         html += `<tr class="${trClass}">
             <td class="p-3 text-center font-bold text-slate-700">${u.name}${safePos}</td>
             <td class="p-3 text-center">${safeTeam}</td>
             <td class="p-3 text-center text-slate-500">${u.email}</td>
-            
-            <td class="p-3 text-center" title="마지막 활동: ${lastActiveStr}">
-                ${statusBadge}
-                <div class="text-[9px] text-slate-400 mt-1">${lastActiveStr}</div>
-            </td>
-            
+            <td class="p-3 text-center" title="마지막 활동: ${lastActiveStr}">${statusBadge}<div class="text-[9px] text-slate-400 mt-1">${lastActiveStr}</div></td>
             <td class="p-3 text-center">
                 <select class="border border-slate-300 rounded px-2 py-1.5 text-xs font-bold ${isP ? 'text-rose-600 bg-white' : 'text-slate-600'}" onchange="window.updateUserRole('${u.uid}', this.value)">
                     <option value="pending" ${u.role === 'pending' ? 'selected' : ''}>승인 대기</option>
@@ -630,93 +584,237 @@ window.renderAdminUsers = () => {
     tb.innerHTML = html;
 };
 
-// 소속 팀 변경 함수
-window.updateUserTeam = async (uid, team) => { 
-    try { 
-        await setDoc(doc(db, "users", uid), { team: team, department: team }, { merge: true }); 
-        if(window.showToast) window.showToast("소속 팀이 변경되었습니다."); 
-    } catch (e) { 
-        if(window.showToast) window.showToast("오류 발생", "error"); 
-    } 
+window.updateUserTeam = async (uid, team) => { try { await setDoc(doc(db, "users", uid), { team: team, department: team }, { merge: true }); if(window.showToast) window.showToast("소속 팀이 변경되었습니다."); } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } };
+window.updateUserPosition = async (uid, pos) => { try { await setDoc(doc(db, "users", uid), { position: pos }, { merge: true }); if(window.showToast) window.showToast("직책이 변경되었습니다."); } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } };
+window.updateUserRole = async (uid, role) => { try { await setDoc(doc(db, "users", uid), { role: role }, { merge: true }); if(window.showToast) window.showToast("등급이 변경되었습니다."); } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } };
+window.updateUserPerm = async (uid, key, val) => { try { const uR = doc(db, "users", uid); const uD = await getDoc(uR); if (uD.exists()) { let p = uD.data().permissions || {}; p[key] = val; await setDoc(uR, { permissions: p }, { merge: true }); if(window.showToast) window.showToast("권한이 업데이트되었습니다."); } } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } };
+window.approveUser = async (uid) => { try { await setDoc(doc(db, "users", uid), { role: 'user' }, { merge: true }); if(window.showToast) window.showToast("계정이 승인되었습니다.", "success"); } catch(e) { window.showToast("승인 처리 실패", "error"); } };
+window.deleteUser = async (uid) => { if (!confirm("이 사용자를 정말 삭제하시겠습니까?")) return; try { await deleteDoc(doc(db, "users", uid)); if(window.showToast) window.showToast("계정 권한이 삭제되었습니다."); } catch (e) { window.showToast("오류 발생", "error"); } };
+
+// ==========================================
+// 💡 PJT 코드 마스터 관리 (복구됨)
+// ==========================================
+window.loadProjectCodeMaster = function() {
+    onSnapshot(query(collection(db, "project_codes")), function(snapshot) {
+        window.pjtCodeMasterList = [];
+        snapshot.forEach(function(doc) {
+            window.pjtCodeMasterList.push({ id: doc.id, ...doc.data() });
+        });
+        window.pjtCodeMasterList.sort(function(a,b) { return b.createdAt - a.createdAt; });
+        if (document.getElementById('proj-code-master-modal') && !document.getElementById('proj-code-master-modal').classList.contains('hidden')) {
+            window.renderProjectCodeMaster();
+        }
+    });
 };
 
-window.updateUserPosition = async (uid, pos) => { 
-    try { await setDoc(doc(db, "users", uid), { position: pos }, { merge: true }); if(window.showToast) window.showToast("직책이 변경되었습니다."); } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } 
+window.openProjCodeMasterModal = function() {
+    document.getElementById('new-pjt-code').value = '';
+    document.getElementById('new-pjt-name').value = '';
+    document.getElementById('new-pjt-company').value = '';
+    document.getElementById('proj-code-master-modal').classList.remove('hidden');
+    document.getElementById('proj-code-master-modal').classList.add('flex');
+    window.renderProjectCodeMaster();
 };
 
-window.updateUserRole = async (uid, role) => { 
-    try { await setDoc(doc(db, "users", uid), { role: role }, { merge: true }); if(window.showToast) window.showToast("등급이 변경되었습니다."); } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } 
+window.closeProjCodeMasterModal = function() {
+    document.getElementById('proj-code-master-modal').classList.add('hidden');
+    document.getElementById('proj-code-master-modal').classList.remove('flex');
 };
 
-window.updateUserPerm = async (uid, key, val) => { 
-    try { const uR = doc(db, "users", uid); const uD = await getDoc(uR); if (uD.exists()) { let p = uD.data().permissions || {}; p[key] = val; await setDoc(uR, { permissions: p }, { merge: true }); if(window.showToast) window.showToast("권한이 업데이트되었습니다."); } } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } 
+window.renderProjectCodeMaster = function() {
+    const tbody = document.getElementById('pjt-code-tbody');
+    if(!tbody) return;
+    if(window.pjtCodeMasterList.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center p-6 text-slate-400 font-bold">등록된 PJT 코드가 없습니다.</td></tr>';
+        return;
+    }
+    let html = '';
+    window.pjtCodeMasterList.forEach(function(p) {
+        html += `<tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">
+                    <td class="p-3 text-center"><input type="checkbox" value="${p.id}" class="pjt-master-cb accent-indigo-500 w-4 h-4 rounded cursor-pointer" onchange="window.updatePjtDeleteBtn()"></td>
+                    <td class="p-3 text-center font-bold text-indigo-700">${p.code}</td>
+                    <td class="p-3 font-bold text-slate-700">${p.name}</td>
+                    <td class="p-3 text-center text-slate-600">${p.company || '-'}</td>
+                    <td class="p-3 text-center"><button onclick="window.deleteProjectCode('${p.id}')" class="text-slate-300 hover:text-rose-500 p-1.5 transition-colors"><i class="fa-solid fa-trash-can"></i></button></td>
+                </tr>`;
+    });
+    tbody.innerHTML = html;
+    window.updatePjtDeleteBtn();
 };
 
-// 💡 5-1. 관리자의 사용자 가입 승인 (알림/메일 발송 제거)
-window.approveUser = async (uid) => {
+window.addProjectCode = async function() {
+    const code = document.getElementById('new-pjt-code').value.trim();
+    const name = document.getElementById('new-pjt-name').value.trim();
+    const company = document.getElementById('new-pjt-company').value.trim();
+    if(!code || !name) return window.showToast("PJT 코드와 프로젝트명을 모두 입력하세요.", "error");
+    
     try {
-        await setDoc(doc(db, "users", uid), { role: 'user' }, { merge: true });
-        if(window.showToast) window.showToast("계정이 정상적으로 승인되었습니다.", "success");
-    } catch(e) {
-        if(window.showToast) window.showToast("승인 처리 실패", "error");
-        console.error(e);
+        await addDoc(collection(db, "project_codes"), { code: code, name: name, company: company, createdAt: Date.now() });
+        window.showToast("PJT 코드가 등록되었습니다.");
+        document.getElementById('new-pjt-code').value = '';
+        document.getElementById('new-pjt-name').value = '';
+        document.getElementById('new-pjt-company').value = '';
+    } catch(e) { window.showToast("등록 실패", "error"); }
+};
+
+window.deleteProjectCode = async function(id) {
+    if(!confirm("이 PJT 코드를 삭제하시겠습니까?")) return;
+    try {
+        await deleteDoc(doc(db, "project_codes", id));
+        window.showToast("삭제되었습니다.");
+    } catch(e) { window.showToast("삭제 실패", "error"); }
+};
+
+window.toggleAllPjtCheckboxes = function(checked) {
+    document.querySelectorAll('.pjt-master-cb').forEach(cb => cb.checked = checked);
+    window.updatePjtDeleteBtn();
+};
+
+window.updatePjtDeleteBtn = function() {
+    const btn = document.getElementById('btn-delete-selected-pjts');
+    const checked = document.querySelectorAll('.pjt-master-cb:checked').length;
+    if(btn) {
+        if(checked > 0) btn.classList.remove('hidden');
+        else btn.classList.add('hidden');
     }
 };
 
-window.deleteUser = async (uid) => { 
-    if (!confirm("이 사용자를 정말 삭제하시겠습니까?\n\n삭제 시 해당 사용자의 시스템 접근이 즉시 영구 차단됩니다.\n(참고: 동일한 이메일로 다시 회원가입을 하려면 Firebase Authentication 콘솔에서도 계정을 삭제해주셔야 합니다.)")) return; 
-    try { 
-        await deleteDoc(doc(db, "users", uid)); 
-        if(window.showToast) window.showToast("계정 권한이 영구적으로 삭제(차단) 되었습니다."); 
-    } catch (e) { 
-        if(window.showToast) window.showToast("오류 발생", "error"); 
-    } 
+window.deleteSelectedProjectCodes = async function() {
+    const cbs = document.querySelectorAll('.pjt-master-cb:checked');
+    if(cbs.length === 0) return;
+    if(!confirm(`선택한 ${cbs.length}개의 PJT 코드를 삭제하시겠습니까?`)) return;
+    try {
+        const batch = writeBatch(db);
+        cbs.forEach(cb => { batch.delete(doc(db, "project_codes", cb.value)); });
+        await batch.commit();
+        window.showToast("선택한 항목이 삭제되었습니다.");
+        document.getElementById('pjt-master-checkbox').checked = false;
+    } catch(e) { window.showToast("일괄 삭제 실패", "error"); }
+};
+
+window.toggleBulkPjtInput = function() {
+    const area = document.getElementById('pjt-bulk-input-area');
+    if(area.classList.contains('hidden')) {
+        area.classList.remove('hidden');
+        area.classList.add('flex');
+        document.getElementById('bulk-pjt-data').value = '';
+    } else {
+        area.classList.add('hidden');
+        area.classList.remove('flex');
+    }
+};
+
+window.processBulkPjtInput = async function() {
+    const data = document.getElementById('bulk-pjt-data').value.trim();
+    if(!data) return window.showToast("데이터를 입력하세요.", "warning");
+    
+    const lines = data.split('\n');
+    let validItems = [];
+    lines.forEach(line => {
+        const parts = line.split('\t');
+        if(parts.length >= 2) {
+            const code = parts[0].trim();
+            const name = parts[1].trim();
+            const comp = parts.length > 2 ? parts[2].trim() : '';
+            if(code && name && !window.pjtCodeMasterList.some(p => p.code === code)) {
+                validItems.push({code: code, name: name, company: comp, createdAt: Date.now()});
+            }
+        }
+    });
+    
+    if(validItems.length === 0) return window.showToast("새로 등록할 유효한 데이터가 없습니다. (형식 오류 또는 중복)", "warning");
+    if(!confirm(`${validItems.length}건의 데이터를 일괄 등록하시겠습니까?`)) return;
+    
+    try {
+        const batch = writeBatch(db);
+        validItems.forEach(item => {
+            const ref = doc(collection(db, "project_codes"));
+            batch.set(ref, item);
+        });
+        await batch.commit();
+        window.showToast(`${validItems.length}건 일괄 등록 완료!`, "success");
+        window.toggleBulkPjtInput();
+    } catch(e) { window.showToast("일괄 등록 실패", "error"); }
 };
 
 // ==========================================
-// 💡 안전한 이미지 뷰어 팝업 함수 (완전한 모달 라이트박스 형태)
+// 💡 이미지/문서 라이트박스 및 외부링크 오픈 유틸리티
 // ==========================================
 window.openImageViewer = function(src) {
     if (!src || typeof src !== 'string') return;
     
-    // 기존에 띄워진 라이트박스가 있다면 제거
-    let existing = document.getElementById('axbis-lightbox');
-    if (existing) existing.remove();
+    // Base64 이미지나 구글 썸네일/다운로드용 이미지일 때 모달형태로 팝업
+    // 구글 뷰어 링크 등은 일반 탭으로 오픈
+    if (src.startsWith('data:image') || src.includes('thumbnail?id=') || src.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i)) {
+        let existing = document.getElementById('axbis-lightbox');
+        if (existing) existing.remove();
 
-    // 모달 배경 컨테이너
-    const viewer = document.createElement('div');
-    viewer.id = 'axbis-lightbox';
-    viewer.className = 'fixed inset-0 z-[999999] flex items-center justify-center bg-slate-900/90 backdrop-blur-sm cursor-zoom-out opacity-0 transition-opacity duration-300';
-    
-    // 클릭 시 닫기
-    viewer.onclick = function() {
-        viewer.classList.remove('opacity-100');
-        setTimeout(() => viewer.remove(), 300);
+        const viewer = document.createElement('div');
+        viewer.id = 'axbis-lightbox';
+        viewer.className = 'fixed inset-0 z-[999999] flex items-center justify-center bg-slate-900/90 backdrop-blur-sm cursor-zoom-out opacity-0 transition-opacity duration-300';
+        
+        viewer.onclick = function() {
+            viewer.classList.remove('opacity-100');
+            setTimeout(() => viewer.remove(), 300);
+        };
+
+        const img = document.createElement('img');
+        img.src = src;
+        img.className = 'max-w-[95vw] max-h-[95vh] object-contain rounded-xl shadow-2xl transform scale-95 transition-transform duration-300';
+        img.onclick = function(e) { e.stopPropagation(); };
+
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'absolute top-6 right-6 text-white/70 hover:text-white text-4xl transition-colors';
+        closeBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+
+        viewer.appendChild(img);
+        viewer.appendChild(closeBtn);
+        document.body.appendChild(viewer);
+
+        requestAnimationFrame(() => {
+            viewer.classList.add('opacity-100');
+            img.classList.remove('scale-95');
+            img.classList.add('scale-100');
+        });
+    } else {
+        window.open(src, '_blank');
+    }
+};
+
+window.resizeAndConvertToBase64 = function(file, callback, targetMaxSize) {
+    if (!file || !file.type.match(/image.*/)) {
+        callback(null);
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(readerEvent) {
+        const image = new Image();
+        image.onload = function() {
+            const canvas = document.createElement('canvas');
+            const maxSize = targetMaxSize || 1200; 
+            let width = image.width;
+            let height = image.height;
+            
+            if (width > height && width > maxSize) {
+                height *= maxSize / width;
+                width = maxSize;
+            } else if (height > maxSize) {
+                width *= maxSize / height;
+                height = maxSize;
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            canvas.getContext('2d').drawImage(image, 0, 0, width, height);
+            
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            callback(dataUrl);
+        };
+        image.onerror = function() { callback(null); };
+        image.src = readerEvent.target.result;
     };
-
-    // 이미지 엘리먼트
-    const img = document.createElement('img');
-    img.src = src;
-    img.className = 'max-w-[95vw] max-h-[95vh] object-contain rounded-xl shadow-2xl transform scale-95 transition-transform duration-300';
-    
-    // 이미지 클릭 시에는 안 닫히게 하려면 (선택)
-    img.onclick = function(e) { e.stopPropagation(); };
-
-    // 닫기 버튼
-    const closeBtn = document.createElement('button');
-    closeBtn.className = 'absolute top-6 right-6 text-white/70 hover:text-white text-4xl transition-colors';
-    closeBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
-
-    viewer.appendChild(img);
-    viewer.appendChild(closeBtn);
-    document.body.appendChild(viewer);
-
-    // 애니메이션 실행
-    requestAnimationFrame(() => {
-        viewer.classList.add('opacity-100');
-        img.classList.remove('scale-95');
-        img.classList.add('scale-100');
-    });
+    reader.onerror = function() { callback(null); };
+    reader.readAsDataURL(file);
 };
 
 window.showAutocomplete = function(inputEl, targetId1, targetId2, isNameSearch) {
@@ -783,3 +881,18 @@ window.selectAutocomplete = function(code, name, company, sourceId, targetId1, t
     const drop = document.getElementById('pjt-autocomplete-dropdown'); 
     if (drop) drop.classList.add('hidden'); 
 };
+
+document.addEventListener('click', function(e) {
+    const n = document.getElementById('notification-dropdown'); 
+    if (n && !n.classList.contains('hidden') && !e.target.closest('.relative.cursor-pointer')) {
+        n.classList.add('hidden');
+    }
+    const m = document.getElementById('mention-dropdown'); 
+    if (m && !m.classList.contains('hidden') && !e.target.closest('#mention-dropdown')) {
+        m.classList.add('hidden');
+    }
+    const d = document.getElementById('pjt-autocomplete-dropdown'); 
+    if (d && !d.classList.contains('hidden') && !e.target.closest('#pjt-autocomplete-dropdown') && !e.target.closest('input[oninput*="showAutocomplete"]')) {
+        d.classList.add('hidden');
+    }
+});
