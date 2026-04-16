@@ -23,7 +23,7 @@
         </div>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 shrink-0 mb-2">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-5 shrink-0 mb-2">
         <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-4 border-l-slate-300 cursor-pointer hover:bg-slate-50 transition-all" onclick="window.filterQrStatus('대기중')">
             <div class="flex justify-between items-center mb-1">
                 <span class="text-[11px] font-bold text-slate-500">대기중</span>
@@ -70,7 +70,7 @@
 </div>
 
 <div id="qr-detail-modal" class="fixed inset-0 z-[300] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10 transition-opacity">
-    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-5xl flex flex-col h-[800px] md:h-[90vh] overflow-hidden transform transition-all">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-5xl flex flex-col h-[800px] md:h-[95vh] overflow-hidden transform transition-all">
         <div class="px-6 py-4 border-b flex justify-between items-center bg-rose-50 shrink-0">
             <h2 class="text-base font-extrabold text-rose-800 flex items-center gap-2">
                 <i class="fa-solid fa-file-shield text-rose-500"></i> 품질 검수 및 승인 처리
@@ -126,21 +126,21 @@
 
             <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                 <div class="flex justify-between items-center mb-3 border-b pb-2">
-                    <h3 class="text-xs font-black text-slate-700"><i class="fa-solid fa-scale-balanced text-teal-500 mr-1"></i> 품질 개선 및 리스크 관리 (Item / Risk)</h3>
+                    <h3 class="text-xs font-black text-slate-700"><i class="fa-solid fa-scale-balanced text-teal-500 mr-1"></i> 품질 개선 및 이슈 관리 (Lessons Learned)</h3>
                     <button onclick="window.addQrLessonRow()" class="bg-teal-50 text-teal-600 px-3 py-1.5 rounded-lg text-[10px] font-bold hover:bg-teal-100 transition-colors border border-teal-200">+ 항목 추가</button>
                 </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-xs border-collapse min-w-[800px]">
-                        <thead class="bg-slate-50 text-slate-500">
+                <div class="overflow-x-auto pb-4">
+                    <table class="w-full text-left text-xs border-collapse min-w-[900px]">
+                        <thead class="bg-slate-50 text-slate-500 border-b border-slate-200">
                             <tr>
-                                <th class="p-2 border border-slate-200 text-center w-32">구분</th>
-                                <th class="p-2 border border-slate-200 w-48">Item (아이템)</th>
-                                <th class="p-2 border border-slate-200 w-1/3 text-rose-600">High Risk (하이리스크)</th>
-                                <th class="p-2 border border-slate-200 w-1/3 text-blue-600">Low Risk (로우리스크)</th>
-                                <th class="p-2 border border-slate-200 text-center w-12"><i class="fa-solid fa-trash-can"></i></th>
+                                <th class="p-2 text-center w-32">구분</th>
+                                <th class="p-2 w-48">Item (아이템명)</th>
+                                <th class="p-2 w-1/3 text-emerald-600"><i class="fa-solid fa-thumbs-up mr-1"></i> Highlight (잘된 점/개선안)</th>
+                                <th class="p-2 w-1/3 text-rose-600"><i class="fa-solid fa-thumbs-down mr-1"></i> Lowlight (문제점/아쉬운 점)</th>
+                                <th class="p-2 text-center w-12"><i class="fa-solid fa-trash-can"></i></th>
                             </tr>
                         </thead>
-                        <tbody id="qr-lessons-tbody">
+                        <tbody id="qr-lessons-tbody" class="divide-y divide-slate-100">
                             </tbody>
                     </table>
                 </div>
@@ -148,7 +148,7 @@
 
             <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                 <h4 class="text-xs font-black text-slate-700 mb-2"><i class="fa-regular fa-comment-dots text-amber-500 mr-1"></i> 품질 종합 검토 의견</h4>
-                <textarea id="qr-comments" placeholder="검수 결과 및 승인 의견을 기재하세요." class="w-full h-24 border border-slate-300 rounded-lg p-3 text-sm outline-rose-500 custom-scrollbar resize-y"></textarea>
+                <textarea id="qr-comments" placeholder="검수 결과 및 승인 의견을 기재하세요." class="w-full h-24 border border-slate-300 rounded-lg p-3 text-sm outline-rose-500 custom-scrollbar resize-y bg-slate-50 focus:bg-white"></textarea>
             </div>
 
             <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
