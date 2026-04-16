@@ -7,9 +7,9 @@ let pjtUnsubscribe = null;
 
 window.qrReports = [];
 window.qrProjects = {};
-window.currentQrStatusFilter = 'all'; // 상태 필터 전역 변수
+window.currentQrStatusFilter = 'all'; 
 
-const QR_DRIVE_PARENT_FOLDER = "1ae5JiICk9ZQEaPVNhR6H4TlPs_Np03kQ"; // PJT 현황 메인 폴더
+const QR_DRIVE_PARENT_FOLDER = "1ae5JiICk9ZQEaPVNhR6H4TlPs_Np03kQ"; 
 
 window.initQualityReport = function() {
     console.log("✅ 품질 완료보고 페이지 로드 완료");
@@ -56,7 +56,7 @@ window.filterQrList = function() {
     let pending = 0, writing = 0, completed = 0;
 
     let filtered = window.qrReports.filter(r => {
-        // 1. 상태 카운트 계산 (전체 데이터 대상)
+        // 1. 상태 카운트 계산
         const stat = r.qualityStatus || '대기중';
         if (stat === '대기중') pending++;
         else if (stat === '작성중') writing++;
@@ -76,7 +76,6 @@ window.filterQrList = function() {
         return true;
     });
 
-    // 대시보드 숫자 업데이트
     if(document.getElementById('qr-dash-pending')) document.getElementById('qr-dash-pending').innerText = pending;
     if(document.getElementById('qr-dash-writing')) document.getElementById('qr-dash-writing').innerText = writing;
     if(document.getElementById('qr-dash-completed')) document.getElementById('qr-dash-completed').innerText = completed;
@@ -84,7 +83,7 @@ window.filterQrList = function() {
     window.renderQrList(filtered);
 };
 
-// 💡 상단 검색창 초성 자동완성 (PJT 마스터 기준 + 현재 리스트 기준)
+// 💡 상단 통합 검색창 초성 자동완성 (에러 원인 회피 및 독립 컨테이너 적용)
 window.qrShowPjtAuto = function(input) {
     const val = input.value.trim().toLowerCase();
     let drop = document.getElementById('qr-pjt-autocomplete-dynamic');
@@ -128,7 +127,7 @@ window.qrShowPjtAuto = function(input) {
         const rect = input.getBoundingClientRect();
         drop.style.left = `${rect.left}px`;
         drop.style.top = `${rect.bottom + 4}px`;
-        drop.style.width = `${Math.max(rect.width, 220)}px`;
+        drop.style.width = `${Math.max(rect.width, 280)}px`;
 
         drop.innerHTML = matches.map(m => {
             let sCode = m.code ? m.code.replace(/'/g,"\\'").replace(/"/g,'&quot;') : '-';
@@ -145,15 +144,14 @@ window.qrShowPjtAuto = function(input) {
 
 window.qrSelectPjt = function(code) {
     const input = document.getElementById('qr-search');
-    if(input) input.value = code;
-    
+    if(input) {
+        input.value = code;
+        window.filterQrList();
+    }
     const drop = document.getElementById('qr-pjt-autocomplete-dynamic');
     if(drop) drop.classList.add('hidden');
-    
-    window.filterQrList(); 
 };
 
-// 외부 클릭 시 드롭다운 닫기
 document.addEventListener('click', function(e) {
     const drop = document.getElementById('qr-pjt-autocomplete-dynamic');
     if (drop && !drop.classList.contains('hidden') && !e.target.closest('#qr-search') && !e.target.closest('#qr-pjt-autocomplete-dynamic')) {
@@ -187,16 +185,14 @@ window.renderQrList = function(list) {
 
     tbody.innerHTML = list.map(r => {
         const dateStr = r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '-';
-        // '완료' 상태일 때만 품질 완료일자 표기
         const compDateStr = (r.qualityStatus === '완료' && r.qualityUpdatedAt) ? new Date(r.qualityUpdatedAt).toLocaleDateString() : '-';
-        const safeName = (r.pjtName || '').replace(/"/g, '&quot;').replace(/'/g, "\\'");
+        const safeName = r.pjtName.replace(/"/g, '&quot;').replace(/'/g, "\\'");
         
         let qStatus = r.qualityStatus || '대기중';
         let iStatus = (r.internalSch && r.internalSch.status) ? r.internalSch.status : '미진행';
         let cStatus = (r.customerSch && r.customerSch.status) ? r.customerSch.status : '미진행';
 
         let adminBtn = '';
-        // 최고관리자만 삭제 권한 부여
         if (window.userProfile && window.userProfile.role === 'admin') {
             adminBtn = `<button onclick="event.stopPropagation(); window.deleteQrReport('${r.id}')" class="bg-white border border-rose-200 hover:border-rose-400 hover:bg-rose-500 hover:text-white text-rose-400 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm ml-1" title="삭제"><i class="fa-solid fa-trash-can"></i></button>`;
         }
@@ -210,9 +206,9 @@ window.renderQrList = function(list) {
                 <td class="p-3 text-center text-[11px]">${intExtMap[iStatus] || iStatus}</td>
                 <td class="p-3 text-center text-[11px]">${intExtMap[cStatus] || cStatus}</td>
                 <td class="p-3 text-center text-[10px] font-bold">${statusMap[qStatus] || qStatus}</td>
-                <td class="p-3 text-center">
+                <td class="p-3 text-center" onclick="event.stopPropagation()">
                     <div class="flex items-center justify-center">
-                        <button class="bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 text-slate-500 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm">
+                        <button onclick="window.openQrModal('${r.id}')" class="bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 text-slate-500 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm">
                             <i class="fa-solid fa-pen-to-square"></i> 검토
                         </button>
                         ${adminBtn}
@@ -223,7 +219,6 @@ window.renderQrList = function(list) {
     }).join('');
 };
 
-// 최고 관리자용 품질보고 데이터 강제 삭제
 window.deleteQrReport = async function(id) {
     if(!confirm("이 품질 완료보고 내역을 삭제하시겠습니까?\n(PJT 현황판의 프로젝트 데이터는 그대로 유지됩니다)")) return;
     try {
@@ -243,7 +238,6 @@ window.openQrModal = function(docId) {
     document.getElementById('qr-project-title').innerText = `[${report.pjtCode}] ${report.pjtName}`;
     document.getElementById('qr-project-date').innerText = `송부일자: ${new Date(report.createdAt).toLocaleDateString()}`;
     
-    // 검수 일정 폼
     if(report.internalSch) {
         document.getElementById('qr-int-start').value = report.internalSch.start || '';
         document.getElementById('qr-int-end').value = report.internalSch.end || '';
@@ -266,7 +260,6 @@ window.openQrModal = function(docId) {
     document.getElementById('qr-comments').value = report.qualityComments || '';
     document.getElementById('qr-final-status').value = report.qualityStatus || '대기중';
 
-    // 품질 첨부파일 초기화 및 기존 파일 렌더링
     document.getElementById('qr-files').value = '';
     document.getElementById('qr-file-names').innerText = '';
     
@@ -288,7 +281,6 @@ window.openQrModal = function(docId) {
         }).join('');
     }
 
-    // 뱃지 업데이트
     const badge = document.getElementById('qr-status-badge');
     const qStat = report.qualityStatus || '대기중';
     if(qStat === '완료') badge.className = "text-[10px] font-bold px-2 py-0.5 rounded shadow-sm border bg-emerald-100 text-emerald-700 border-emerald-200";
@@ -306,21 +298,21 @@ window.closeQrModal = function() {
     document.getElementById('qr-detail-modal').classList.remove('flex');
 };
 
-// 💡 1. 동적 행 추가 로직 및 조건부 세부 입력 폼 (Highlight / Lowlight 로 워딩 변경)
-window.addQrLessonRow = function(data = null, rowIndex = -1) {
+// 💡 1. 동적 행 추가 로직 및 조건부 세부 입력 폼 (이중 tbody 문제 수정)
+window.addQrLessonRow = function(data = null) {
     const tbody = document.getElementById('qr-lessons-tbody');
-    if(rowIndex === -1) rowIndex = tbody.children.length; // 인덱스 부여 (디테일 토글용)
+    const groupId = 'lesson-group-' + Date.now() + '-' + Math.floor(Math.random() * 1000); // 💡 고유 그룹 ID 부여
     
     const tr = document.createElement('tr');
-    tr.className = "qr-lesson-row hover:bg-slate-50/50 transition-colors";
+    tr.className = "qr-lesson-row hover:bg-slate-50/50 transition-colors border-b border-slate-100 bg-white";
+    tr.setAttribute('data-group-id', groupId);
     
     const catVal = data ? data.category : '품질개선';
     const itemVal = data ? data.item : '';
-    const hlVal = data ? data.highRisk : ''; // 기존 highRisk 속성을 그대로 사용 (데이터 호환)
-    const llVal = data ? data.lowRisk : '';  // 기존 lowRisk 속성을 그대로 사용
-    const details = data ? (data.details || {}) : {}; // 추가 세부 데이터 객체
+    const hlVal = data ? data.highRisk : '';
+    const lrVal = data ? data.lowRisk : '';  
+    const details = data ? (data.details || {}) : {}; 
 
-    // 카테고리에 따른 세부 입력 폼 HTML 템플릿
     let detailHtml = '';
     let isDetailVisible = false;
 
@@ -368,7 +360,6 @@ window.addQrLessonRow = function(data = null, rowIndex = -1) {
             </div>`;
     }
 
-    // 💡 두 줄을 차지하는 구조 (첫 줄: 메인 입력 / 두번째 줄: 세부 폼)
     tr.innerHTML = `
         <td class="p-2 border-r border-slate-100 align-top bg-white">
             <select class="qr-ls-category w-full border border-slate-300 rounded px-2 py-1.5 text-xs font-bold text-slate-700 outline-teal-500 bg-slate-50 cursor-pointer" onchange="window.toggleQrLessonDetails(this)">
@@ -388,18 +379,13 @@ window.addQrLessonRow = function(data = null, rowIndex = -1) {
             <textarea class="qr-ls-low w-full border border-slate-300 rounded p-2 text-xs outline-rose-500 custom-scrollbar resize-y min-h-[50px] bg-rose-50/30 focus:bg-white" placeholder="문제점 또는 아쉬운 점 (Lowlight)">${lrVal}</textarea>
         </td>
         <td class="p-2 text-center align-middle bg-white">
-            <button onclick="this.closest('.qr-lesson-group').remove()" class="text-slate-300 hover:text-rose-500 transition-colors p-1.5 bg-white border border-slate-200 rounded-lg shadow-sm hover:border-rose-200 hover:bg-rose-50"><i class="fa-solid fa-trash-can"></i></button>
+            <button onclick="window.removeQrLessonRow(this)" class="text-slate-300 hover:text-rose-500 transition-colors p-1.5 bg-white border border-slate-200 rounded-lg shadow-sm hover:border-rose-200 hover:bg-rose-50"><i class="fa-solid fa-trash-can"></i></button>
         </td>
     `;
 
-    // 전체 그룹을 감싸는 tbody (row 묶음) 처리
-    const groupTbody = document.createElement('tbody');
-    groupTbody.className = "qr-lesson-group border-b-2 border-slate-200 bg-white";
-    groupTbody.appendChild(tr);
-
-    // 세부 입력 폼 행 (항상 존재하지만 hidden으로 제어)
     const detailTr = document.createElement('tr');
-    detailTr.className = "qr-lesson-detail-row bg-slate-50/50";
+    detailTr.className = "qr-lesson-detail-row bg-slate-50/50 border-b-4 border-slate-200"; // 💡 하단에 확실한 구분선 추가
+    detailTr.setAttribute('data-group-id', groupId);
     if(!isDetailVisible) detailTr.style.display = 'none';
     
     detailTr.innerHTML = `
@@ -409,18 +395,24 @@ window.addQrLessonRow = function(data = null, rowIndex = -1) {
             </div>
         </td>
     `;
-    groupTbody.appendChild(detailTr);
 
-    // DOM 구조 변경: 기존 tbody에 묶음 tbody들을 append
-    tbody.appendChild(groupTbody);
+    tbody.appendChild(tr);
+    tbody.appendChild(detailTr);
 };
 
-// 💡 2. 카테고리 변경 시 세부 폼 토글
+window.removeQrLessonRow = function(btn) {
+    const tr = btn.closest('tr');
+    const groupId = tr.getAttribute('data-group-id');
+    const rows = tr.parentNode.querySelectorAll(`tr[data-group-id="${groupId}"]`);
+    rows.forEach(r => r.remove());
+};
+
 window.toggleQrLessonDetails = function(selectEl) {
     const val = selectEl.value;
-    const group = selectEl.closest('.qr-lesson-group');
-    const detailTr = group.querySelector('.qr-lesson-detail-row');
-    const container = group.querySelector('.qr-detail-container');
+    const tr = selectEl.closest('tr');
+    const groupId = tr.getAttribute('data-group-id');
+    const detailTr = tr.parentNode.querySelector(`tr.qr-lesson-detail-row[data-group-id="${groupId}"]`);
+    const container = detailTr.querySelector('.qr-detail-container');
     
     let detailHtml = '';
     
@@ -473,7 +465,6 @@ window.toggleQrLessonDetails = function(selectEl) {
     container.innerHTML = detailHtml;
 };
 
-// 💡 3. 세부 지표 자동 계산기
 window.calcQrLessonDetails = function(inputEl, calcType) {
     const detailContainer = inputEl.closest('.qr-detail-container');
     const oldVal = parseFloat(detailContainer.querySelector('.qr-detail-old-val').value) || 0;
@@ -486,21 +477,20 @@ window.calcQrLessonDetails = function(inputEl, calcType) {
 
     if (oldVal > 0) {
         if (calcType === '원가절감') {
-            res1 = oldVal - newVal; // 절감액
-            res2 = (res1 / oldVal * 100); // CR%
+            res1 = oldVal - newVal; 
+            res2 = (res1 / oldVal * 100); 
         } else if (calcType === '납기단축') {
-            res1 = oldVal - newVal; // 단축일수
-            res2 = (res1 / oldVal * 100); // 단축률
+            res1 = oldVal - newVal; 
+            res2 = (res1 / oldVal * 100); 
         } else if (calcType === '품질개선') {
-            res1 = oldVal - newVal; // 개선건수
-            res2 = (res1 / oldVal * 100); // 개선율
+            res1 = oldVal - newVal; 
+            res2 = (res1 / oldVal * 100); 
         }
     }
 
     res1El.innerText = res1.toLocaleString();
     res2El.innerText = res2.toFixed(1);
 };
-
 
 window.updateQrFileNames = function() {
     const inputEl = document.getElementById('qr-files');
@@ -515,7 +505,6 @@ window.updateQrFileNames = function() {
     }
 };
 
-// 구글 드라이브 업로드 유틸리티 
 async function qrUploadToDrive(file, folderName) {
     if(!window.googleAccessToken) throw new Error("구글 인증이 필요합니다.");
     
@@ -597,7 +586,7 @@ async function qrUploadToDrive(file, folderName) {
     });
 }
 
-// 💡 4. 최종 저장 시 세부 데이터까지 추출하여 저장
+// 💡 저장 시 데이터 구조 완벽 파싱 (<tr> 단위가 아닌 <tr.qr-lesson-row> 단위 조회)
 window.saveQualityReport = async function() {
     const docId = document.getElementById('qr-doc-id').value;
     const report = window.qrReports.find(r => r.id === docId);
@@ -621,20 +610,18 @@ window.saveQualityReport = async function() {
             }
         }
 
-        // 아이템 & 리스크 및 세부내역 테이블 데이터 추출
         const qualityLessons = [];
-        document.querySelectorAll('.qr-lesson-group').forEach(group => {
-            const trMain = group.querySelector('.qr-lesson-row');
-            if(!trMain) return;
-
+        document.querySelectorAll('.qr-lesson-row').forEach(trMain => {
             let lesson = {
                 category: trMain.querySelector('.qr-ls-category').value,
                 item: trMain.querySelector('.qr-ls-item').value.trim(),
-                highRisk: trMain.querySelector('.qr-ls-high').value.trim(), // 워딩만 Highlight
-                lowRisk: trMain.querySelector('.qr-ls-low').value.trim()    // 워딩만 Lowlight
+                highRisk: trMain.querySelector('.qr-ls-high').value.trim(), 
+                lowRisk: trMain.querySelector('.qr-ls-low').value.trim()    
             };
 
-            const trDetail = group.querySelector('.qr-lesson-detail-row');
+            const groupId = trMain.getAttribute('data-group-id');
+            const trDetail = trMain.parentNode.querySelector(`tr.qr-lesson-detail-row[data-group-id="${groupId}"]`);
+            
             if (trDetail && trDetail.style.display !== 'none') {
                 lesson.details = {
                     company: trDetail.querySelector('.qr-detail-company')?.value.trim() || '',
@@ -671,7 +658,6 @@ window.saveQualityReport = async function() {
 
         await setDoc(doc(db, "project_completion_reports", docId), payload, { merge: true });
 
-        // 승인완료 알림 발송 (제조팀 담당자)
         if (payload.qualityStatus === '완료' && window.notifyUser) {
             const pjt = window.qrProjects[report.projectId];
             if (pjt && pjt.manager) {
