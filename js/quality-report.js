@@ -234,7 +234,6 @@ window.openQrModal = function(docId) {
     document.getElementById('qr-project-title').innerText = `[${report.pjtCode}] ${report.pjtName}`;
     document.getElementById('qr-project-date').innerText = `송부일자: ${new Date(report.createdAt).toLocaleDateString()}`;
     
-    // 검수 일정 폼
     if(report.internalSch) {
         document.getElementById('qr-int-start').value = report.internalSch.start || '';
         document.getElementById('qr-int-end').value = report.internalSch.end || '';
@@ -246,7 +245,7 @@ window.openQrModal = function(docId) {
         document.getElementById('qr-ext-status').value = report.customerSch.status || '미진행';
     }
     
-    // 💡 테이블 1: Lessons Learned (Good / Bad)
+    // 테이블 1: Lessons Learned (Good / Bad)
     document.getElementById('qr-goodbad-tbody').innerHTML = '';
     let hasGoodBad = false;
     if(report.qualityLessons && report.qualityLessons.length > 0) {
@@ -259,7 +258,7 @@ window.openQrModal = function(docId) {
     }
     if(!hasGoodBad) window.addQrGoodBadRow(); 
 
-    // 💡 테이블 2: 실적 관리 (성과 및 진행내용)
+    // 테이블 2: 실적 관리 (성과 및 진행내용)
     document.getElementById('qr-performances-tbody').innerHTML = '';
     let hasPerf = false;
     if(report.qualityPerformances && report.qualityPerformances.length > 0) {
@@ -268,7 +267,6 @@ window.openQrModal = function(docId) {
             hasPerf = true;
         });
     }
-    // 기존 하위 호환성 체크 (과거에 작성된 데이터가 Lessons에 묶여있다면)
     if (report.qualityLessons && report.qualityLessons.length > 0) {
         report.qualityLessons.forEach(l => {
             if (l.content || l.details || l.oldVal !== undefined || (l.item && !l.highlight && !l.lowlight)) {
@@ -320,13 +318,12 @@ window.closeQrModal = function() {
     document.getElementById('qr-detail-modal').classList.remove('flex');
 };
 
-// 💡 1. 동적 행 추가 로직: Good/Bad 전용
 window.addQrGoodBadRow = function(data = null) {
     const tbody = document.getElementById('qr-goodbad-tbody');
     const tr = document.createElement('tr');
     tr.className = "qr-goodbad-row hover:bg-slate-50/50 transition-colors bg-white border-b border-slate-100";
     
-    const catVal = data ? data.category : '품질개선';
+    const catVal = data ? data.category : '제작';
     const itemVal = data ? data.item : '';
     const hlVal = data ? (data.highlight || data.highRisk || '') : '';
     const llVal = data ? (data.lowlight || data.lowRisk || '') : '';
@@ -356,7 +353,6 @@ window.addQrGoodBadRow = function(data = null) {
     tbody.appendChild(tr);
 };
 
-// 💡 2. 동적 행 추가 로직: 실적 관리 전용 (하위 상세폼 포함)
 window.addQrPerformanceRow = function(data = null) {
     const tbody = document.getElementById('qr-performances-tbody');
     const groupId = 'perf-group-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
@@ -448,7 +444,7 @@ window.addQrPerformanceRow = function(data = null) {
             <button onclick="window.removeQrPerformanceRow(this)" class="text-slate-300 hover:text-rose-500 transition-colors p-1.5 bg-white border border-slate-200 rounded-lg shadow-sm hover:border-rose-200 hover:bg-rose-50"><i class="fa-solid fa-trash-can"></i></button>
         </td>
     `;
-
+    
     const detailTr = document.createElement('tr');
     detailTr.className = "qr-perf-detail-row bg-slate-50/50 border-b-4 border-slate-200"; 
     detailTr.setAttribute('data-group-id', groupId);
@@ -541,7 +537,6 @@ window.calcQrPerformanceRow = function(inputEl) {
     if (oldVal !== 0 || newVal !== 0) {
         res = oldVal - newVal;
     }
-    
     resEl.innerText = res.toLocaleString();
 };
 
@@ -571,7 +566,6 @@ window.calcQrPerformanceDetails = function(inputEl, calcType) {
     res1El.innerText = res1.toLocaleString();
     res2El.innerText = res2.toFixed(1);
 };
-
 
 window.updateQrFileNames = function() {
     const inputEl = document.getElementById('qr-files');
@@ -690,7 +684,6 @@ window.saveQualityReport = async function() {
             }
         }
 
-        // Good/Bad 항목 데이터 추출
         const qualityLessons = [];
         document.querySelectorAll('.qr-goodbad-row').forEach(tr => {
             qualityLessons.push({
@@ -701,9 +694,11 @@ window.saveQualityReport = async function() {
             });
         });
 
-        // 실적 관리 데이터 추출
         const qualityPerformances = [];
         document.querySelectorAll('.qr-perf-row').forEach(trMain => {
+            const groupId = trMain.getAttribute('data-group-id');
+            const trDetail = trMain.parentNode.querySelector(`tr.qr-perf-detail-row[data-group-id="${groupId}"]`);
+            
             let perf = {
                 category: trMain.querySelector('.qr-pf-category').value,
                 item: trMain.querySelector('.qr-pf-item').value.trim(),
@@ -713,9 +708,6 @@ window.saveQualityReport = async function() {
                 resVal: parseFloat(trMain.querySelector('.qr-pf-res').innerText.replace(/,/g, '')) || 0
             };
 
-            const groupId = trMain.getAttribute('data-group-id');
-            const trDetail = trMain.parentNode.querySelector(`tr.qr-perf-detail-row[data-group-id="${groupId}"]`);
-            
             if (trDetail && trDetail.style.display !== 'none') {
                 perf.details = {
                     company: trDetail.querySelector('.qr-detail-company')?.value.trim() || '',
@@ -726,6 +718,7 @@ window.saveQualityReport = async function() {
                     res2: parseFloat(trDetail.querySelector('.qr-detail-res2')?.innerText) || 0
                 };
             }
+
             qualityPerformances.push(perf);
         });
 
@@ -742,7 +735,7 @@ window.saveQualityReport = async function() {
                 status: document.getElementById('qr-ext-status').value
             },
             qualityLessons: qualityLessons,
-            qualityPerformances: qualityPerformances, // 💡 새로운 테이블 데이터 구조 반영
+            qualityPerformances: qualityPerformances,
             qualityComments: document.getElementById('qr-comments').value.trim(),
             qualityStatus: statusVal,
             qualityFiles: uploadedFiles,
