@@ -340,7 +340,7 @@ window.renderProjectStatusList = function() {
     tbody.innerHTML = htmlStr;
 };
 
-// 💡 엑스박스 완벽 방지, 안전한 썸네일 이미지 렌더러 (과거 데이터도 100% 호환)
+// 💡 엑스박스 완벽 방지, 썸네일 고화질 매핑 HTML 렌더러
 window.generateMediaHtml = function(filesArray) {
     if (!filesArray || filesArray.length === 0) return '';
     let mediaHtml = ''; let filesHtml = '';
@@ -550,18 +550,12 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
 // 💡 구매 관리
 // ==========================================
 window.openPurchaseModal = function(projectId, title) { 
-    document.getElementById('pur-req-id').value = projectId; 
-    document.getElementById('pur-project-title').innerText = title; 
-    window.resetPurchaseForm(); 
-    document.getElementById('purchase-modal').classList.replace('hidden', 'flex'); 
-    if(window.initGoogleAPI) window.initGoogleAPI();
+    document.getElementById('pur-req-id').value = projectId; document.getElementById('pur-project-title').innerText = title; window.resetPurchaseForm(); 
+    document.getElementById('purchase-modal').classList.replace('hidden', 'flex'); if(window.initGoogleAPI) window.initGoogleAPI();
     
     if (currentPurchaseUnsubscribe) currentPurchaseUnsubscribe(); 
     currentPurchaseUnsubscribe = onSnapshot(query(collection(db, "project_purchases"), where("projectId", "==", projectId)), function(snap) { 
-        let list = []; 
-        snap.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
-        list.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
-        
+        let list = []; snap.forEach(doc => list.push({ id: doc.id, ...doc.data() })); list.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
         const listEl = document.getElementById('purchase-list');
         if(list.length === 0) { listEl.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 구매 내역이 없습니다.</div>'; return; }
         
@@ -587,8 +581,7 @@ window.closePurchaseModal = function() { document.getElementById('purchase-modal
 window.resetPurchaseForm = function() { document.getElementById('editing-pur-id').value = ''; document.getElementById('new-pur-text').value = ''; document.getElementById('new-pur-file').value = ''; document.getElementById('pur-file-name').innerText = ''; };
 window.savePurchaseItem = async function() { 
     const pId = document.getElementById('pur-req-id').value, title = document.getElementById('pur-project-title').innerText;
-    const proj = window.currentProjectStatusList.find(p => p.id === pId);
-    const folderName = proj && proj.code ? proj.code : title;
+    const proj = window.currentProjectStatusList.find(p => p.id === pId), folderName = proj && proj.code ? proj.code : title;
     const content = document.getElementById('new-pur-text').value.trim(), fileInput = document.getElementById('new-pur-file'), btn = document.getElementById('btn-pur-save');
     
     if(!content && fileInput.files.length === 0) return window.showToast("내용이나 파일을 첨부하세요.", "error");
@@ -791,7 +784,7 @@ window.renderDailyLogs = function(logs) {
 };
 
 window.saveDailyLogItem = async function() { 
-    const projectId = document.getElementById('log-req-id').value; const logId = document.getElementById('editing-log-id').value; 
+    const projectId = document.getElementById('log-req-id').value, logId = document.getElementById('editing-log-id').value; 
     const date = document.getElementById('new-log-date').value; const content = document.getElementById('new-log-text').value.trim(); 
     const fileInput = document.getElementById('new-log-image'), progressVal = parseInt(document.getElementById('log-project-progress').value) || 0; 
     const purchaseRateVal = parseInt(document.getElementById('log-project-purchase-rate').value) || 0; 
