@@ -245,13 +245,36 @@ window.openQrModal = function(docId) {
         document.getElementById('qr-ext-status').value = report.customerSch.status || '미진행';
     }
     
-    // 💡 품질 개선 및 리스크 테이블 (1단 구조) 렌더링
-    document.getElementById('qr-lessons-tbody').innerHTML = '';
-    if(report.qualityLessons && report.qualityLessons.length > 0) {
-        report.qualityLessons.forEach((l) => window.addQrLessonRow(l));
-    } else {
-        window.addQrLessonRow(); // 없으면 빈 줄 1개 생성
+    // 💡 1. 2단 분리된 테이블 (Good/Bad & 실적) 초기화 및 렌더링
+    document.getElementById('qr-goodbad-tbody').innerHTML = '';
+    document.getElementById('qr-performances-tbody').innerHTML = '';
+    
+    let hasGoodBad = false;
+    let hasPerf = false;
+
+    if (report.qualityLessons && report.qualityLessons.length > 0) {
+        report.qualityLessons.forEach(l => {
+            if (l.highlight || l.lowlight || l.highRisk || l.lowRisk) {
+                window.addQrGoodBadRow(l);
+                hasGoodBad = true;
+            }
+            if (l.content || l.details || l.oldVal !== undefined || (l.item && !l.highlight && !l.lowlight)) {
+                window.addQrPerformanceRow(l);
+                hasPerf = true;
+            }
+        });
     }
+
+    if (report.qualityPerformances && report.qualityPerformances.length > 0) {
+        report.qualityPerformances.forEach(p => {
+            window.addQrPerformanceRow(p);
+            hasPerf = true;
+        });
+    }
+
+    if(!hasGoodBad) window.addQrGoodBadRow();
+    if(!hasPerf) window.addQrPerformanceRow();
+
 
     document.getElementById('qr-comments').value = report.qualityComments || '';
     document.getElementById('qr-final-status').value = report.qualityStatus || '대기중';
@@ -294,23 +317,21 @@ window.closeQrModal = function() {
     document.getElementById('qr-detail-modal').classList.remove('flex');
 };
 
-// 💡 1. 동적 행 추가 로직 수정 (요청하신 대로 1단 구조 및 컬럼 변경 반영)
-window.addQrLessonRow = function(data = null) {
-    const tbody = document.getElementById('qr-lessons-tbody');
+
+// 💡 2. 상단 Good/Bad 작성용 추가 함수
+window.addQrGoodBadRow = function(data = null) {
+    const tbody = document.getElementById('qr-goodbad-tbody');
     const tr = document.createElement('tr');
-    tr.className = "qr-lesson-row hover:bg-slate-50/50 transition-colors bg-white";
+    tr.className = "qr-goodbad-row hover:bg-slate-50/50 transition-colors bg-white border-b border-slate-100";
     
-    const catVal = data ? data.category : '품질개선';
+    const catVal = data ? data.category : '제작';
     const itemVal = data ? data.item : '';
-    // 기존 호환성 (과거에 입력된 High/Low Risk 값이 있다면 content로 묶어서 가져옴)
-    let contentVal = data ? (data.content || data.highRisk || data.lowRisk || '') : '';
-    const oldVal = data ? (data.oldVal || (data.details ? data.details.oldVal : '')) : '';
-    const newVal = data ? (data.newVal || (data.details ? data.details.newVal : '')) : '';
-    const resVal = data ? (data.resVal || (data.details ? data.details.res1 : '0')) : '0';
+    const hlVal = data ? (data.highlight || data.highRisk || '') : '';
+    const llVal = data ? (data.lowlight || data.lowRisk || '') : '';
 
     tr.innerHTML = `
         <td class="p-2 border-r border-slate-100 align-top">
-            <select class="qr-ls-category w-full border border-slate-300 rounded px-2 py-1.5 text-xs font-bold text-slate-700 outline-teal-500 bg-slate-50 cursor-pointer">
+            <select class="qr-gb-category w-full border border-slate-300 rounded px-2 py-1.5 text-xs font-bold text-slate-700 outline-emerald-500 bg-slate-50 cursor-pointer">
                 <option value="제작" ${catVal==='제작'?'selected':''}>제작</option>
                 <option value="품질개선" ${catVal==='품질개선'?'selected':''}>품질개선</option>
                 <option value="납기단축" ${catVal==='납기단축'?'selected':''}>납기단축</option>
@@ -318,43 +339,237 @@ window.addQrLessonRow = function(data = null) {
             </select>
         </td>
         <td class="p-2 border-r border-slate-100 align-top">
-            <input type="text" class="qr-ls-item w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-teal-500 bg-slate-50 focus:bg-white" value="${itemVal}" placeholder="아이템명">
+            <input type="text" class="qr-gb-item w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-emerald-500 bg-white" value="${itemVal}" placeholder="아이템명">
         </td>
         <td class="p-2 border-r border-slate-100 align-top">
-            <textarea class="qr-ls-content w-full border border-slate-300 rounded p-2 text-xs outline-teal-500 custom-scrollbar resize-y min-h-[40px] bg-slate-50 focus:bg-white" placeholder="상세 진행내용 입력">${contentVal}</textarea>
+            <textarea class="qr-gb-high w-full border border-slate-300 rounded p-2 text-xs outline-emerald-500 custom-scrollbar resize-y min-h-[50px] bg-emerald-50/30 focus:bg-white" placeholder="잘된 점 또는 개선안 (Highlight)">${hlVal}</textarea>
         </td>
         <td class="p-2 border-r border-slate-100 align-top">
-            <input type="number" class="qr-ls-old w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-teal-500 bg-slate-50 focus:bg-white text-right font-bold" value="${oldVal}" oninput="window.calcQrLessonRow(this)" placeholder="0">
-        </td>
-        <td class="p-2 border-r border-slate-100 align-top">
-            <input type="number" class="qr-ls-new w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-teal-500 bg-slate-50 focus:bg-white text-right font-bold" value="${newVal}" oninput="window.calcQrLessonRow(this)" placeholder="0">
-        </td>
-        <td class="p-2 border-r border-slate-100 align-middle text-center">
-            <span class="qr-ls-res font-black text-emerald-600 text-sm">${resVal}</span>
+            <textarea class="qr-gb-low w-full border border-slate-300 rounded p-2 text-xs outline-rose-500 custom-scrollbar resize-y min-h-[50px] bg-rose-50/30 focus:bg-white" placeholder="문제점 또는 아쉬운 점 (Lowlight)">${llVal}</textarea>
         </td>
         <td class="p-2 text-center align-middle">
             <button onclick="this.closest('tr').remove()" class="text-slate-300 hover:text-rose-500 transition-colors p-1.5 bg-white border border-slate-200 rounded-lg shadow-sm hover:border-rose-200 hover:bg-rose-50"><i class="fa-solid fa-trash-can"></i></button>
         </td>
     `;
-    
     tbody.appendChild(tr);
 };
 
-// 💡 2. 개선수치 자동 계산 로직
-window.calcQrLessonRow = function(inputEl) {
-    const tr = inputEl.closest('tr');
-    const oldVal = parseFloat(tr.querySelector('.qr-ls-old').value) || 0;
-    const newVal = parseFloat(tr.querySelector('.qr-ls-new').value) || 0;
-    const resEl = tr.querySelector('.qr-ls-res');
+
+// 💡 3. 하단 실적 및 품질개선 상세 폼용 추가 함수 (기존 로직 이름 변경)
+window.addQrPerformanceRow = function(data = null) {
+    const tbody = document.getElementById('qr-performances-tbody');
+    const groupId = 'perf-group-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
     
-    // 단순 차감 계산 (기준 - 실적 = 개선건수/금액/시간)
+    const catVal = data ? data.category : '품질개선';
+    const itemVal = data ? data.item : '';
+    const contentVal = data ? data.content || '' : '';
+    const oldVal = data ? (data.oldVal !== undefined ? data.oldVal : (data.details ? data.details.oldVal : '')) : '';
+    const newVal = data ? (data.newVal !== undefined ? data.newVal : (data.details ? data.details.newVal : '')) : '';
+    const resVal = data ? (data.resVal !== undefined ? data.resVal : (data.details ? data.details.res1 : '0')) : '0';
+    const details = data ? (data.details || {}) : {}; 
+
+    let detailHtml = '';
+    let isDetailVisible = false;
+
+    if (catVal === '원가절감') {
+        isDetailVisible = true;
+        detailHtml = `
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 bg-amber-50/30 p-3 rounded-xl border border-amber-100 mt-2">
+                <div><label class="text-[10px] font-bold text-slate-500 mb-1 block">업체</label><input type="text" class="qr-detail-company w-full border border-slate-200 px-2 py-1.5 rounded text-xs outline-amber-500 bg-white" value="${details.company||''}"></div>
+                <div><label class="text-[10px] font-bold text-slate-500 mb-1 block">진행현황</label><input type="text" class="qr-detail-status w-full border border-slate-200 px-2 py-1.5 rounded text-xs outline-amber-500 bg-white" value="${details.status||''}"></div>
+                <div><label class="text-[10px] font-bold text-slate-500 mb-1 block">기존 원가 (원)</label><input type="number" class="qr-detail-old-val w-full border border-slate-200 px-2 py-1.5 rounded text-xs outline-amber-500 bg-white text-right" value="${details.oldVal||''}" oninput="window.calcQrPerformanceDetails(this, '원가절감')"></div>
+                <div><label class="text-[10px] font-bold text-emerald-600 mb-1 block">실적 원가 (원)</label><input type="number" class="qr-detail-new-val w-full border border-emerald-200 px-2 py-1.5 rounded text-xs outline-emerald-500 bg-white font-bold text-emerald-700 text-right" value="${details.newVal||''}" oninput="window.calcQrPerformanceDetails(this, '원가절감')"></div>
+                
+                <div class="col-span-2 md:col-span-4 flex justify-end items-center gap-4 mt-1 bg-white p-2 rounded border border-slate-100">
+                    <span class="text-[11px] font-bold text-slate-500">절감액 (Amount): <span class="text-rose-500 font-black qr-detail-res1 ml-1">${details.res1||'0'}</span> 원</span>
+                    <span class="text-[11px] font-bold text-slate-500">절감률 (CR %): <span class="text-rose-500 font-black qr-detail-res2 ml-1">${details.res2||'0'}</span> %</span>
+                </div>
+            </div>`;
+    } else if (catVal === '납기단축') {
+        isDetailVisible = true;
+        detailHtml = `
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 bg-blue-50/30 p-3 rounded-xl border border-blue-100 mt-2">
+                <div><label class="text-[10px] font-bold text-slate-500 mb-1 block">업체</label><input type="text" class="qr-detail-company w-full border border-slate-200 px-2 py-1.5 rounded text-xs outline-blue-500 bg-white" value="${details.company||''}"></div>
+                <div><label class="text-[10px] font-bold text-slate-500 mb-1 block">진행현황</label><input type="text" class="qr-detail-status w-full border border-slate-200 px-2 py-1.5 rounded text-xs outline-blue-500 bg-white" value="${details.status||''}"></div>
+                <div><label class="text-[10px] font-bold text-slate-500 mb-1 block">기존 납기 (일)</label><input type="number" class="qr-detail-old-val w-full border border-slate-200 px-2 py-1.5 rounded text-xs outline-blue-500 bg-white text-right" value="${details.oldVal||''}" oninput="window.calcQrPerformanceDetails(this, '납기단축')"></div>
+                <div><label class="text-[10px] font-bold text-emerald-600 mb-1 block">실적 납기 (일)</label><input type="number" class="qr-detail-new-val w-full border border-emerald-200 px-2 py-1.5 rounded text-xs outline-emerald-500 bg-white font-bold text-emerald-700 text-right" value="${details.newVal||''}" oninput="window.calcQrPerformanceDetails(this, '납기단축')"></div>
+                
+                <div class="col-span-2 md:col-span-4 flex justify-end items-center gap-4 mt-1 bg-white p-2 rounded border border-slate-100">
+                    <span class="text-[11px] font-bold text-slate-500">단축 일수: <span class="text-rose-500 font-black qr-detail-res1 ml-1">${details.res1||'0'}</span> 일</span>
+                    <span class="text-[11px] font-bold text-slate-500">단축률 (%): <span class="text-rose-500 font-black qr-detail-res2 ml-1">${details.res2||'0'}</span> %</span>
+                </div>
+            </div>`;
+    } else if (catVal === '품질개선') {
+        isDetailVisible = true;
+        detailHtml = `
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 bg-emerald-50/30 p-3 rounded-xl border border-emerald-100 mt-2">
+                <div><label class="text-[10px] font-bold text-slate-500 mb-1 block">업체</label><input type="text" class="qr-detail-company w-full border border-slate-200 px-2 py-1.5 rounded text-xs outline-emerald-500 bg-white" value="${details.company||''}"></div>
+                <div><label class="text-[10px] font-bold text-slate-500 mb-1 block">진행현황</label><input type="text" class="qr-detail-status w-full border border-slate-200 px-2 py-1.5 rounded text-xs outline-emerald-500 bg-white" value="${details.status||''}"></div>
+                <div><label class="text-[10px] font-bold text-slate-500 mb-1 block">기존 불량 (건/률)</label><input type="number" class="qr-detail-old-val w-full border border-slate-200 px-2 py-1.5 rounded text-xs outline-emerald-500 bg-white text-right" value="${details.oldVal||''}" oninput="window.calcQrPerformanceDetails(this, '품질개선')"></div>
+                <div><label class="text-[10px] font-bold text-emerald-600 mb-1 block">실적 불량 (건/률)</label><input type="number" class="qr-detail-new-val w-full border border-emerald-200 px-2 py-1.5 rounded text-xs outline-emerald-500 bg-white font-bold text-emerald-700 text-right" value="${details.newVal||''}" oninput="window.calcQrPerformanceDetails(this, '품질개선')"></div>
+                
+                <div class="col-span-2 md:col-span-4 flex justify-end items-center gap-4 mt-1 bg-white p-2 rounded border border-slate-100">
+                    <span class="text-[11px] font-bold text-slate-500">개선 건/포인트: <span class="text-rose-500 font-black qr-detail-res1 ml-1">${details.res1||'0'}</span></span>
+                    <span class="text-[11px] font-bold text-slate-500">개선율 (%): <span class="text-rose-500 font-black qr-detail-res2 ml-1">${details.res2||'0'}</span> %</span>
+                </div>
+            </div>`;
+    }
+
+    const tr = document.createElement('tr');
+    tr.className = "qr-perf-row hover:bg-slate-50/50 transition-colors bg-white border-b border-slate-100";
+    tr.setAttribute('data-group-id', groupId);
+
+    tr.innerHTML = `
+        <td class="p-2 border-r border-slate-100 align-top">
+            <select class="qr-pf-category w-full border border-slate-300 rounded px-2 py-1.5 text-xs font-bold text-slate-700 outline-teal-500 bg-slate-50 cursor-pointer" onchange="window.toggleQrPerformanceDetails(this)">
+                <option value="제작" ${catVal==='제작'?'selected':''}>제작</option>
+                <option value="품질개선" ${catVal==='품질개선'?'selected':''}>품질개선</option>
+                <option value="납기단축" ${catVal==='납기단축'?'selected':''}>납기단축</option>
+                <option value="원가절감" ${catVal==='원가절감'?'selected':''}>원가절감</option>
+            </select>
+        </td>
+        <td class="p-2 border-r border-slate-100 align-top">
+            <input type="text" class="qr-pf-item w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-teal-500 bg-slate-50 focus:bg-white" value="${itemVal}" placeholder="아이템명">
+        </td>
+        <td class="p-2 border-r border-slate-100 align-top">
+            <textarea class="qr-pf-content w-full border border-slate-300 rounded p-2 text-xs outline-teal-500 custom-scrollbar resize-y min-h-[40px] bg-slate-50 focus:bg-white" placeholder="상세 진행내용 입력">${contentVal}</textarea>
+        </td>
+        <td class="p-2 border-r border-slate-100 align-top">
+            <input type="number" class="qr-pf-old w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-teal-500 bg-slate-50 focus:bg-white text-right font-bold" value="${oldVal}" oninput="window.calcQrPerformanceRow(this)" placeholder="0">
+        </td>
+        <td class="p-2 border-r border-slate-100 align-top">
+            <input type="number" class="qr-pf-new w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-teal-500 bg-slate-50 focus:bg-white text-right font-bold" value="${newVal}" oninput="window.calcQrPerformanceRow(this)" placeholder="0">
+        </td>
+        <td class="p-2 border-r border-slate-100 align-middle text-center">
+            <span class="qr-pf-res font-black text-emerald-600 text-sm">${resVal}</span>
+        </td>
+        <td class="p-2 text-center align-middle">
+            <button onclick="window.removeQrPerformanceRow(this)" class="text-slate-300 hover:text-rose-500 transition-colors p-1.5 bg-white border border-slate-200 rounded-lg shadow-sm hover:border-rose-200 hover:bg-rose-50"><i class="fa-solid fa-trash-can"></i></button>
+        </td>
+    `;
+    
+    const detailTr = document.createElement('tr');
+    detailTr.className = "qr-perf-detail-row bg-slate-50/50 border-b-4 border-slate-200"; 
+    detailTr.setAttribute('data-group-id', groupId);
+    if(!isDetailVisible) detailTr.style.display = 'none';
+    
+    detailTr.innerHTML = `
+        <td colspan="7" class="p-4 border-t border-slate-100">
+            <div class="qr-detail-container w-full max-w-4xl mx-auto">
+                ${detailHtml}
+            </div>
+        </td>
+    `;
+
+    tbody.appendChild(tr);
+    tbody.appendChild(detailTr);
+};
+
+window.removeQrPerformanceRow = function(btn) {
+    const tr = btn.closest('tr');
+    const groupId = tr.getAttribute('data-group-id');
+    const rows = tr.parentNode.querySelectorAll(`tr[data-group-id="${groupId}"]`);
+    rows.forEach(r => r.remove());
+};
+
+window.toggleQrPerformanceDetails = function(selectEl) {
+    const val = selectEl.value;
+    const tr = selectEl.closest('tr');
+    const groupId = tr.getAttribute('data-group-id');
+    const detailTr = tr.parentNode.querySelector(`tr.qr-perf-detail-row[data-group-id="${groupId}"]`);
+    const container = detailTr.querySelector('.qr-detail-container');
+    
+    let detailHtml = '';
+    
+    if (val === '원가절감') {
+        detailTr.style.display = 'table-row';
+        detailHtml = `
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 bg-amber-50/30 p-3 rounded-xl border border-amber-100 mt-2">
+                <div><label class="text-[10px] font-bold text-slate-500 mb-1 block">업체</label><input type="text" class="qr-detail-company w-full border border-slate-200 px-2 py-1.5 rounded text-xs outline-amber-500 bg-white"></div>
+                <div><label class="text-[10px] font-bold text-slate-500 mb-1 block">진행현황</label><input type="text" class="qr-detail-status w-full border border-slate-200 px-2 py-1.5 rounded text-xs outline-amber-500 bg-white"></div>
+                <div><label class="text-[10px] font-bold text-slate-500 mb-1 block">기존 원가 (원)</label><input type="number" class="qr-detail-old-val w-full border border-slate-200 px-2 py-1.5 rounded text-xs outline-amber-500 bg-white text-right" oninput="window.calcQrPerformanceDetails(this, '원가절감')"></div>
+                <div><label class="text-[10px] font-bold text-emerald-600 mb-1 block">실적 원가 (원)</label><input type="number" class="qr-detail-new-val w-full border border-emerald-200 px-2 py-1.5 rounded text-xs outline-emerald-500 bg-white font-bold text-emerald-700 text-right" oninput="window.calcQrPerformanceDetails(this, '원가절감')"></div>
+                
+                <div class="col-span-2 md:col-span-4 flex justify-end items-center gap-4 mt-1 bg-white p-2 rounded border border-slate-100">
+                    <span class="text-[11px] font-bold text-slate-500">절감액 (Amount): <span class="text-rose-500 font-black qr-detail-res1 ml-1">0</span> 원</span>
+                    <span class="text-[11px] font-bold text-slate-500">절감률 (CR %): <span class="text-rose-500 font-black qr-detail-res2 ml-1">0</span> %</span>
+                </div>
+            </div>`;
+    } else if (val === '납기단축') {
+        detailTr.style.display = 'table-row';
+        detailHtml = `
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 bg-blue-50/30 p-3 rounded-xl border border-blue-100 mt-2">
+                <div><label class="text-[10px] font-bold text-slate-500 mb-1 block">업체</label><input type="text" class="qr-detail-company w-full border border-slate-200 px-2 py-1.5 rounded text-xs outline-blue-500 bg-white"></div>
+                <div><label class="text-[10px] font-bold text-slate-500 mb-1 block">진행현황</label><input type="text" class="qr-detail-status w-full border border-slate-200 px-2 py-1.5 rounded text-xs outline-blue-500 bg-white"></div>
+                <div><label class="text-[10px] font-bold text-slate-500 mb-1 block">기존 납기 (일)</label><input type="number" class="qr-detail-old-val w-full border border-slate-200 px-2 py-1.5 rounded text-xs outline-blue-500 bg-white text-right" oninput="window.calcQrPerformanceDetails(this, '납기단축')"></div>
+                <div><label class="text-[10px] font-bold text-emerald-600 mb-1 block">실적 납기 (일)</label><input type="number" class="qr-detail-new-val w-full border border-emerald-200 px-2 py-1.5 rounded text-xs outline-emerald-500 bg-white font-bold text-emerald-700 text-right" oninput="window.calcQrPerformanceDetails(this, '납기단축')"></div>
+                
+                <div class="col-span-2 md:col-span-4 flex justify-end items-center gap-4 mt-1 bg-white p-2 rounded border border-slate-100">
+                    <span class="text-[11px] font-bold text-slate-500">단축 일수: <span class="text-rose-500 font-black qr-detail-res1 ml-1">0</span> 일</span>
+                    <span class="text-[11px] font-bold text-slate-500">단축률 (%): <span class="text-rose-500 font-black qr-detail-res2 ml-1">0</span> %</span>
+                </div>
+            </div>`;
+    } else if (val === '품질개선') {
+        detailTr.style.display = 'table-row';
+        detailHtml = `
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 bg-emerald-50/30 p-3 rounded-xl border border-emerald-100 mt-2">
+                <div><label class="text-[10px] font-bold text-slate-500 mb-1 block">업체</label><input type="text" class="qr-detail-company w-full border border-slate-200 px-2 py-1.5 rounded text-xs outline-emerald-500 bg-white"></div>
+                <div><label class="text-[10px] font-bold text-slate-500 mb-1 block">진행현황</label><input type="text" class="qr-detail-status w-full border border-slate-200 px-2 py-1.5 rounded text-xs outline-emerald-500 bg-white"></div>
+                <div><label class="text-[10px] font-bold text-slate-500 mb-1 block">기존 불량 (건/률)</label><input type="number" class="qr-detail-old-val w-full border border-slate-200 px-2 py-1.5 rounded text-xs outline-emerald-500 bg-white text-right" oninput="window.calcQrPerformanceDetails(this, '품질개선')"></div>
+                <div><label class="text-[10px] font-bold text-emerald-600 mb-1 block">실적 불량 (건/률)</label><input type="number" class="qr-detail-new-val w-full border border-emerald-200 px-2 py-1.5 rounded text-xs outline-emerald-500 bg-white font-bold text-emerald-700 text-right" oninput="window.calcQrPerformanceDetails(this, '품질개선')"></div>
+                
+                <div class="col-span-2 md:col-span-4 flex justify-end items-center gap-4 mt-1 bg-white p-2 rounded border border-slate-100">
+                    <span class="text-[11px] font-bold text-slate-500">개선 건/포인트: <span class="text-rose-500 font-black qr-detail-res1 ml-1">0</span></span>
+                    <span class="text-[11px] font-bold text-slate-500">개선율 (%): <span class="text-rose-500 font-black qr-detail-res2 ml-1">0</span> %</span>
+                </div>
+            </div>`;
+    } else {
+        detailTr.style.display = 'none';
+    }
+    
+    container.innerHTML = detailHtml;
+};
+
+window.calcQrPerformanceRow = function(inputEl) {
+    const tr = inputEl.closest('tr');
+    const oldVal = parseFloat(tr.querySelector('.qr-pf-old').value) || 0;
+    const newVal = parseFloat(tr.querySelector('.qr-pf-new').value) || 0;
+    const resEl = tr.querySelector('.qr-pf-res');
+    
     let res = 0;
     if (oldVal !== 0 || newVal !== 0) {
         res = oldVal - newVal;
     }
-    
     resEl.innerText = res.toLocaleString();
 };
+
+window.calcQrPerformanceDetails = function(inputEl, calcType) {
+    const detailContainer = inputEl.closest('.qr-detail-container');
+    const oldVal = parseFloat(detailContainer.querySelector('.qr-detail-old-val').value) || 0;
+    const newVal = parseFloat(detailContainer.querySelector('.qr-detail-new-val').value) || 0;
+    
+    const res1El = detailContainer.querySelector('.qr-detail-res1');
+    const res2El = detailContainer.querySelector('.qr-detail-res2');
+
+    let res1 = 0, res2 = 0;
+
+    if (oldVal > 0) {
+        if (calcType === '원가절감') {
+            res1 = oldVal - newVal; 
+            res2 = (res1 / oldVal * 100); 
+        } else if (calcType === '납기단축') {
+            res1 = oldVal - newVal; 
+            res2 = (res1 / oldVal * 100); 
+        } else if (calcType === '품질개선') {
+            res1 = oldVal - newVal; 
+            res2 = (res1 / oldVal * 100); 
+        }
+    }
+
+    res1El.innerText = res1.toLocaleString();
+    res2El.innerText = res2.toFixed(1);
+};
+
 
 window.updateQrFileNames = function() {
     const inputEl = document.getElementById('qr-files');
@@ -450,6 +665,7 @@ async function qrUploadToDrive(file, folderName) {
     });
 }
 
+// 💡 4. 최종 저장 시 세부 데이터까지 추출하여 저장
 window.saveQualityReport = async function() {
     const docId = document.getElementById('qr-doc-id').value;
     const report = window.qrReports.find(r => r.id === docId);
@@ -473,17 +689,42 @@ window.saveQualityReport = async function() {
             }
         }
 
-        // 💡 3. 새로 개편된 1단 구조의 데이터 추출 로직 적용
         const qualityLessons = [];
-        document.querySelectorAll('.qr-lesson-row').forEach(tr => {
+        document.querySelectorAll('.qr-goodbad-row').forEach(tr => {
             qualityLessons.push({
-                category: tr.querySelector('.qr-ls-category').value,
-                item: tr.querySelector('.qr-ls-item').value.trim(),
-                content: tr.querySelector('.qr-ls-content').value.trim(),
-                oldVal: parseFloat(tr.querySelector('.qr-ls-old').value) || 0,
-                newVal: parseFloat(tr.querySelector('.qr-ls-new').value) || 0,
-                resVal: parseFloat(tr.querySelector('.qr-ls-res').innerText.replace(/,/g, '')) || 0
+                category: tr.querySelector('.qr-gb-category').value,
+                item: tr.querySelector('.qr-gb-item').value.trim(),
+                highlight: tr.querySelector('.qr-gb-high').value.trim(),
+                lowlight: tr.querySelector('.qr-gb-low').value.trim()
             });
+        });
+
+        const qualityPerformances = [];
+        document.querySelectorAll('.qr-perf-row').forEach(trMain => {
+            const groupId = trMain.getAttribute('data-group-id');
+            const trDetail = trMain.parentNode.querySelector(`tr.qr-perf-detail-row[data-group-id="${groupId}"]`);
+            
+            let perf = {
+                category: trMain.querySelector('.qr-pf-category').value,
+                item: trMain.querySelector('.qr-pf-item').value.trim(),
+                content: trMain.querySelector('.qr-pf-content').value.trim(),
+                oldVal: parseFloat(trMain.querySelector('.qr-pf-old').value) || 0,
+                newVal: parseFloat(trMain.querySelector('.qr-pf-new').value) || 0,
+                resVal: parseFloat(trMain.querySelector('.qr-pf-res').innerText.replace(/,/g, '')) || 0
+            };
+
+            if (trDetail && trDetail.style.display !== 'none') {
+                perf.details = {
+                    company: trDetail.querySelector('.qr-detail-company')?.value.trim() || '',
+                    status: trDetail.querySelector('.qr-detail-status')?.value.trim() || '',
+                    oldVal: parseFloat(trDetail.querySelector('.qr-detail-old-val')?.value) || 0,
+                    newVal: parseFloat(trDetail.querySelector('.qr-detail-new-val')?.value) || 0,
+                    res1: parseFloat(trDetail.querySelector('.qr-detail-res1')?.innerText.replace(/,/g, '')) || 0,
+                    res2: parseFloat(trDetail.querySelector('.qr-detail-res2')?.innerText) || 0
+                };
+            }
+
+            qualityPerformances.push(perf);
         });
 
         const statusVal = document.getElementById('qr-final-status').value;
@@ -499,6 +740,7 @@ window.saveQualityReport = async function() {
                 status: document.getElementById('qr-ext-status').value
             },
             qualityLessons: qualityLessons,
+            qualityPerformances: qualityPerformances,
             qualityComments: document.getElementById('qr-comments').value.trim(),
             qualityStatus: statusVal,
             qualityFiles: uploadedFiles,
