@@ -71,16 +71,23 @@ const getSafeString = (val) => {
     return (val === null || val === undefined) ? '' : String(val);
 };
 
-// 💡 다중 파일 이름 표시 유틸 함수
+// 💡 [수정됨] 다중 파일 이름 및 UI 박스 상태를 정확히 제어하는 유틸 함수
 window.updateMultiFileNames = function(inputEl, displayElId) {
     const displayEl = document.getElementById(displayElId);
     if (!displayEl) return;
+    
+    // Daily Log 처럼 숨겨진 wrap이 있는 경우 처리
+    const wrap = document.getElementById(displayElId + '-wrap');
+
     if (inputEl.files.length === 0) {
         displayEl.innerHTML = '';
+        if(wrap) wrap.classList.add('hidden');
     } else if (inputEl.files.length === 1) {
         displayEl.innerHTML = inputEl.files[0].name;
+        if(wrap) wrap.classList.remove('hidden');
     } else {
-        displayEl.innerHTML = `${inputEl.files[0].name} 외 ${inputEl.files.length - 1}개 파일 선택됨`;
+        displayEl.innerHTML = `${inputEl.files[0].name} 외 ${inputEl.files.length - 1}개 파일 첨부됨`;
+        if(wrap) wrap.classList.remove('hidden');
     }
 };
 
@@ -530,14 +537,16 @@ window.submitCrReq = async function() {
         const designInput = document.getElementById('cr-req-design-file');
         
         if (specInput && specInput.files.length > 0) {
-            for(let i=0; i < specInput.files.length; i++) {
-                let url = await handleDriveUploadWithProgress(specInput.files[i], pjtData.code || pjtData.name, '완료보고');
+            let total = specInput.files.length;
+            for(let i=0; i < total; i++) {
+                let url = await handleDriveUploadWithProgress(specInput.files[i], pjtData.code || pjtData.name, '완료보고', i+1, total);
                 specFiles.push({ name: specInput.files[i].name, url: url });
             }
         }
         if (designInput && designInput.files.length > 0) {
-            for(let i=0; i < designInput.files.length; i++) {
-                let url = await handleDriveUploadWithProgress(designInput.files[i], pjtData.code || pjtData.name, '완료보고');
+            let total = designInput.files.length;
+            for(let i=0; i < total; i++) {
+                let url = await handleDriveUploadWithProgress(designInput.files[i], pjtData.code || pjtData.name, '완료보고', i+1, total);
                 designFiles.push({ name: designInput.files[i].name, url: url });
             }
         }
@@ -627,8 +636,8 @@ window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
     }
 };
 
-// 💡 수정된 다중파일 업로드 유틸
-async function handleDriveUploadWithProgress(file, projectName, subFolderName = null) {
+// 💡 [수정됨] 다중 파일 업로드 최적화 (깜빡임 제거, 순차 상태 표시)
+async function handleDriveUploadWithProgress(file, projectName, subFolderName = null, fileIndex = 1, totalFiles = 1) {
     if(!window.googleAccessToken) {
         if(window.initGoogleAPI) window.initGoogleAPI();
         if(window.authenticateGoogle && !window.googleAccessToken) window.authenticateGoogle();
@@ -657,7 +666,10 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
     }
     if(progressBar) progressBar.style.width = '0%';
     if(progressText) progressText.innerText = '0%';
-    if(progressFilename) progressFilename.innerText = file.name;
+    
+    let fileCounterText = totalFiles > 1 ? `[${fileIndex}/${totalFiles}] ` : '';
+    if(progressFilename) progressFilename.innerText = fileCounterText + file.name;
+    
     const totalMb = (file.size / (1024 * 1024)).toFixed(2);
     if(progressSize) progressSize.innerText = `0.00 MB / ${totalMb} MB`;
 
@@ -682,14 +694,21 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
         };
 
         xhr.onload = function() {
-            if(progressModal) {
-                progressModal.classList.add('hidden');
-                progressModal.classList.remove('flex');
+            // 마지막 파일일 때만 업로드 진행창 닫기 (깜빡임 현상 방지)
+            if (fileIndex === totalFiles) {
+                if(progressModal) {
+                    progressModal.classList.add('hidden');
+                    progressModal.classList.remove('flex');
+                }
             }
             if (xhr.status >= 200 && xhr.status < 300) {
                 const data = JSON.parse(xhr.responseText);
                 resolve(`https://drive.google.com/file/d/${data.id}/view`);
             } else {
+                if(progressModal) {
+                    progressModal.classList.add('hidden');
+                    progressModal.classList.remove('flex');
+                }
                 reject(new Error("파일 업로드 실패: " + xhr.responseText));
             }
         };
@@ -706,6 +725,9 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
     });
 }
 
+// ==========================================
+// 💡 구매 관리
+// ==========================================
 window.openPurchaseModal = function(projectId, title) { 
     document.getElementById('pur-req-id').value = projectId; 
     document.getElementById('pur-project-title').innerText = title; 
@@ -732,7 +754,6 @@ window.openPurchaseModal = function(projectId, title) {
             
             let filesHtml = '';
             let mediaHtml = '';
-            if (item.fileUrl) filesHtml += `<a href="${item.fileUrl}" target="_blank" class="text-xs text-sky-500 font-bold underline w-fit flex items-center gap-1"><i class="fa-solid fa-paperclip"></i> 첨부 일정표 확인</a>`;
             
             if (item.files && item.files.length > 0) {
                 item.files.forEach(f => {
@@ -740,6 +761,7 @@ window.openPurchaseModal = function(projectId, title) {
                     if (isImg) {
                         let fileIdMatch = f.url.match(/\/d\/(.+?)\/view/);
                         let rawUrl = fileIdMatch ? `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}` : f.url;
+                        // 💡 이미지 팝업 연결
                         mediaHtml += `<img src="${rawUrl}" alt="${f.name}" class="max-h-40 rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.openImageViewer('${rawUrl}')">`;
                     } else {
                         filesHtml += `<a href="${f.url}" target="_blank" class="text-xs text-sky-500 font-bold underline w-fit flex items-center gap-1"><i class="fa-solid fa-file-arrow-down"></i> ${f.name}</a>`;
@@ -777,6 +799,7 @@ window.resetPurchaseForm = function() {
     document.getElementById('pur-file-name').innerText = ''; 
 };
 
+// 💡 [수정됨] 구매 다중 파일 업로드 최적화
 window.savePurchaseItem = async function() { 
     const pId = document.getElementById('pur-req-id').value;
     const title = document.getElementById('pur-project-title').innerText;
@@ -794,8 +817,9 @@ window.savePurchaseItem = async function() {
     try { 
         let filesData = [];
         if (fileInput.files.length > 0) {
-            for(let i=0; i<fileInput.files.length; i++) {
-                let url = await handleDriveUploadWithProgress(fileInput.files[i], folderName, '구매');
+            let total = fileInput.files.length;
+            for(let i=0; i<total; i++) {
+                let url = await handleDriveUploadWithProgress(fileInput.files[i], folderName, '구매', i+1, total);
                 filesData.push({ name: fileInput.files[i].name, url: url });
             }
         }
@@ -813,6 +837,9 @@ window.deletePurchase = async function(id) {
     if(confirm("삭제하시겠습니까?")) await deleteDoc(doc(db, "project_purchases", id)); 
 };
 
+// ==========================================
+// 💡 설계 파일 관리
+// ==========================================
 window.openDesignModal = function(projectId, title) { 
     document.getElementById('des-req-id').value = projectId; 
     document.getElementById('des-project-title').innerText = title; 
@@ -839,7 +866,6 @@ window.openDesignModal = function(projectId, title) {
 
             let filesHtml = '';
             let mediaHtml = '';
-            if (item.fileUrl) filesHtml += `<a href="${item.fileUrl}" target="_blank" class="text-xs text-teal-500 font-bold underline w-fit flex items-center gap-1"><i class="fa-solid fa-file-arrow-down"></i> 도면 파일 확인</a>`;
             
             if (item.files && item.files.length > 0) {
                 item.files.forEach(f => {
@@ -847,6 +873,7 @@ window.openDesignModal = function(projectId, title) {
                     if (isImg) {
                         let fileIdMatch = f.url.match(/\/d\/(.+?)\/view/);
                         let rawUrl = fileIdMatch ? `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}` : f.url;
+                        // 💡 이미지 팝업 연결
                         mediaHtml += `<img src="${rawUrl}" alt="${f.name}" class="max-h-40 rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.openImageViewer('${rawUrl}')">`;
                     } else {
                         filesHtml += `<a href="${f.url}" target="_blank" class="text-xs text-teal-500 font-bold underline w-fit flex items-center gap-1"><i class="fa-solid fa-file-arrow-down"></i> ${f.name}</a>`;
@@ -884,6 +911,7 @@ window.resetDesignForm = function() {
     document.getElementById('des-file-name').innerText = ''; 
 };
 
+// 💡 [수정됨] 설계 다중 파일 업로드 최적화
 window.saveDesignItem = async function() { 
     const pId = document.getElementById('des-req-id').value;
     const title = document.getElementById('des-project-title').innerText;
@@ -901,8 +929,9 @@ window.saveDesignItem = async function() {
     try { 
         let filesData = [];
         if (fileInput.files.length > 0) {
-            for(let i=0; i<fileInput.files.length; i++) {
-                let url = await handleDriveUploadWithProgress(fileInput.files[i], folderName, '설계');
+            let total = fileInput.files.length;
+            for(let i=0; i<total; i++) {
+                let url = await handleDriveUploadWithProgress(fileInput.files[i], folderName, '설계', i+1, total);
                 filesData.push({ name: fileInput.files[i].name, url: url });
             }
         }
@@ -920,6 +949,9 @@ window.deleteDesign = async function(id) {
     if(confirm("삭제하시겠습니까?")) await deleteDoc(doc(db, "project_designs", id)); 
 };
 
+// ==========================================
+// 💡 일정표 관리
+// ==========================================
 window.openPjtScheduleModal = function(projectId, title) { 
     document.getElementById('sch-req-id').value = projectId; 
     document.getElementById('sch-project-title').innerText = title; 
@@ -946,7 +978,6 @@ window.openPjtScheduleModal = function(projectId, title) {
 
             let filesHtml = '';
             let mediaHtml = '';
-            if (item.fileUrl) filesHtml += `<a href="${item.fileUrl}" target="_blank" class="text-xs text-fuchsia-500 font-bold underline w-fit flex items-center gap-1"><i class="fa-solid fa-calendar-days"></i> 첨부 일정표 확인</a>`;
             
             if (item.files && item.files.length > 0) {
                 item.files.forEach(f => {
@@ -954,6 +985,7 @@ window.openPjtScheduleModal = function(projectId, title) {
                     if (isImg) {
                         let fileIdMatch = f.url.match(/\/d\/(.+?)\/view/);
                         let rawUrl = fileIdMatch ? `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}` : f.url;
+                        // 💡 이미지 팝업 연결
                         mediaHtml += `<img src="${rawUrl}" alt="${f.name}" class="max-h-40 rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.openImageViewer('${rawUrl}')">`;
                     } else {
                         filesHtml += `<a href="${f.url}" target="_blank" class="text-xs text-fuchsia-500 font-bold underline w-fit flex items-center gap-1"><i class="fa-solid fa-file-arrow-down"></i> ${f.name}</a>`;
@@ -991,6 +1023,7 @@ window.resetPjtScheduleForm = function() {
     document.getElementById('sch-file-name').innerText = ''; 
 };
 
+// 💡 [수정됨] 일정 다중 파일 업로드 최적화
 window.savePjtScheduleItem = async function() { 
     const pId = document.getElementById('sch-req-id').value;
     const title = document.getElementById('sch-project-title').innerText;
@@ -1008,8 +1041,9 @@ window.savePjtScheduleItem = async function() {
     try { 
         let filesData = [];
         if (fileInput.files.length > 0) {
-            for(let i=0; i<fileInput.files.length; i++) {
-                let url = await handleDriveUploadWithProgress(fileInput.files[i], folderName, '일정');
+            let total = fileInput.files.length;
+            for(let i=0; i<total; i++) {
+                let url = await handleDriveUploadWithProgress(fileInput.files[i], folderName, '일정', i+1, total);
                 filesData.push({ name: fileInput.files[i].name, url: url });
             }
         }
@@ -1027,6 +1061,9 @@ window.deletePjtSchedule = async function(id) {
     if(confirm("삭제하시겠습니까?")) await deleteDoc(doc(db, "project_schedules", id)); 
 };
 
+// ==========================================
+// 💡 프로젝트 정보 입력 폼
+// ==========================================
 window.openProjStatusWriteModal = function() {
     document.getElementById('ps-id').value = ''; 
     document.getElementById('ps-code').value = ''; 
@@ -1290,7 +1327,7 @@ window.loadProjectHistory = async function(projectId) {
 };
 
 window.restoreProjectHistory = async function(histId, projectId) {
-    if(!confirm("이 시점의 데이터로 프로젝트 복원하시겠습니까?\n(현재 상태는 덮어씌워집니다)")) return;
+    if(!confirm("이 시점의 데이터로 프로젝트를 복원하시겠습니까?\n(현재 상태는 덮어씌워집니다)")) return;
     
     try {
         const hSnap = await getDoc(doc(db, "project_history", histId));
@@ -1608,10 +1645,10 @@ window.renderDailyLogs = function(logs) {
             let safeContent = String(log.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             if(window.formatMentions) safeContent = window.formatMentions(safeContent);
             
+            // 💡 이미지 및 다중 파일 렌더링
             let mediaHtml = '';
             let filesHtml = '';
             
-            // 💡 이미지 뷰어 팝업 적용
             if (log.imageUrl) {
                 mediaHtml += `<img src="${log.imageUrl}" class="max-w-[200px] max-h-[200px] object-cover rounded-lg border border-slate-200 cursor-pointer hover:opacity-80" onclick="window.openImageViewer('${log.imageUrl}')">`;
             }
@@ -1675,11 +1712,12 @@ window.saveDailyLogItem = async function() {
 
         let filesData = [];
         
-        // 💡 수정: 다중 파일 순차 업로드 확실히 처리 (모달 껌뻑임 방지는 ui 쪽에서 해결)
+        // 💡 다중 파일 순차 업로드 최적화 
         if (fileInput && fileInput.files.length > 0) {
-            window.showToast(`총 ${fileInput.files.length}개의 파일을 업로드합니다...`);
-            for(let i=0; i<fileInput.files.length; i++) {
-                let url = await handleDriveUploadWithProgress(fileInput.files[i], folderName, '생산일지');
+            let total = fileInput.files.length;
+            window.showToast(`총 ${total}개의 파일을 업로드합니다...`);
+            for(let i=0; i<total; i++) {
+                let url = await handleDriveUploadWithProgress(fileInput.files[i], folderName, '생산일지', i+1, total);
                 filesData.push({ name: fileInput.files[i].name, url: url });
             }
         }
@@ -1687,7 +1725,7 @@ window.saveDailyLogItem = async function() {
         const payload = { date: date, content: content, updatedAt: Date.now() }; 
         
         if (logId) { 
-            // 💡 수정: 기존 일지를 편집할 때 기존 첨부파일이 날아가지 않도록 병합 보존
+            // 💡 기존 일지 편집 시 파일 누적 병합 보존
             const existingLog = window.currentDailyLogs.find(l => l.id === logId);
             let finalFiles = existingLog && existingLog.files ? [...existingLog.files] : [];
             
@@ -1702,7 +1740,6 @@ window.saveDailyLogItem = async function() {
             await setDoc(doc(db, "daily_logs", logId), payload, { merge: true }); 
             window.showToast("일지가 수정되었습니다."); 
         } else { 
-            // 새 일지 작성
             if(filesData.length > 0) payload.files = filesData; 
             
             payload.projectId = projectId; 
