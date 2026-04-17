@@ -1,5 +1,5 @@
 import { db } from './firebase.js';
-import { collection, doc, query, onSnapshot, where, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { collection, doc, setDoc, query, onSnapshot, where, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 let integPjtUnsubscribe = null;
 let integCrUnsubscribe = null;
@@ -55,8 +55,8 @@ function mergeIntegrationData() {
     window.integMergedData = [];
     
     // 💡 요구사항: "제조PJT 에서 설비에 대한 송부완료된 프로젝트만 보여주면돼!"
-    // status === 'completed' (제조팀 완료) AND category === '설비'
-    let completedPjts = window.integProjects.filter(p => p.status === 'completed' && p.category === '설비');
+    // 추가 요구사항: 숨김 처리(isHiddenFromIntegration)된 프로젝트는 렌더링에서 제외 (Soft Delete)
+    let completedPjts = window.integProjects.filter(p => p.status === 'completed' && p.category === '설비' && !p.isHiddenFromIntegration);
 
     completedPjts.forEach(pjt => {
         let crReport = window.integCrReports.find(cr => cr.projectId === pjt.id) || {};
@@ -203,7 +203,7 @@ function renderIntegTable(list) {
     if (!tbody) return;
 
     if(list.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center p-8 text-slate-400 font-bold">조건에 맞는 데이터가 없습니다.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center p-8 text-slate-400 font-bold">조건에 맞는 데이터가 없습니다.</td></tr>';
         return;
     }
 
@@ -239,10 +239,27 @@ function renderIntegTable(list) {
                         ${btnText}
                     </button>
                 </td>
+                <td class="p-3 text-center" onclick="event.stopPropagation()">
+                    <button onclick="window.hideIntegrationProject('${d.projectId}')" class="text-slate-300 hover:text-rose-500 transition-colors p-1.5 rounded-lg hover:bg-rose-50" title="목록에서 제외(숨기기)">
+                        <i class="fa-solid fa-eye-slash"></i>
+                    </button>
+                </td>
             </tr>
         `;
     }).join('');
 }
+
+// 💡 리스트에서 항목 숨기기 기능 (Soft Delete)
+window.hideIntegrationProject = async function(projectId) {
+    if (!confirm("이 프로젝트를 통합 완료보고 목록에서 제외(숨기기)하시겠습니까?\n(실제 데이터는 삭제되지 않으며 취합 리스트에서만 사라집니다.)")) return;
+    
+    try {
+        await setDoc(doc(db, "projects_status", projectId), { isHiddenFromIntegration: true }, { merge: true });
+        window.showToast("목록에서 제외(숨김) 처리되었습니다.", "success");
+    } catch(e) {
+        window.showToast("처리 실패: " + e.message, "error");
+    }
+};
 
 
 // ========================================================
@@ -331,9 +348,12 @@ window.switchIntegTab = function(tabName) {
 
     // 💡 탭을 전환할 때 해당 탭 안의 차트를 그려서 0x0 렌더링 버그 방지 및 애니메이션 효과 극대화
     if(window.currentDashboardData) {
-        if(tabName === 'mfg') renderMfgCharts(window.currentDashboardData);
-        if(tabName === 'qual') renderQualCharts(window.currentDashboardData);
-        if(tabName === 'pur') renderPurCharts(window.currentDashboardData);
+        // 레이아웃이 적용될 틈(reflow)을 조금 준 후 렌더링합니다.
+        setTimeout(() => {
+            if(tabName === 'mfg') renderMfgCharts(window.currentDashboardData);
+            if(tabName === 'qual') renderQualCharts(window.currentDashboardData);
+            if(tabName === 'pur') renderPurCharts(window.currentDashboardData);
+        }, 100);
     }
 };
 
