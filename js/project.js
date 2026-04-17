@@ -20,40 +20,21 @@ window.calendarCurrentDate = new Date();
 window.hideCompletedFilter = false; 
 window.ganttTodayOffset = 0;
 window.ncrData = [];
-window.currentLogMembers = []; // 생산일지 투입인원 관리 배열
-
-// ==========================================
-// 💡 유틸리티 함수
-// ==========================================
 
 window.resizeAndConvertToBase64 = function(file, callback, targetMaxSize) {
-    if (!file || !file.type.match(/image.*/)) {
-        callback(null);
-        return;
-    }
+    if (!file || !file.type.match(/image.*/)) { callback(null); return; }
     const reader = new FileReader();
     reader.onload = function(readerEvent) {
         const image = new Image();
         image.onload = function() {
             const canvas = document.createElement('canvas');
             const maxSize = targetMaxSize || 1200;
-            let width = image.width;
-            let height = image.height;
-            
-            if (width > height && width > maxSize) {
-                height *= maxSize / width;
-                width = maxSize;
-            } else if (height > maxSize) {
-                width *= maxSize / height;
-                height = maxSize;
-            }
-            
-            canvas.width = width;
-            canvas.height = height;
+            let width = image.width, height = image.height;
+            if (width > height && width > maxSize) { height *= maxSize / width; width = maxSize; } 
+            else if (height > maxSize) { width *= maxSize / height; height = maxSize; }
+            canvas.width = width; canvas.height = height;
             canvas.getContext('2d').drawImage(image, 0, 0, width, height);
-            
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-            callback(dataUrl);
+            callback(canvas.toDataURL('image/jpeg', 0.8));
         };
         image.onerror = function() { callback(null); };
         image.src = readerEvent.target.result;
@@ -69,22 +50,15 @@ const getSafeMillis = (val) => {
         if (typeof val === 'number') return val; 
         if (typeof val === 'string') return new Date(val).getTime() || 0; 
         return 0; 
-    } catch(e) { 
-        return 0; 
-    } 
+    } catch(e) { return 0; } 
 };
 
-// 💡 데이터가 null일 때 에러 방지
-const getSafeString = (val) => {
-    return (val === null || val === undefined) ? '' : String(val);
-};
+const getSafeString = (val) => { return (val === null || val === undefined) ? '' : String(val); };
 
 window.updateMultiFileNames = function(inputEl, displayElId) {
     const displayEl = document.getElementById(displayElId);
     if (!displayEl) return;
-    
     const wrap = document.getElementById(displayElId + '-wrap');
-
     if (inputEl.files.length === 0) {
         displayEl.innerHTML = '';
         if(wrap) wrap.classList.add('hidden');
@@ -97,208 +71,79 @@ window.updateMultiFileNames = function(inputEl, displayElId) {
     }
 };
 
-// ==========================================
-// 💡 카운트 및 데이터 로드
-// ==========================================
-
 window.loadCounts = function() {
     try {
-        onSnapshot(collection(db, "project_comments"), (snap) => { 
-            window.projectCommentCounts = {}; 
-            snap.forEach(doc => { 
-                let d = doc.data(); 
-                let pid = d.projectId || d.reqId; 
-                if(pid) window.projectCommentCounts[pid] = (window.projectCommentCounts[pid]||0)+1; 
-            }); 
-            window.renderProjectStatusList();
-        });
-        
-        onSnapshot(collection(db, "project_issues"), (snap) => { 
-            window.projectIssueCounts = {}; 
-            snap.forEach(doc => { 
-                let d = doc.data(); 
-                let pid = d.projectId || d.reqId; 
-                if(pid && !d.isResolved) window.projectIssueCounts[pid] = (window.projectIssueCounts[pid]||0)+1; 
-            }); 
-            window.renderProjectStatusList();
-        });
-        
-        onSnapshot(collection(db, "daily_logs"), (snap) => { 
-            window.projectLogCounts = {}; 
-            snap.forEach(doc => { 
-                let d = doc.data(); 
-                let pid = d.projectId || d.reqId; 
-                if(pid) window.projectLogCounts[pid] = (window.projectLogCounts[pid]||0)+1; 
-            }); 
-            window.renderProjectStatusList();
-        });
-        
-        onSnapshot(collection(db, "project_purchases"), (snap) => { 
-            window.projectPurchaseCounts = {}; 
-            snap.forEach(doc => { 
-                let pid = doc.data().projectId; 
-                if(pid) window.projectPurchaseCounts[pid] = (window.projectPurchaseCounts[pid]||0)+1; 
-            }); 
-            window.renderProjectStatusList();
-        });
-        
-        onSnapshot(collection(db, "project_designs"), (snap) => { 
-            window.projectDesignCounts = {}; 
-            snap.forEach(doc => { 
-                let pid = doc.data().projectId; 
-                if(pid) window.projectDesignCounts[pid] = (window.projectDesignCounts[pid]||0)+1; 
-            }); 
-            window.renderProjectStatusList();
-        });
-        
-        onSnapshot(collection(db, "project_schedules"), (snap) => { 
-            window.projectScheduleCounts = {}; 
-            snap.forEach(doc => { 
-                let pid = doc.data().projectId; 
-                if(pid) window.projectScheduleCounts[pid] = (window.projectScheduleCounts[pid]||0)+1; 
-            }); 
-            window.renderProjectStatusList();
-        });
-        
+        onSnapshot(collection(db, "project_comments"), (snap) => { window.projectCommentCounts = {}; snap.forEach(doc => { let d = doc.data(); let pid = d.projectId || d.reqId; if(pid) window.projectCommentCounts[pid] = (window.projectCommentCounts[pid]||0)+1; }); window.renderProjectStatusList(); });
+        onSnapshot(collection(db, "project_issues"), (snap) => { window.projectIssueCounts = {}; snap.forEach(doc => { let d = doc.data(); let pid = d.projectId || d.reqId; if(pid && !d.isResolved) window.projectIssueCounts[pid] = (window.projectIssueCounts[pid]||0)+1; }); window.renderProjectStatusList(); });
+        onSnapshot(collection(db, "daily_logs"), (snap) => { window.projectLogCounts = {}; snap.forEach(doc => { let d = doc.data(); let pid = d.projectId || d.reqId; if(pid) window.projectLogCounts[pid] = (window.projectLogCounts[pid]||0)+1; }); window.renderProjectStatusList(); });
+        onSnapshot(collection(db, "project_purchases"), (snap) => { window.projectPurchaseCounts = {}; snap.forEach(doc => { let pid = doc.data().projectId; if(pid) window.projectPurchaseCounts[pid] = (window.projectPurchaseCounts[pid]||0)+1; }); window.renderProjectStatusList(); });
+        onSnapshot(collection(db, "project_designs"), (snap) => { window.projectDesignCounts = {}; snap.forEach(doc => { let pid = doc.data().projectId; if(pid) window.projectDesignCounts[pid] = (window.projectDesignCounts[pid]||0)+1; }); window.renderProjectStatusList(); });
+        onSnapshot(collection(db, "project_schedules"), (snap) => { window.projectScheduleCounts = {}; snap.forEach(doc => { let pid = doc.data().projectId; if(pid) window.projectScheduleCounts[pid] = (window.projectScheduleCounts[pid]||0)+1; }); window.renderProjectStatusList(); });
         window.loadNcrData();
-    } catch(e) { 
-        console.warn("카운트 로드 실패:", e); 
-    }
+    } catch(e) { console.warn("카운트 로드 실패:", e); }
 };
 
 window.switchProjPartTab = function(part) {
-    window.currentProjPartTab = part; 
-    window.resetAllFilters();
-    let btnMfg = document.getElementById('btn-part-mfg');
-    let btnOpt = document.getElementById('btn-part-opt');
-    
+    window.currentProjPartTab = part; window.resetAllFilters();
+    let btnMfg = document.getElementById('btn-part-mfg'), btnOpt = document.getElementById('btn-part-opt');
     if (btnMfg) btnMfg.className = part === '제조' ? "px-3 py-1 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
     if (btnOpt) btnOpt.className = part === '광학' ? "px-3 py-1 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
-    
     window.loadProjectStatusData();
 };
 
 window.filterByStatusOnly = function(status) {
-    window.currentCategoryFilter = 'all'; 
-    window.currentYearFilter = ''; 
-    window.currentMonthFilter = ''; 
-    window.hideCompletedFilter = false;
-    
-    const cSelect = document.getElementById('filter-category-select'); 
-    if(cSelect) cSelect.value = 'all';
-    
-    const ySelect = document.getElementById('filter-year-select'); 
-    if(ySelect) ySelect.value = '';
-    
-    const mSelect = document.getElementById('filter-month-select'); 
-    if(mSelect) mSelect.value = '';
-    
-    const hCb = document.getElementById('hide-completed-cb'); 
-    if(hCb) hCb.checked = false;
-    
+    window.currentCategoryFilter = 'all'; window.currentYearFilter = ''; window.currentMonthFilter = ''; window.hideCompletedFilter = false;
+    if(document.getElementById('filter-category-select')) document.getElementById('filter-category-select').value = 'all';
+    if(document.getElementById('filter-year-select')) document.getElementById('filter-year-select').value = '';
+    if(document.getElementById('filter-month-select')) document.getElementById('filter-month-select').value = '';
+    if(document.getElementById('hide-completed-cb')) document.getElementById('hide-completed-cb').checked = false;
     window.filterProjectStatus(status);
 };
 
 window.filterByCompletedThisMonth = function() {
-    window.currentCategoryFilter = 'all'; 
-    window.currentYearFilter = ''; 
-    window.hideCompletedFilter = false;
-    
-    const now = new Date();
-    const currentMonthStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+    window.currentCategoryFilter = 'all'; window.currentYearFilter = ''; window.hideCompletedFilter = false;
+    const now = new Date(); const currentMonthStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
     window.currentMonthFilter = currentMonthStr;
-    
-    const cSelect = document.getElementById('filter-category-select'); 
-    if(cSelect) cSelect.value = 'all';
-    
-    const ySelect = document.getElementById('filter-year-select'); 
-    if(ySelect) ySelect.value = '';
-    
-    const mSelect = document.getElementById('filter-month-select'); 
-    if(mSelect) mSelect.value = currentMonthStr;
-    
-    const hCb = document.getElementById('hide-completed-cb'); 
-    if(hCb) hCb.checked = false;
-    
+    if(document.getElementById('filter-category-select')) document.getElementById('filter-category-select').value = 'all';
+    if(document.getElementById('filter-year-select')) document.getElementById('filter-year-select').value = '';
+    if(document.getElementById('filter-month-select')) document.getElementById('filter-month-select').value = currentMonthStr;
+    if(document.getElementById('hide-completed-cb')) document.getElementById('hide-completed-cb').checked = false;
     window.filterProjectStatus('completed');
 };
 
 window.filterProjectStatus = function(status) {
     window.currentStatusFilter = status;
-    if(window.currentProjDashView === 'gantt') {
-        window.renderProjGantt(); 
-    } else if(window.currentProjDashView === 'calendar') {
-        window.renderProjCalendar(); 
-    } else {
-        window.renderProjectStatusList();
-    }
+    if(window.currentProjDashView === 'gantt') window.renderProjGantt(); 
+    else if(window.currentProjDashView === 'calendar') window.renderProjCalendar(); 
+    else window.renderProjectStatusList();
 };
 
-window.filterByCategory = function(category) { 
-    window.currentCategoryFilter = category; 
-    window.filterProjectStatus(window.currentStatusFilter); 
-};
-
-window.filterByYear = function(yearStr) { 
-    window.currentYearFilter = yearStr; 
-    window.updateMiniDashboard(); 
-    window.filterProjectStatus(window.currentStatusFilter); 
-};
-
-window.filterByMonth = function(monthStr) { 
-    window.currentMonthFilter = monthStr; 
-    window.updateMiniDashboard(); 
-    window.filterProjectStatus(window.currentStatusFilter); 
-};
+window.filterByCategory = function(category) { window.currentCategoryFilter = category; window.filterProjectStatus(window.currentStatusFilter); };
+window.filterByYear = function(yearStr) { window.currentYearFilter = yearStr; window.updateMiniDashboard(); window.filterProjectStatus(window.currentStatusFilter); };
+window.filterByMonth = function(monthStr) { window.currentMonthFilter = monthStr; window.updateMiniDashboard(); window.filterProjectStatus(window.currentStatusFilter); };
+window.toggleHideCompleted = function(checked) { window.hideCompletedFilter = checked; window.filterProjectStatus(window.currentStatusFilter); };
 
 window.resetAllFilters = function() {
-    window.currentStatusFilter = 'all'; 
-    window.currentCategoryFilter = 'all'; 
-    window.currentYearFilter = ''; 
-    window.currentMonthFilter = ''; 
-    window.hideCompletedFilter = false;
-    
+    window.currentStatusFilter = 'all'; window.currentCategoryFilter = 'all'; window.currentYearFilter = ''; window.currentMonthFilter = ''; window.hideCompletedFilter = false;
     if(document.getElementById('filter-category-select')) document.getElementById('filter-category-select').value = 'all';
     if(document.getElementById('filter-year-select')) document.getElementById('filter-year-select').value = '';
     if(document.getElementById('filter-month-select')) document.getElementById('filter-month-select').value = '';
     if(document.getElementById('hide-completed-cb')) document.getElementById('hide-completed-cb').checked = false;
-    
     window.filterProjectStatus('all');
-};
-
-window.toggleHideCompleted = function(checked) { 
-    window.hideCompletedFilter = checked; 
-    window.filterProjectStatus(window.currentStatusFilter); 
 };
 
 window.getFilteredProjects = function() {
     let list = window.currentProjectStatusList || [];
-    
-    if (window.currentCategoryFilter && window.currentCategoryFilter !== 'all') {
-        list = list.filter(item => getSafeString(item.category) === window.currentCategoryFilter);
-    }
-    
+    if (window.currentCategoryFilter && window.currentCategoryFilter !== 'all') list = list.filter(item => getSafeString(item.category) === window.currentCategoryFilter);
     if (window.currentStatusFilter && window.currentStatusFilter !== 'all') { 
         list = list.filter(item => { 
-            if (window.currentStatusFilter === 'progress') {
-                return item.status === 'progress' || item.status === 'inspecting'; 
-            }
+            if (window.currentStatusFilter === 'progress') return item.status === 'progress' || item.status === 'inspecting'; 
             return item.status === window.currentStatusFilter; 
         }); 
     }
-    
-    if (window.hideCompletedFilter) {
-        list = list.filter(item => item.status !== 'completed');
-    }
-    
-    if (window.currentYearFilter) {
-        list = list.filter(item => (item.d_shipEn || '').startsWith(window.currentYearFilter) || (item.d_asmEst || '').startsWith(window.currentYearFilter) || (item.d_asmEn || '').startsWith(window.currentYearFilter));
-    }
-    
-    if (window.currentMonthFilter) {
-        list = list.filter(item => (item.d_shipEn || '').startsWith(window.currentMonthFilter) || (item.d_asmEst || '').startsWith(window.currentMonthFilter) || (item.d_asmEn || '').startsWith(window.currentMonthFilter));
-    }
-    
+    if (window.hideCompletedFilter) list = list.filter(item => item.status !== 'completed');
+    if (window.currentYearFilter) list = list.filter(item => (item.d_shipEn || '').startsWith(window.currentYearFilter) || (item.d_asmEst || '').startsWith(window.currentYearFilter) || (item.d_asmEn || '').startsWith(window.currentYearFilter));
+    if (window.currentMonthFilter) list = list.filter(item => (item.d_shipEn || '').startsWith(window.currentMonthFilter) || (item.d_asmEst || '').startsWith(window.currentMonthFilter) || (item.d_asmEn || '').startsWith(window.currentMonthFilter));
     const priority = { 'pending': 1, 'progress': 2, 'inspecting': 2, 'rejected': 3, 'completed': 4 };
     list.sort((a,b) => (priority[a.status] || 99) - (priority[b.status] || 99) || getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
     return list;
@@ -323,16 +168,10 @@ window.updateMiniDashboard = function() {
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
         const completedLabel = document.getElementById('mini-dash-completed-label');
-        if (completedLabel) {
-            completedLabel.innerHTML = '<i class="fa-solid fa-truck-fast text-emerald-400"></i> 출하 완료 (' + (now.getMonth() + 1) + '월)';
-        }
+        if (completedLabel) completedLabel.innerHTML = '<i class="fa-solid fa-truck-fast text-emerald-400"></i> 출하 완료 (' + (now.getMonth() + 1) + '월)';
 
         (window.currentProjectStatusList || []).forEach(function(item) {
-            const status = getSafeString(item.status); 
-            const shipEn = getSafeString(item.d_shipEn); 
-            const shipEst = getSafeString(item.d_shipEst); 
-            const code = getSafeString(item.code) || '미지정';
-            
+            const status = getSafeString(item.status), shipEn = getSafeString(item.d_shipEn), shipEst = getSafeString(item.d_shipEst), code = getSafeString(item.code) || '미지정';
             if (status === 'pending' || status === 'rejected') pending++;
             else if (status === 'progress' || status === 'inspecting') progress++;
             else if (status === 'completed' && shipEn.startsWith(currentMonthStr)) completedThisMonth++;
@@ -354,26 +193,18 @@ window.updateMiniDashboard = function() {
 
         const elUpcoming7 = document.getElementById('mini-dash-upcoming');
         if(elUpcoming7) { 
-            if (upcomingCodes7.length === 0) {
-                elUpcoming7.innerHTML = '<span class="text-[10px] text-rose-400 font-bold w-full text-center mt-1">임박한 프로젝트 없음</span>';
-            } else {
-                elUpcoming7.innerHTML = upcomingCodes7.map(u => {
-                    let dText = u.dDay === 0 ? 'D-Day' : (u.dDay < 0 ? '지연' : 'D-' + u.dDay); 
-                    let bgClass = u.dDay <= 3 ? 'bg-rose-500 text-white border-rose-600' : 'bg-white text-rose-600 border-rose-200'; 
-                    return `<span class="text-[10px] border px-1.5 py-0.5 rounded font-bold shadow-sm flex items-center gap-1 ${bgClass}">${u.code} <span class="opacity-80 text-[8px]">[${dText}]</span></span>`;
-                }).join('');
-            }
+            if (upcomingCodes7.length === 0) elUpcoming7.innerHTML = '<span class="text-[10px] text-rose-400 font-bold w-full text-center mt-1">임박한 프로젝트 없음</span>';
+            else elUpcoming7.innerHTML = upcomingCodes7.map(u => {
+                let dText = u.dDay === 0 ? 'D-Day' : (u.dDay < 0 ? '지연' : 'D-' + u.dDay); 
+                let bgClass = u.dDay <= 3 ? 'bg-rose-500 text-white border-rose-600' : 'bg-white text-rose-600 border-rose-200'; 
+                return `<span class="text-[10px] border px-1.5 py-0.5 rounded font-bold shadow-sm flex items-center gap-1 ${bgClass}">${u.code} <span class="opacity-80 text-[8px]">[${dText}]</span></span>`;
+            }).join('');
         }
         
         const elUpcoming14 = document.getElementById('mini-dash-upcoming-14');
         if(elUpcoming14) { 
-            if (upcomingCodes14.length === 0) {
-                elUpcoming14.innerHTML = '<span class="text-[10px] text-orange-400 font-bold w-full text-center mt-1">임박한 프로젝트 없음</span>';
-            } else {
-                elUpcoming14.innerHTML = upcomingCodes14.map(u => {
-                    return `<span class="text-[10px] border px-1.5 py-0.5 rounded font-bold shadow-sm flex items-center gap-1 bg-white text-orange-600 border-orange-200">${u.code} <span class="opacity-80 text-[8px]">[D-${u.dDay}]</span></span>`;
-                }).join('');
-            }
+            if (upcomingCodes14.length === 0) elUpcoming14.innerHTML = '<span class="text-[10px] text-orange-400 font-bold w-full text-center mt-1">임박한 프로젝트 없음</span>';
+            else elUpcoming14.innerHTML = upcomingCodes14.map(u => `<span class="text-[10px] border px-1.5 py-0.5 rounded font-bold shadow-sm flex items-center gap-1 bg-white text-orange-600 border-orange-200">${u.code} <span class="opacity-80 text-[8px]">[D-${u.dDay}]</span></span>`).join('');
         }
     } catch(e) {}
 };
@@ -393,40 +224,27 @@ window.loadProjectStatusData = function() {
                 data.id = docSnap.id; 
                 window.currentProjectStatusList.push(data); 
             }
-            if(getSafeMillis(data.updatedAt) > lastUpdated) {
-                lastUpdated = getSafeMillis(data.updatedAt);
-            }
+            if(getSafeMillis(data.updatedAt) > lastUpdated) lastUpdated = getSafeMillis(data.updatedAt);
         });
         
         if (lastUpdated > 0) { 
             const lDate = new Date(lastUpdated); 
             const el = document.getElementById('pjt-last-update');
-            if(el) {
-                el.innerText = lDate.getFullYear().toString().slice(2) + '-' + String(lDate.getMonth()+1).padStart(2,'0') + '-' + String(lDate.getDate()).padStart(2,'0') + ' ' + String(lDate.getHours()).padStart(2,'0') + ':' + String(lDate.getMinutes()).padStart(2,'0'); 
-            }
+            if(el) el.innerText = lDate.getFullYear().toString().slice(2) + '-' + String(lDate.getMonth()+1).padStart(2,'0') + '-' + String(lDate.getDate()).padStart(2,'0') + ' ' + String(lDate.getHours()).padStart(2,'0') + ':' + String(lDate.getMinutes()).padStart(2,'0'); 
         }
         
         window.updateMiniDashboard();
-        
-        if(window.currentProjDashView === 'gantt') {
-            window.renderProjGantt(); 
-        } else if(window.currentProjDashView === 'calendar') {
-            window.renderProjCalendar();
-        } else {
-            window.renderProjectStatusList();
-        }
+        if(window.currentProjDashView === 'gantt') window.renderProjGantt(); 
+        else if(window.currentProjDashView === 'calendar') window.renderProjCalendar();
+        else window.renderProjectStatusList();
     });
 };
 
-// ==========================================
-// 💡 메인 리스트 렌더링
-// ==========================================
 window.renderProjectStatusList = function() {
     const tbody = document.getElementById('proj-dash-tbody'); 
     if(!tbody) return;
     
     let displayList = window.getFilteredProjects();
-    
     if(displayList.length === 0) { 
         tbody.innerHTML = '<tr><td colspan="33" class="text-center p-6 text-slate-400 font-bold border-b border-slate-100 bg-white">프로젝트가 없습니다.</td></tr>'; 
         return; 
@@ -442,9 +260,7 @@ window.renderProjectStatusList = function() {
     
     let htmlStr = '';
     displayList.forEach(item => {
-        const cMd = parseFloat(item.currentMd) || 0; 
-        const oMd = parseFloat(item.outMd) || 0; 
-        const fMd = parseFloat(item.finalMd) || (cMd + oMd);
+        const cMd = parseFloat(item.currentMd) || 0, oMd = parseFloat(item.outMd) || 0, fMd = parseFloat(item.finalMd) || (cMd + oMd);
         const safeNameHtml = getSafeString(item.name).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const safeNameJs = getSafeString(item.name).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, ' ').replace(/\r/g, '');
         
@@ -465,91 +281,46 @@ window.renderProjectStatusList = function() {
         }).length;
 
         let ncrIconHtml = '';
-        if (totalNcrCnt === 0) {
-            ncrIconHtml = `<button onclick="window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-slate-300 hover:text-indigo-400 transition-colors p-1" title="부적합 내역 없음"><i class="fa-solid fa-file-circle-check text-lg"></i></button>`;
-        } else if (unresolvedNcrCnt === 0) {
-            ncrIconHtml = `<button onclick="window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-emerald-500 hover:text-emerald-600 transition-colors p-1" title="모두 조치 완료"><i class="fa-solid fa-file-circle-check text-lg"></i></button>`;
-        } else {
-            ncrIconHtml = `<button onclick="window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-rose-500 relative transition-transform hover:scale-110 p-1" title="미결 부적합 ${unresolvedNcrCnt}건">
-                <i class="fa-solid fa-file-circle-exclamation text-lg"></i>
-                <span class="absolute -top-1 -right-2 bg-rose-100 text-rose-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-rose-200">${unresolvedNcrCnt}</span>
-            </button>`;
-        }
+        if (totalNcrCnt === 0) ncrIconHtml = `<button onclick="window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-slate-300 hover:text-indigo-400 transition-colors p-1" title="부적합 내역 없음"><i class="fa-solid fa-file-circle-check text-lg"></i></button>`;
+        else if (unresolvedNcrCnt === 0) ncrIconHtml = `<button onclick="window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-emerald-500 hover:text-emerald-600 transition-colors p-1" title="모두 조치 완료"><i class="fa-solid fa-file-circle-check text-lg"></i></button>`;
+        else ncrIconHtml = `<button onclick="window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-rose-500 relative transition-transform hover:scale-110 p-1" title="미결 부적합 ${unresolvedNcrCnt}건"><i class="fa-solid fa-file-circle-exclamation text-lg"></i><span class="absolute -top-1 -right-2 bg-rose-100 text-rose-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-rose-200">${unresolvedNcrCnt}</span></button>`;
 
-        trHtml += `
-        <tr class="group hover:bg-indigo-50/50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.editProjStatus('${item.id}')">
-            <td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 0px; min-width: 40px; max-width: 40px;" onclick="event.stopPropagation()">
-                <button onclick="window.deleteProjStatus('${item.id}')" class="text-slate-300 hover:text-rose-500 p-1.5 rounded">
-                    <i class="fa-solid fa-trash-can"></i>
-                </button>
-            </td>
-            <td class="border-b border-r border-slate-200 px-2 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 40px; min-width: 80px; max-width: 80px;">${getSafeString(item.category)}</td>
-            <td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 120px; min-width: 50px; max-width: 50px;" onclick="event.stopPropagation()">
-                <button onclick="window.openCommentModal('${item.id}', '${safeNameJs}')" class="text-amber-400 relative">
-                    <i class="fa-regular fa-comment-dots text-lg"></i>
-                    ${cCnt ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-amber-200">${cCnt}</span>` : ''}
-                </button>
-            </td>
-            <td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 170px; min-width: 50px; max-width: 50px;" onclick="event.stopPropagation()">
-                <button onclick="window.openIssueModal('${item.id}', '${safeNameJs}')" class="text-rose-400 relative">
-                    <i class="fa-solid fa-triangle-exclamation text-lg"></i>
-                    ${iCnt ? `<span class="absolute -top-1 -right-2 bg-rose-100 text-rose-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-rose-200">${iCnt}</span>` : ''}
-                </button>
-            </td>
-            <td class="border-b border-r border-slate-200 px-2 py-1 text-center font-bold text-indigo-700 bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 220px; min-width: 110px; max-width: 110px;">${getSafeString(item.code)}</td>
-            <td class="border-b border-r border-slate-200 px-2 py-1 truncate max-w-[220px] bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 330px; min-width: 220px;">${safeNameHtml}</td>
-            <td class="border-b border-r border-slate-200 px-2 py-1 text-center truncate max-w-[110px] bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 550px; min-width: 110px;">${getSafeString(item.company)}</td>
-            <td class="border-b border-r border-slate-200 px-2 py-1 text-center font-black text-emerald-600 bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 660px; min-width: 60px; max-width: 60px;">${parseFloat(item.progress) || 0}%</td>
-            <td class="border-b border-r border-slate-200 px-2 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20 shadow-[3px_0_5px_-1px_rgba(0,0,0,0.3)] border-r-slate-300" style="left: 720px; min-width: 80px; max-width: 80px;">${statusMap[item.status] || ''}</td>
-            
-            <td class="border border-slate-200 px-2 py-1 text-center font-bold text-slate-600">${getSafeString(item.manager)}</td>
-            <td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()">
-                <button onclick="window.openPurchaseModal('${item.id}', '${safeNameJs}')" class="text-amber-500 relative">
-                    <i class="fa-solid fa-cart-shopping text-lg"></i>
-                    ${purCnt ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-amber-200">${purCnt}</span>` : ''}
-                </button>
-            </td>
-            <td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()">
-                <button onclick="window.openDesignModal('${item.id}', '${safeNameJs}')" class="text-teal-400 relative">
-                    <i class="fa-solid fa-pen-ruler text-lg"></i>
-                    ${desCnt ? `<span class="absolute -top-1 -right-2 bg-teal-100 text-teal-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-teal-200">${desCnt}</span>` : ''}
-                </button>
-            </td>
-            <td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()">
-                <button onclick="window.openPjtScheduleModal('${item.id}', '${safeNameJs}')" class="text-fuchsia-400 relative">
-                    <i class="fa-regular fa-calendar-check text-lg"></i>
-                    ${schCnt ? `<span class="absolute -top-1 -right-2 bg-fuchsia-100 text-fuchsia-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-fuchsia-200">${schCnt}</span>` : ''}
-                </button>
-            </td>
-            <td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()">
-                <button onclick="window.openDailyLogModal('${item.id}')" class="text-sky-400 relative">
-                    <i class="fa-solid fa-book text-lg"></i>
-                    ${lCnt ? `<span class="absolute -top-1 -right-2 bg-sky-100 text-sky-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-sky-200">${lCnt}</span>` : ''}
-                </button>
-            </td>
-            
-            <td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()">${ncrIconHtml}</td>
+        let trHtml = `<tr class="group hover:bg-indigo-50/50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.editProjStatus('${item.id}')">`;
+        trHtml += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 0px; min-width: 40px; max-width: 40px;" onclick="event.stopPropagation()"><button onclick="window.deleteProjStatus('${item.id}')" class="text-slate-300 hover:text-rose-500 p-1.5 rounded"><i class="fa-solid fa-trash-can"></i></button></td>`;
+        trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 40px; min-width: 80px; max-width: 80px;">${getSafeString(item.category)}</td>`;
+        trHtml += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 120px; min-width: 50px; max-width: 50px;" onclick="event.stopPropagation()"><button onclick="window.openCommentModal('${item.id}', '${safeNameJs}')" class="text-amber-400 relative"><i class="fa-regular fa-comment-dots text-lg"></i>${cCnt ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-amber-200">${cCnt}</span>` : ''}</button></td>`;
+        trHtml += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 170px; min-width: 50px; max-width: 50px;" onclick="event.stopPropagation()"><button onclick="window.openIssueModal('${item.id}', '${safeNameJs}')" class="text-rose-400 relative"><i class="fa-solid fa-triangle-exclamation text-lg"></i>${iCnt ? `<span class="absolute -top-1 -right-2 bg-rose-100 text-rose-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-rose-200">${iCnt}</span>` : ''}</button></td>`;
+        trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center font-bold text-indigo-700 bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 220px; min-width: 110px; max-width: 110px;">${getSafeString(item.code)}</td>`;
+        trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 truncate max-w-[220px] bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 330px; min-width: 220px;">${safeNameHtml}</td>`;
+        trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center truncate max-w-[110px] bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 550px; min-width: 110px;">${getSafeString(item.company)}</td>`;
+        trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center font-black text-emerald-600 bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 660px; min-width: 60px; max-width: 60px;">${parseFloat(item.progress) || 0}%</td>`;
+        trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20 shadow-[3px_0_5px_-1px_rgba(0,0,0,0.3)] border-r-slate-300" style="left: 720px; min-width: 80px; max-width: 80px;">${statusMap[item.status] || ''}</td>`;
+        
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center font-bold text-slate-600">${getSafeString(item.manager)}</td>`;
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openPurchaseModal('${item.id}', '${safeNameJs}')" class="text-amber-500 relative"><i class="fa-solid fa-cart-shopping text-lg"></i>${purCnt ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-amber-200">${purCnt}</span>` : ''}</button></td>`;
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openDesignModal('${item.id}', '${safeNameJs}')" class="text-teal-400 relative"><i class="fa-solid fa-pen-ruler text-lg"></i>${desCnt ? `<span class="absolute -top-1 -right-2 bg-teal-100 text-teal-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-teal-200">${desCnt}</span>` : ''}</button></td>`;
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openPjtScheduleModal('${item.id}', '${safeNameJs}')" class="text-fuchsia-400 relative"><i class="fa-regular fa-calendar-check text-lg"></i>${schCnt ? `<span class="absolute -top-1 -right-2 bg-fuchsia-100 text-fuchsia-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-fuchsia-200">${schCnt}</span>` : ''}</button></td>`;
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openDailyLogModal('${item.id}')" class="text-sky-400 relative"><i class="fa-solid fa-book text-lg"></i>${lCnt ? `<span class="absolute -top-1 -right-2 bg-sky-100 text-sky-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-sky-200">${lCnt}</span>` : ''}</button></td>`;
+        
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()">${ncrIconHtml}</td>`;
 
-            <td class="border border-slate-200 px-2 py-1 text-center text-sky-600">${item.estMd||0}</td>
-            <td class="border border-slate-200 px-1 py-1 text-center font-bold" onclick="event.stopPropagation()">
-                <button onclick="window.openMdLogModal('${item.id}', '${safeNameJs}', ${cMd})" class="text-purple-600 underline">${cMd}</button>
-            </td>
-            <td class="border border-slate-200 px-2 py-1 text-center font-bold">${fMd.toFixed(1)}</td>
-            <td class="border border-slate-200 px-2 py-1 text-center text-amber-600">${item.totPers||''}</td>
-            <td class="border border-slate-200 px-2 py-1 text-center text-amber-600">${item.outPers||''}</td>
-            <td class="border border-slate-200 px-2 py-1 text-center text-amber-600">${item.outMd||''}</td>
-            <td class="border border-slate-200 px-2 py-1 text-center bg-rose-50/50 text-rose-700">${getSafeString(item.d_shipEst)}</td>
-            <td class="border border-slate-200 px-2 py-1 text-center bg-indigo-50/50">${getSafeString(item.d_asmEst)}</td>
-            <td class="border border-slate-200 px-2 py-1 text-center bg-indigo-50/50">${getSafeString(item.d_asmEndEst)}</td>
-            <td class="border border-slate-200 px-2 py-1 text-center text-indigo-700 font-bold">${getSafeString(item.d_asmSt)}</td>
-            <td class="border border-slate-200 px-2 py-1 text-center text-indigo-700 font-bold">${getSafeString(item.d_asmEn)}</td>
-            <td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_insSt)}</td>
-            <td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_insEn)}</td>
-            <td class="border border-slate-200 px-2 py-1 text-center bg-rose-50/50 text-rose-700 font-bold">${getSafeString(item.d_shipEn)}</td>
-            <td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_setSt)}</td>
-            <td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_setEn)}</td>
-            `;
-            
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center text-sky-600">${item.estMd||0}</td>`;
+        trHtml += `<td class="border border-slate-200 px-1 py-1 text-center font-bold" onclick="event.stopPropagation()"><button onclick="window.openMdLogModal('${item.id}', '${safeNameJs}', ${cMd})" class="text-purple-600 underline">${cMd}</button></td>`;
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center font-bold">${fMd.toFixed(1)}</td>`;
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center text-amber-600">${item.totPers||''}</td>`;
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center text-amber-600">${item.outPers||''}</td>`;
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center text-amber-600">${item.outMd||''}</td>`;
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center bg-rose-50/50 text-rose-700">${getSafeString(item.d_shipEst)}</td>`;
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center bg-indigo-50/50">${getSafeString(item.d_asmEst)}</td>`;
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center bg-indigo-50/50">${getSafeString(item.d_asmEndEst)}</td>`;
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center text-indigo-700 font-bold">${getSafeString(item.d_asmSt)}</td>`;
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center text-indigo-700 font-bold">${getSafeString(item.d_asmEn)}</td>`;
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_insSt)}</td>`;
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_insEn)}</td>`;
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center bg-rose-50/50 text-rose-700 font-bold">${getSafeString(item.d_shipEn)}</td>`;
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_setSt)}</td>`;
+        trHtml += `<td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_setEn)}</td>`;
+        
         let linksHtml = '';
         if(item.links && Array.isArray(item.links)) { 
             linksHtml = item.links.map(lnk => `<a href="${getSafeString(lnk?.url)}" target="_blank" title="${getSafeString(lnk?.name)}" class="text-teal-500 hover:text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded transition-colors"><i class="fa-solid fa-link text-[10px]"></i></a>`).join(''); 
@@ -570,56 +341,37 @@ window.renderProjectStatusList = function() {
         trHtml += `</tr>`;
         htmlStr += trHtml;
     });
-    
     tbody.innerHTML = htmlStr;
 };
 
-// ==========================================
 // 💡 엑스박스 완벽 방지, 썸네일 고화질 매핑 HTML 렌더러
-// ==========================================
 window.generateMediaHtml = function(filesArray) {
     if (!filesArray || filesArray.length === 0) return '';
-    
-    let mediaHtml = ''; 
-    let filesHtml = '';
+    let mediaHtml = ''; let filesHtml = '';
     
     filesArray.forEach(f => {
         let isImg = false;
-        
         if (f.name && f.name.match(/\.(jpeg|jpg|gif|png|webp|bmp|heic|heif)$/i)) isImg = true;
         if (f.url && f.url.startsWith('data:image')) isImg = true;
         if (f.thumbBase64 && f.thumbBase64.startsWith('data:image')) isImg = true;
         if (f.name === '첨부사진.jpg' || f.name === '첨부사진') isImg = true;
 
         if (isImg) {
-            let viewUrl = f.url;
-            let thumbUrl = f.url;
+            let viewUrl = f.url, thumbUrl = f.url;
             let fileIdMatch = f.url ? f.url.match(/\/d\/(.+?)\/view/) : null;
-            
             if (fileIdMatch) {
-                // 구글 드라이브 파일일 경우 고품질 썸네일과 원본 뷰어 매핑
                 viewUrl = `https://drive.google.com/file/d/${fileIdMatch[1]}/view`;
                 thumbUrl = `https://drive.google.com/thumbnail?id=${fileIdMatch[1]}&sz=w600`;
             }
+            if (f.thumbBase64 && f.thumbBase64.startsWith('data:image')) thumbUrl = f.thumbBase64;
 
-            if (f.thumbBase64 && f.thumbBase64.startsWith('data:image')) {
-                thumbUrl = f.thumbBase64;
-            } else if (f.url && f.url.startsWith('data:image')) {
-                thumbUrl = f.url;
-            }
-
-            mediaHtml += `
-            <div class="relative overflow-hidden rounded-lg border border-slate-200 shadow-sm cursor-pointer group w-32 h-32 bg-slate-100 flex items-center justify-center" onclick="window.openImageViewer('${viewUrl}')">
-            `;
-            
+            mediaHtml += `<div class="relative overflow-hidden rounded-lg border border-slate-200 shadow-sm cursor-pointer group w-32 h-32 bg-slate-100 flex items-center justify-center" onclick="window.openImageViewer('${viewUrl}')">`;
             if (thumbUrl && (thumbUrl.startsWith('data:') || thumbUrl.includes('drive.google.com/thumbnail'))) {
                 mediaHtml += `<img src="${thumbUrl}" alt="${f.name || '이미지'}" class="w-full h-full object-cover group-hover:scale-110 transition-transform" onerror="this.outerHTML='<div class=\\'flex flex-col items-center justify-center text-slate-400 w-full h-full\\'><i class=\\'fa-regular fa-image text-3xl mb-1\\'></i><span class=\\'text-[10px] font-bold\\'>사진보기</span></div>';">`;
             } else {
                 mediaHtml += `<div class="flex flex-col items-center justify-center text-slate-400 group-hover:text-indigo-500 transition-colors w-full h-full"><i class="fa-regular fa-image text-3xl mb-1"></i><span class="text-[10px] font-bold">사진보기</span></div>`;
             }
-            
             mediaHtml += `<div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"><i class="fa-solid fa-magnifying-glass-plus text-xl"></i></div></div>`;
-            
         } else {
             filesHtml += `<a href="${f.url}" target="_blank" class="text-xs text-sky-500 font-bold underline flex items-center gap-1 w-fit"><i class="fa-solid fa-file-arrow-down"></i> ${f.name}</a>`;
         }
@@ -628,13 +380,12 @@ window.generateMediaHtml = function(filesArray) {
     let result = '';
     if (mediaHtml) result += `<div class="flex flex-wrap gap-2 mt-3">${mediaHtml}</div>`;
     if (filesHtml) result += `<div class="flex flex-col gap-1 mt-2">${filesHtml}</div>`;
-    
     return result;
 };
 
 
 // ==========================================
-// 💡 PJT 완료보고 송부 및 임시저장
+// 💡 PJT 완료보고 송부 
 // ==========================================
 window.openCrReqModal = function(id, title) {
     try {
@@ -671,6 +422,7 @@ window.closeCrReqModal = function() {
     }
 };
 
+// 💡 임시저장 기능
 window.tempSaveCrReq = async function() {
     const pIdEl = document.getElementById('cr-req-pjt-id');
     const goodTxtEl = document.getElementById('cr-req-good');
@@ -745,6 +497,7 @@ window.submitCrReq = async function() {
             }
         }
 
+        // 💡 송부 시 crSent 상태 true로 설정 및 임시저장 초기화
         batch.update(pjtRef, { 
             status: 'completed', 
             crSent: true,
@@ -781,12 +534,8 @@ window.submitCrReq = async function() {
         }
         window.showToast("완료요청 송부 완료", "success");
         window.closeCrReqModal();
-    } catch(e) { 
-        window.showToast("송부 중 오류가 발생했습니다.", "error");
-    } finally { 
-        btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> 완료요청 송부'; 
-        btn.disabled = false; 
-    }
+    } catch(e) { window.showToast("송부 중 오류가 발생했습니다.", "error");
+    } finally { btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> 완료요청 송부'; btn.disabled = false; }
 };
 
 window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
@@ -822,10 +571,7 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
     const progressSize = document.getElementById('upload-progress-size');
     const progressFilename = document.getElementById('upload-progress-filename');
     
-    if(progressModal) { 
-        progressModal.classList.remove('hidden'); 
-        progressModal.classList.add('flex'); 
-    }
+    if(progressModal) { progressModal.classList.remove('hidden'); progressModal.classList.add('flex'); }
     if(progressBar) progressBar.style.width = '0%';
     if(progressText) progressText.innerText = '0%';
     
@@ -854,27 +600,15 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
         };
 
         xhr.onload = function() {
-            if (fileIndex === totalFiles) { 
-                if(progressModal) { 
-                    progressModal.classList.add('hidden'); 
-                    progressModal.classList.remove('flex'); 
-                } 
-            }
-            if (xhr.status >= 200 && xhr.status < 300) {
-                resolve(`https://drive.google.com/file/d/${JSON.parse(xhr.responseText).id}/view`);
-            } else {
-                if(progressModal) { 
-                    progressModal.classList.add('hidden'); 
-                    progressModal.classList.remove('flex'); 
-                }
+            if (fileIndex === totalFiles) { if(progressModal) { progressModal.classList.add('hidden'); progressModal.classList.remove('flex'); } }
+            if (xhr.status >= 200 && xhr.status < 300) resolve(`https://drive.google.com/file/d/${JSON.parse(xhr.responseText).id}/view`);
+            else {
+                if(progressModal) { progressModal.classList.add('hidden'); progressModal.classList.remove('flex'); }
                 reject(new Error("파일 업로드 실패: " + xhr.responseText));
             }
         };
         xhr.onerror = function() {
-            if(progressModal) { 
-                progressModal.classList.add('hidden'); 
-                progressModal.classList.remove('flex'); 
-            }
+            if(progressModal) { progressModal.classList.add('hidden'); progressModal.classList.remove('flex'); }
             reject(new Error("네트워크 오류 발생"));
         };
         xhr.send(form);
@@ -882,7 +616,7 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
 }
 
 // ==========================================
-// 💡 프로젝트 현황 등록 모달 (수정본)
+// 💡 프로젝트 정보 입력 폼
 // ==========================================
 window.openProjStatusWriteModal = function() {
     try {
@@ -1282,7 +1016,7 @@ window.renderComments = function(topLevelComments) {
     try {
         let listHtml = '';
         topLevelComments.forEach(function(c) { 
-            let safeContent = String(c.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+            let safeContent = getSafeString(c.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             if(window.formatMentions) safeContent = window.formatMentions(safeContent);
             
             let files = [];
@@ -1293,7 +1027,7 @@ window.renderComments = function(topLevelComments) {
             if(c.replies && c.replies.length > 0) { 
                 repliesHtml += '<div class="pl-4 border-l-[3px] border-indigo-100/60 space-y-2 mt-4 pt-2 ml-2">'; 
                 c.replies.forEach(function(r) { 
-                    let safeReplyContent = String(r.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>'); 
+                    let safeReplyContent = getSafeString(r.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>'); 
                     if(window.formatMentions) safeReplyContent = window.formatMentions(safeReplyContent); 
                     
                     let rFiles = [];
@@ -1503,8 +1237,9 @@ window.deleteComment = async function(id) {
     } catch(e) { window.showToast("삭제 실패", "error"); } 
 };
 
+
 // ==========================================
-// 💡 이슈 관리
+// 💡 이슈, MD로그, 등등
 // ==========================================
 window.openIssueModal = function(projectId, title) { 
     try {
@@ -1563,7 +1298,7 @@ window.renderIssues = function(issues) {
     try {
         let listHtml = '';
         issues.forEach(function(iss) { 
-            let safeText = String(iss.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+            let safeText = getSafeString(iss.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             if(window.formatMentions) safeText = window.formatMentions(safeText);
             
             let btnHtml = '';
@@ -1681,9 +1416,6 @@ window.closeIssueModal = function() {
     } 
 };
 
-// ==========================================
-// 💡 생산일지(MD) 및 인원 다중선택
-// ==========================================
 window.addLogMember = function(name) { 
     if(!name) return; 
     if(!window.currentLogMembers) window.currentLogMembers = [];
@@ -1779,7 +1511,7 @@ window.renderMdLogs = function(logs) {
     try {
         let htmlStr = '';
         logs.forEach(function(log) { 
-            let safeDesc = String(log.desc || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+            let safeDesc = getSafeString(log.desc).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             if(window.formatMentions) safeDesc = window.formatMentions(safeDesc);
             
             let btnHtml = '-';
@@ -1919,9 +1651,6 @@ window.resetMdLogForm = function() {
     if(btnCancel) btnCancel.classList.add('hidden'); 
 };
 
-// ==========================================
-// 💡 링크 모달
-// ==========================================
 window.openLinkModal = function(projectId, title) { 
     try {
         const modal = document.getElementById('link-modal');
@@ -2025,127 +1754,4 @@ window.deleteLinkItem = async function(projectId, index) {
     } catch(e) { 
         window.showToast("삭제 실패", "error"); 
     } 
-};
-
-window.loadNcrData = async function() {
-    try {
-        if(window.showToast) window.showToast("부적합(RAWDATA) 데이터를 가져오는 중입니다...", "success");
-        const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSYwsWjs8ox503LLsRIeVRbbZ4R7eLgoq0C-ZdYIBIUACCwWyt5oYkAAtIpX9j1taqt1MQaEg1Jjom0/pub?gid=0&single=true&output=csv';
-        const separator = csvUrl.includes('?') ? '&' : '?';
-        const res = await fetch(csvUrl + separator + 't=' + Date.now());
-        
-        if (!res.ok) throw new Error("시트 데이터를 가져오지 못했습니다.");
-        const csvText = await res.text();
-        if (csvText.includes('<html') || csvText.includes('<body')) throw new Error("링크 형식이 잘못되었습니다.");
-
-        const rows = []; let row = [], col = "", quote = false;
-        for (let i = 0; i < csvText.length; i++) {
-            let cc = csvText[i], nc = csvText[i+1];
-            if (cc === '"' && quote && nc === '"') { col += cc; ++i; continue; }
-            if (cc === '"') { quote = !quote; continue; }
-            if (cc === ',' && !quote) { row.push(col); col = ""; continue; }
-            if ((cc === '\r' || cc === '\n') && !quote) {
-                if (row.length > 0 || col !== "") { row.push(col); rows.push(row); row = []; col = ""; }
-                if (cc === '\r' && nc === '\n') i++;
-                continue;
-            }
-            col += cc;
-        }
-        if (col !== "" || row.length > 0) { row.push(col); rows.push(row); }
-
-        let dataStartIndex = 1;
-        for (let i = 0; i < Math.min(5, rows.length); i++) {
-            if (rows[i][0] && String(rows[i][0]).includes('NCR No')) { dataStartIndex = i + 1; break; }
-        }
-
-        window.ncrData = rows.slice(dataStartIndex).map(r => {
-            return {
-                ncrNo: r[0] ? getSafeString(r[0]).trim() : '',      
-                date: r[1] ? getSafeString(r[1]).trim() : '',       
-                pjtCode: r[2] ? getSafeString(r[2]).trim() : '',    
-                partName: r[3] ? getSafeString(r[3]).trim() : '',   
-                drawingNo: r[4] ? getSafeString(r[4]).trim() : '',  
-                type: r[12] ? getSafeString(r[12]).trim() : '',     
-                content: r[13] ? getSafeString(r[13]).trim() : '',  
-                status: r[15] ? getSafeString(r[15]).trim() : ''    
-            };
-        }).filter(n => n.pjtCode !== ''); 
-
-        if (window.ncrData.length === 0) {
-            if(window.showToast) window.showToast("RAWDATA 시트에서 데이터를 찾을 수 없습니다.", "warning");
-        } else {
-            if(window.showToast) window.showToast(`부적합(NCR) 데이터 ${window.ncrData.length}건 동기화 완료!`, "success");
-        }
-        window.renderProjectStatusList();
-        const modal = document.getElementById('ncr-modal');
-        if (modal && !modal.classList.contains('hidden')) {
-            const titleEl = document.getElementById('ncr-project-title');
-            if (titleEl && titleEl.dataset.code) window.renderNcrList(titleEl.dataset.code);
-        }
-    } catch(e) {
-        console.error("NCR 로드 에러:", e);
-        if(window.showToast) window.showToast(`동기화 실패: ${e.message}`, "error");
-    }
-};
-
-window.openNcrModal = function(pjtCode, pjtName) {
-    const titleEl = document.getElementById('ncr-project-title');
-    if (titleEl) {
-        titleEl.innerText = `[${getSafeString(pjtCode)}] ${getSafeString(pjtName)}`;
-        titleEl.dataset.code = getSafeString(pjtCode);
-    }
-    const modal = document.getElementById('ncr-modal');
-    if(modal) {
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-    }
-    window.renderNcrList(pjtCode);
-};
-
-window.closeNcrModal = function() {
-    const modal = document.getElementById('ncr-modal');
-    if(modal) {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-    }
-};
-
-window.renderNcrList = function(pjtCode) {
-    const tbody = document.getElementById('ncr-list-tbody');
-    if (!tbody) return;
-    
-    const safeTargetCode = getSafeString(pjtCode).replace(/\s/g, '').toUpperCase();
-    const list = (window.ncrData || []).filter(n => getSafeString(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeTargetCode);
-    
-    let total = list.length;
-    let completed = list.filter(n => {
-        let s = getSafeString(n.status);
-        return s.includes('완료') || s.includes('종결');
-    }).length;
-    
-    const elTotal = document.getElementById('ncr-total-cnt'); if(elTotal) elTotal.innerText = total;
-    const elPending = document.getElementById('ncr-pending-cnt'); if(elPending) elPending.innerText = total - completed;
-    const elComp = document.getElementById('ncr-comp-cnt'); if(elComp) elComp.innerText = completed;
-    
-    if (total === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-8 text-slate-400 font-bold bg-white">등록된 부적합 내역이 없습니다.</td></tr>';
-        return;
-    }
-    
-    tbody.innerHTML = list.map(n => {
-        let s = getSafeString(n.status);
-        const isComp = s.includes('완료') || s.includes('종결');
-        const textClass = isComp ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-700';
-        const badge = isComp ? `<span class="bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">완료</span>` : `<span class="bg-rose-50 text-rose-600 border border-rose-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">진행중</span>`;
-        
-        return `<tr class="hover:bg-slate-50 transition-colors bg-white border-b border-slate-100">
-                    <td class="p-3 text-center font-bold text-slate-500 whitespace-nowrap">${getSafeString(n.ncrNo) || '-'}</td>
-                    <td class="p-3 text-center text-slate-500 whitespace-nowrap">${getSafeString(n.date) || '-'}</td>
-                    <td class="p-3 text-center text-slate-500 whitespace-nowrap">${getSafeString(n.drawingNo) || '-'}</td>
-                    <td class="p-3 text-center text-slate-500 whitespace-nowrap">${getSafeString(n.partName) || '-'}</td>
-                    <td class="p-3 text-center whitespace-nowrap"><span class="bg-slate-100 px-2 py-1 border border-slate-200 rounded font-bold">${getSafeString(n.type) || '-'}</span></td>
-                    <td class="p-3 font-medium ${textClass} break-all">${getSafeString(n.content).replace(/</g, '&lt;').replace(/>/g, '&gt;') || '-'}</td>
-                    <td class="p-3 text-center whitespace-nowrap">${badge}</td>
-                </tr>`;
-    }).join('');
 };
