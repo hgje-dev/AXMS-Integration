@@ -27,11 +27,34 @@
         font-weight: 700;
     }
     .animate-fade-in {
-        animation: fadeIn 0.3s ease-out forwards;
+        animation: fadeIn 0.4s ease-out forwards;
     }
     @keyframes fadeIn {
         from { opacity: 0; transform: translateY(10px); }
         to { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* 💡 제조팀 보라색 테이블 전용 스타일 */
+    .mfg-th-purple {
+        background-color: #5c4b99;
+        color: white;
+        font-size: 12px;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .mfg-td-gray {
+        background-color: #f8fafc;
+        border-top: 1px solid #e2e8f0;
+        border-bottom: 1px solid #e2e8f0;
+        border-right: 1px solid #e2e8f0;
+        font-size: 12px;
+        font-weight: 700;
+        color: #334155;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 </style>
 
@@ -99,8 +122,7 @@
                         <th class="p-3 text-center border-r border-slate-600 w-24 text-rose-300">품질(Q)</th>
                         <th class="p-3 text-center border-r border-slate-600 w-24 text-emerald-300">구매(Cost)</th>
                         <th class="p-3 text-center border-r border-slate-600 w-28 text-amber-300">최종 상태</th>
-                        <th class="p-3 text-center border-r border-slate-600 w-28">대시보드</th>
-                        <th class="p-3 text-center w-16">관리</th>
+                        <th class="p-3 text-center w-28">대시보드</th>
                     </tr>
                 </thead>
                 <tbody id="integ-tbody" class="text-xs divide-y divide-slate-100 text-slate-700">
@@ -111,7 +133,7 @@
 </div>
 
 <div id="integration-dashboard-modal" class="fixed inset-0 z-[300] hidden items-center justify-center bg-slate-900/80 backdrop-blur-md py-6 px-4 transition-opacity">
-    <div class="bg-[#f8fafc] rounded-3xl shadow-2xl w-full max-w-[1400px] flex flex-col h-full max-h-[95vh] overflow-hidden transform transition-all border border-slate-300">
+    <div class="bg-[#f8fafc] rounded-3xl shadow-2xl w-full max-w-[1500px] flex flex-col h-full max-h-[95vh] overflow-hidden transform transition-all border border-slate-300">
         
         <div class="px-8 py-5 border-b border-slate-200 bg-white flex justify-between items-center shrink-0 shadow-sm z-10">
             <div>
@@ -162,7 +184,7 @@
                 </div>
             </div>
 
-            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-[400px]">
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-[500px]">
                 <div class="flex border-b border-slate-200 bg-slate-50/50 px-2 pt-2">
                     <button onclick="window.switchIntegTab('mfg')" id="tab-mfg" class="custom-tab-btn active px-6 py-3 text-sm transition-all rounded-t-lg flex items-center gap-2">
                         <i class="fa-solid fa-gears"></i> 제조팀 상세보고
@@ -175,28 +197,80 @@
                     </button>
                 </div>
                 
-                <div class="p-6 flex-1 bg-slate-50/50">
+                <div class="p-6 flex-1 bg-white">
                     
                     <div id="content-mfg" class="animate-fade-in space-y-6">
-                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[280px]">
-                                <h4 class="text-sm font-black text-slate-800 mb-1">목표 대비 공수 실적</h4>
-                                <p class="text-[10px] font-bold text-slate-400 mb-4">계획 M/H vs 최종 M/H 비교</p>
-                                <div class="relative w-full flex-1 min-h-0 pb-2"><canvas id="integ-chart-md"></canvas></div>
+                        
+                        <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                            <div class="flex justify-between items-end border-b border-slate-100 pb-3 mb-5">
+                                <h4 class="text-sm font-black text-slate-800"><i class="fa-solid fa-calendar-check text-indigo-500 mr-1.5"></i> 제조/일정 성과 요약</h4>
+                                <span class="text-[10px] font-bold text-slate-400">(1공수 : 8h/1Day, 직접직 인건비 기준)</span>
                             </div>
-                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[280px]">
-                                <h4 class="text-sm font-black text-slate-800 mb-1">주차별 제작 진행률</h4>
-                                <p class="text-[10px] font-bold text-slate-400 mb-4">계획 대비 실제 진행 (S-Curve)</p>
-                                <div class="relative w-full flex-1 min-h-0 pb-2"><canvas id="integ-chart-schedule"></canvas></div>
+                            
+                            <div class="flex flex-col gap-2 mb-8">
+                                <div class="flex items-stretch h-11">
+                                    <div class="mfg-th-purple w-32 rounded-l-md shadow-sm">제작 계획일</div>
+                                    <div class="mfg-td-gray flex-1 gap-4 shadow-sm"><span id="mfg-plan-st">-</span> <span>~</span> <span id="mfg-plan-en">-</span></div>
+                                    <div class="mfg-th-purple w-28 shadow-sm">총 소요일</div>
+                                    <div class="mfg-td-gray w-24 shadow-sm"><span id="mfg-plan-days" class="text-sm">-</span> <span class="ml-1 text-[10px] font-normal text-slate-500">일</span></div>
+                                    <div class="mfg-th-purple w-24 ml-6 shadow-sm rounded-l-md">오차</div>
+                                    <div class="mfg-td-gray w-32 shadow-sm rounded-r-md" id="mfg-diff-box">
+                                        <span id="mfg-diff-icon" class="mr-1 text-[10px]"></span> <span id="mfg-diff-days" class="text-sm">-</span> <span class="ml-1 text-[10px] font-normal text-slate-500">일</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-stretch h-11">
+                                    <div class="mfg-th-purple w-32 rounded-l-md shadow-sm">제작 실행일</div>
+                                    <div class="mfg-td-gray flex-1 gap-4 shadow-sm"><span id="mfg-act-st">-</span> <span>~</span> <span id="mfg-act-en">-</span></div>
+                                    <div class="mfg-th-purple w-28 shadow-sm">총 소요일</div>
+                                    <div class="mfg-td-gray w-24 shadow-sm"><span id="mfg-act-days" class="text-sm">-</span> <span class="ml-1 text-[10px] font-normal text-slate-500">일</span></div>
+                                    <div class="w-24 ml-6"></div><div class="w-32"></div> </div>
+                                <div class="flex items-stretch h-11">
+                                    <div class="mfg-th-purple w-32 rounded-l-md shadow-sm">이전 설비 실행일</div>
+                                    <div class="mfg-td-gray flex-1 gap-4 shadow-sm"><span id="mfg-prev-st" class="text-slate-400">데이터 없음</span> <span>~</span> <span id="mfg-prev-en" class="text-slate-400">데이터 없음</span></div>
+                                    <div class="mfg-th-purple w-28 shadow-sm">총 소요일</div>
+                                    <div class="mfg-td-gray w-24 shadow-sm"><span id="mfg-prev-days" class="text-sm text-slate-400">-</span> <span class="ml-1 text-[10px] font-normal text-slate-400">일</span></div>
+                                    <div class="mfg-th-purple w-24 ml-6 shadow-sm rounded-l-md">단축</div>
+                                    <div class="mfg-td-gray w-32 shadow-sm rounded-r-md text-slate-400">- 일</div>
+                                </div>
                             </div>
-                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[280px]">
-                                <h4 class="text-sm font-black text-slate-800 mb-1">공정별 투입 공수 비중</h4>
-                                <p class="text-[10px] font-bold text-slate-400 mb-4">기구조립 / 전장배선 등 공정 비율</p>
-                                <div class="relative w-full flex-1 min-h-0 pb-2"><canvas id="integ-chart-process"></canvas></div>
+
+                            <h5 class="text-xs font-black text-indigo-800 mb-3 border-b border-slate-100 pb-2 pl-1">투입공수 및 비용</h5>
+                            
+                            <div class="flex flex-col gap-2">
+                                <div class="flex items-stretch h-11">
+                                    <div class="mfg-th-purple w-32 rounded-l-md shadow-sm">예상 투입공수</div>
+                                    <div class="mfg-td-gray w-32 shadow-sm"><span id="mfg-est-md" class="text-sm">-</span> <span class="ml-1 text-[10px] font-normal text-slate-500">공수</span></div>
+                                    <div class="mfg-th-purple w-20 ml-2 shadow-sm rounded-l-md">오차</div>
+                                    <div class="mfg-td-gray w-32 shadow-sm rounded-r-md" id="mfg-md-diff-box">
+                                        <span id="mfg-md-diff-icon" class="mr-1 text-[10px]"></span> <span id="mfg-md-diff" class="text-sm">-</span> <span class="ml-1 text-[10px] font-normal text-slate-500">공수</span>
+                                    </div>
+                                    <div class="mfg-th-purple w-28 ml-6 shadow-sm rounded-l-md">공수비용</div>
+                                    <div class="mfg-td-gray flex-1 shadow-sm"><span id="mfg-est-cost" class="text-sm">-</span> <span class="ml-1 text-[10px] font-normal text-slate-500">원</span></div>
+                                    <div class="mfg-th-purple w-24 ml-2 shadow-sm rounded-l-md">비용 오차</div>
+                                    <div class="mfg-td-gray w-40 shadow-sm rounded-r-md" id="mfg-cost-diff-box">
+                                        <span id="mfg-cost-diff-icon" class="mr-1 text-[10px]"></span> <span id="mfg-cost-diff" class="text-sm">-</span> <span class="ml-1 text-[10px] font-normal text-slate-500">원</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-stretch h-11">
+                                    <div class="mfg-th-purple w-32 rounded-l-md shadow-sm">실제 투입공수</div>
+                                    <div class="mfg-td-gray w-32 shadow-sm"><span id="mfg-act-md" class="text-sm font-black text-indigo-700">-</span> <span class="ml-1 text-[10px] font-normal text-slate-500">공수</span></div>
+                                    <div class="w-20 ml-2"></div><div class="w-32"></div> <div class="mfg-th-purple w-28 ml-6 shadow-sm rounded-l-md">공수비용</div>
+                                    <div class="mfg-td-gray flex-1 shadow-sm"><span id="mfg-act-cost" class="text-sm font-black text-indigo-700">-</span> <span class="ml-1 text-[10px] font-normal text-slate-500">원</span></div>
+                                    <div class="w-24 ml-2"></div><div class="w-40"></div> </div>
+                                <div class="flex items-stretch h-11 opacity-60">
+                                    <div class="mfg-th-purple w-32 rounded-l-md shadow-sm">전 설비 투입공수</div>
+                                    <div class="mfg-td-gray w-32 shadow-sm"><span class="text-sm">-</span> <span class="ml-1 text-[10px] font-normal">공수</span></div>
+                                    <div class="mfg-th-purple w-20 ml-2 shadow-sm rounded-l-md bg-slate-400">단축</div>
+                                    <div class="mfg-td-gray w-32 shadow-sm rounded-r-md">-</div>
+                                    <div class="mfg-th-purple w-28 ml-6 shadow-sm rounded-l-md">공수비용</div>
+                                    <div class="mfg-td-gray flex-1 shadow-sm"><span class="text-sm">-</span> <span class="ml-1 text-[10px] font-normal">원</span></div>
+                                    <div class="mfg-th-purple w-24 ml-2 shadow-sm rounded-l-md bg-slate-400">절감</div>
+                                    <div class="mfg-td-gray w-40 shadow-sm rounded-r-md">-</div>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="flex items-center justify-between border-b border-slate-200 pb-2 mt-4">
+                        <div class="flex items-center justify-between border-b pb-2">
                             <h4 class="text-sm font-black text-slate-700"><i class="fa-solid fa-paperclip text-slate-400 mr-1"></i> 제조팀 프로젝트 총평 (Good & Bad)</h4>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="mfg-goodbad-container">
@@ -205,11 +279,18 @@
 
                     <div id="content-qual" class="hidden animate-fade-in space-y-6">
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[280px]">
+                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[320px]">
                                 <h4 class="text-sm font-black text-slate-800 mb-1">부적합(NCR) 발생 유형</h4>
-                                <p class="text-[10px] font-bold text-slate-400 mb-4">구조개선 / 설계오류 등 원인 분석</p>
-                                <div class="relative w-full flex-1 min-h-0 pb-2 flex items-center justify-center">
+                                <p class="text-[10px] font-bold text-slate-400 mb-4">구조개선 / 설계오류 등 주요 원인 분석</p>
+                                <div class="relative w-full flex-1 min-h-0 flex items-center justify-center pb-2">
                                     <canvas id="integ-chart-qual-ncr"></canvas>
+                                </div>
+                            </div>
+                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[320px]">
+                                <h4 class="text-sm font-black text-slate-800 mb-1">공정별 불량 점유율</h4>
+                                <p class="text-[10px] font-bold text-slate-400 mb-4">가공, 조립, 전장 등 공정 단계별 불량 발생 비중</p>
+                                <div class="relative w-full flex-1 min-h-0 pb-2">
+                                    <canvas id="integ-chart-qual-process"></canvas>
                                 </div>
                             </div>
                         </div>
@@ -234,7 +315,7 @@
 
                     <div id="content-pur" class="hidden animate-fade-in space-y-6">
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[280px]">
+                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[320px]">
                                 <h4 class="text-sm font-black text-slate-800 mb-1">프로젝트 예산 집행 구조</h4>
                                 <p class="text-[10px] font-bold text-slate-400 mb-4">계획 대비 실제 투입 및 잔여 예산</p>
                                 <div class="relative w-full flex-1 min-h-0 flex items-center justify-center pb-2">
@@ -245,10 +326,12 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[280px]">
+                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[320px]">
                                 <h4 class="text-sm font-black text-slate-800 mb-1">주요 업체별 원가 절감액</h4>
                                 <p class="text-[10px] font-bold text-slate-400 mb-4">V/E 협상 및 재고 활용 성과 (단위: 백만 원)</p>
-                                <div class="relative w-full flex-1 min-h-0 pb-2"><canvas id="integ-chart-pur-saving"></canvas></div>
+                                <div class="relative w-full flex-1 min-h-0 pb-2">
+                                    <canvas id="integ-chart-pur-saving"></canvas>
+                                </div>
                             </div>
                         </div>
 
