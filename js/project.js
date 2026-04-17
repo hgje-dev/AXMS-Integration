@@ -13,7 +13,6 @@ let currentPjtScheduleUnsubscribe = null;
 
 const TARGET_DRIVE_FOLDER = "1ae5JiICk9ZQEaPVNhR6H4TlPs_Np03kQ";
 
-// 💡 [수정] 초기 기본값: 올해 연도 및 완료 숨김 TRUE
 window.currentStatusFilter = 'all';
 window.currentCategoryFilter = 'all';
 window.currentMonthFilter = '';
@@ -416,7 +415,6 @@ window.generateMediaHtml = function(filesArray) {
             let fileIdMatch = f.url ? f.url.match(/\/d\/(.+?)\/view/) : null;
             
             if (fileIdMatch) {
-                // 구글 드라이브 파일일 경우 고품질 썸네일과 원본 뷰어 매핑
                 viewUrl = `https://drive.google.com/file/d/${fileIdMatch[1]}/view`;
                 thumbUrl = `https://drive.google.com/thumbnail?id=${fileIdMatch[1]}&sz=w600`;
             }
@@ -450,6 +448,7 @@ window.generateMediaHtml = function(filesArray) {
     
     return result;
 };
+
 
 // ==========================================
 // 💡 PJT 완료보고 송부 및 임시저장
@@ -489,6 +488,7 @@ window.closeCrReqModal = function() {
     }
 };
 
+// 💡 임시저장 기능
 window.tempSaveCrReq = async function() {
     const pIdEl = document.getElementById('cr-req-pjt-id');
     const goodTxtEl = document.getElementById('cr-req-good');
@@ -563,6 +563,7 @@ window.submitCrReq = async function() {
             }
         }
 
+        // 💡 송부 시 crSent 상태 true로 설정 및 임시저장 초기화
         batch.update(pjtRef, { 
             status: 'completed', 
             crSent: true,
@@ -594,25 +595,42 @@ window.submitCrReq = async function() {
             const targetTeams = ['품질경영팀', '전략구매팀'];
             if (window.allSystemUsers) {
                 const targets = window.allSystemUsers.filter(u => targetTeams.includes(u.team));
-                for(let u of targets) await window.notifyUser(u.name, msg, pId, "완료요청");
+                for(let u of targets) {
+                    await window.notifyUser(u.name, msg, pId, "완료요청");
+                }
             }
         }
         window.showToast("완료요청 송부 완료", "success");
         window.closeCrReqModal();
-    } catch(e) { window.showToast("송부 중 오류가 발생했습니다.", "error");
-    } finally { btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> 완료요청 송부'; btn.disabled = false; }
+    } catch(e) {
+        window.showToast("송부 중 오류가 발생했습니다.", "error");
+        console.error(e);
+    } finally {
+        btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> 완료요청 송부';
+        btn.disabled = false;
+    }
 };
 
 window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
     if (!window.googleAccessToken) return null;
     const safeFolderName = getSafeString(folderName).replace(/[\/\\]/g, '_') || '미분류 프로젝트';
     const query = `name='${safeFolderName}' and mimeType='application/vnd.google-apps.folder' and '${parentFolderId}' in parents and trashed=false`;
-    const findRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}`, { headers: { 'Authorization': 'Bearer ' + window.googleAccessToken } });
+    
+    const findRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}`, {
+        headers: { 'Authorization': 'Bearer ' + window.googleAccessToken }
+    });
     const folderData = await findRes.json();
-    if (folderData.files && folderData.files.length > 0) return folderData.files[0].id;
-    else {
-        const createRes = await fetch('https://www.googleapis.com/drive/v3/files', { method: 'POST', headers: { 'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: safeFolderName, mimeType: 'application/vnd.google-apps.folder', parents: [parentFolderId] }) });
-        const newFolderData = await createRes.json(); return newFolderData.id;
+    
+    if (folderData.files && folderData.files.length > 0) {
+        return folderData.files[0].id;
+    } else {
+        const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: safeFolderName, mimeType: 'application/vnd.google-apps.folder', parents: [parentFolderId] })
+        });
+        const newFolderData = await createRes.json();
+        return newFolderData.id;
     }
 };
 
@@ -622,9 +640,12 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
         if(window.authenticateGoogle && !window.googleAccessToken) window.authenticateGoogle();
         if(!window.googleAccessToken) throw new Error("구글 인증이 필요합니다. [연동하기] 버튼을 눌러주세요.");
     }
+    
     if (!file) throw new Error("파일이 없습니다.");
+
     let targetFolderId = await window.getOrCreateDriveFolder(projectName, TARGET_DRIVE_FOLDER);
     if (!targetFolderId) throw new Error("프로젝트 폴더를 생성/조회할 수 없습니다.");
+
     if (subFolderName) {
         const subFolderId = await window.getOrCreateDriveFolder(subFolderName, targetFolderId);
         if (subFolderId) targetFolderId = subFolderId;
@@ -636,12 +657,16 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
     const progressSize = document.getElementById('upload-progress-size');
     const progressFilename = document.getElementById('upload-progress-filename');
     
-    if(progressModal) { progressModal.classList.remove('hidden'); progressModal.classList.add('flex'); }
+    if(progressModal) {
+        progressModal.classList.remove('hidden');
+        progressModal.classList.add('flex');
+    }
     if(progressBar) progressBar.style.width = '0%';
     if(progressText) progressText.innerText = '0%';
     
     let fileCounterText = totalFiles > 1 ? `[${fileIndex}/${totalFiles}] ` : '';
     if(progressFilename) progressFilename.innerText = fileCounterText + file.name;
+    
     const totalMb = (file.size / (1024 * 1024)).toFixed(2);
     if(progressSize) progressSize.innerText = `0.00 MB / ${totalMb} MB`;
 
@@ -650,6 +675,7 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
         const form = new FormData();
         form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
         form.append('file', file);
+
         const xhr = new XMLHttpRequest();
         xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', true);
         xhr.setRequestHeader('Authorization', 'Bearer ' + window.googleAccessToken);
@@ -665,400 +691,38 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
         };
 
         xhr.onload = function() {
-            if (fileIndex === totalFiles) { if(progressModal) { progressModal.classList.add('hidden'); progressModal.classList.remove('flex'); } }
-            if (xhr.status >= 200 && xhr.status < 300) resolve(`https://drive.google.com/file/d/${JSON.parse(xhr.responseText).id}/view`);
-            else {
-                if(progressModal) { progressModal.classList.add('hidden'); progressModal.classList.remove('flex'); }
+            if (fileIndex === totalFiles) {
+                if(progressModal) {
+                    progressModal.classList.add('hidden');
+                    progressModal.classList.remove('flex');
+                }
+            }
+            if (xhr.status >= 200 && xhr.status < 300) {
+                const data = JSON.parse(xhr.responseText);
+                resolve(`https://drive.google.com/file/d/${data.id}/view`);
+            } else {
+                if(progressModal) {
+                    progressModal.classList.add('hidden');
+                    progressModal.classList.remove('flex');
+                }
                 reject(new Error("파일 업로드 실패: " + xhr.responseText));
             }
         };
+
         xhr.onerror = function() {
-            if(progressModal) { progressModal.classList.add('hidden'); progressModal.classList.remove('flex'); }
+            if(progressModal) {
+                progressModal.classList.add('hidden');
+                progressModal.classList.remove('flex');
+            }
             reject(new Error("네트워크 오류 발생"));
         };
+
         xhr.send(form);
     });
 }
 
 // ==========================================
-// 💡 구매 관리
-// ==========================================
-window.openPurchaseModal = function(projectId, title) { 
-    try {
-        const modal = document.getElementById('purchase-modal');
-        if(!modal) return;
-        
-        const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
-        const setHtml = (eid, val) => { const el = document.getElementById(eid); if(el) el.innerText = val; };
-        
-        setVal('pur-req-id', projectId); 
-        setHtml('pur-project-title', title || ''); 
-        window.resetPurchaseForm(); 
-        
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-        
-        if(window.initGoogleAPI) window.initGoogleAPI();
-        
-        if (currentPurchaseUnsubscribe) currentPurchaseUnsubscribe(); 
-        currentPurchaseUnsubscribe = onSnapshot(query(collection(db, "project_purchases"), where("projectId", "==", projectId)), function(snap) { 
-            let list = []; 
-            snap.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
-            list.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
-            
-            const listEl = document.getElementById('purchase-list');
-            if(!listEl) return;
-            
-            if(list.length === 0) { 
-                listEl.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 구매 내역이 없습니다.</div>'; 
-                return; 
-            }
-            
-            listEl.innerHTML = list.map(item => {
-                let dateStr = item.createdAt ? window.getDateTimeStr(new Date(getSafeMillis(item.createdAt))) : '';
-                let safeContent = getSafeString(item.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
-                if(window.formatMentions) safeContent = window.formatMentions(safeContent);
-                let attachmentsHtml = window.generateMediaHtml(item.files);
-
-                return `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
-                            <div class="flex justify-between items-start">
-                                <div class="flex items-center gap-2"><span class="font-bold text-amber-600 text-sm">${getSafeString(item.authorName)}</span><span class="text-[10px] text-slate-400 font-medium">${dateStr}</span></div>
-                                <div class="flex gap-2"><button onclick="window.deletePurchase('${item.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button></div>
-                            </div>
-                            <div class="text-[13px] text-slate-700 font-medium break-words leading-relaxed">${safeContent}</div>
-                            ${attachmentsHtml}
-                        </div>`;
-            }).join('');
-        });
-    } catch(e) {
-        if(window.showToast) window.showToast('모달을 여는 중 에러가 발생했습니다.', 'error');
-    }
-};
-
-window.closePurchaseModal = function() { 
-    const modal = document.getElementById('purchase-modal');
-    if(modal) {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-    }
-    if (currentPurchaseUnsubscribe) currentPurchaseUnsubscribe(); 
-};
-
-window.resetPurchaseForm = function() { 
-    const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
-    setVal('editing-pur-id', ''); 
-    setVal('new-pur-text', ''); 
-    setVal('new-pur-file', ''); 
-    const fname = document.getElementById('pur-file-name');
-    if(fname) fname.innerText = ''; 
-};
-
-window.savePurchaseItem = async function() { 
-    const pIdEl = document.getElementById('pur-req-id');
-    const titleEl = document.getElementById('pur-project-title');
-    if(!pIdEl || !titleEl) return;
-    
-    const pId = pIdEl.value;
-    const title = titleEl.innerText;
-    
-    const proj = (window.currentProjectStatusList || []).find(p => p.id === pId);
-    const folderName = proj && proj.code ? proj.code : title;
-
-    const contentEl = document.getElementById('new-pur-text');
-    const fileInput = document.getElementById('new-pur-file');
-    const btn = document.getElementById('btn-pur-save');
-    
-    if(!contentEl || !fileInput || !btn) return;
-    
-    const content = contentEl.value.trim();
-    if(!content && fileInput.files.length === 0) return window.showToast("내용이나 파일을 첨부하세요.", "error");
-    
-    btn.innerHTML = '저장중..'; btn.disabled = true;
-    try { 
-        let filesData = [];
-        if (fileInput.files.length > 0) {
-            let total = fileInput.files.length;
-            for(let i=0; i<total; i++) {
-                let file = fileInput.files[i];
-                let isImg = file.name.match(/\.(jpeg|jpg|gif|png|webp|bmp|heic)$/i);
-                
-                let thumbBase64 = null;
-                if(isImg) {
-                    thumbBase64 = await new Promise(resolve => { window.resizeAndConvertToBase64(file, res => resolve(res), 300); });
-                }
-                
-                let url = await handleDriveUploadWithProgress(file, folderName, '구매', i+1, total);
-                filesData.push({ name: file.name, url: url, thumbBase64: thumbBase64 });
-            }
-        }
-        await addDoc(collection(db, "project_purchases"), { projectId: pId, content: content, files: filesData, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
-        window.showToast("구매 내역이 등록되었습니다."); 
-        window.resetPurchaseForm(); 
-    } catch(e) { 
-        window.showToast(e.message, "error"); 
-    } finally { 
-        btn.innerHTML = '등록'; btn.disabled = false; 
-    }
-};
-
-window.deletePurchase = async function(id) { 
-    if(confirm("삭제하시겠습니까?")) await deleteDoc(doc(db, "project_purchases", id)); 
-};
-
-// ==========================================
-// 💡 설계 파일 관리
-// ==========================================
-window.openDesignModal = function(projectId, title) { 
-    try {
-        const modal = document.getElementById('design-modal');
-        if(!modal) return;
-
-        const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
-        const setHtml = (eid, val) => { const el = document.getElementById(eid); if(el) el.innerText = val; };
-
-        setVal('des-req-id', projectId); 
-        setHtml('des-project-title', title || ''); 
-        window.resetDesignForm(); 
-        
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-        
-        if(window.initGoogleAPI) window.initGoogleAPI();
-
-        if (currentDesignUnsubscribe) currentDesignUnsubscribe(); 
-        currentDesignUnsubscribe = onSnapshot(query(collection(db, "project_designs"), where("projectId", "==", projectId)), function(snap) { 
-            let list = []; 
-            snap.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
-            list.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
-            
-            const listEl = document.getElementById('design-list');
-            if(!listEl) return;
-            
-            if(list.length === 0) { 
-                listEl.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 설계 파일이 없습니다.</div>'; 
-                return; 
-            }
-            
-            listEl.innerHTML = list.map(item => {
-                let dateStr = item.createdAt ? window.getDateTimeStr(new Date(getSafeMillis(item.createdAt))) : '';
-                let safeContent = getSafeString(item.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
-                if(window.formatMentions) safeContent = window.formatMentions(safeContent);
-
-                let attachmentsHtml = window.generateMediaHtml(item.files);
-
-                return `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
-                            <div class="flex justify-between items-start">
-                                <div class="flex items-center gap-2"><span class="font-bold text-teal-600 text-sm">${getSafeString(item.authorName)}</span><span class="text-[10px] text-slate-400 font-medium">${dateStr}</span></div>
-                                <div class="flex gap-2"><button onclick="window.deleteDesign('${item.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button></div>
-                            </div>
-                            <div class="text-[13px] text-slate-700 font-medium break-words leading-relaxed">${safeContent}</div>
-                            ${attachmentsHtml}
-                        </div>`;
-            }).join('');
-        });
-    } catch(e) {
-        if(window.showToast) window.showToast('모달을 여는 중 에러가 발생했습니다.', 'error');
-    }
-};
-
-window.closeDesignModal = function() { 
-    const modal = document.getElementById('design-modal');
-    if(modal) {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-    }
-    if (currentDesignUnsubscribe) currentDesignUnsubscribe(); 
-};
-
-window.resetDesignForm = function() { 
-    const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
-    setVal('editing-des-id', ''); 
-    setVal('new-des-text', ''); 
-    setVal('new-des-file', ''); 
-    const fname = document.getElementById('des-file-name');
-    if(fname) fname.innerText = ''; 
-};
-
-window.saveDesignItem = async function() { 
-    const pIdEl = document.getElementById('des-req-id');
-    const titleEl = document.getElementById('des-project-title');
-    if(!pIdEl || !titleEl) return;
-    
-    const pId = pIdEl.value;
-    const title = titleEl.innerText;
-    
-    const proj = (window.currentProjectStatusList || []).find(p => p.id === pId);
-    const folderName = proj && proj.code ? proj.code : title;
-
-    const contentEl = document.getElementById('new-des-text');
-    const fileInput = document.getElementById('new-des-file');
-    const btn = document.getElementById('btn-des-save');
-    
-    if(!contentEl || !fileInput || !btn) return;
-    
-    const content = contentEl.value.trim();
-    if(!content && fileInput.files.length === 0) return window.showToast("내용이나 파일을 첨부하세요.", "error");
-    
-    btn.innerHTML = '저장중..'; btn.disabled = true;
-    try { 
-        let filesData = [];
-        if (fileInput.files.length > 0) {
-            let total = fileInput.files.length;
-            for(let i=0; i<total; i++) {
-                let file = fileInput.files[i];
-                let isImg = file.name.match(/\.(jpeg|jpg|gif|png|webp|bmp|heic)$/i);
-                
-                let thumbBase64 = null;
-                if(isImg) {
-                    thumbBase64 = await new Promise(resolve => { window.resizeAndConvertToBase64(file, res => resolve(res), 300); });
-                }
-                
-                let url = await handleDriveUploadWithProgress(file, folderName, '설계', i+1, total);
-                filesData.push({ name: file.name, url: url, thumbBase64: thumbBase64 });
-            }
-        }
-        await addDoc(collection(db, "project_designs"), { projectId: pId, content: content, files: filesData, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
-        window.showToast("설계 내역이 등록되었습니다."); 
-        window.resetDesignForm(); 
-    } catch(e) { 
-        window.showToast(e.message, "error"); 
-    } finally { 
-        btn.innerHTML = '등록'; btn.disabled = false; 
-    }
-};
-
-window.deleteDesign = async function(id) { 
-    if(confirm("삭제하시겠습니까?")) await deleteDoc(doc(db, "project_designs", id)); 
-};
-
-// ==========================================
-// 💡 일정표 관리
-// ==========================================
-window.openPjtScheduleModal = function(projectId, title) { 
-    try {
-        const modal = document.getElementById('pjt-schedule-modal');
-        if(!modal) return;
-        
-        const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
-        const setHtml = (eid, val) => { const el = document.getElementById(eid); if(el) el.innerText = val; };
-
-        setVal('sch-req-id', projectId); 
-        setHtml('sch-project-title', title || ''); 
-        window.resetPjtScheduleForm(); 
-        
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-        
-        if(window.initGoogleAPI) window.initGoogleAPI();
-
-        if (currentPjtScheduleUnsubscribe) currentPjtScheduleUnsubscribe(); 
-        currentPjtScheduleUnsubscribe = onSnapshot(query(collection(db, "project_schedules"), where("projectId", "==", projectId)), function(snap) { 
-            let list = []; 
-            snap.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
-            list.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
-            
-            const listEl = document.getElementById('pjt-schedule-list');
-            if(!listEl) return;
-            
-            if(list.length === 0) { 
-                listEl.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 PJT 일정이 없습니다.</div>'; 
-                return; 
-            }
-            
-            listEl.innerHTML = list.map(item => {
-                let dateStr = item.createdAt ? window.getDateTimeStr(new Date(getSafeMillis(item.createdAt))) : '';
-                let safeContent = getSafeString(item.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
-                if(window.formatMentions) safeContent = window.formatMentions(safeContent);
-
-                let attachmentsHtml = window.generateMediaHtml(item.files);
-
-                return `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
-                            <div class="flex justify-between items-start">
-                                <div class="flex items-center gap-2"><span class="font-bold text-fuchsia-600 text-sm">${getSafeString(item.authorName)}</span><span class="text-[10px] text-slate-400 font-medium">${dateStr}</span></div>
-                                <div class="flex gap-2"><button onclick="window.deletePjtSchedule('${item.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button></div>
-                            </div>
-                            <div class="text-[13px] text-slate-700 font-medium break-words leading-relaxed">${safeContent}</div>
-                            ${attachmentsHtml}
-                        </div>`;
-            }).join('');
-        });
-    } catch(e) {
-        if(window.showToast) window.showToast('모달을 여는 중 에러가 발생했습니다.', 'error');
-    }
-};
-
-window.closePjtScheduleModal = function() { 
-    const modal = document.getElementById('pjt-schedule-modal');
-    if(modal) {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-    }
-    if (currentPjtScheduleUnsubscribe) currentPjtScheduleUnsubscribe(); 
-};
-
-window.resetPjtScheduleForm = function() { 
-    const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
-    setVal('editing-sch-id', ''); 
-    setVal('new-sch-text', ''); 
-    setVal('new-sch-file', ''); 
-    const fname = document.getElementById('sch-file-name');
-    if(fname) fname.innerText = ''; 
-};
-
-window.savePjtScheduleItem = async function() { 
-    const pIdEl = document.getElementById('sch-req-id');
-    const titleEl = document.getElementById('sch-project-title');
-    if(!pIdEl || !titleEl) return;
-    
-    const pId = pIdEl.value;
-    const title = titleEl.innerText;
-    
-    const proj = (window.currentProjectStatusList || []).find(p => p.id === pId);
-    const folderName = proj && proj.code ? proj.code : title;
-
-    const contentEl = document.getElementById('new-sch-text');
-    const fileInput = document.getElementById('new-sch-file');
-    const btn = document.getElementById('btn-sch-save');
-    
-    if(!contentEl || !fileInput || !btn) return;
-    
-    const content = contentEl.value.trim();
-    if(!content && fileInput.files.length === 0) return window.showToast("내용이나 파일을 첨부하세요.", "error");
-    
-    btn.innerHTML = '저장중..'; btn.disabled = true;
-    try { 
-        let filesData = [];
-        if (fileInput.files.length > 0) {
-            let total = fileInput.files.length;
-            for(let i=0; i<total; i++) {
-                let file = fileInput.files[i];
-                let isImg = file.name.match(/\.(jpeg|jpg|gif|png|webp|bmp|heic)$/i);
-                
-                let thumbBase64 = null;
-                if(isImg) {
-                    thumbBase64 = await new Promise(resolve => { window.resizeAndConvertToBase64(file, res => resolve(res), 300); });
-                }
-                
-                let url = await handleDriveUploadWithProgress(file, folderName, '일정', i+1, total);
-                filesData.push({ name: file.name, url: url, thumbBase64: thumbBase64 });
-            }
-        }
-        await addDoc(collection(db, "project_schedules"), { projectId: pId, content: content, files: filesData, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
-        window.showToast("PJT 일정 내역이 등록되었습니다."); 
-        window.resetPjtScheduleForm(); 
-    } catch(e) { 
-        window.showToast(e.message, "error"); 
-    } finally { 
-        btn.innerHTML = '등록'; btn.disabled = false; 
-    }
-};
-
-window.deletePjtSchedule = async function(id) { 
-    if(confirm("삭제하시겠습니까?")) await deleteDoc(doc(db, "project_schedules", id)); 
-};
-
-// ==========================================
-// 💡 프로젝트 현황 등록 모달 (수정본)
+// 💡 프로젝트 정보 입력 폼 (모달 방어 로직 & 자동 스왑 기능)
 // ==========================================
 window.openProjStatusWriteModal = function() {
     try {
@@ -1178,8 +842,15 @@ window.saveProjStatus = async function(btn) {
         if(!codeEl || !nameEl) return;
 
         const id = idEl.value; 
-        const code = codeEl.value; 
-        const name = nameEl.value;
+        let code = codeEl.value.trim(); 
+        let name = nameEl.value.trim();
+        
+        // 💡 [안전장치] 사용자가 PJT코드칸에 한글(이름)을 쓰고 프로젝트명칸에 코드를 쓰면 자동 교정
+        if (/[가-힣]/.test(code) && !/[가-힣]/.test(name) && name !== "") {
+            let temp = code;
+            code = name;
+            name = temp;
+        }
         
         if(!code || !name) { 
             if(btn){ btn.disabled = false; btn.innerHTML = '저장하기'; } 
@@ -2113,7 +1784,7 @@ window.resetMdLogForm = function() {
     setVal('new-md-desc', ''); 
     
     // 등록폼 초기화 시 인원 선택 초기화
-    window.currentLogMembers = [window.userProfile.name]; // 기본값: 작성자 본인
+    window.currentLogMembers = window.userProfile ? [window.userProfile.name] : []; 
     window.renderLogMembers();
 
     const btnSave = document.getElementById('btn-md-save');
