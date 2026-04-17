@@ -325,13 +325,18 @@
             
             <div class="flex gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative flex-col md:flex-row md:items-start">
                 <div class="relative flex-1 w-full flex flex-col gap-2">
-                    <input type="date" id="new-log-date" class="border px-3 py-2 rounded-lg text-sm font-bold text-slate-600 w-36 h-10 shrink-0 outline-sky-500">
+                    <div class="flex gap-2 items-center">
+                        <input type="date" id="new-log-date" class="border px-3 py-2 rounded-lg text-sm font-bold text-slate-600 w-36 h-10 shrink-0 outline-sky-500">
+                        <select id="log-member-add" class="border px-2 py-2 rounded-lg text-sm h-10 outline-sky-500 text-slate-600 cursor-pointer" onchange="window.addLogMember(this.value)"></select>
+                    </div>
+                    <div id="log-selected-members" class="flex flex-wrap gap-1 min-h-[24px]"></div>
+                    <input type="hidden" id="log-members">
                     <div class="relative w-full">
-                        <textarea id="new-log-text" placeholder="작업 내용 입력... (@멘션, Enter 저장, Shift+Enter 줄바꿈)" class="w-full h-24 border px-4 py-3 rounded-lg text-sm outline-sky-500 resize-none custom-scrollbar" oninput="window.handleMention(this)" onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); document.getElementById('btn-log-save').click(); }"></textarea>
+                        <textarea id="new-log-text" placeholder="작업 내용 입력... (@멘션, Enter 저장, Shift+Enter 줄바꿈)" class="w-full h-20 border px-4 py-3 rounded-lg text-sm outline-sky-500 resize-none custom-scrollbar" oninput="window.handleMention(this)" onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); document.getElementById('btn-log-save').click(); }"></textarea>
                     </div>
                 </div>
                 
-                <div class="w-full md:w-48 h-[136px] border-2 border-dashed border-sky-200 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-sky-50 hover:border-sky-400 transition-colors relative"
+                <div class="w-full md:w-48 h-[170px] border-2 border-dashed border-sky-200 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-sky-50 hover:border-sky-400 transition-colors relative"
                      onclick="document.getElementById('new-log-image').click()"
                      ondragover="event.preventDefault(); this.classList.add('bg-sky-50', 'border-sky-400');"
                      ondragleave="event.preventDefault(); this.classList.remove('bg-sky-50', 'border-sky-400');"
