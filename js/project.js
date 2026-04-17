@@ -379,7 +379,6 @@ window.generateMediaHtml = function(filesArray) {
     return result;
 };
 
-
 window.openCrReqModal = function(id, title) {
     const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
     const setHtml = (eid, val) => { const el = document.getElementById(eid); if(el) el.innerHTML = val; };
@@ -485,7 +484,688 @@ window.submitCrReq = async function() {
     } finally { btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> 완료요청 송부'; btn.disabled = false; }
 };
 
-// 💡 프로젝트 입력 폼 안정성 강화 (수정/등록 클릭 시 무반응 에러 방지)
+window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
+    if (!window.googleAccessToken) return null;
+    const safeFolderName = getSafeString(folderName).replace(/[\/\\]/g, '_') || '미분류 프로젝트';
+    const query = `name='${safeFolderName}' and mimeType='application/vnd.google-apps.folder' and '${parentFolderId}' in parents and trashed=false`;
+    const findRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}`, { headers: { 'Authorization': 'Bearer ' + window.googleAccessToken } });
+    const folderData = await findRes.json();
+    if (folderData.files && folderData.files.length > 0) return folderData.files[0].id;
+    else {
+        const createRes = await fetch('https://www.googleapis.com/drive/v3/files', { method: 'POST', headers: { 'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: safeFolderName, mimeType: 'application/vnd.google-apps.folder', parents: [parentFolderId] }) });
+        const newFolderData = await createRes.json(); return newFolderData.id;
+    }
+};
+
+async function handleDriveUploadWithProgress(file, projectName, subFolderName = null, fileIndex = 1, totalFiles = 1) {
+    if(!window.googleAccessToken) {
+        if(window.initGoogleAPI) window.initGoogleAPI();
+        if(window.authenticateGoogle && !window.googleAccessToken) window.authenticateGoogle();
+        if(!window.googleAccessToken) throw new Error("구글 인증이 필요합니다. [연동하기] 버튼을 눌러주세요.");
+    }
+    if (!file) throw new Error("파일이 없습니다.");
+    let targetFolderId = await window.getOrCreateDriveFolder(projectName, TARGET_DRIVE_FOLDER);
+    if (!targetFolderId) throw new Error("프로젝트 폴더를 생성/조회할 수 없습니다.");
+    if (subFolderName) {
+        const subFolderId = await window.getOrCreateDriveFolder(subFolderName, targetFolderId);
+        if (subFolderId) targetFolderId = subFolderId;
+    }
+
+    const progressModal = document.getElementById('upload-progress-modal');
+    const progressBar = document.getElementById('upload-progress-bar');
+    const progressText = document.getElementById('upload-progress-text');
+    const progressSize = document.getElementById('upload-progress-size');
+    const progressFilename = document.getElementById('upload-progress-filename');
+    
+    if(progressModal) { progressModal.classList.remove('hidden'); progressModal.classList.add('flex'); }
+    if(progressBar) progressBar.style.width = '0%';
+    if(progressText) progressText.innerText = '0%';
+    
+    let fileCounterText = totalFiles > 1 ? `[${fileIndex}/${totalFiles}] ` : '';
+    if(progressFilename) progressFilename.innerText = fileCounterText + file.name;
+    const totalMb = (file.size / (1024 * 1024)).toFixed(2);
+    if(progressSize) progressSize.innerText = `0.00 MB / ${totalMb} MB`;
+
+    return new Promise((resolve, reject) => {
+        const metadata = { name: file.name, parents: [targetFolderId] };
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('file', file);
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', true);
+        xhr.setRequestHeader('Authorization', 'Bearer ' + window.googleAccessToken);
+
+        xhr.upload.onprogress = function(e) {
+            if (e.lengthComputable) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                const loadedMb = (e.loaded / (1024 * 1024)).toFixed(2);
+                if(progressBar) progressBar.style.width = percent + '%';
+                if(progressText) progressText.innerText = percent + '%';
+                if(progressSize) progressSize.innerText = `${loadedMb} MB / ${totalMb} MB`;
+            }
+        };
+
+        xhr.onload = function() {
+            if (fileIndex === totalFiles) { if(progressModal) { progressModal.classList.add('hidden'); progressModal.classList.remove('flex'); } }
+            if (xhr.status >= 200 && xhr.status < 300) resolve(`https://drive.google.com/file/d/${JSON.parse(xhr.responseText).id}/view`);
+            else {
+                if(progressModal) { progressModal.classList.add('hidden'); progressModal.classList.remove('flex'); }
+                reject(new Error("파일 업로드 실패: " + xhr.responseText));
+            }
+        };
+        xhr.onerror = function() {
+            if(progressModal) { progressModal.classList.add('hidden'); progressModal.classList.remove('flex'); }
+            reject(new Error("네트워크 오류 발생"));
+        };
+        xhr.send(form);
+    });
+}
+
+// ==========================================
+// 💡 구매 관리
+// ==========================================
+window.openPurchaseModal = function(projectId, title) { 
+    const modal = document.getElementById('purchase-modal');
+    if(!modal) return;
+    
+    document.getElementById('pur-req-id').value = projectId; 
+    document.getElementById('pur-project-title').innerText = title || ''; 
+    window.resetPurchaseForm(); 
+    
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    
+    if(window.initGoogleAPI) window.initGoogleAPI();
+    
+    if (currentPurchaseUnsubscribe) currentPurchaseUnsubscribe(); 
+    currentPurchaseUnsubscribe = onSnapshot(query(collection(db, "project_purchases"), where("projectId", "==", projectId)), function(snap) { 
+        let list = []; 
+        snap.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
+        list.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
+        
+        const listEl = document.getElementById('purchase-list');
+        if(!listEl) return;
+        
+        if(list.length === 0) { 
+            listEl.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 구매 내역이 없습니다.</div>'; 
+            return; 
+        }
+        
+        listEl.innerHTML = list.map(item => {
+            let dateStr = item.createdAt ? window.getDateTimeStr(new Date(getSafeMillis(item.createdAt))) : '';
+            let safeContent = getSafeString(item.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+            if(window.formatMentions) safeContent = window.formatMentions(safeContent);
+            let attachmentsHtml = window.generateMediaHtml(item.files);
+
+            return `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
+                        <div class="flex justify-between items-start">
+                            <div class="flex items-center gap-2"><span class="font-bold text-amber-600 text-sm">${getSafeString(item.authorName)}</span><span class="text-[10px] text-slate-400 font-medium">${dateStr}</span></div>
+                            <div class="flex gap-2"><button onclick="window.deletePurchase('${item.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button></div>
+                        </div>
+                        <div class="text-[13px] text-slate-700 font-medium break-words leading-relaxed">${safeContent}</div>
+                        ${attachmentsHtml}
+                    </div>`;
+        }).join('');
+    });
+};
+
+window.closePurchaseModal = function() { 
+    const modal = document.getElementById('purchase-modal');
+    if(modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+    if (currentPurchaseUnsubscribe) currentPurchaseUnsubscribe(); 
+};
+
+window.resetPurchaseForm = function() { 
+    const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
+    setVal('editing-pur-id', ''); 
+    setVal('new-pur-text', ''); 
+    setVal('new-pur-file', ''); 
+    const fname = document.getElementById('pur-file-name');
+    if(fname) fname.innerText = ''; 
+};
+
+window.savePurchaseItem = async function() { 
+    const pIdEl = document.getElementById('pur-req-id');
+    const titleEl = document.getElementById('pur-project-title');
+    if(!pIdEl || !titleEl) return;
+    
+    const pId = pIdEl.value;
+    const title = titleEl.innerText;
+    
+    const proj = (window.currentProjectStatusList || []).find(p => p.id === pId);
+    const folderName = proj && proj.code ? proj.code : title;
+
+    const contentEl = document.getElementById('new-pur-text');
+    const fileInput = document.getElementById('new-pur-file');
+    const btn = document.getElementById('btn-pur-save');
+    
+    if(!contentEl || !fileInput || !btn) return;
+    
+    const content = contentEl.value.trim();
+    if(!content && fileInput.files.length === 0) return window.showToast("내용이나 파일을 첨부하세요.", "error");
+    
+    btn.innerHTML = '저장중..'; btn.disabled = true;
+    try { 
+        let filesData = [];
+        if (fileInput.files.length > 0) {
+            let total = fileInput.files.length;
+            for(let i=0; i<total; i++) {
+                let file = fileInput.files[i];
+                let isImg = file.name.match(/\.(jpeg|jpg|gif|png|webp|bmp|heic)$/i);
+                
+                let thumbBase64 = null;
+                if(isImg) {
+                    thumbBase64 = await new Promise(resolve => { window.resizeAndConvertToBase64(file, res => resolve(res), 300); });
+                }
+                
+                let url = await handleDriveUploadWithProgress(file, folderName, '구매', i+1, total);
+                filesData.push({ name: file.name, url: url, thumbBase64: thumbBase64 });
+            }
+        }
+        await addDoc(collection(db, "project_purchases"), { projectId: pId, content: content, files: filesData, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
+        window.showToast("구매 내역이 등록되었습니다."); 
+        window.resetPurchaseForm(); 
+    } catch(e) { 
+        window.showToast(e.message, "error"); 
+    } finally { 
+        btn.innerHTML = '등록'; btn.disabled = false; 
+    }
+};
+
+window.deletePurchase = async function(id) { 
+    if(confirm("삭제하시겠습니까?")) await deleteDoc(doc(db, "project_purchases", id)); 
+};
+
+// ==========================================
+// 💡 설계 파일 관리
+// ==========================================
+window.openDesignModal = function(projectId, title) { 
+    const modal = document.getElementById('design-modal');
+    if(!modal) return;
+
+    document.getElementById('des-req-id').value = projectId; 
+    document.getElementById('des-project-title').innerText = title || ''; 
+    window.resetDesignForm(); 
+    
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    
+    if(window.initGoogleAPI) window.initGoogleAPI();
+
+    if (currentDesignUnsubscribe) currentDesignUnsubscribe(); 
+    currentDesignUnsubscribe = onSnapshot(query(collection(db, "project_designs"), where("projectId", "==", projectId)), function(snap) { 
+        let list = []; 
+        snap.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
+        list.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
+        
+        const listEl = document.getElementById('design-list');
+        if(!listEl) return;
+        
+        if(list.length === 0) { 
+            listEl.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 설계 파일이 없습니다.</div>'; 
+            return; 
+        }
+        
+        listEl.innerHTML = list.map(item => {
+            let dateStr = item.createdAt ? window.getDateTimeStr(new Date(getSafeMillis(item.createdAt))) : '';
+            let safeContent = getSafeString(item.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+            if(window.formatMentions) safeContent = window.formatMentions(safeContent);
+
+            let attachmentsHtml = window.generateMediaHtml(item.files);
+
+            return `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
+                        <div class="flex justify-between items-start">
+                            <div class="flex items-center gap-2"><span class="font-bold text-teal-600 text-sm">${getSafeString(item.authorName)}</span><span class="text-[10px] text-slate-400 font-medium">${dateStr}</span></div>
+                            <div class="flex gap-2"><button onclick="window.deleteDesign('${item.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button></div>
+                        </div>
+                        <div class="text-[13px] text-slate-700 font-medium break-words leading-relaxed">${safeContent}</div>
+                        ${attachmentsHtml}
+                    </div>`;
+        }).join('');
+    });
+};
+
+window.closeDesignModal = function() { 
+    const modal = document.getElementById('design-modal');
+    if(modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+    if (currentDesignUnsubscribe) currentDesignUnsubscribe(); 
+};
+
+window.resetDesignForm = function() { 
+    const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
+    setVal('editing-des-id', ''); 
+    setVal('new-des-text', ''); 
+    setVal('new-des-file', ''); 
+    const fname = document.getElementById('des-file-name');
+    if(fname) fname.innerText = ''; 
+};
+
+window.saveDesignItem = async function() { 
+    const pIdEl = document.getElementById('des-req-id');
+    const titleEl = document.getElementById('des-project-title');
+    if(!pIdEl || !titleEl) return;
+    
+    const pId = pIdEl.value;
+    const title = titleEl.innerText;
+    
+    const proj = (window.currentProjectStatusList || []).find(p => p.id === pId);
+    const folderName = proj && proj.code ? proj.code : title;
+
+    const contentEl = document.getElementById('new-des-text');
+    const fileInput = document.getElementById('new-des-file');
+    const btn = document.getElementById('btn-des-save');
+    
+    if(!contentEl || !fileInput || !btn) return;
+    
+    const content = contentEl.value.trim();
+    if(!content && fileInput.files.length === 0) return window.showToast("내용이나 파일을 첨부하세요.", "error");
+    
+    btn.innerHTML = '저장중..'; btn.disabled = true;
+    try { 
+        let filesData = [];
+        if (fileInput.files.length > 0) {
+            let total = fileInput.files.length;
+            for(let i=0; i<total; i++) {
+                let file = fileInput.files[i];
+                let isImg = file.name.match(/\.(jpeg|jpg|gif|png|webp|bmp|heic)$/i);
+                
+                let thumbBase64 = null;
+                if(isImg) {
+                    thumbBase64 = await new Promise(resolve => { window.resizeAndConvertToBase64(file, res => resolve(res), 300); });
+                }
+                
+                let url = await handleDriveUploadWithProgress(file, folderName, '설계', i+1, total);
+                filesData.push({ name: file.name, url: url, thumbBase64: thumbBase64 });
+            }
+        }
+        await addDoc(collection(db, "project_designs"), { projectId: pId, content: content, files: filesData, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
+        window.showToast("설계 내역이 등록되었습니다."); 
+        window.resetDesignForm(); 
+    } catch(e) { 
+        window.showToast(e.message, "error"); 
+    } finally { 
+        btn.innerHTML = '등록'; btn.disabled = false; 
+    }
+};
+
+window.deleteDesign = async function(id) { 
+    if(confirm("삭제하시겠습니까?")) await deleteDoc(doc(db, "project_designs", id)); 
+};
+
+// ==========================================
+// 💡 일정표 관리
+// ==========================================
+window.openPjtScheduleModal = function(projectId, title) { 
+    const modal = document.getElementById('pjt-schedule-modal');
+    if(!modal) return;
+    
+    document.getElementById('sch-req-id').value = projectId; 
+    document.getElementById('sch-project-title').innerText = title || ''; 
+    window.resetPjtScheduleForm(); 
+    
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    
+    if(window.initGoogleAPI) window.initGoogleAPI();
+
+    if (currentPjtScheduleUnsubscribe) currentPjtScheduleUnsubscribe(); 
+    currentPjtScheduleUnsubscribe = onSnapshot(query(collection(db, "project_schedules"), where("projectId", "==", projectId)), function(snap) { 
+        let list = []; 
+        snap.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
+        list.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
+        
+        const listEl = document.getElementById('pjt-schedule-list');
+        if(!listEl) return;
+        
+        if(list.length === 0) { 
+            listEl.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 PJT 일정이 없습니다.</div>'; 
+            return; 
+        }
+        
+        listEl.innerHTML = list.map(item => {
+            let dateStr = item.createdAt ? window.getDateTimeStr(new Date(getSafeMillis(item.createdAt))) : '';
+            let safeContent = getSafeString(item.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+            if(window.formatMentions) safeContent = window.formatMentions(safeContent);
+
+            let attachmentsHtml = window.generateMediaHtml(item.files);
+
+            return `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
+                        <div class="flex justify-between items-start">
+                            <div class="flex items-center gap-2"><span class="font-bold text-fuchsia-600 text-sm">${getSafeString(item.authorName)}</span><span class="text-[10px] text-slate-400 font-medium">${dateStr}</span></div>
+                            <div class="flex gap-2"><button onclick="window.deletePjtSchedule('${item.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button></div>
+                        </div>
+                        <div class="text-[13px] text-slate-700 font-medium break-words leading-relaxed">${safeContent}</div>
+                        ${attachmentsHtml}
+                    </div>`;
+        }).join('');
+    });
+};
+
+window.closePjtScheduleModal = function() { 
+    const modal = document.getElementById('pjt-schedule-modal');
+    if(modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+    if (currentPjtScheduleUnsubscribe) currentPjtScheduleUnsubscribe(); 
+};
+
+window.resetPjtScheduleForm = function() { 
+    const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
+    setVal('editing-sch-id', ''); 
+    setVal('new-sch-text', ''); 
+    setVal('new-sch-file', ''); 
+    const fname = document.getElementById('sch-file-name');
+    if(fname) fname.innerText = ''; 
+};
+
+window.savePjtScheduleItem = async function() { 
+    const pIdEl = document.getElementById('sch-req-id');
+    const titleEl = document.getElementById('sch-project-title');
+    if(!pIdEl || !titleEl) return;
+    
+    const pId = pIdEl.value;
+    const title = titleEl.innerText;
+    
+    const proj = (window.currentProjectStatusList || []).find(p => p.id === pId);
+    const folderName = proj && proj.code ? proj.code : title;
+
+    const contentEl = document.getElementById('new-sch-text');
+    const fileInput = document.getElementById('new-sch-file');
+    const btn = document.getElementById('btn-sch-save');
+    
+    if(!contentEl || !fileInput || !btn) return;
+    
+    const content = contentEl.value.trim();
+    if(!content && fileInput.files.length === 0) return window.showToast("내용이나 파일을 첨부하세요.", "error");
+    
+    btn.innerHTML = '저장중..'; btn.disabled = true;
+    try { 
+        let filesData = [];
+        if (fileInput.files.length > 0) {
+            let total = fileInput.files.length;
+            for(let i=0; i<total; i++) {
+                let file = fileInput.files[i];
+                let isImg = file.name.match(/\.(jpeg|jpg|gif|png|webp|bmp|heic)$/i);
+                
+                let thumbBase64 = null;
+                if(isImg) {
+                    thumbBase64 = await new Promise(resolve => { window.resizeAndConvertToBase64(file, res => resolve(res), 300); });
+                }
+                
+                let url = await handleDriveUploadWithProgress(file, folderName, '일정', i+1, total);
+                filesData.push({ name: file.name, url: url, thumbBase64: thumbBase64 });
+            }
+        }
+        await addDoc(collection(db, "project_schedules"), { projectId: pId, content: content, files: filesData, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
+        window.showToast("PJT 일정 내역이 등록되었습니다."); 
+        window.resetPjtScheduleForm(); 
+    } catch(e) { 
+        window.showToast(e.message, "error"); 
+    } finally { 
+        btn.innerHTML = '등록'; btn.disabled = false; 
+    }
+};
+
+window.deletePjtSchedule = async function(id) { 
+    if(confirm("삭제하시겠습니까?")) await deleteDoc(doc(db, "project_schedules", id)); 
+};
+
+// ==========================================
+// 💡 생산일지 (Daily Log)
+// ==========================================
+window.openDailyLogModal = function(projectId) { 
+    const modal = document.getElementById('daily-log-modal');
+    if(!modal) return;
+    
+    const proj = (window.currentProjectStatusList || []).find(p => p.id === projectId) || {}; 
+    
+    const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
+    const setHtml = (eid, val) => { const el = document.getElementById(eid); if(el) el.innerText = val; };
+    
+    setVal('log-req-id', projectId); 
+    setHtml('log-project-title', proj.name || ''); 
+    setVal('log-project-progress', proj.progress || 0); 
+    setVal('log-project-purchase-rate', proj.purchaseRate || 0); 
+    
+    window.resetDailyLogForm(); 
+    
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    
+    window.loadDailyLogs(projectId); 
+};
+
+window.loadDailyLogs = function(projectId) { 
+    if (currentLogUnsubscribe) currentLogUnsubscribe(); 
+    
+    currentLogUnsubscribe = onSnapshot(collection(db, "daily_logs"), function(snapshot) { 
+        try {
+            window.currentDailyLogs = []; 
+            snapshot.forEach(function(doc) { 
+                const d = doc.data(); 
+                if(d.projectId === projectId || d.reqId === projectId) { 
+                    d.id = doc.id; 
+                    window.currentDailyLogs.push(d); 
+                } 
+            }); 
+            
+            window.currentDailyLogs.sort(function(a, b) { 
+                const dateA = a.date || ''; const dateB = b.date || ''; 
+                if (dateA !== dateB) return dateB.localeCompare(dateA); 
+                return getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt); 
+            }); 
+            
+            window.renderDailyLogs(window.currentDailyLogs); 
+        } catch(e) { console.error(e); }
+    }); 
+};
+
+window.renderDailyLogs = function(logs) { 
+    const list = document.getElementById('daily-log-list'); 
+    if(!list) return;
+    
+    if (logs.length === 0) { 
+        list.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 생산일지가 없습니다.</div>'; 
+        return; 
+    } 
+    
+    try {
+        let listHtml = '';
+        logs.forEach(function(log) { 
+            let safeContent = getSafeString(log.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+            if(window.formatMentions) safeContent = window.formatMentions(safeContent);
+            
+            let legacyFiles = [];
+            if(log.imageUrl) legacyFiles.push({ name: '첨부사진.jpg', url: log.imageUrl, thumbBase64: log.imageUrl });
+            
+            let allFiles = legacyFiles;
+            if(log.files && log.files.length > 0) {
+                allFiles = [...allFiles, ...log.files];
+            }
+            
+            let attachmentsHtml = window.generateMediaHtml(allFiles);
+            
+            let btnHtml = '';
+            if (log.authorUid === window.currentUser?.uid || (window.userProfile && window.userProfile.role === 'admin')) {
+                btnHtml = `<button onclick="window.editDailyLog('${log.id}')" class="text-slate-400 hover:text-sky-500 transition-colors" title="수정"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteDailyLog('${log.id}')" class="text-slate-400 hover:text-rose-500 transition-colors" title="삭제"><i class="fa-solid fa-trash-can"></i></button>`;
+            }
+            
+            listHtml += `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1 hover:shadow-md transition-shadow">
+                            <div class="flex justify-between items-center">
+                                <div class="flex items-center gap-3">
+                                    <span class="font-bold text-sky-600 text-xs flex items-center gap-1"><i class="fa-regular fa-calendar text-sky-400"></i> ${getSafeString(log.date)}</span>
+                                    <span class="font-black text-slate-700 text-sm">${getSafeString(log.authorName)}</span>
+                                </div>
+                                <div class="flex gap-2">${btnHtml}</div>
+                            </div>
+                            <div class="text-slate-700 font-medium text-[13px] pl-1 mt-2 mb-1 break-words leading-relaxed">${safeContent}</div>
+                            ${attachmentsHtml}
+                        </div>`; 
+        });
+        list.innerHTML = listHtml;
+    } catch(e) { 
+        list.innerHTML = '<div class="text-center p-8 text-rose-500 font-bold">렌더링 오류 발생</div>'; 
+    }
+};
+
+window.saveDailyLogItem = async function() { 
+    const pIdEl = document.getElementById('log-req-id');
+    if(!pIdEl) return;
+    const projectId = pIdEl.value; 
+    
+    const logId = document.getElementById('editing-log-id').value; 
+    const date = document.getElementById('new-log-date').value; 
+    const content = document.getElementById('new-log-text').value.trim(); 
+    const fileInput = document.getElementById('new-log-image'); 
+    
+    const progEl = document.getElementById('log-project-progress');
+    const rateEl = document.getElementById('log-project-purchase-rate');
+    const progressVal = progEl ? (parseInt(progEl.value) || 0) : 0; 
+    const purchaseRateVal = rateEl ? (parseInt(rateEl.value) || 0) : 0; 
+    
+    if(!date || (!content && (!fileInput || fileInput.files.length === 0))) {
+        return window.showToast("날짜와 내용을 입력하거나 사진을 첨부하세요.", "error"); 
+    }
+    
+    const btnSave = document.getElementById('btn-log-save');
+    if(btnSave) { btnSave.innerHTML = '저장중..'; btnSave.disabled = true; }
+    
+    try { 
+        const proj = (window.currentProjectStatusList || []).find(p => p.id === projectId) || {};
+        const folderName = proj.code ? proj.code : (proj.name || '미지정');
+
+        let filesData = [];
+        
+        if (fileInput && fileInput.files.length > 0) {
+            let total = fileInput.files.length;
+            window.showToast(`총 ${total}개의 파일을 업로드합니다...`);
+            for(let i=0; i<total; i++) {
+                let file = fileInput.files[i];
+                let isImg = file.name.match(/\.(jpeg|jpg|gif|png|webp|bmp|heic)$/i);
+                
+                let thumbBase64 = null;
+                if(isImg) {
+                    thumbBase64 = await new Promise(resolve => { window.resizeAndConvertToBase64(file, res => resolve(res), 300); });
+                }
+                
+                let url = await handleDriveUploadWithProgress(file, folderName, '생산일지', i+1, total);
+                filesData.push({ name: file.name, url: url, thumbBase64: thumbBase64 });
+            }
+        }
+
+        const payload = { date: date, content: content, updatedAt: Date.now() }; 
+        
+        if (logId) { 
+            const existingLog = (window.currentDailyLogs || []).find(l => l.id === logId);
+            let finalFiles = existingLog && existingLog.files ? [...existingLog.files] : [];
+            
+            if (filesData.length > 0) finalFiles = [...finalFiles, ...filesData];
+            if (finalFiles.length > 0) payload.files = finalFiles;
+            
+            await setDoc(doc(db, "daily_logs", logId), payload, { merge: true }); 
+            window.showToast("일지가 수정되었습니다."); 
+        } else { 
+            if(filesData.length > 0) payload.files = filesData; 
+            
+            payload.projectId = projectId; 
+            payload.authorUid = window.currentUser.uid; 
+            payload.authorName = window.userProfile.name; 
+            payload.createdAt = Date.now(); 
+            await addDoc(collection(db, "daily_logs"), payload); 
+            window.showToast("일지가 등록되었습니다."); 
+            
+            if(window.processMentions) {
+                await window.processMentions(content, projectId, "생산일지"); 
+            }
+        } 
+        
+        await setDoc(doc(db, "projects_status", projectId), { 
+            progress: progressVal, 
+            purchaseRate: purchaseRateVal 
+        }, { merge: true }); 
+        
+        window.resetDailyLogForm(); 
+    } catch(e) { 
+        window.showToast("저장 중 오류 발생", "error"); 
+    } finally { 
+        if(btnSave) { btnSave.innerHTML = '등록'; btnSave.disabled = false; }
+    } 
+};
+
+window.editDailyLog = function(id) { 
+    const log = (window.currentDailyLogs || []).find(l => l.id === id); 
+    if(!log) return; 
+    
+    const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
+    setVal('editing-log-id', id); 
+    setVal('new-log-date', log.date || window.getLocalDateStr(new Date())); 
+    setVal('new-log-text', log.content || ''); 
+    
+    const btnSave = document.getElementById('btn-log-save');
+    if(btnSave) btnSave.innerText = '수정'; 
+    const btnCancel = document.getElementById('btn-log-cancel');
+    if(btnCancel) btnCancel.classList.remove('hidden'); 
+    
+    const txt = document.getElementById('new-log-text');
+    if(txt) txt.focus(); 
+};
+
+window.deleteDailyLog = async function(id) { 
+    if(!confirm("이 일지를 삭제하시겠습니까?")) return; 
+    try { 
+        await deleteDoc(doc(db, "daily_logs", id)); 
+        window.showToast("삭제되었습니다."); 
+        window.resetDailyLogForm(); 
+    } catch(e) { 
+        window.showToast("삭제 실패", "error"); 
+    } 
+};
+
+window.clearDailyLogFile = function(e) {
+    if(e) e.stopPropagation();
+    const input = document.getElementById('new-log-image');
+    const wrap = document.getElementById('new-log-filename-wrap');
+    if(input) input.value = '';
+    if(wrap) wrap.classList.add('hidden');
+};
+
+window.closeDailyLogModal = function() { 
+    const modal = document.getElementById('daily-log-modal');
+    if(modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+    if (currentLogUnsubscribe) { 
+        currentLogUnsubscribe(); 
+        currentLogUnsubscribe = null; 
+    } 
+};
+
+window.resetDailyLogForm = function() { 
+    const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
+    setVal('editing-log-id', ''); 
+    setVal('new-log-date', window.getLocalDateStr(new Date())); 
+    setVal('new-log-text', ''); 
+    setVal('new-log-image', ''); 
+    window.clearDailyLogFile(); 
+    
+    const btnSave = document.getElementById('btn-log-save');
+    if(btnSave) btnSave.innerText = '등록'; 
+    const btnCancel = document.getElementById('btn-log-cancel');
+    if(btnCancel) btnCancel.classList.add('hidden'); 
+};
+
+
+// ==========================================
+// 💡 프로젝트 정보 입력 폼
+// ==========================================
 window.openProjStatusWriteModal = function() {
     const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
     
@@ -775,9 +1455,14 @@ window.restoreProjectHistory = async function(histId, projectId) {
 
 window.toggleProjDashView = function(view) {
     window.currentProjDashView = view;
-    document.getElementById('proj-dash-list-container').classList.add('hidden'); 
-    document.getElementById('proj-dash-gantt-container').classList.add('hidden'); 
-    document.getElementById('proj-dash-calendar-container').classList.add('hidden');
+    
+    const listC = document.getElementById('proj-dash-list-container');
+    const ganttC = document.getElementById('proj-dash-gantt-container');
+    const calC = document.getElementById('proj-dash-calendar-container');
+    
+    if(listC) listC.classList.add('hidden'); 
+    if(ganttC) ganttC.classList.add('hidden'); 
+    if(calC) calC.classList.add('hidden');
     
     ['list', 'gantt', 'calendar'].forEach(function(b) {
         const btn = document.getElementById('btn-pd-' + b); 
@@ -789,262 +1474,789 @@ window.toggleProjDashView = function(view) {
         activeBtn.className = "px-2 py-1 text-[11px] font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-colors whitespace-nowrap";
     }
     
-    if(view === 'list') {
-        document.getElementById('proj-dash-list-container').classList.remove('hidden');
-    } else if(view === 'gantt') { 
-        document.getElementById('proj-dash-gantt-container').classList.remove('hidden'); 
+    if(view === 'list' && listC) {
+        listC.classList.remove('hidden');
+    } else if(view === 'gantt' && ganttC) { 
+        ganttC.classList.remove('hidden'); 
         window.renderProjGantt(); 
-    } else if(view === 'calendar') { 
-        document.getElementById('proj-dash-calendar-container').classList.remove('hidden'); 
+    } else if(view === 'calendar' && calC) { 
+        calC.classList.remove('hidden'); 
         window.renderProjCalendar(); 
     }
 };
 
-window.scrollToGanttToday = function() {
-    const scrollContainer = document.getElementById('proj-dash-gantt-content');
-    if(scrollContainer && window.ganttTodayOffset >= 0) {
-        scrollContainer.scrollTo({
-            left: window.ganttTodayOffset + 300 - (scrollContainer.clientWidth / 2),
-            behavior: 'smooth'
-        });
-    }
+// ==========================================
+// 💡 코멘트 관리
+// ==========================================
+window.openCommentModal = function(projectId, title) { 
+    const modal = document.getElementById('comment-modal');
+    if(!modal) return;
+    
+    document.getElementById('cmt-req-id').value = projectId; 
+    if(window.cancelCommentAction) window.cancelCommentAction(); 
+    
+    modal.classList.remove('hidden'); 
+    modal.classList.add('flex'); 
+    window.loadComments(projectId); 
 };
 
-window.renderProjGantt = function() {
-    const container = document.getElementById('proj-dash-gantt-content');
+window.loadComments = function(projectId) { 
+    if (currentCommentUnsubscribe) currentCommentUnsubscribe(); 
+    
+    currentCommentUnsubscribe = onSnapshot(collection(db, "project_comments"), function(snapshot) { 
+        try {
+            window.currentComments = []; 
+            snapshot.forEach(function(docSnap) { 
+                const d = docSnap.data(); 
+                if(d.projectId === projectId || d.reqId === projectId) {
+                    d.id = docSnap.id;
+                    window.currentComments.push(d); 
+                }
+            }); 
+            
+            const topLevel = window.currentComments.filter(function(c) { 
+                return !c.parentId || c.parentId === 'null' || c.parentId === ''; 
+            }).sort(function(a,b) { 
+                return getSafeMillis(a.createdAt) - getSafeMillis(b.createdAt); 
+            }); 
+            
+            const replies = window.currentComments.filter(function(c) { 
+                return c.parentId && c.parentId !== 'null' && c.parentId !== ''; 
+            }).sort(function(a,b) { 
+                return getSafeMillis(a.createdAt) - getSafeMillis(b.createdAt); 
+            }); 
+            
+            topLevel.forEach(function(c) { 
+                c.replies = replies.filter(function(r) { return r.parentId === c.id; }); 
+            }); 
+            
+            window.renderComments(topLevel); 
+        } catch(e) { console.error(e); }
+    }); 
+};
+
+window.renderComments = function(topLevelComments) { 
+    const list = document.getElementById('comment-list'); 
+    if(!list) return;
+    
+    if (topLevelComments.length === 0) { 
+        list.innerHTML = '<div class="text-center p-10 text-slate-400 font-bold">등록된 코멘트가 없습니다.</div>'; 
+        return; 
+    } 
+    
     try {
-        let displayList = window.getFilteredProjects();
-        if(displayList.length === 0) { 
-            container.innerHTML = '<div class="text-center p-10 text-slate-500 font-bold bg-white w-full h-full flex items-center justify-center rounded-xl">표시할 일정 데이터가 없습니다.</div>'; 
-            return; 
-        }
-
-        let minDate = new Date(); 
-        let maxDate = new Date(); 
-        let hasDates = false;
-        
-        displayList.forEach(function(p) {
-            const dates = [p.d_asmSt, p.d_asmEn, p.d_insSt, p.d_insEn, p.d_shipEn, p.d_setSt, p.d_setEn, p.d_asmEst, p.d_shipEst, p.d_asmEndEst].filter(d => d).map(d => new Date(d)).filter(d => !isNaN(d.getTime()));
-            dates.forEach(function(d) { 
-                if(!hasDates) { minDate = new Date(d); maxDate = new Date(d); hasDates = true; } 
-                if(d < minDate) minDate = new Date(d); 
-                if(d > maxDate) maxDate = new Date(d); 
-            });
+        let listHtml = '';
+        topLevelComments.forEach(function(c) { 
+            let safeContent = String(c.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+            if(window.formatMentions) safeContent = window.formatMentions(safeContent);
+            
+            let files = [];
+            if(c.imageUrl) files.push({name:'첨부사진.jpg', url: c.imageUrl, thumbBase64: c.imageUrl});
+            const cImgHtml = window.generateMediaHtml(files);
+            
+            let repliesHtml = ''; 
+            if(c.replies && c.replies.length > 0) { 
+                repliesHtml += '<div class="pl-4 border-l-[3px] border-indigo-100/60 space-y-2 mt-4 pt-2 ml-2">'; 
+                c.replies.forEach(function(r) { 
+                    let safeReplyContent = String(r.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>'); 
+                    if(window.formatMentions) safeReplyContent = window.formatMentions(safeReplyContent); 
+                    
+                    let rFiles = [];
+                    if(r.imageUrl) rFiles.push({name:'첨부사진.jpg', url: r.imageUrl, thumbBase64: r.imageUrl});
+                    const rImgHtml = window.generateMediaHtml(rFiles);
+                    
+                    let replyBtnHtml = '';
+                    if (r.authorUid === window.currentUser?.uid || (window.userProfile && window.userProfile.role === 'admin')) {
+                        replyBtnHtml = `<button onclick="window.editComment('${r.id}')" class="text-slate-400 hover:text-amber-500 px-1"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteComment('${r.id}')" class="text-slate-400 hover:text-rose-500 px-1"><i class="fa-solid fa-trash-can"></i></button>`;
+                    }
+                    
+                    repliesHtml += `<div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                        <div class="flex justify-between items-start mb-2">
+                                            <div class="flex items-center gap-2">
+                                                <i class="fa-solid fa-reply text-[10px] text-slate-400 rotate-180 scale-y-[-1]"></i>
+                                                <span class="font-black text-slate-700 text-sm">${getSafeString(r.authorName)}</span>
+                                                <span class="text-xs font-medium text-slate-400">${window.getDateTimeStr(new Date(getSafeMillis(r.createdAt)))}</span>
+                                            </div>
+                                            <div class="flex gap-2">${replyBtnHtml}</div>
+                                        </div>
+                                        <div class="text-slate-700 text-[13px] font-medium pl-6 break-words">${safeReplyContent}</div>
+                                        ${rImgHtml}
+                                    </div>`; 
+                }); 
+                repliesHtml += '</div>'; 
+            } 
+            
+            let mainBtnHtml = '';
+            if (c.authorUid === window.currentUser?.uid || (window.userProfile && window.userProfile.role === 'admin')) {
+                mainBtnHtml = `<button onclick="window.editComment('${c.id}')" class="text-slate-400 hover:text-amber-500 px-1"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteComment('${c.id}')" class="text-slate-400 hover:text-rose-500 px-1"><i class="fa-solid fa-trash-can"></i></button>`;
+            }
+            
+            listHtml += `<div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                            <div class="flex justify-between items-start mb-3">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-black text-slate-800 text-[15px]">${getSafeString(c.authorName)}</span>
+                                    <span class="text-xs font-medium text-slate-400">${window.getDateTimeStr(new Date(getSafeMillis(c.createdAt)))}</span>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button onclick="window.setReplyTo('${c.id}', '${c.authorName}')" class="text-[11px] bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 px-3 py-1 rounded-lg font-bold transition-colors shadow-sm">답글달기</button>
+                                    ${mainBtnHtml}
+                                </div>
+                            </div>
+                            <div class="text-slate-800 text-[14px] font-medium pl-1 mb-2 break-words leading-relaxed">${safeContent}</div>
+                            ${cImgHtml}
+                            ${repliesHtml}
+                        </div>`; 
         });
-        
-        const today = new Date(); 
-        today.setHours(0,0,0,0);
-        
-        if(today < minDate) minDate = new Date(today);
-        if(today > maxDate) maxDate = new Date(today);
-
-        if(!hasDates) { 
-            container.innerHTML = '<div class="text-center p-10 text-slate-500 font-bold bg-white w-full h-full flex items-center justify-center rounded-xl">표시할 일정 데이터가 없습니다.</div>'; 
-            return; 
-        }
-        
-        minDate.setDate(minDate.getDate() - 5); 
-        maxDate.setDate(maxDate.getDate() + 10);
-        const totalDays = Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24)); 
-        const dayWidth = 24; 
-        
-        const todayStr = window.getLocalDateStr(new Date()); 
-        let todayOffset = -1;
-
-        let html = `<div class="relative min-w-max h-full min-h-[500px]" style="width: ${totalDays * dayWidth + 300}px">`;
-        
-        for(let i=0; i<totalDays; i++) {
-            let d = new Date(minDate); 
-            d.setDate(d.getDate() + i);
-            let dStr = window.getLocalDateStr(d);
-            if(dStr === todayStr) todayOffset = i * dayWidth; 
-        }
-        
-        window.ganttTodayOffset = todayOffset;
-
-        if(todayOffset >= 0) {
-            html += `<div class="absolute top-0 w-[2px] bg-rose-500 z-[100] pointer-events-none shadow-sm" style="left: ${300 + todayOffset + (dayWidth/2)}px; height:100%; bottom:0;"><div class="absolute top-10 -translate-x-1/2 bg-rose-500 text-white text-[10px] px-2 py-0.5 rounded-full shadow-md font-bold whitespace-nowrap border border-white">오늘</div></div>`;
-        }
-
-        html += `<div class="flex border-b border-slate-200 sticky top-0 bg-white z-50 shadow-sm"><div class="w-[300px] flex-shrink-0 p-3 font-bold text-xs text-slate-700 bg-slate-50 border-r border-slate-200 flex items-center sticky left-0 z-50"><div class="w-[100px] text-indigo-600">PJT 코드</div><div class="w-[200px]">프로젝트명</div></div>`;
-        
-        for(let i=0; i<totalDays; i++) {
-            let d = new Date(minDate); 
-            d.setDate(d.getDate() + i);
-            let dStr = window.getLocalDateStr(d);
-            let bgClass = (d.getDay() === 0 || d.getDay() === 6) ? 'bg-slate-50' : 'bg-white'; 
-            let textClass = d.getDay() === 0 ? 'text-rose-500' : (d.getDay() === 6 ? 'text-blue-500' : 'text-slate-500');
-            if (dStr === todayStr) { bgClass = 'bg-rose-50'; textClass = 'text-rose-600 font-black'; }
-            
-            let dateText = (d.getDate() === 1 || i === 0) ? `<div class="text-[8px] font-black bg-slate-200 text-slate-600">${d.getMonth()+1}월</div>` : `<div class="text-[8px] font-bold bg-slate-100 text-transparent select-none">-</div>`;
-            html += `<div class="w-[${dayWidth}px] flex-shrink-0 text-center border-r border-slate-100 ${bgClass} flex flex-col justify-center relative">${dateText}<div class="text-[10px] font-bold ${textClass} py-1">${d.getDate()}</div></div>`;
-        }
-        
-        html += `</div><div class="relative w-full h-full min-h-full" style="min-height: 400px;">`;
-
-        displayList.forEach(function(p) {
-            const safeNameHtml = String(p.name||'').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); 
-            const safeCodeStr = p.code || '-';
-            
-            html += `<div class="flex border-b border-slate-100 relative group cursor-pointer hover:bg-slate-50 transition-colors" onclick="window.editProjStatus('${p.id}')">`;
-            
-            html += `<div class="w-[300px] flex-shrink-0 p-2 text-[11px] font-bold text-slate-700 border-r border-slate-200 bg-white group-hover:bg-slate-50 z-40 sticky left-0 flex items-center transition-colors" title="${safeNameHtml}"><div class="w-[100px] text-indigo-600 truncate font-black pr-1">${safeCodeStr}</div><div class="w-[200px] truncate">${safeNameHtml}</div></div>`;
-            
-            html += `<div class="flex relative" style="width: ${totalDays * dayWidth}px">`;
-            
-            for(let i=0; i<totalDays; i++) { 
-                let d = new Date(minDate); 
-                d.setDate(d.getDate() + i); 
-                let bgStr = (d.getDay() === 0 || d.getDay() === 6) ? 'bg-slate-50/50' : '';
-                html += `<div class="w-[${dayWidth}px] flex-shrink-0 border-r border-slate-50 ${bgStr} h-12"></div>`; 
-            }
-            
-            const drawBar = function(start, end, colorClass, label, yOffset) {
-                if(!start) return ''; 
-                let sD = new Date(start); 
-                let eD = end ? new Date(end) : new Date(start);
-                if(isNaN(sD.getTime()) || isNaN(eD.getTime())) return '';
-                if(sD < minDate) sD = new Date(minDate); 
-                if(eD > maxDate) eD = new Date(maxDate); 
-                if(sD > eD) eD = new Date(sD);
-                
-                let leftOffset = Math.floor((sD - minDate) / (1000 * 60 * 60 * 24)) * dayWidth; 
-                let width = Math.ceil((eD - sD) / (1000 * 60 * 60 * 24) + 1) * dayWidth;
-                return `<div class="absolute ${yOffset} h-[14px] rounded-sm ${colorClass} text-[8px] flex items-center justify-center font-bold shadow-sm overflow-hidden whitespace-nowrap opacity-90 hover:opacity-100 hover:scale-y-110 transition-all cursor-pointer z-10" style="left: ${leftOffset}px; width: ${width}px;" title="${label}: ${start} ~ ${end||start}"></div>`;
-            };
-            
-            const drawPoint = function(dateStr, colorClass, label, yOffset) {
-                if(!dateStr) return ''; 
-                let d = new Date(dateStr); 
-                if(isNaN(d.getTime())) return '';
-                let leftOffset = Math.floor((d - minDate) / (1000 * 60 * 60 * 24)) * dayWidth;
-                return `<div class="absolute ${yOffset} w-3 h-3 rounded-sm transform rotate-45 shadow-sm border-2 z-20 ${colorClass}" style="left: ${leftOffset + dayWidth/2 - 6}px;" title="${label}: ${dateStr}"></div>`;
-            }
-            
-            html += drawBar(p.d_asmEst, p.d_asmEndEst, 'bg-white border-2 border-indigo-400 border-dashed text-indigo-700', '조립(예정)', 'top-1');
-            html += drawBar(p.d_asmSt, p.d_asmEn, 'bg-indigo-600 text-white', '조립(실제)', 'top-1/2 -translate-y-1/2'); 
-            html += drawBar(p.d_insSt, p.d_insEn, 'bg-teal-500 text-white', '검수', 'top-1/2 -translate-y-1/2'); 
-            html += drawBar(p.d_setSt, p.d_setEn, 'bg-slate-600 text-white', 'Setup', 'top-1/2 -translate-y-1/2');
-            html += drawPoint(p.d_shipEst, 'bg-white border-rose-400', '출하(예정)', 'top-1');
-            html += drawPoint(p.d_shipEn, 'bg-rose-500 border-white', '출하(실제)', 'top-1/2 -translate-y-1/2');
-            
-            html += `</div></div>`;
-        });
-        
-        html += `</div></div>`; 
-        container.innerHTML = html;
-        
-        setTimeout(function() { 
-            const scrollContainer = document.getElementById('proj-dash-gantt-content'); 
-            if(scrollContainer && todayOffset >= 0) {
-                scrollContainer.scrollLeft = todayOffset + 300 - (scrollContainer.clientWidth / 2);
-            }
-        }, 100);
+        list.innerHTML = listHtml;
     } catch(e) { 
-        console.error("간트차트 오류:", e); 
+        list.innerHTML = '<div class="text-center p-8 text-rose-500 font-bold">렌더링 오류 발생</div>'; 
     }
 };
 
-window.changeCalendarMonth = function(offset) { 
-    window.calendarCurrentDate.setMonth(window.calendarCurrentDate.getMonth() + offset); 
-    window.renderProjCalendar(); 
+window.saveCommentItem = async function() { 
+    const projectId = document.getElementById('cmt-req-id').value; 
+    const contentEl = document.getElementById('new-cmt-text');
+    const content = contentEl ? contentEl.value.trim() : ''; 
+    const parentId = document.getElementById('reply-to-id').value || null; 
+    const editId = document.getElementById('editing-cmt-id').value; 
+    const fileInput = document.getElementById('new-cmt-image'); 
+    
+    if(!content && (!fileInput || fileInput.files.length === 0)) {
+        return window.showToast("코멘트 내용이나 사진을 첨부하세요.", "error"); 
+    }
+    
+    const btnSave = document.getElementById('btn-cmt-save');
+    if(btnSave) { 
+        btnSave.innerHTML = '저장중..'; 
+        btnSave.disabled = true; 
+    }
+    
+    const saveData = async function(base64Img) { 
+        try { 
+            const payload = { content: content, updatedAt: Date.now() }; 
+            if(base64Img) payload.imageUrl = base64Img; 
+            
+            if (editId) { 
+                await setDoc(doc(db, "project_comments", editId), payload, { merge: true }); 
+                window.showToast("코멘트가 수정되었습니다."); 
+            } else { 
+                payload.projectId = projectId; 
+                payload.parentId = parentId; 
+                payload.authorUid = window.currentUser.uid; 
+                payload.authorName = window.userProfile.name; 
+                payload.createdAt = Date.now(); 
+                await addDoc(collection(db, "project_comments"), payload); 
+                window.showToast("코멘트가 등록되었습니다."); 
+                
+                if(window.processMentions) {
+                    await window.processMentions(content, projectId, "코멘트");
+                }
+            } 
+            
+            if(window.cancelCommentAction) {
+                window.cancelCommentAction(); 
+            }
+        } catch(e) { 
+            window.showToast("저장 중 오류 발생", "error"); 
+        } finally { 
+            if(btnSave) { 
+                btnSave.innerHTML = '작성'; 
+                btnSave.disabled = false; 
+            }
+        } 
+    }; 
+    
+    if(fileInput && fileInput.files.length > 0) { 
+        if(window.resizeAndConvertToBase64) {
+            window.resizeAndConvertToBase64(fileInput.files[0], function(base64) { 
+                saveData(base64); 
+            }, 800); 
+        } else { 
+            saveData(null); 
+        }
+    } else { 
+        saveData(null); 
+    } 
 };
 
-window.renderProjCalendar = function() {
-    const container = document.getElementById('proj-dash-calendar-content');
+window.editComment = function(id) { 
+    const comment = (window.currentComments || []).find(c => c.id === id); 
+    if(!comment) return; 
+    
+    if(window.cancelCommentAction) window.cancelCommentAction(); 
+    
+    const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
+    setVal('editing-cmt-id', id); 
+    setVal('new-cmt-text', comment.content || ''); 
+    
+    const btnSave = document.getElementById('btn-cmt-save');
+    if(btnSave) btnSave.innerText = '수정'; 
+    
+    const indName = document.getElementById('reply-indicator-name');
+    if(indName) indName.innerHTML = '<i class="fa-solid fa-pen mr-1"></i> 코멘트 내용 수정 중'; 
+    
+    const ind = document.getElementById('reply-indicator');
+    if(ind) ind.classList.remove('hidden'); 
+    
+    const txt = document.getElementById('new-cmt-text');
+    if(txt) txt.focus(); 
+};
+
+window.setReplyTo = function(commentId, authorName) { 
+    if(window.cancelCommentAction) window.cancelCommentAction(); 
+    
+    const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
+    setVal('reply-to-id', commentId); 
+    
+    const indName = document.getElementById('reply-indicator-name');
+    if(indName) indName.innerHTML = `<i class="fa-solid fa-reply rotate-180 scale-y-[-1] mr-1"></i> <b class="text-indigo-800">${authorName}</b> 님에게 답글 작성 중`; 
+    
+    const ind = document.getElementById('reply-indicator');
+    if(ind) ind.classList.remove('hidden'); 
+    
+    const txt = document.getElementById('new-cmt-text');
+    if(txt) txt.focus(); 
+};
+
+window.cancelCommentAction = function() { 
+    const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
+    setVal('reply-to-id', ''); 
+    setVal('editing-cmt-id', ''); 
+    setVal('new-cmt-text', ''); 
+    setVal('new-cmt-image', ''); 
+    
+    const btnSave = document.getElementById('btn-cmt-save');
+    if(btnSave) btnSave.innerText = '작성'; 
+    
+    const ind = document.getElementById('reply-indicator');
+    if(ind) ind.classList.add('hidden'); 
+};
+
+window.closeCommentModal = function() { 
+    const modal = document.getElementById('comment-modal');
+    if(modal) {
+        modal.classList.add('hidden'); 
+        modal.classList.remove('flex'); 
+    }
+    if (currentCommentUnsubscribe) { 
+        currentCommentUnsubscribe(); 
+        currentCommentUnsubscribe = null; 
+    } 
+};
+
+window.deleteComment = async function(id) { 
+    if(!confirm("이 코멘트를 삭제하시겠습니까?")) return; 
+    try { 
+        await deleteDoc(doc(db, "project_comments", id)); 
+        const q = query(collection(db, "project_comments"), where("parentId", "==", id)); 
+        const snapshot = await getDocs(q); 
+        if(!snapshot.empty) { 
+            const batch = writeBatch(db); 
+            snapshot.forEach(function(d) { batch.delete(d.ref); }); 
+            await batch.commit(); 
+        } 
+        window.showToast("삭제되었습니다."); 
+        if(window.cancelCommentAction) window.cancelCommentAction(); 
+    } catch(e) { window.showToast("삭제 실패", "error"); } 
+};
+
+
+// ==========================================
+// 💡 이슈, MD로그, 등등
+// ==========================================
+window.openIssueModal = function(projectId, title) { 
+    const modal = document.getElementById('issue-modal');
+    if(!modal) return;
+    
+    const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
+    setVal('issue-req-id', projectId); 
+    setVal('editing-issue-id', ''); 
+    setVal('new-issue-text', ''); 
+    
+    const btn = document.getElementById('btn-issue-save');
+    if(btn) btn.innerText = '등록'; 
+    
+    modal.classList.remove('hidden'); 
+    modal.classList.add('flex'); 
+    
+    window.loadIssues(projectId); 
+};
+
+window.loadIssues = function(projectId) { 
+    if (currentIssueUnsubscribe) currentIssueUnsubscribe(); 
+    
+    currentIssueUnsubscribe = onSnapshot(collection(db, "project_issues"), function(snapshot) { 
+        try {
+            window.currentIssues = []; 
+            let unresolvedCount = 0; 
+            
+            snapshot.forEach(function(docSnap) { 
+                const d = docSnap.data(); 
+                if(d.projectId === projectId || d.reqId === projectId) {
+                    d.id = docSnap.id;
+                    window.currentIssues.push(d); 
+                    if(!d.isResolved) unresolvedCount++;
+                }
+            }); 
+            
+            window.currentIssues.sort(function(a,b) { return getSafeMillis(a.createdAt) - getSafeMillis(b.createdAt); }); 
+            window.renderIssues(window.currentIssues); 
+        } catch(e) { console.error(e); }
+    }); 
+};
+
+window.renderIssues = function(issues) { 
+    const list = document.getElementById('issue-list'); 
+    if(!list) return;
+    
+    if (issues.length === 0) { 
+        list.innerHTML = '<div class="text-center p-10 text-slate-400 font-bold">등록된 이슈가 없습니다.</div>'; 
+        return; 
+    } 
+    
     try {
-        let displayList = window.getFilteredProjects();
-        const year = window.calendarCurrentDate.getFullYear(); 
-        const month = window.calendarCurrentDate.getMonth();
-        const firstDay = new Date(year, month, 1).getDay(); 
-        const lastDate = new Date(year, month + 1, 0).getDate();
-        const today = new Date(); 
-        const isCurrentMonth = (today.getFullYear() === year && today.getMonth() === month);
-        
-        let html = `<div class="flex justify-between items-center mb-4">
-                        <div class="flex items-center gap-4">
-                            <button onclick="window.changeCalendarMonth(-1)" class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"><i class="fa-solid fa-chevron-left"></i></button>
-                            <h3 class="text-lg font-black text-indigo-800 w-32 text-center">${year}년 ${month + 1}월</h3>
-                            <button onclick="window.changeCalendarMonth(1)" class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"><i class="fa-solid fa-chevron-right"></i></button>
-                            <button onclick="window.calendarCurrentDate = new Date(); window.renderProjCalendar();" class="text-[10px] bg-indigo-50 text-indigo-600 px-3 py-1 rounded-lg font-bold hover:bg-indigo-100 transition-colors border border-indigo-200">이번 달</button>
-                        </div>
-                        <div class="flex gap-2 text-[10px] font-bold">
-                            <span class="bg-indigo-100 text-indigo-700 px-2 py-1 rounded border border-indigo-200">조립진행</span>
-                            <span class="bg-rose-100 text-rose-700 px-2 py-1 rounded border border-rose-200">출하예정</span>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-7 gap-1 text-center font-bold text-xs text-slate-500 mb-2">
-                        <div class="text-rose-500">일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div class="text-blue-500">토</div>
-                    </div>
-                    <div class="grid grid-cols-7 gap-1 auto-rows-fr">`;
-        
-        for(let i=0; i<firstDay; i++) { 
-            html += `<div class="min-h-[100px] bg-slate-50 rounded-lg border border-slate-100"></div>`; 
-        }
-        
-        for(let date=1; date<=lastDate; date++) {
-            const currentDateStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(date).padStart(2,'0'); 
-            let dayEvents = '';
+        let listHtml = '';
+        issues.forEach(function(iss) { 
+            let safeText = String(iss.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+            if(window.formatMentions) safeText = window.formatMentions(safeText);
             
-            displayList.forEach(function(p) {
-                const safeNameHtml = getSafeString(p.name).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); 
-                const safeCodeStr = getSafeString(p.code) || '-';
-                let isAsm = false; 
-                
-                if(p.d_asmSt && p.d_asmEn) { 
-                    if(currentDateStr >= p.d_asmSt && currentDateStr <= p.d_asmEn) isAsm = true; 
-                } else if(p.d_asmEst && p.d_asmEndEst) { 
-                    if(currentDateStr >= p.d_asmEst && currentDateStr <= p.d_asmEndEst) isAsm = true; 
-                }
-                
-                if(isAsm) {
-                    dayEvents += `<div class="text-[9px] bg-indigo-500 text-white px-1.5 py-0.5 rounded mb-0.5 truncate cursor-pointer shadow-sm hover:scale-[1.02] transition-transform" onclick="window.editProjStatus('${p.id}')" title="${safeNameHtml}">${safeCodeStr} 조립</div>`;
-                }
-                
-                if(p.d_shipEn === currentDateStr || (!p.d_shipEn && p.d_shipEst === currentDateStr)) { 
-                    dayEvents += `<div class="text-[9px] bg-rose-500 text-white px-1.5 py-0.5 rounded mb-0.5 truncate cursor-pointer shadow-sm hover:scale-[1.02] transition-transform" onclick="window.editProjStatus('${p.id}')" title="${safeNameHtml}">${safeCodeStr} 출하</div>`; 
-                }
-            });
+            let btnHtml = '';
+            if (iss.authorUid === window.currentUser?.uid || (window.userProfile && window.userProfile.role === 'admin')) {
+                btnHtml = `<button onclick="window.editIssue('${iss.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteIssue('${iss.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button>`;
+            }
             
-            const isToday = (isCurrentMonth && date === today.getDate());
-            const badge = isToday ? `<span class="bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center mx-auto shadow-md">${date}</span>` : date;
-            const borderClass = isToday ? 'border-indigo-400 bg-indigo-50/10' : 'border-slate-200';
+            let resolvedClass = iss.isResolved ? 'border-slate-200 bg-slate-50' : 'border-rose-200 shadow-sm';
+            let titleClass = iss.isResolved ? 'text-slate-400' : 'text-rose-600';
+            let contentClass = iss.isResolved ? 'text-slate-400 line-through' : 'text-slate-700';
+            let checkHtml = iss.isResolved ? 'checked' : '';
             
-            html += `<div class="min-h-[100px] bg-white rounded-lg border ${borderClass} p-1 hover:bg-slate-50 transition-colors"><div class="text-xs font-bold text-slate-700 mb-1 text-center">${badge}</div><div class="flex flex-col gap-0.5 overflow-hidden">${dayEvents}</div></div>`;
-        }
+            listHtml += `<div class="bg-white p-4 rounded-xl border ${resolvedClass} flex items-start gap-3 transition-all">
+                            <div class="mt-0.5">
+                                <input type="checkbox" ${checkHtml} onchange="window.toggleIssueStatus('${iss.id}', this.checked)" class="w-5 h-5 text-rose-500 rounded border-gray-300 cursor-pointer accent-rose-500 shadow-sm">
+                            </div>
+                            <div class="flex-1 flex flex-col gap-1">
+                                <div class="flex justify-between items-center">
+                                    <span class="font-bold text-sm ${titleClass}">${getSafeString(iss.authorName)}</span>
+                                    <div class="flex gap-2">${btnHtml}</div>
+                                </div>
+                                <div class="text-[13px] font-medium mt-1 leading-relaxed ${contentClass} break-words">${safeText}</div>
+                            </div>
+                        </div>`; 
+        });
+        list.innerHTML = listHtml;
+    } catch(e) { 
+        list.innerHTML = '<div class="text-center p-8 text-rose-500 font-bold">렌더링 오류 발생</div>'; 
+    }
+};
+
+window.saveIssueItem = async function() { 
+    const projectIdEl = document.getElementById('issue-req-id');
+    const editIdEl = document.getElementById('editing-issue-id');
+    const contentEl = document.getElementById('new-issue-text');
+    if(!projectIdEl || !contentEl) return;
+    
+    const projectId = projectIdEl.value; 
+    const editId = editIdEl ? editIdEl.value : ''; 
+    const content = contentEl.value.trim(); 
+    
+    if(!content) return window.showToast("이슈 내용을 입력하세요.", "error"); 
+    
+    try { 
+        if (editId) { 
+            await setDoc(doc(db, "project_issues", editId), { content: content, updatedAt: Date.now() }, { merge: true }); 
+            window.showToast("이슈가 수정되었습니다."); 
+        } else { 
+            await addDoc(collection(db, "project_issues"), { 
+                projectId: projectId, 
+                content: content, 
+                isResolved: false, 
+                authorUid: window.currentUser.uid, 
+                authorName: window.userProfile.name, 
+                createdAt: Date.now() 
+            }); 
+            window.showToast("이슈가 등록되었습니다."); 
+            
+            if(window.processMentions) {
+                await window.processMentions(content, projectId, "이슈");
+            }
+        } 
         
-        html += `</div>`; 
-        container.innerHTML = html;
+        if(editIdEl) editIdEl.value = ''; 
+        contentEl.value = ''; 
+        const btnSave = document.getElementById('btn-issue-save');
+        if(btnSave) btnSave.innerText = '등록'; 
+    } catch(e) { 
+        window.showToast("저장 중 오류 발생", "error"); 
+    } 
+};
+
+window.toggleIssueStatus = async function(id, isResolved) { 
+    try { 
+        await setDoc(doc(db, "project_issues", id), { isResolved: isResolved }, { merge: true }); 
+    } catch(e) { 
+        window.showToast("상태 변경 오류", "error"); 
+    } 
+};
+
+window.editIssue = function(id) { 
+    const iss = (window.currentIssues || []).find(i => i.id === id); 
+    if(!iss) return; 
+    
+    const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
+    setVal('editing-issue-id', id); 
+    setVal('new-issue-text', iss.content || ''); 
+    
+    const btnSave = document.getElementById('btn-issue-save');
+    if(btnSave) btnSave.innerText = '수정'; 
+    
+    const txt = document.getElementById('new-issue-text');
+    if(txt) txt.focus(); 
+};
+
+window.deleteIssue = async function(id) { 
+    if(!confirm("이 이슈를 삭제하시겠습니까?")) return; 
+    try { 
+        await deleteDoc(doc(db, "project_issues", id)); 
+        window.showToast("삭제되었습니다."); 
+    } catch(e) { 
+        window.showToast("삭제 실패", "error"); 
+    } 
+};
+
+window.closeIssueModal = function() { 
+    const modal = document.getElementById('issue-modal');
+    if(modal) {
+        modal.classList.add('hidden'); 
+        modal.classList.remove('flex'); 
+    }
+    if (currentIssueUnsubscribe) { 
+        currentIssueUnsubscribe(); 
+        currentIssueUnsubscribe = null; 
+    } 
+};
+
+window.openMdLogModal = function(projectId, title, curMd) { 
+    const modal = document.getElementById('md-log-modal');
+    if(!modal) return;
+    
+    const proj = (window.currentProjectStatusList || []).find(p => p.id === projectId) || {}; 
+    
+    const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
+    setVal('md-req-id', projectId); 
+    
+    const badge = document.getElementById('md-total-badge'); 
+    if(badge) badge.innerText = '총 ' + (proj.currentMd || 0) + ' MD'; 
+    
+    window.resetMdLogForm(); 
+    
+    modal.classList.remove('hidden'); 
+    modal.classList.add('flex'); 
+    window.loadMdLogs(projectId); 
+};
+
+window.loadMdLogs = function(projectId) { 
+    if (currentMdLogUnsubscribe) currentMdLogUnsubscribe(); 
+    
+    currentMdLogUnsubscribe = onSnapshot(collection(db, "project_md_logs"), function(snapshot) { 
+        try {
+            window.currentMdLogs = []; 
+            let totalMd = 0; 
+            
+            snapshot.forEach(function(docSnap) { 
+                const d = docSnap.data(); 
+                if(d.projectId === projectId || d.reqId === projectId) {
+                    d.id = docSnap.id;
+                    window.currentMdLogs.push(d); 
+                    totalMd += parseFloat(d.md) || 0; 
+                }
+            }); 
+            
+            window.currentMdLogs.sort(function(a, b) { 
+                const dateA = a.date || ''; 
+                const dateB = b.date || ''; 
+                if (dateA !== dateB) return dateB.localeCompare(dateA); 
+                return getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt); 
+            }); 
+            
+            const badge = document.getElementById('md-total-badge'); 
+            if(badge) badge.innerText = '총 ' + totalMd.toFixed(1) + ' MD'; 
+            window.renderMdLogs(window.currentMdLogs); 
+        } catch(e) { console.error(e); }
+    }); 
+};
+
+window.renderMdLogs = function(logs) { 
+    const list = document.getElementById('md-log-list'); 
+    if(!list) return;
+    
+    if (logs.length === 0) { 
+        list.innerHTML = '<tr><td colspan="5" class="text-center p-6 text-slate-400 font-bold">등록된 투입 공수 내역이 없습니다.</td></tr>'; 
+        return; 
+    } 
+    
+    try {
+        let htmlStr = '';
+        logs.forEach(function(log) { 
+            let safeDesc = String(log.desc || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+            if(window.formatMentions) safeDesc = window.formatMentions(safeDesc);
+            
+            let btnHtml = '-';
+            if (log.authorUid === window.currentUser?.uid || (window.userProfile && window.userProfile.role === 'admin')) {
+                btnHtml = `<button onclick="window.editMdLog('${log.id}')" class="text-slate-400 hover:text-purple-500 transition-colors" title="수정"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteMdLog('${log.id}', '${log.projectId}')" class="text-slate-400 hover:text-rose-500 transition-colors" title="삭제"><i class="fa-solid fa-trash-can"></i></button>`;
+            }
+            
+            htmlStr += `<tr class="hover:bg-purple-50/30 transition-colors">
+                            <td class="p-3 text-center text-slate-500 font-bold">${getSafeString(log.date)}</td>
+                            <td class="p-3 text-center text-purple-700 font-black">${parseFloat(log.md).toFixed(1)}</td>
+                            <td class="p-3 text-slate-700">${safeDesc || '-'}</td>
+                            <td class="p-3 text-center text-slate-600 font-bold">${getSafeString(log.authorName)}</td>
+                            <td class="p-3 text-center"><div class="flex justify-center gap-2">${btnHtml}</div></td>
+                        </tr>`; 
+        });
+        list.innerHTML = htmlStr;
+    } catch(e) { 
+        list.innerHTML = '<tr><td colspan="5" class="text-center p-6 text-rose-500 font-bold">렌더링 오류 발생</td></tr>'; 
+    }
+};
+
+window.saveMdLogItem = async function() { 
+    const pIdEl = document.getElementById('md-req-id');
+    const logIdEl = document.getElementById('editing-md-id');
+    const dateEl = document.getElementById('new-md-date');
+    const mdValEl = document.getElementById('new-md-val');
+    const descEl = document.getElementById('new-md-desc');
+    
+    if(!pIdEl || !dateEl || !mdValEl) return;
+    
+    const projectId = pIdEl.value; 
+    const logId = logIdEl ? logIdEl.value : ''; 
+    const date = dateEl.value; 
+    const mdVal = mdValEl.value; 
+    const desc = descEl ? descEl.value.trim() : ''; 
+    
+    if(!date || !mdVal) return window.showToast("날짜와 투입 MD를 입력하세요.", "error"); 
+    
+    try { 
+        if (logId) { 
+            await setDoc(doc(db, "project_md_logs", logId), { 
+                date: date, 
+                md: parseFloat(mdVal), 
+                desc: desc, 
+                updatedAt: Date.now() 
+            }, { merge: true }); 
+            window.showToast("MD 내역이 수정되었습니다."); 
+        } else { 
+            await addDoc(collection(db, "project_md_logs"), { 
+                projectId: projectId, 
+                date: date, 
+                md: parseFloat(mdVal), 
+                desc: desc, 
+                authorUid: window.currentUser.uid, 
+                authorName: window.userProfile.name, 
+                createdAt: Date.now() 
+            }); 
+            window.showToast("MD 내역이 등록되었습니다."); 
+            
+            if(window.processMentions) {
+                await window.processMentions(desc, projectId, "투입MD기록");
+            }
+        } 
+        
+        await window.updateProjectTotalMd(projectId); 
+        window.resetMdLogForm(); 
+    } catch(e) { 
+        window.showToast("저장 중 오류 발생", "error"); 
+    } 
+};
+
+window.editMdLog = function(id) { 
+    const log = (window.currentMdLogs || []).find(l => l.id === id); 
+    if(!log) return; 
+    
+    const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
+    setVal('editing-md-id', id); 
+    setVal('new-md-date', log.date || window.getLocalDateStr(new Date())); 
+    setVal('new-md-val', log.md || ''); 
+    setVal('new-md-desc', log.desc || ''); 
+    
+    const btnSave = document.getElementById('btn-md-save');
+    if(btnSave) btnSave.innerText = '수정'; 
+    
+    const btnCancel = document.getElementById('btn-md-cancel');
+    if(btnCancel) btnCancel.classList.remove('hidden'); 
+};
+
+window.deleteMdLog = async function(id, projectId) { 
+    if(!confirm("이 MD 내역을 삭제하시겠습니까?")) return; 
+    try { 
+        await deleteDoc(doc(db, "project_md_logs", id)); 
+        await window.updateProjectTotalMd(projectId); 
+        window.showToast("삭제되었습니다."); 
+        window.resetMdLogForm(); 
+    } catch(e) { window.showToast("삭제 실패", "error"); } 
+};
+
+window.updateProjectTotalMd = async function(projectId) { 
+    const snap = await getDocs(query(collection(db, "project_md_logs"), where("projectId", "==", projectId))); 
+    let total = 0; 
+    snap.forEach(function(docSnap) { 
+        total += parseFloat(docSnap.data().md) || 0; 
+    }); 
+    
+    const projRef = doc(db, "projects_status", projectId); 
+    const projSnap = await getDoc(projRef); 
+    if(projSnap.exists()) { 
+        const outMd = parseFloat(projSnap.data().outMd) || 0; 
+        await setDoc(projRef, { currentMd: total, finalMd: total + outMd }, { merge: true }); 
+    } 
+};
+
+window.closeMdLogModal = function() { 
+    const modal = document.getElementById('md-log-modal');
+    if(modal) {
+        modal.classList.add('hidden'); 
+        modal.classList.remove('flex'); 
+    }
+    if (currentMdLogUnsubscribe) { 
+        currentMdLogUnsubscribe(); 
+        currentMdLogUnsubscribe = null; 
+    } 
+};
+
+window.resetMdLogForm = function() { 
+    const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
+    setVal('editing-md-id', ''); 
+    setVal('new-md-date', window.getLocalDateStr(new Date())); 
+    setVal('new-md-val', ''); 
+    setVal('new-md-desc', ''); 
+    
+    const btnSave = document.getElementById('btn-md-save');
+    if(btnSave) btnSave.innerText = '등록'; 
+    
+    const btnCancel = document.getElementById('btn-md-cancel');
+    if(btnCancel) btnCancel.classList.add('hidden'); 
+};
+
+window.openLinkModal = function(projectId, title) { 
+    const modal = document.getElementById('link-modal');
+    if(!modal) return;
+    
+    const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
+    setVal('link-req-id', projectId); 
+    
+    const titleEl = document.getElementById('link-project-title'); 
+    if(titleEl) titleEl.innerText = title || ''; 
+    
+    setVal('new-link-name', ''); 
+    setVal('new-link-url', ''); 
+    
+    modal.classList.remove('hidden'); 
+    modal.classList.add('flex'); 
+    
+    window.renderLinksList(projectId); 
+};
+
+window.renderLinksList = function(projectId) { 
+    try {
+        const proj = (window.currentProjectStatusList || []).find(p => p.id === projectId); 
+        const list = document.getElementById('link-list'); 
+        if(!list) return;
+        
+        if(!proj || !proj.links || proj.links.length === 0) { 
+            list.innerHTML = '<li class="p-8 text-center text-slate-400 font-bold text-xs bg-white rounded-xl border border-slate-200 border-dashed">등록된 문서/링크가 없습니다.</li>'; 
+            return; 
+        } 
+        
+        let htmlStr = ''; 
+        proj.links.forEach(function(lnk, idx) { 
+            htmlStr += `<li class="flex justify-between items-center p-4 bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow group">
+                            <div class="flex flex-col truncate">
+                                <span class="font-extrabold text-slate-700 text-sm mb-1">${getSafeString(lnk.name)}</span>
+                                <a href="${getSafeString(lnk.url)}" target="_blank" class="text-[11px] font-bold text-teal-600 hover:text-teal-800 hover:underline truncate flex items-center gap-1"><i class="fa-solid fa-link"></i> ${getSafeString(lnk.url)}</a>
+                            </div>
+                            <button onclick="window.deleteLinkItem('${projectId}', ${idx})" class="text-slate-300 hover:bg-rose-50 hover:text-rose-500 rounded-lg transition-all p-2.5"><i class="fa-solid fa-trash-can"></i></button>
+                        </li>`; 
+        }); 
+        list.innerHTML = htmlStr;
     } catch(e) {}
+};
+
+window.closeLinkModal = function() { 
+    const modal = document.getElementById('link-modal');
+    if(modal) {
+        modal.classList.add('hidden'); 
+        modal.classList.remove('flex'); 
+    }
+};
+
+window.saveLinkItem = async function() { 
+    const pIdEl = document.getElementById('link-req-id');
+    const nameEl = document.getElementById('new-link-name');
+    const urlEl = document.getElementById('new-link-url');
+    
+    if(!pIdEl || !urlEl) return;
+    
+    const projectId = pIdEl.value; 
+    const name = nameEl ? nameEl.value.trim() : '참고 링크'; 
+    let url = urlEl.value.trim(); 
+    
+    if(!url) return window.showToast("링크 URL을 입력하세요.", "error"); 
+    
+    const proj = (window.currentProjectStatusList || []).find(p => p.id === projectId); 
+    let links = proj && proj.links ? proj.links.slice() : []; 
+    
+    if(!url.startsWith('http')) url = 'https://' + url; 
+    links.push({ name: name || '참고 링크', url: url }); 
+    
+    try { 
+        await setDoc(doc(db, "projects_status", projectId), { links: links }, { merge: true }); 
+        window.showToast("링크가 추가되었습니다."); 
+        if(nameEl) nameEl.value = ''; 
+        urlEl.value = ''; 
+        if(proj) proj.links = links; 
+        window.renderLinksList(projectId); 
+    } catch(e) { 
+        window.showToast("추가 실패", "error"); 
+    } 
+};
+
+window.deleteLinkItem = async function(projectId, index) { 
+    if(!confirm("이 링크를 삭제하시겠습니까?")) return; 
+    const proj = (window.currentProjectStatusList || []).find(p => p.id === projectId); 
+    if(!proj || !proj.links) return; 
+    
+    let links = proj.links.slice(); 
+    links.splice(index, 1); 
+    
+    try { 
+        await setDoc(doc(db, "projects_status", projectId), { links: links }, { merge: true }); 
+        window.showToast("링크가 삭제되었습니다."); 
+        if(proj) proj.links = links; 
+        window.renderLinksList(projectId); 
+    } catch(e) { 
+        window.showToast("삭제 실패", "error"); 
+    } 
 };
 
 window.loadNcrData = async function() {
     try {
         if(window.showToast) window.showToast("부적합(RAWDATA) 데이터를 가져오는 중입니다...", "success");
-        
         const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSYwsWjs8ox503LLsRIeVRbbZ4R7eLgoq0C-ZdYIBIUACCwWyt5oYkAAtIpX9j1taqt1MQaEg1Jjom0/pub?gid=0&single=true&output=csv';
         const separator = csvUrl.includes('?') ? '&' : '?';
         const res = await fetch(csvUrl + separator + 't=' + Date.now());
         
         if (!res.ok) throw new Error("시트 데이터를 가져오지 못했습니다.");
-
         const csvText = await res.text();
-        if (csvText.includes('<html') || csvText.includes('<body')) {
-            throw new Error("링크 형식이 잘못되었습니다. (웹에 게시에서 .csv 링크인지 확인해주세요)");
-        }
+        if (csvText.includes('<html') || csvText.includes('<body')) throw new Error("링크 형식이 잘못되었습니다.");
 
-        const rows = [];
-        let row = [], col = "", quote = false;
-        
+        const rows = []; let row = [], col = "", quote = false;
         for (let i = 0; i < csvText.length; i++) {
             let cc = csvText[i], nc = csvText[i+1];
             if (cc === '"' && quote && nc === '"') { col += cc; ++i; continue; }
             if (cc === '"') { quote = !quote; continue; }
             if (cc === ',' && !quote) { row.push(col); col = ""; continue; }
             if ((cc === '\r' || cc === '\n') && !quote) {
-                if (row.length > 0 || col !== "") {
-                    row.push(col); rows.push(row); row = []; col = "";
-                }
+                if (row.length > 0 || col !== "") { row.push(col); rows.push(row); row = []; col = ""; }
                 if (cc === '\r' && nc === '\n') i++;
                 continue;
             }
@@ -1054,10 +2266,7 @@ window.loadNcrData = async function() {
 
         let dataStartIndex = 1;
         for (let i = 0; i < Math.min(5, rows.length); i++) {
-            if (rows[i][0] && String(rows[i][0]).includes('NCR No')) {
-                dataStartIndex = i + 1;
-                break;
-            }
+            if (rows[i][0] && String(rows[i][0]).includes('NCR No')) { dataStartIndex = i + 1; break; }
         }
 
         window.ncrData = rows.slice(dataStartIndex).map(r => {
@@ -1078,17 +2287,12 @@ window.loadNcrData = async function() {
         } else {
             if(window.showToast) window.showToast(`부적합(NCR) 데이터 ${window.ncrData.length}건 동기화 완료!`, "success");
         }
-
         window.renderProjectStatusList();
-
         const modal = document.getElementById('ncr-modal');
         if (modal && !modal.classList.contains('hidden')) {
             const titleEl = document.getElementById('ncr-project-title');
-            if (titleEl && titleEl.dataset.code) {
-                window.renderNcrList(titleEl.dataset.code);
-            }
+            if (titleEl && titleEl.dataset.code) window.renderNcrList(titleEl.dataset.code);
         }
-
     } catch(e) {
         console.error("NCR 로드 에러:", e);
         if(window.showToast) window.showToast(`동기화 실패: ${e.message}`, "error");
@@ -1101,14 +2305,20 @@ window.openNcrModal = function(pjtCode, pjtName) {
         titleEl.innerText = `[${getSafeString(pjtCode)}] ${getSafeString(pjtName)}`;
         titleEl.dataset.code = getSafeString(pjtCode);
     }
-    document.getElementById('ncr-modal').classList.remove('hidden');
-    document.getElementById('ncr-modal').classList.add('flex');
+    const modal = document.getElementById('ncr-modal');
+    if(modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
     window.renderNcrList(pjtCode);
 };
 
 window.closeNcrModal = function() {
-    document.getElementById('ncr-modal').classList.add('hidden');
-    document.getElementById('ncr-modal').classList.remove('flex');
+    const modal = document.getElementById('ncr-modal');
+    if(modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
 };
 
 window.renderNcrList = function(pjtCode) {
@@ -1124,14 +2334,9 @@ window.renderNcrList = function(pjtCode) {
         return s.includes('완료') || s.includes('종결');
     }).length;
     
-    const elTotal = document.getElementById('ncr-total-cnt');
-    if(elTotal) elTotal.innerText = total;
-    
-    const elPending = document.getElementById('ncr-pending-cnt');
-    if(elPending) elPending.innerText = total - completed;
-    
-    const elComp = document.getElementById('ncr-comp-cnt');
-    if(elComp) elComp.innerText = completed;
+    const elTotal = document.getElementById('ncr-total-cnt'); if(elTotal) elTotal.innerText = total;
+    const elPending = document.getElementById('ncr-pending-cnt'); if(elPending) elPending.innerText = total - completed;
+    const elComp = document.getElementById('ncr-comp-cnt'); if(elComp) elComp.innerText = completed;
     
     if (total === 0) {
         tbody.innerHTML = '<tr><td colspan="7" class="text-center p-8 text-slate-400 font-bold bg-white">등록된 부적합 내역이 없습니다.</td></tr>';
