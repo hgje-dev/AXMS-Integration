@@ -69,15 +69,13 @@ window.resetReqFilters = function() {
     window.renderRequestList();
 };
 
-const GOOGLE_CLIENT_ID = '924354535197-joakn7gpfj4d3oirpd1pu3un9j7689q9.apps.googleusercontent.com';
-const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/spreadsheets.readonly';
-
+// 💡 Firebase Auth 토큰 연동으로 로직 통합
 window.googleAccessToken = null;
 
 const DRIVE_FOLDERS = {
     'collab': '1q4pzChZi_FYFGK7cXuRK6GRbIeSzfkRC', 
     'purchase': '18SE2vn_OjZKWWOnthyrVA4fPoIcQP490', 
-    'repair': '1gLlXB3raQPNewFEwJXOGgFGNJyzubSER' // 수리/점검 폴더 아이디
+    'repair': '1gLlXB3raQPNewFEwJXOGgFGNJyzubSER'
 };
 
 window.handleFileSelect = function(files) {
@@ -101,6 +99,7 @@ window.clearSelectedFile = function(e) {
     if(nameWrap) nameWrap.classList.add('hidden');
 };
 
+// 💡 1. 연동 확인 및 UI 렌더링 로직
 window.initGoogleAPI = function() {
     if (typeof google === 'undefined' || typeof gapi === 'undefined') {
         setTimeout(window.initGoogleAPI, 500);
@@ -109,11 +108,31 @@ window.initGoogleAPI = function() {
     
     const storedToken = localStorage.getItem('axmsGoogleTokenV2');
     const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
-    const authSection = document.getElementById('google-auth-section');
-    const authStatus = document.getElementById('google-auth-status');
-    const pjtAuthBtn = document.getElementById('btn-pjt-google-auth'); 
-    const pjtAuthStatus = document.getElementById('pjt-google-auth-status'); 
     
+    // UI 토글 헬퍼
+    const toggleUIs = (isAuthenticated) => {
+        const elsToHideIfAuth = ['google-auth-section', 'btn-pjt-google-auth', 'btn-pc-google-auth', 'btn-cr-google-auth', 'btn-qr-google-auth'];
+        const elsToShowIfAuth = ['google-auth-status', 'pjt-google-auth-status', 'pc-google-auth-status', 'cr-google-auth-status', 'qr-google-auth-status'];
+        
+        elsToHideIfAuth.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) isAuthenticated ? el.classList.add('hidden') : el.classList.remove('hidden');
+        });
+        
+        elsToShowIfAuth.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                if (isAuthenticated) {
+                    el.classList.remove('hidden');
+                    if (el.tagName !== 'BUTTON') el.classList.add('flex');
+                } else {
+                    el.classList.add('hidden');
+                    el.classList.remove('flex');
+                }
+            }
+        });
+    };
+
     if (storedToken && storedExpiry && Date.now() < parseInt(storedExpiry)) {
         window.googleAccessToken = storedToken;
         gapi.load('client', () => {
@@ -123,51 +142,36 @@ window.initGoogleAPI = function() {
                 gapi.client.load('gmail', 'v1');
             });
         });
-        if(authSection) authSection.classList.add('hidden');
-        if(authStatus) { authStatus.classList.remove('hidden'); authStatus.classList.add('flex'); }
-        if(pjtAuthBtn) pjtAuthBtn.classList.add('hidden'); 
-        if(pjtAuthStatus) { pjtAuthStatus.classList.remove('hidden'); pjtAuthStatus.classList.add('flex'); }
+        toggleUIs(true);
     } else {
-        if(authSection) authSection.classList.remove('hidden');
-        if(authStatus) { authStatus.classList.add('hidden'); authStatus.classList.remove('flex'); }
-        if(pjtAuthBtn) pjtAuthBtn.classList.remove('hidden'); 
-        if(pjtAuthStatus) { pjtAuthStatus.classList.add('hidden'); pjtAuthStatus.classList.remove('flex'); }
+        toggleUIs(false);
     }
-    
-    window.tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: GOOGLE_CLIENT_ID,
-        scope: GOOGLE_SCOPES,
-        callback: (response) => {
-            if (response.error !== undefined) {
-                window.showToast("구글 인증에 실패했습니다.", "error");
-                return;
-            }
-            window.googleAccessToken = response.access_token;
-            localStorage.setItem('axmsGoogleTokenV2', response.access_token);
-            localStorage.setItem('axmsGoogleTokenExpiryV2', Date.now() + 3500 * 1000);
-
-            if(authSection) authSection.classList.add('hidden');
-            if(authStatus) { authStatus.classList.remove('hidden'); authStatus.classList.add('flex'); }
-            if(pjtAuthBtn) pjtAuthBtn.classList.add('hidden'); 
-            if(pjtAuthStatus) { pjtAuthStatus.classList.remove('hidden'); pjtAuthStatus.classList.add('flex'); }
-            
-            window.showToast("구글 계정 연동이 완료되었습니다.");
-            
-            gapi.load('client', () => {
-                gapi.client.init({}).then(() => {
-                    gapi.client.load('drive', 'v3');
-                    gapi.client.load('gmail', 'v1');
-                });
-            });
-            
-            if(window.loadNcrData) window.loadNcrData();
-        }
-    });
 };
 
-window.authenticateGoogle = function() {
-    if (!window.tokenClient) return window.showToast("구글 API를 불러오는 중입니다. 잠시 후 다시 시도해주세요.", "warning");
-    if (!window.googleAccessToken) window.tokenClient.requestAccessToken({prompt: 'consent'});
+// 💡 2. 재인증 팝업 로직 (토큰 만료 시 호출)
+window.authenticateGoogle = async function() {
+    try {
+        const { auth } = await import('./firebase.js');
+        const { GoogleAuthProvider, signInWithPopup } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+        
+        const googleProvider = new GoogleAuthProvider();
+        googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
+        googleProvider.addScope('https://www.googleapis.com/auth/gmail.send');
+        googleProvider.addScope('https://www.googleapis.com/auth/spreadsheets.readonly');
+        
+        const result = await signInWithPopup(auth, googleProvider);
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        
+        if (credential && credential.accessToken) {
+            window.googleAccessToken = credential.accessToken;
+            localStorage.setItem('axmsGoogleTokenV2', credential.accessToken);
+            localStorage.setItem('axmsGoogleTokenExpiryV2', Date.now() + 3500 * 1000);
+            window.showToast("구글 계정 연동(토큰 갱신)이 완료되었습니다.");
+            if(window.initGoogleAPI) window.initGoogleAPI();
+        }
+    } catch(e) {
+        window.showToast("구글 연동 갱신에 실패했습니다: " + e.message, "error");
+    }
 };
 
 window.uploadFileToDrive = async function(file, folderId) {
