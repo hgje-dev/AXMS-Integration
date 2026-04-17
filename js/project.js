@@ -394,7 +394,7 @@ window.renderProjectStatusList = function() {
     tbody.innerHTML = htmlStr;
 };
 
-// 💡 엑스박스 완벽 방지, 썸네일 고화질 매핑 HTML 렌더러
+// 💡 엑스박스 방지 이미지 생성 렌더러
 window.generateMediaHtml = function(filesArray) {
     if (!filesArray || !Array.isArray(filesArray) || filesArray.length === 0) return '';
     
@@ -488,7 +488,6 @@ window.closeCrReqModal = function() {
     }
 };
 
-// 💡 임시저장 기능
 window.tempSaveCrReq = async function() {
     const pIdEl = document.getElementById('cr-req-pjt-id');
     const goodTxtEl = document.getElementById('cr-req-good');
@@ -563,7 +562,6 @@ window.submitCrReq = async function() {
             }
         }
 
-        // 💡 송부 시 crSent 상태 true로 설정 및 임시저장 초기화
         batch.update(pjtRef, { 
             status: 'completed', 
             crSent: true,
@@ -595,42 +593,25 @@ window.submitCrReq = async function() {
             const targetTeams = ['품질경영팀', '전략구매팀'];
             if (window.allSystemUsers) {
                 const targets = window.allSystemUsers.filter(u => targetTeams.includes(u.team));
-                for(let u of targets) {
-                    await window.notifyUser(u.name, msg, pId, "완료요청");
-                }
+                for(let u of targets) await window.notifyUser(u.name, msg, pId, "완료요청");
             }
         }
         window.showToast("완료요청 송부 완료", "success");
         window.closeCrReqModal();
-    } catch(e) {
-        window.showToast("송부 중 오류가 발생했습니다.", "error");
-        console.error(e);
-    } finally {
-        btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> 완료요청 송부';
-        btn.disabled = false;
-    }
+    } catch(e) { window.showToast("송부 중 오류가 발생했습니다.", "error");
+    } finally { btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> 완료요청 송부'; btn.disabled = false; }
 };
 
 window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
     if (!window.googleAccessToken) return null;
     const safeFolderName = getSafeString(folderName).replace(/[\/\\]/g, '_') || '미분류 프로젝트';
     const query = `name='${safeFolderName}' and mimeType='application/vnd.google-apps.folder' and '${parentFolderId}' in parents and trashed=false`;
-    
-    const findRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}`, {
-        headers: { 'Authorization': 'Bearer ' + window.googleAccessToken }
-    });
+    const findRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}`, { headers: { 'Authorization': 'Bearer ' + window.googleAccessToken } });
     const folderData = await findRes.json();
-    
-    if (folderData.files && folderData.files.length > 0) {
-        return folderData.files[0].id;
-    } else {
-        const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
-            method: 'POST',
-            headers: { 'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: safeFolderName, mimeType: 'application/vnd.google-apps.folder', parents: [parentFolderId] })
-        });
-        const newFolderData = await createRes.json();
-        return newFolderData.id;
+    if (folderData.files && folderData.files.length > 0) return folderData.files[0].id;
+    else {
+        const createRes = await fetch('https://www.googleapis.com/drive/v3/files', { method: 'POST', headers: { 'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: safeFolderName, mimeType: 'application/vnd.google-apps.folder', parents: [parentFolderId] }) });
+        const newFolderData = await createRes.json(); return newFolderData.id;
     }
 };
 
@@ -640,12 +621,9 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
         if(window.authenticateGoogle && !window.googleAccessToken) window.authenticateGoogle();
         if(!window.googleAccessToken) throw new Error("구글 인증이 필요합니다. [연동하기] 버튼을 눌러주세요.");
     }
-    
     if (!file) throw new Error("파일이 없습니다.");
-
     let targetFolderId = await window.getOrCreateDriveFolder(projectName, TARGET_DRIVE_FOLDER);
     if (!targetFolderId) throw new Error("프로젝트 폴더를 생성/조회할 수 없습니다.");
-
     if (subFolderName) {
         const subFolderId = await window.getOrCreateDriveFolder(subFolderName, targetFolderId);
         if (subFolderId) targetFolderId = subFolderId;
@@ -657,16 +635,12 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
     const progressSize = document.getElementById('upload-progress-size');
     const progressFilename = document.getElementById('upload-progress-filename');
     
-    if(progressModal) {
-        progressModal.classList.remove('hidden');
-        progressModal.classList.add('flex');
-    }
+    if(progressModal) { progressModal.classList.remove('hidden'); progressModal.classList.add('flex'); }
     if(progressBar) progressBar.style.width = '0%';
     if(progressText) progressText.innerText = '0%';
     
     let fileCounterText = totalFiles > 1 ? `[${fileIndex}/${totalFiles}] ` : '';
     if(progressFilename) progressFilename.innerText = fileCounterText + file.name;
-    
     const totalMb = (file.size / (1024 * 1024)).toFixed(2);
     if(progressSize) progressSize.innerText = `0.00 MB / ${totalMb} MB`;
 
@@ -675,7 +649,6 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
         const form = new FormData();
         form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
         form.append('file', file);
-
         const xhr = new XMLHttpRequest();
         xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', true);
         xhr.setRequestHeader('Authorization', 'Bearer ' + window.googleAccessToken);
@@ -691,38 +664,400 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
         };
 
         xhr.onload = function() {
-            if (fileIndex === totalFiles) {
-                if(progressModal) {
-                    progressModal.classList.add('hidden');
-                    progressModal.classList.remove('flex');
-                }
-            }
-            if (xhr.status >= 200 && xhr.status < 300) {
-                const data = JSON.parse(xhr.responseText);
-                resolve(`https://drive.google.com/file/d/${data.id}/view`);
-            } else {
-                if(progressModal) {
-                    progressModal.classList.add('hidden');
-                    progressModal.classList.remove('flex');
-                }
+            if (fileIndex === totalFiles) { if(progressModal) { progressModal.classList.add('hidden'); progressModal.classList.remove('flex'); } }
+            if (xhr.status >= 200 && xhr.status < 300) resolve(`https://drive.google.com/file/d/${JSON.parse(xhr.responseText).id}/view`);
+            else {
+                if(progressModal) { progressModal.classList.add('hidden'); progressModal.classList.remove('flex'); }
                 reject(new Error("파일 업로드 실패: " + xhr.responseText));
             }
         };
-
         xhr.onerror = function() {
-            if(progressModal) {
-                progressModal.classList.add('hidden');
-                progressModal.classList.remove('flex');
-            }
+            if(progressModal) { progressModal.classList.add('hidden'); progressModal.classList.remove('flex'); }
             reject(new Error("네트워크 오류 발생"));
         };
-
         xhr.send(form);
     });
 }
 
 // ==========================================
-// 💡 프로젝트 정보 입력 폼 (모달 방어 로직 & 자동 스왑 기능)
+// 💡 구매 관리 모달
+// ==========================================
+window.openPurchaseModal = function(projectId, title) { 
+    try {
+        const modal = document.getElementById('purchase-modal');
+        if(!modal) return;
+        
+        const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
+        const setHtml = (eid, val) => { const el = document.getElementById(eid); if(el) el.innerText = val; };
+        
+        setVal('pur-req-id', projectId); 
+        setHtml('pur-project-title', title || ''); 
+        window.resetPurchaseForm(); 
+        
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        
+        if(window.initGoogleAPI) window.initGoogleAPI();
+        
+        if (currentPurchaseUnsubscribe) currentPurchaseUnsubscribe(); 
+        currentPurchaseUnsubscribe = onSnapshot(query(collection(db, "project_purchases"), where("projectId", "==", projectId)), function(snap) { 
+            let list = []; 
+            snap.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
+            list.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
+            
+            const listEl = document.getElementById('purchase-list');
+            if(!listEl) return;
+            
+            if(list.length === 0) { 
+                listEl.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 구매 내역이 없습니다.</div>'; 
+                return; 
+            }
+            
+            listEl.innerHTML = list.map(item => {
+                let dateStr = item.createdAt ? window.getDateTimeStr(new Date(getSafeMillis(item.createdAt))) : '';
+                let safeContent = getSafeString(item.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+                if(window.formatMentions) safeContent = window.formatMentions(safeContent);
+                let attachmentsHtml = window.generateMediaHtml(item.files);
+
+                return `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
+                            <div class="flex justify-between items-start">
+                                <div class="flex items-center gap-2"><span class="font-bold text-amber-600 text-sm">${getSafeString(item.authorName)}</span><span class="text-[10px] text-slate-400 font-medium">${dateStr}</span></div>
+                                <div class="flex gap-2"><button onclick="window.deletePurchase('${item.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button></div>
+                            </div>
+                            <div class="text-[13px] text-slate-700 font-medium break-words leading-relaxed">${safeContent}</div>
+                            ${attachmentsHtml}
+                        </div>`;
+            }).join('');
+        });
+    } catch(e) {
+        if(window.showToast) window.showToast('모달을 여는 중 에러가 발생했습니다.', 'error');
+    }
+};
+
+window.closePurchaseModal = function() { 
+    const modal = document.getElementById('purchase-modal');
+    if(modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+    if (currentPurchaseUnsubscribe) currentPurchaseUnsubscribe(); 
+};
+
+window.resetPurchaseForm = function() { 
+    const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
+    setVal('editing-pur-id', ''); 
+    setVal('new-pur-text', ''); 
+    setVal('new-pur-file', ''); 
+    const fname = document.getElementById('pur-file-name');
+    if(fname) fname.innerText = ''; 
+};
+
+window.savePurchaseItem = async function() { 
+    const pIdEl = document.getElementById('pur-req-id');
+    const titleEl = document.getElementById('pur-project-title');
+    if(!pIdEl || !titleEl) return;
+    
+    const pId = pIdEl.value;
+    const title = titleEl.innerText;
+    
+    const proj = (window.currentProjectStatusList || []).find(p => p.id === pId);
+    const folderName = proj && proj.code ? proj.code : title;
+
+    const contentEl = document.getElementById('new-pur-text');
+    const fileInput = document.getElementById('new-pur-file');
+    const btn = document.getElementById('btn-pur-save');
+    
+    if(!contentEl || !fileInput || !btn) return;
+    
+    const content = contentEl.value.trim();
+    if(!content && fileInput.files.length === 0) return window.showToast("내용이나 파일을 첨부하세요.", "error");
+    
+    btn.innerHTML = '저장중..'; btn.disabled = true;
+    try { 
+        let filesData = [];
+        if (fileInput.files.length > 0) {
+            let total = fileInput.files.length;
+            for(let i=0; i<total; i++) {
+                let file = fileInput.files[i];
+                let isImg = file.name.match(/\.(jpeg|jpg|gif|png|webp|bmp|heic)$/i);
+                
+                let thumbBase64 = null;
+                if(isImg) {
+                    thumbBase64 = await new Promise(resolve => { window.resizeAndConvertToBase64(file, res => resolve(res), 300); });
+                }
+                
+                let url = await handleDriveUploadWithProgress(file, folderName, '구매', i+1, total);
+                filesData.push({ name: file.name, url: url, thumbBase64: thumbBase64 });
+            }
+        }
+        await addDoc(collection(db, "project_purchases"), { projectId: pId, content: content, files: filesData, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
+        window.showToast("구매 내역이 등록되었습니다."); 
+        window.resetPurchaseForm(); 
+    } catch(e) { 
+        window.showToast(e.message, "error"); 
+    } finally { 
+        btn.innerHTML = '등록'; btn.disabled = false; 
+    }
+};
+
+window.deletePurchase = async function(id) { 
+    if(confirm("삭제하시겠습니까?")) await deleteDoc(doc(db, "project_purchases", id)); 
+};
+
+// ==========================================
+// 💡 설계 파일 관리 모달
+// ==========================================
+window.openDesignModal = function(projectId, title) { 
+    try {
+        const modal = document.getElementById('design-modal');
+        if(!modal) return;
+
+        const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
+        const setHtml = (eid, val) => { const el = document.getElementById(eid); if(el) el.innerText = val; };
+
+        setVal('des-req-id', projectId); 
+        setHtml('des-project-title', title || ''); 
+        window.resetDesignForm(); 
+        
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        
+        if(window.initGoogleAPI) window.initGoogleAPI();
+
+        if (currentDesignUnsubscribe) currentDesignUnsubscribe(); 
+        currentDesignUnsubscribe = onSnapshot(query(collection(db, "project_designs"), where("projectId", "==", projectId)), function(snap) { 
+            let list = []; 
+            snap.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
+            list.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
+            
+            const listEl = document.getElementById('design-list');
+            if(!listEl) return;
+            
+            if(list.length === 0) { 
+                listEl.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 설계 파일이 없습니다.</div>'; 
+                return; 
+            }
+            
+            listEl.innerHTML = list.map(item => {
+                let dateStr = item.createdAt ? window.getDateTimeStr(new Date(getSafeMillis(item.createdAt))) : '';
+                let safeContent = getSafeString(item.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+                if(window.formatMentions) safeContent = window.formatMentions(safeContent);
+
+                let attachmentsHtml = window.generateMediaHtml(item.files);
+
+                return `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
+                            <div class="flex justify-between items-start">
+                                <div class="flex items-center gap-2"><span class="font-bold text-teal-600 text-sm">${getSafeString(item.authorName)}</span><span class="text-[10px] text-slate-400 font-medium">${dateStr}</span></div>
+                                <div class="flex gap-2"><button onclick="window.deleteDesign('${item.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button></div>
+                            </div>
+                            <div class="text-[13px] text-slate-700 font-medium break-words leading-relaxed">${safeContent}</div>
+                            ${attachmentsHtml}
+                        </div>`;
+            }).join('');
+        });
+    } catch(e) {
+        if(window.showToast) window.showToast('모달을 여는 중 에러가 발생했습니다.', 'error');
+    }
+};
+
+window.closeDesignModal = function() { 
+    const modal = document.getElementById('design-modal');
+    if(modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+    if (currentDesignUnsubscribe) currentDesignUnsubscribe(); 
+};
+
+window.resetDesignForm = function() { 
+    const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
+    setVal('editing-des-id', ''); 
+    setVal('new-des-text', ''); 
+    setVal('new-des-file', ''); 
+    const fname = document.getElementById('des-file-name');
+    if(fname) fname.innerText = ''; 
+};
+
+window.saveDesignItem = async function() { 
+    const pIdEl = document.getElementById('des-req-id');
+    const titleEl = document.getElementById('des-project-title');
+    if(!pIdEl || !titleEl) return;
+    
+    const pId = pIdEl.value;
+    const title = titleEl.innerText;
+    
+    const proj = (window.currentProjectStatusList || []).find(p => p.id === pId);
+    const folderName = proj && proj.code ? proj.code : title;
+
+    const contentEl = document.getElementById('new-des-text');
+    const fileInput = document.getElementById('new-des-file');
+    const btn = document.getElementById('btn-des-save');
+    
+    if(!contentEl || !fileInput || !btn) return;
+    
+    const content = contentEl.value.trim();
+    if(!content && fileInput.files.length === 0) return window.showToast("내용이나 파일을 첨부하세요.", "error");
+    
+    btn.innerHTML = '저장중..'; btn.disabled = true;
+    try { 
+        let filesData = [];
+        if (fileInput.files.length > 0) {
+            let total = fileInput.files.length;
+            for(let i=0; i<total; i++) {
+                let file = fileInput.files[i];
+                let isImg = file.name.match(/\.(jpeg|jpg|gif|png|webp|bmp|heic)$/i);
+                
+                let thumbBase64 = null;
+                if(isImg) {
+                    thumbBase64 = await new Promise(resolve => { window.resizeAndConvertToBase64(file, res => resolve(res), 300); });
+                }
+                
+                let url = await handleDriveUploadWithProgress(file, folderName, '설계', i+1, total);
+                filesData.push({ name: file.name, url: url, thumbBase64: thumbBase64 });
+            }
+        }
+        await addDoc(collection(db, "project_designs"), { projectId: pId, content: content, files: filesData, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
+        window.showToast("설계 내역이 등록되었습니다."); 
+        window.resetDesignForm(); 
+    } catch(e) { 
+        window.showToast(e.message, "error"); 
+    } finally { 
+        btn.innerHTML = '등록'; btn.disabled = false; 
+    }
+};
+
+window.deleteDesign = async function(id) { 
+    if(confirm("삭제하시겠습니까?")) await deleteDoc(doc(db, "project_designs", id)); 
+};
+
+// ==========================================
+// 💡 일정표 관리 모달
+// ==========================================
+window.openPjtScheduleModal = function(projectId, title) { 
+    try {
+        const modal = document.getElementById('pjt-schedule-modal');
+        if(!modal) return;
+        
+        const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
+        const setHtml = (eid, val) => { const el = document.getElementById(eid); if(el) el.innerText = val; };
+
+        setVal('sch-req-id', projectId); 
+        setHtml('sch-project-title', title || ''); 
+        window.resetPjtScheduleForm(); 
+        
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        
+        if(window.initGoogleAPI) window.initGoogleAPI();
+
+        if (currentPjtScheduleUnsubscribe) currentPjtScheduleUnsubscribe(); 
+        currentPjtScheduleUnsubscribe = onSnapshot(query(collection(db, "project_schedules"), where("projectId", "==", projectId)), function(snap) { 
+            let list = []; 
+            snap.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
+            list.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
+            
+            const listEl = document.getElementById('pjt-schedule-list');
+            if(!listEl) return;
+            
+            if(list.length === 0) { 
+                listEl.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 PJT 일정이 없습니다.</div>'; 
+                return; 
+            }
+            
+            listEl.innerHTML = list.map(item => {
+                let dateStr = item.createdAt ? window.getDateTimeStr(new Date(getSafeMillis(item.createdAt))) : '';
+                let safeContent = getSafeString(item.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+                if(window.formatMentions) safeContent = window.formatMentions(safeContent);
+
+                let attachmentsHtml = window.generateMediaHtml(item.files);
+
+                return `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
+                            <div class="flex justify-between items-start">
+                                <div class="flex items-center gap-2"><span class="font-bold text-fuchsia-600 text-sm">${getSafeString(item.authorName)}</span><span class="text-[10px] text-slate-400 font-medium">${dateStr}</span></div>
+                                <div class="flex gap-2"><button onclick="window.deletePjtSchedule('${item.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button></div>
+                            </div>
+                            <div class="text-[13px] text-slate-700 font-medium break-words leading-relaxed">${safeContent}</div>
+                            ${attachmentsHtml}
+                        </div>`;
+            }).join('');
+        });
+    } catch(e) {
+        if(window.showToast) window.showToast('모달을 여는 중 에러가 발생했습니다.', 'error');
+    }
+};
+
+window.closePjtScheduleModal = function() { 
+    const modal = document.getElementById('pjt-schedule-modal');
+    if(modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+    if (currentPjtScheduleUnsubscribe) currentPjtScheduleUnsubscribe(); 
+};
+
+window.resetPjtScheduleForm = function() { 
+    const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
+    setVal('editing-sch-id', ''); 
+    setVal('new-sch-text', ''); 
+    setVal('new-sch-file', ''); 
+    const fname = document.getElementById('sch-file-name');
+    if(fname) fname.innerText = ''; 
+};
+
+window.savePjtScheduleItem = async function() { 
+    const pIdEl = document.getElementById('sch-req-id');
+    const titleEl = document.getElementById('sch-project-title');
+    if(!pIdEl || !titleEl) return;
+    
+    const pId = pIdEl.value;
+    const title = titleEl.innerText;
+    
+    const proj = (window.currentProjectStatusList || []).find(p => p.id === pId);
+    const folderName = proj && proj.code ? proj.code : title;
+
+    const contentEl = document.getElementById('new-sch-text');
+    const fileInput = document.getElementById('new-sch-file');
+    const btn = document.getElementById('btn-sch-save');
+    
+    if(!contentEl || !fileInput || !btn) return;
+    
+    const content = contentEl.value.trim();
+    if(!content && fileInput.files.length === 0) return window.showToast("내용이나 파일을 첨부하세요.", "error");
+    
+    btn.innerHTML = '저장중..'; btn.disabled = true;
+    try { 
+        let filesData = [];
+        if (fileInput.files.length > 0) {
+            let total = fileInput.files.length;
+            for(let i=0; i<total; i++) {
+                let file = fileInput.files[i];
+                let isImg = file.name.match(/\.(jpeg|jpg|gif|png|webp|bmp|heic)$/i);
+                
+                let thumbBase64 = null;
+                if(isImg) {
+                    thumbBase64 = await new Promise(resolve => { window.resizeAndConvertToBase64(file, res => resolve(res), 300); });
+                }
+                
+                let url = await handleDriveUploadWithProgress(file, folderName, '일정', i+1, total);
+                filesData.push({ name: file.name, url: url, thumbBase64: thumbBase64 });
+            }
+        }
+        await addDoc(collection(db, "project_schedules"), { projectId: pId, content: content, files: filesData, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() });
+        window.showToast("PJT 일정 내역이 등록되었습니다."); 
+        window.resetPjtScheduleForm(); 
+    } catch(e) { 
+        window.showToast(e.message, "error"); 
+    } finally { 
+        btn.innerHTML = '등록'; btn.disabled = false; 
+    }
+};
+
+window.deletePjtSchedule = async function(id) { 
+    if(confirm("삭제하시겠습니까?")) await deleteDoc(doc(db, "project_schedules", id)); 
+};
+
+// ==========================================
+// 💡 프로젝트 정보 입력 폼 모달
 // ==========================================
 window.openProjStatusWriteModal = function() {
     try {
@@ -842,15 +1177,10 @@ window.saveProjStatus = async function(btn) {
         if(!codeEl || !nameEl) return;
 
         const id = idEl.value; 
+        
+        // 💡 [버그 수정] 초성 검색 시 코드와 이름이 뒤바뀌지 않도록 자동 스왑 로직 완전 제거
         let code = codeEl.value.trim(); 
         let name = nameEl.value.trim();
-        
-        // 💡 [안전장치] 사용자가 PJT코드칸에 한글(이름)을 쓰고 프로젝트명칸에 코드를 쓰면 자동 교정
-        if (/[가-힣]/.test(code) && !/[가-힣]/.test(name) && name !== "") {
-            let temp = code;
-            code = name;
-            name = temp;
-        }
         
         if(!code || !name) { 
             if(btn){ btn.disabled = false; btn.innerHTML = '저장하기'; } 
@@ -1061,8 +1391,226 @@ window.toggleProjDashView = function(view) {
     }
 };
 
+window.scrollToGanttToday = function() {
+    const scrollContainer = document.getElementById('proj-dash-gantt-content');
+    if(scrollContainer && window.ganttTodayOffset >= 0) {
+        scrollContainer.scrollTo({
+            left: window.ganttTodayOffset + 300 - (scrollContainer.clientWidth / 2),
+            behavior: 'smooth'
+        });
+    }
+};
+
+window.renderProjGantt = function() {
+    const container = document.getElementById('proj-dash-gantt-content');
+    try {
+        let displayList = window.getFilteredProjects();
+        if(displayList.length === 0) { 
+            container.innerHTML = '<div class="text-center p-10 text-slate-500 font-bold bg-white w-full h-full flex items-center justify-center rounded-xl">표시할 일정 데이터가 없습니다.</div>'; 
+            return; 
+        }
+
+        let minDate = new Date(); 
+        let maxDate = new Date(); 
+        let hasDates = false;
+        
+        displayList.forEach(function(p) {
+            const dates = [p.d_asmSt, p.d_asmEn, p.d_insSt, p.d_insEn, p.d_shipEn, p.d_setSt, p.d_setEn, p.d_asmEst, p.d_shipEst, p.d_asmEndEst].filter(d => d).map(d => new Date(d)).filter(d => !isNaN(d.getTime()));
+            dates.forEach(function(d) { 
+                if(!hasDates) { minDate = new Date(d); maxDate = new Date(d); hasDates = true; } 
+                if(d < minDate) minDate = new Date(d); 
+                if(d > maxDate) maxDate = new Date(d); 
+            });
+        });
+        
+        const today = new Date(); 
+        today.setHours(0,0,0,0);
+        
+        if(today < minDate) minDate = new Date(today);
+        if(today > maxDate) maxDate = new Date(today);
+
+        if(!hasDates) { 
+            container.innerHTML = '<div class="text-center p-10 text-slate-500 font-bold bg-white w-full h-full flex items-center justify-center rounded-xl">표시할 일정 데이터가 없습니다.</div>'; 
+            return; 
+        }
+        
+        minDate.setDate(minDate.getDate() - 5); 
+        maxDate.setDate(maxDate.getDate() + 10);
+        const totalDays = Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24)); 
+        const dayWidth = 24; 
+        
+        const todayStr = window.getLocalDateStr(new Date()); 
+        let todayOffset = -1;
+
+        let html = `<div class="relative min-w-max h-full min-h-[500px]" style="width: ${totalDays * dayWidth + 300}px">`;
+        
+        for(let i=0; i<totalDays; i++) {
+            let d = new Date(minDate); 
+            d.setDate(d.getDate() + i);
+            let dStr = window.getLocalDateStr(d);
+            if(dStr === todayStr) todayOffset = i * dayWidth; 
+        }
+        
+        window.ganttTodayOffset = todayOffset;
+
+        if(todayOffset >= 0) {
+            html += `<div class="absolute top-0 w-[2px] bg-rose-500 z-[100] pointer-events-none shadow-sm" style="left: ${300 + todayOffset + (dayWidth/2)}px; height:100%; bottom:0;"><div class="absolute top-10 -translate-x-1/2 bg-rose-500 text-white text-[10px] px-2 py-0.5 rounded-full shadow-md font-bold whitespace-nowrap border border-white">오늘</div></div>`;
+        }
+
+        html += `<div class="flex border-b border-slate-200 sticky top-0 bg-white z-50 shadow-sm"><div class="w-[300px] flex-shrink-0 p-3 font-bold text-xs text-slate-700 bg-slate-50 border-r border-slate-200 flex items-center sticky left-0 z-50"><div class="w-[100px] text-indigo-600">PJT 코드</div><div class="w-[200px]">프로젝트명</div></div>`;
+        
+        for(let i=0; i<totalDays; i++) {
+            let d = new Date(minDate); 
+            d.setDate(d.getDate() + i);
+            let dStr = window.getLocalDateStr(d);
+            let bgClass = (d.getDay() === 0 || d.getDay() === 6) ? 'bg-slate-50' : 'bg-white'; 
+            let textClass = d.getDay() === 0 ? 'text-rose-500' : (d.getDay() === 6 ? 'text-blue-500' : 'text-slate-500');
+            if (dStr === todayStr) { bgClass = 'bg-rose-50'; textClass = 'text-rose-600 font-black'; }
+            
+            let dateText = (d.getDate() === 1 || i === 0) ? `<div class="text-[8px] font-black bg-slate-200 text-slate-600">${d.getMonth()+1}월</div>` : `<div class="text-[8px] font-bold bg-slate-100 text-transparent select-none">-</div>`;
+            html += `<div class="w-[${dayWidth}px] flex-shrink-0 text-center border-r border-slate-100 ${bgClass} flex flex-col justify-center relative">${dateText}<div class="text-[10px] font-bold ${textClass} py-1">${d.getDate()}</div></div>`;
+        }
+        
+        html += `</div><div class="relative w-full h-full min-h-full" style="min-height: 400px;">`;
+
+        displayList.forEach(function(p) {
+            const safeNameHtml = String(p.name||'').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); 
+            const safeCodeStr = p.code || '-';
+            
+            html += `<div class="flex border-b border-slate-100 relative group cursor-pointer hover:bg-slate-50 transition-colors" onclick="window.editProjStatus('${p.id}')">`;
+            
+            html += `<div class="w-[300px] flex-shrink-0 p-2 text-[11px] font-bold text-slate-700 border-r border-slate-200 bg-white group-hover:bg-slate-50 z-40 sticky left-0 flex items-center transition-colors" title="${safeNameHtml}"><div class="w-[100px] text-indigo-600 truncate font-black pr-1">${safeCodeStr}</div><div class="w-[200px] truncate">${safeNameHtml}</div></div>`;
+            
+            html += `<div class="flex relative" style="width: ${totalDays * dayWidth}px">`;
+            
+            for(let i=0; i<totalDays; i++) { 
+                let d = new Date(minDate); 
+                d.setDate(d.getDate() + i); 
+                let bgStr = (d.getDay() === 0 || d.getDay() === 6) ? 'bg-slate-50/50' : '';
+                html += `<div class="w-[${dayWidth}px] flex-shrink-0 border-r border-slate-50 ${bgStr} h-12"></div>`; 
+            }
+            
+            const drawBar = function(start, end, colorClass, label, yOffset) {
+                if(!start) return ''; 
+                let sD = new Date(start); 
+                let eD = end ? new Date(end) : new Date(start);
+                if(isNaN(sD.getTime()) || isNaN(eD.getTime())) return '';
+                if(sD < minDate) sD = new Date(minDate); 
+                if(eD > maxDate) eD = new Date(maxDate); 
+                if(sD > eD) eD = new Date(sD);
+                
+                let leftOffset = Math.floor((sD - minDate) / (1000 * 60 * 60 * 24)) * dayWidth; 
+                let width = Math.ceil((eD - sD) / (1000 * 60 * 60 * 24) + 1) * dayWidth;
+                return `<div class="absolute ${yOffset} h-[14px] rounded-sm ${colorClass} text-[8px] flex items-center justify-center font-bold shadow-sm overflow-hidden whitespace-nowrap opacity-90 hover:opacity-100 hover:scale-y-110 transition-all cursor-pointer z-10" style="left: ${leftOffset}px; width: ${width}px;" title="${label}: ${start} ~ ${end||start}"></div>`;
+            };
+            
+            const drawPoint = function(dateStr, colorClass, label, yOffset) {
+                if(!dateStr) return ''; 
+                let d = new Date(dateStr); 
+                if(isNaN(d.getTime())) return '';
+                let leftOffset = Math.floor((d - minDate) / (1000 * 60 * 60 * 24)) * dayWidth;
+                return `<div class="absolute ${yOffset} w-3 h-3 rounded-sm transform rotate-45 shadow-sm border-2 z-20 ${colorClass}" style="left: ${leftOffset + dayWidth/2 - 6}px;" title="${label}: ${dateStr}"></div>`;
+            }
+            
+            html += drawBar(p.d_asmEst, p.d_asmEndEst, 'bg-white border-2 border-indigo-400 border-dashed text-indigo-700', '조립(예정)', 'top-1');
+            html += drawBar(p.d_asmSt, p.d_asmEn, 'bg-indigo-600 text-white', '조립(실제)', 'top-1/2 -translate-y-1/2'); 
+            html += drawBar(p.d_insSt, p.d_insEn, 'bg-teal-500 text-white', '검수', 'top-1/2 -translate-y-1/2'); 
+            html += drawBar(p.d_setSt, p.d_setEn, 'bg-slate-600 text-white', 'Setup', 'top-1/2 -translate-y-1/2');
+            html += drawPoint(p.d_shipEst, 'bg-white border-rose-400', '출하(예정)', 'top-1');
+            html += drawPoint(p.d_shipEn, 'bg-rose-500 border-white', '출하(실제)', 'top-1/2 -translate-y-1/2');
+            
+            html += `</div></div>`;
+        });
+        
+        html += `</div></div>`; 
+        container.innerHTML = html;
+        
+        setTimeout(function() { 
+            const scrollContainer = document.getElementById('proj-dash-gantt-content'); 
+            if(scrollContainer && todayOffset >= 0) {
+                scrollContainer.scrollLeft = todayOffset + 300 - (scrollContainer.clientWidth / 2);
+            }
+        }, 100);
+    } catch(e) { 
+        console.error("간트차트 오류:", e); 
+    }
+};
+
+window.changeCalendarMonth = function(offset) { 
+    window.calendarCurrentDate.setMonth(window.calendarCurrentDate.getMonth() + offset); 
+    window.renderProjCalendar(); 
+};
+
+window.renderProjCalendar = function() {
+    const container = document.getElementById('proj-dash-calendar-content');
+    try {
+        let displayList = window.getFilteredProjects();
+        const year = window.calendarCurrentDate.getFullYear(); 
+        const month = window.calendarCurrentDate.getMonth();
+        const firstDay = new Date(year, month, 1).getDay(); 
+        const lastDate = new Date(year, month + 1, 0).getDate();
+        const today = new Date(); 
+        const isCurrentMonth = (today.getFullYear() === year && today.getMonth() === month);
+        
+        let html = `<div class="flex justify-between items-center mb-4">
+                        <div class="flex items-center gap-4">
+                            <button onclick="window.changeCalendarMonth(-1)" class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"><i class="fa-solid fa-chevron-left"></i></button>
+                            <h3 class="text-lg font-black text-indigo-800 w-32 text-center">${year}년 ${month + 1}월</h3>
+                            <button onclick="window.changeCalendarMonth(1)" class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"><i class="fa-solid fa-chevron-right"></i></button>
+                            <button onclick="window.calendarCurrentDate = new Date(); window.renderProjCalendar();" class="text-[10px] bg-indigo-50 text-indigo-600 px-3 py-1 rounded-lg font-bold hover:bg-indigo-100 transition-colors border border-indigo-200">이번 달</button>
+                        </div>
+                        <div class="flex gap-2 text-[10px] font-bold">
+                            <span class="bg-indigo-100 text-indigo-700 px-2 py-1 rounded border border-indigo-200">조립진행</span>
+                            <span class="bg-rose-100 text-rose-700 px-2 py-1 rounded border border-rose-200">출하예정</span>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-7 gap-1 text-center font-bold text-xs text-slate-500 mb-2">
+                        <div class="text-rose-500">일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div class="text-blue-500">토</div>
+                    </div>
+                    <div class="grid grid-cols-7 gap-1 auto-rows-fr">`;
+        
+        for(let i=0; i<firstDay; i++) { 
+            html += `<div class="min-h-[100px] bg-slate-50 rounded-lg border border-slate-100"></div>`; 
+        }
+        
+        for(let date=1; date<=lastDate; date++) {
+            const currentDateStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(date).padStart(2,'0'); 
+            let dayEvents = '';
+            
+            displayList.forEach(function(p) {
+                const safeNameHtml = getSafeString(p.name).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); 
+                const safeCodeStr = getSafeString(p.code) || '-';
+                let isAsm = false; 
+                
+                if(p.d_asmSt && p.d_asmEn) { 
+                    if(currentDateStr >= p.d_asmSt && currentDateStr <= p.d_asmEn) isAsm = true; 
+                } else if(p.d_asmEst && p.d_asmEndEst) { 
+                    if(currentDateStr >= p.d_asmEst && currentDateStr <= p.d_asmEndEst) isAsm = true; 
+                }
+                
+                if(isAsm) {
+                    dayEvents += `<div class="text-[9px] bg-indigo-500 text-white px-1.5 py-0.5 rounded mb-0.5 truncate cursor-pointer shadow-sm hover:scale-[1.02] transition-transform" onclick="window.editProjStatus('${p.id}')" title="${safeNameHtml}">${safeCodeStr} 조립</div>`;
+                }
+                
+                if(p.d_shipEn === currentDateStr || (!p.d_shipEn && p.d_shipEst === currentDateStr)) { 
+                    dayEvents += `<div class="text-[9px] bg-rose-500 text-white px-1.5 py-0.5 rounded mb-0.5 truncate cursor-pointer shadow-sm hover:scale-[1.02] transition-transform" onclick="window.editProjStatus('${p.id}')" title="${safeNameHtml}">${safeCodeStr} 출하</div>`; 
+                }
+            });
+            
+            const isToday = (isCurrentMonth && date === today.getDate());
+            const badge = isToday ? `<span class="bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center mx-auto shadow-md">${date}</span>` : date;
+            const borderClass = isToday ? 'border-indigo-400 bg-indigo-50/10' : 'border-slate-200';
+            
+            html += `<div class="min-h-[100px] bg-white rounded-lg border ${borderClass} p-1 hover:bg-slate-50 transition-colors"><div class="text-xs font-bold text-slate-700 mb-1 text-center">${badge}</div><div class="flex flex-col gap-0.5 overflow-hidden">${dayEvents}</div></div>`;
+        }
+        
+        html += `</div>`; 
+        container.innerHTML = html;
+    } catch(e) {}
+};
+
 // ==========================================
-// 💡 코멘트 관리
+// 💡 코멘트 관리 모달
 // ==========================================
 window.openCommentModal = function(projectId, title) { 
     try {
@@ -1352,7 +1900,7 @@ window.deleteComment = async function(id) {
 
 
 // ==========================================
-// 💡 이슈 관리
+// 💡 이슈 관리 모달
 // ==========================================
 window.openIssueModal = function(projectId, title) { 
     try {
@@ -1574,7 +2122,6 @@ window.openMdLogModal = function(projectId, title, curMd) {
         const badge = document.getElementById('md-total-badge'); 
         if(badge) badge.innerText = '총 ' + (proj.currentMd || 0) + ' MD'; 
         
-        // 💡 셀렉트 박스에 팀원 목록 셋팅
         const members = window.teamMembers || [];
         const mHtml = '<option value="">팀원 추가</option>' + members.map(t => `<option value="${t.name||''}">${t.name||''} (${t.part||''})</option>`).join('');
         const logMemberSelect = document.getElementById('log-member-add');
@@ -1636,8 +2183,7 @@ window.renderMdLogs = function(logs) {
             let safeDesc = String(log.desc || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             if(window.formatMentions) safeDesc = window.formatMentions(safeDesc);
             
-            // 💡 등록된 팀원 배지로 이쁘게 출력
-            let workersHtml = `<span class="font-bold">${getSafeString(log.authorName)}</span>`;
+            let workersHtml = `<span class="font-bold text-slate-500">${getSafeString(log.authorName)}</span>`;
             if (log.members) {
                 const membersArr = String(log.members).split(',').map(s=>s.trim()).filter(Boolean);
                 if(membersArr.length > 0) {
@@ -1679,7 +2225,7 @@ window.saveMdLogItem = async function() {
     const date = dateEl.value; 
     const mdVal = mdValEl.value; 
     const desc = descEl ? descEl.value.trim() : ''; 
-    const members = membersEl ? membersEl.value : ''; // 추가된 투입 인원 데이터
+    const members = membersEl ? membersEl.value : ''; 
 
     if(!date || !mdVal) return window.showToast("날짜와 투입 MD를 입력하세요.", "error"); 
     
@@ -1728,7 +2274,6 @@ window.editMdLog = function(id) {
     setVal('new-md-val', log.md || ''); 
     setVal('new-md-desc', log.desc || ''); 
     
-    // 💡 수정 시 기존에 등록했던 팀원 불러오기
     window.currentLogMembers = (log.members && typeof log.members === 'string') ? log.members.split(',').map(s=>s.trim()).filter(Boolean) : [];
     window.renderLogMembers();
 
@@ -1783,9 +2328,13 @@ window.resetMdLogForm = function() {
     setVal('new-md-val', ''); 
     setVal('new-md-desc', ''); 
     
-    // 등록폼 초기화 시 인원 선택 초기화
-    window.currentLogMembers = window.userProfile ? [window.userProfile.name] : []; 
-    window.renderLogMembers();
+    // 💡 안전한 사용자 이름 렌더링
+    let defaultUser = '';
+    if(window.userProfile && window.userProfile.name) {
+        defaultUser = window.userProfile.name;
+    }
+    window.currentLogMembers = defaultUser ? [defaultUser] : []; 
+    if(window.renderLogMembers) window.renderLogMembers();
 
     const btnSave = document.getElementById('btn-md-save');
     if(btnSave) btnSave.innerText = '등록'; 
@@ -1795,7 +2344,18 @@ window.resetMdLogForm = function() {
 };
 
 // ==========================================
-// 💡 링크 모달
+// 💡 안전한 첨부 파일 지우기
+// ==========================================
+window.clearDailyLogFile = function(e) {
+    if(e && typeof e.stopPropagation === 'function') e.stopPropagation();
+    const input = document.getElementById('new-log-image');
+    const wrap = document.getElementById('new-log-filename-wrap');
+    if(input) input.value = '';
+    if(wrap) wrap.classList.add('hidden');
+};
+
+// ==========================================
+// 💡 문서 링크 모달
 // ==========================================
 window.openLinkModal = function(projectId, title) { 
     try {
@@ -1903,7 +2463,7 @@ window.deleteLinkItem = async function(projectId, index) {
 };
 
 // ==========================================
-// 💡 NCR 부적합 및 데이터 통신
+// 💡 NCR 부적합 모달 및 통신
 // ==========================================
 window.loadNcrData = async function() {
     try {
