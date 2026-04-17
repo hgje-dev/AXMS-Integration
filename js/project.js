@@ -626,6 +626,225 @@ window.renderProjectStatusList = function() {
 };
 
 // ==========================================
+// 💡 간트(Gantt) 렌더링 추가
+// ==========================================
+window.renderProjGantt = function() {
+    const container = document.getElementById('proj-dash-gantt-content');
+    if(!container) return;
+    
+    let displayList = window.getFilteredProjects();
+    if(displayList.length === 0) {
+        container.innerHTML = '<div class="p-10 text-center text-slate-400 font-bold">표시할 데이터가 없습니다.</div>';
+        return;
+    }
+
+    let minDate = new Date(); minDate.setDate(minDate.getDate() - 14);
+    let maxDate = new Date(); maxDate.setDate(maxDate.getDate() + 30);
+    
+    displayList.forEach(p => {
+        ['d_asmEst', 'd_asmSt', 'd_asmEndEst', 'd_asmEn', 'd_insSt', 'd_insEn', 'd_setSt', 'd_setEn', 'd_shipEst', 'd_shipEn'].forEach(k => {
+            if(p[k]) {
+                let d = new Date(p[k]);
+                if(!isNaN(d.getTime())) {
+                    if(d < minDate) minDate = new Date(d);
+                    if(d > maxDate) maxDate = new Date(d);
+                }
+            }
+        });
+    });
+    
+    minDate.setDate(minDate.getDate() - 7);
+    maxDate.setDate(maxDate.getDate() + 14);
+    
+    const totalDays = Math.ceil((maxDate.getTime() - minDate.getTime()) / 86400000);
+    
+    let html = '<div class="relative min-w-max pb-10 pt-6">';
+    
+    // Header
+    let headerHtml = '<div class="flex border-b border-slate-200 sticky top-0 bg-white z-20" style="margin-left: 200px;">';
+    for(let i=0; i<=totalDays; i++) {
+        let curr = new Date(minDate.getTime() + i * 86400000);
+        let isWeekend = curr.getDay() === 0 || curr.getDay() === 6;
+        let bg = isWeekend ? 'bg-slate-50' : '';
+        let textCol = curr.getDay() === 0 ? 'text-rose-400' : (curr.getDay() === 6 ? 'text-blue-400' : 'text-slate-500');
+        headerHtml += `<div class="shrink-0 w-8 flex flex-col items-center justify-end pb-1 border-r border-slate-100 ${bg}"><span class="text-[9px] ${textCol} font-bold">${curr.getMonth()+1}/${curr.getDate()}</span></div>`;
+    }
+    headerHtml += '</div>';
+    html += headerHtml;
+    
+    // Today Line
+    const todayOffset = Math.ceil((new Date().getTime() - minDate.getTime()) / 86400000);
+    if(todayOffset >= 0 && todayOffset <= totalDays) {
+        html += `<div id="gantt-today-line" class="absolute top-0 bottom-0 w-[2px] bg-rose-500 z-10" style="left: ${200 + todayOffset * 32}px;"><div class="absolute -top-3 -left-3 bg-rose-500 text-white text-[9px] px-1.5 py-0.5 rounded shadow-md whitespace-nowrap font-bold">오늘</div></div>`;
+    }
+
+    // Rows
+    displayList.forEach(p => {
+        html += `<div class="flex border-b border-slate-100 hover:bg-slate-50 relative h-10 group">`;
+        html += `<div class="w-[200px] shrink-0 bg-white sticky left-0 z-30 border-r border-slate-200 px-3 py-2 flex flex-col justify-center shadow-[2px_0_4px_rgba(0,0,0,0.02)]">
+                    <div class="text-[10px] font-bold text-indigo-600 truncate">${p.code||'-'}</div>
+                    <div class="text-[11px] font-bold text-slate-700 truncate" title="${p.name}">${p.name}</div>
+                 </div>`;
+        
+        html += `<div class="flex-1 relative flex items-center">`;
+        for(let i=0; i<=totalDays; i++) {
+            let curr = new Date(minDate.getTime() + i * 86400000);
+            let isWeekend = curr.getDay() === 0 || curr.getDay() === 6;
+            let bg = isWeekend ? 'bg-slate-50/50' : '';
+            html += `<div class="shrink-0 w-8 h-full border-r border-slate-100 ${bg}"></div>`;
+        }
+        
+        const drawBar = (start, end, colorClass, title, topOffset) => {
+            if(!start) return '';
+            let s = new Date(start); let e = end ? new Date(end) : new Date(start);
+            if(isNaN(s.getTime())) return '';
+            if(isNaN(e.getTime())) e = new Date(s);
+            if(e < s) e = new Date(s);
+            
+            let leftOffset = Math.ceil((s.getTime() - minDate.getTime()) / 86400000);
+            let widthDays = Math.ceil((e.getTime() - s.getTime()) / 86400000) + 1;
+            
+            if(leftOffset < 0) { widthDays += leftOffset; leftOffset = 0; }
+            if(leftOffset + widthDays > totalDays) { widthDays = totalDays - leftOffset + 1; }
+            if(widthDays <= 0) return '';
+            
+            let isMilestone = (widthDays === 1 && s.getTime() === e.getTime() && title.includes('출하'));
+            if (isMilestone) {
+                return `<div class="absolute ${colorClass} w-3 h-3 transform rotate-45 shadow-sm border border-white cursor-help z-10" style="left: ${leftOffset * 32 + 16 - 6}px; top: 14px;" title="${title}: ${start}"></div>`;
+            } else {
+                return `<div class="absolute ${colorClass} h-3.5 rounded shadow-sm opacity-80 hover:opacity-100 transition-opacity cursor-help z-10 flex items-center px-1 overflow-hidden" style="left: ${leftOffset * 32}px; width: ${widthDays * 32}px; top: ${topOffset}px;" title="${title}: ${start} ~ ${end||start}"></div>`;
+            }
+        };
+
+        html += drawBar(p.d_asmEst, p.d_asmEndEst, 'bg-indigo-300', '조립예정', 6);
+        html += drawBar(p.d_asmSt, p.d_asmEn, 'bg-indigo-500', '조립(실)', 20);
+        html += drawBar(p.d_insSt, p.d_insEn, 'bg-teal-500', '검수', 13);
+        html += drawBar(p.d_setSt, p.d_setEn, 'bg-slate-600', 'Setup', 13);
+        html += drawBar(p.d_shipEst, null, 'bg-rose-300', '출하예정', 13);
+        html += drawBar(p.d_shipEn, null, 'bg-rose-500', '출하(실)', 13);
+        
+        html += `</div></div>`;
+    });
+    
+    html += '</div>';
+    container.innerHTML = html;
+};
+
+window.scrollToGanttToday = function() {
+    const container = document.getElementById('proj-dash-gantt-content');
+    const line = document.getElementById('gantt-today-line');
+    if(container && line) {
+        container.scrollTo({ left: line.offsetLeft - container.clientWidth / 2, behavior: 'smooth' });
+    }
+};
+
+// ==========================================
+// 💡 달력(Calendar) 렌더링 추가
+// ==========================================
+window.renderProjCalendar = function() {
+    const container = document.getElementById('proj-dash-calendar-content');
+    if(!container) return;
+    
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    
+    const firstDay = new Date(year, month, 1).getDay();
+    const lastDate = new Date(year, month + 1, 0).getDate();
+    
+    let html = `
+        <div class="flex justify-between items-center mb-4 px-2">
+            <h3 class="text-base font-black text-slate-800">${year}년 ${month + 1}월 프로젝트 일정</h3>
+            <div class="flex gap-3 text-[10px] font-bold text-slate-600">
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-indigo-500 shadow-sm"></span>조립</span>
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-teal-500 shadow-sm"></span>검수</span>
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-slate-600 shadow-sm"></span>Setup</span>
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-rose-500 shadow-sm"></span>출하</span>
+            </div>
+        </div>
+        <div class="grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-xl overflow-hidden">
+            <div class="p-2 text-center text-xs font-black text-rose-500 bg-slate-50">일</div>
+            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">월</div>
+            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">화</div>
+            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">수</div>
+            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">목</div>
+            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">금</div>
+            <div class="p-2 text-center text-xs font-black text-blue-500 bg-slate-50">토</div>
+    `;
+    
+    for(let i=0; i<firstDay; i++) html += `<div class="bg-white min-h-[120px]"></div>`;
+    
+    let displayList = window.getFilteredProjects();
+    
+    for(let date = 1; date <= lastDate; date++) {
+        const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(date).padStart(2,'0')}`;
+        const isToday = dateStr === window.getLocalDateStr(new Date());
+        let dayEventsHtml = '';
+        
+        displayList.forEach(p => {
+            let addEvent = (startStr, endStr, type, color, suffix) => {
+                if(!startStr) return;
+                let s = window.getLocalDateStr(new Date(startStr));
+                let e = endStr ? window.getLocalDateStr(new Date(endStr)) : s;
+                if (dateStr >= s && dateStr <= e) {
+                    dayEventsHtml += `<div class="text-[9px] ${color} text-white px-1.5 py-0.5 rounded mb-0.5 truncate shadow-sm cursor-help font-bold" title="${p.name} [${type} ${suffix}]">${p.code} ${type}</div>`;
+                }
+            };
+            addEvent(p.d_asmSt, p.d_asmEn, '조립', 'bg-indigo-500', '(실)');
+            addEvent(p.d_insSt, p.d_insEn, '검수', 'bg-teal-500', '(실)');
+            addEvent(p.d_setSt, p.d_setEn, 'Set', 'bg-slate-600', '(실)');
+            addEvent(p.d_shipEn, null, '출하', 'bg-rose-500', '(실)');
+        });
+        
+        const numClass = isToday ? 'bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center mx-auto shadow-md' : 'text-slate-700';
+        
+        html += `<div class="bg-white p-1.5 min-h-[120px] border-t-2 ${isToday?'border-indigo-500':'border-transparent'} hover:bg-slate-50 transition-colors flex flex-col gap-1">
+                    <div class="text-[11px] font-bold text-center ${numClass} shrink-0">${date}</div>
+                    <div class="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-0.5">${dayEventsHtml}</div>
+                 </div>`;
+    }
+    
+    html += `</div>`;
+    container.innerHTML = html;
+};
+
+// ==========================================
+// 💡 생산일지 팀원 추가 기능(Bug Fix 추가)
+// ==========================================
+window.addLogMember = function(name) {
+    if(!name) return;
+    window.currentLogMembers = window.currentLogMembers || [];
+    if(!window.currentLogMembers.includes(name)) {
+        window.currentLogMembers.push(name);
+        if(window.renderLogMembers) window.renderLogMembers();
+    }
+    const el = document.getElementById('log-member-add') || document.getElementById('md-member-add');
+    if(el) el.selectedIndex = 0;
+};
+
+window.removeLogMember = function(name) {
+    window.currentLogMembers = window.currentLogMembers || [];
+    window.currentLogMembers = window.currentLogMembers.filter(n => n !== name);
+    if(window.renderLogMembers) window.renderLogMembers();
+};
+
+window.renderLogMembers = function() {
+    const container = document.getElementById('log-selected-members'); 
+    const containerMd = document.getElementById('md-selected-members'); 
+    const memInput = document.getElementById('log-members'); 
+    const membersList = window.currentLogMembers || [];
+    
+    if(memInput) memInput.value = membersList.join(', ');
+    
+    const htmlStr = membersList.map(function(name) {
+        return `<span class="bg-sky-100 text-sky-700 px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1.5 shadow-sm">${name} <i class="fa-solid fa-xmark cursor-pointer hover:text-rose-500 bg-white/50 rounded-full px-1 py-0.5" onclick="window.removeLogMember('${name}')"></i></span>`;
+    }).join('');
+
+    if(container) container.innerHTML = htmlStr;
+    if(containerMd) containerMd.innerHTML = htmlStr;
+};
+
+// ==========================================
 // 💡 이미지 렌더러 (엑스박스 방지)
 // ==========================================
 window.generateMediaHtml = function(filesArray) {
