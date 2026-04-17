@@ -1,407 +1,669 @@
 import { db } from './firebase.js';
-import { collection, doc, setDoc, addDoc, deleteDoc, query, onSnapshot, where, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { collection, doc, query, onSnapshot, where, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-let crProjectsUnsubscribe = null;
-let currentInspUnsubscribe = null;
+let integPjtUnsubscribe = null;
+let integCrUnsubscribe = null;
+let integPcUnsubscribe = null;
 
-const CR_DRIVE_PARENT_FOLDER = "1ae5JiICk9ZQEaPVNhR6H4TlPs_Np03kQ"; // PJT 현황 메인 폴더
+window.integProjects = [];
+window.integCrReports = [];
+window.integPcReports = [];
+window.integMergedData = [];
 
-window.initQualityReport = function() {
-    console.log("✅ 품질 완료보고 페이지 로드 완료");
-    window.loadCrProjects();
-    if(window.initGoogleAPI) window.initGoogleAPI();
+window.currentIntegFilter = 'all'; 
+window.integChartInstances = {};
+
+window.initCompletionReport = function() {
+    console.log("✅ 통합 완료보고(PJT 결산) 페이지 로드 완료");
+    
+    // 차트 플러그인 등 초기 세팅
+    Chart.defaults.font.family = "'Pretendard', sans-serif";
+    
+    window.fetchIntegrationData();
 };
 
-window.loadCrProjects = function() {
-    if (crProjectsUnsubscribe) crProjectsUnsubscribe();
+window.fetchIntegrationData = function() {
+    // 1. Projects Status (완료된 프로젝트 위주)
+    if (integPjtUnsubscribe) integPjtUnsubscribe();
+    integPjtUnsubscribe = onSnapshot(collection(db, "projects_status"), (snap) => {
+        window.integProjects = [];
+        snap.forEach(d => window.integProjects.push({ id: d.id, ...d.data() }));
+        mergeIntegrationData();
+    });
+
+    // 2. Project Completion Reports (품질팀 데이터 & 제조팀 1차 데이터)
+    if (integCrUnsubscribe) integCrUnsubscribe();
+    integCrUnsubscribe = onSnapshot(collection(db, "project_completion_reports"), (snap) => {
+        window.integCrReports = [];
+        snap.forEach(d => window.integCrReports.push({ id: d.id, ...d.data() }));
+        mergeIntegrationData();
+    });
+
+    // 3. Product Costs (구매팀 데이터)
+    if (integPcUnsubscribe) integPcUnsubscribe();
+    integPcUnsubscribe = onSnapshot(collection(db, "product_costs"), (snap) => {
+        window.integPcReports = [];
+        snap.forEach(d => window.integPcReports.push({ id: d.id, ...d.data() }));
+        mergeIntegrationData();
+    });
+};
+
+function mergeIntegrationData() {
+    // 세 컬렉션의 데이터가 모두 로드되었는지 대충 확인 후 병합
+    if (window.integProjects.length === 0) return;
+
+    window.integMergedData = [];
     
-    // 프로젝트 현황 전체를 가져와서 프론트에서 필터링 (검색 용이성)
-    crProjectsUnsubscribe = onSnapshot(collection(db, "projects_status"), (snapshot) => {
-        window.crProjectList = [];
-        snapshot.forEach(docSnap => {
-            window.crProjectList.push({ id: docSnap.id, ...docSnap.data() });
+    // 제조 완료(completed)인 것들만 1차 필터링
+    let completedPjts = window.integProjects.filter(p => p.status === 'completed');
+
+    completedPjts.forEach(pjt => {
+        let crReport = window.integCrReports.find(cr => cr.projectId === pjt.id) || {};
+        let pcReport = window.integPcReports.find(pc => pc.projectId === pjt.id) || {};
+
+        let mStatus = '완료'; // projects_status가 completed이므로
+        let qStatus = crReport.qualityStatus || '대기중'; // 품질팀
+        let pStatus = pcReport.status || '대기중';       // 구매팀
+
+        if(qStatus === '분석 완료') qStatus = '완료';
+        if(pStatus === '분석 완료') pStatus = '완료';
+
+        let finalStatus = (mStatus === '완료' && qStatus === '완료' && pStatus === '완료') ? '통합완료' : '작성대기';
+
+        window.integMergedData.push({
+            projectId: pjt.id,
+            pjtCode: pjt.code || '-',
+            pjtName: pjt.name || '알수없음',
+            shipDate: pjt.d_shipEn || pjt.d_shipEst || '-',
+            
+            estMd: parseFloat(pjt.estMd) || 0,
+            finalMd: parseFloat(pjt.finalMd) || 0,
+            
+            // 품질 데이터 추출
+            qStatus: qStatus,
+            crData: crReport,
+            
+            // 구매 데이터 추출
+            pStatus: pStatus,
+            pcData: pcReport,
+
+            finalStatus: finalStatus,
+            updatedAt: pjt.updatedAt || 0
         });
-        window.filterCrList();
     });
-};
 
-window.filterCrList = function() {
-    const search = document.getElementById('cr-search')?.value.toLowerCase() || '';
+    // 최신순 정렬
+    window.integMergedData.sort((a,b) => b.updatedAt - a.updatedAt);
     
-    let filtered = window.crProjectList.filter(p => {
-        // 기본적으로 '완료(출하)' 상태인 것 위주로 보여주되, 원하면 진행중인 것도 검수리스트 작성이 가능하도록
-        // 일단 모든 프로젝트를 띄우되 검색으로 필터링
-        let match = true;
-        if (search) {
-            const str = `${p.code||''} ${p.name||''} ${p.company||''}`.toLowerCase();
-            match = str.includes(search) || (window.matchString && window.matchString(search, str));
-        }
-        return match;
-    });
+    window.filterIntegrationList();
+}
 
-    // 상태순(완료가 위로 오게 하거나, 최신순 등 정렬)
-    filtered.sort((a,b) => {
-        if(a.status === 'completed' && b.status !== 'completed') return -1;
-        if(a.status !== 'completed' && b.status === 'completed') return 1;
-        return (b.updatedAt || 0) - (a.updatedAt || 0);
-    });
-
-    window.renderCrList(filtered);
+window.setIntegrationFilter = function(filter) {
+    window.currentIntegFilter = filter;
+    window.filterIntegrationList();
 };
 
-window.renderCrList = function(list) {
-    const tbody = document.getElementById('cr-tbody');
-    if (!tbody) return;
+window.filterIntegrationList = function(resetStr) {
+    if (resetStr === 'all') {
+        window.currentIntegFilter = 'all';
+        const searchInput = document.getElementById('cr-main-search');
+        if(searchInput) searchInput.value = '';
+    }
 
-    if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-400 font-bold">프로젝트가 없습니다.</td></tr>`;
+    const searchKeyword = document.getElementById('cr-main-search')?.value.toLowerCase().trim() || '';
+
+    let total = 0, pending = 0, completed = 0, totalSaving = 0;
+    
+    let filtered = window.integMergedData.filter(d => {
+        // 통계 계산
+        total++;
+        if (d.finalStatus === '통합완료') {
+            completed++;
+            // 총 예산 절감액 합산 (구매팀 actualTotal < targetCost 일때)
+            const target = parseFloat(d.pcData.targetCost) || 0;
+            const actual = parseFloat(d.pcData.actualTotal) || 0;
+            if (target > 0 && target > actual) {
+                totalSaving += (target - actual);
+            }
+        } else {
+            pending++;
+        }
+
+        // 탭 필터 적용
+        if (window.currentIntegFilter === 'pending' && d.finalStatus !== '작성대기') return false;
+        if (window.currentIntegFilter === 'completed' && d.finalStatus !== '통합완료') return false;
+
+        // 검색어 필터
+        if (searchKeyword) {
+            const str = `${d.pjtCode} ${d.pjtName}`.toLowerCase();
+            if (!str.includes(searchKeyword) && !(window.matchString && window.matchString(searchKeyword, str))) return false;
+        }
+        
+        return true;
+    });
+
+    // 미니 대시보드 업데이트
+    if(document.getElementById('integ-dash-total')) document.getElementById('integ-dash-total').innerText = total;
+    if(document.getElementById('integ-dash-pending')) document.getElementById('integ-dash-pending').innerText = pending;
+    if(document.getElementById('integ-dash-completed')) document.getElementById('integ-dash-completed').innerText = completed;
+    if(document.getElementById('integ-dash-saving')) document.getElementById('integ-dash-saving').innerText = totalSaving.toLocaleString();
+
+    renderIntegTop3(window.integMergedData.filter(d => d.finalStatus === '통합완료'));
+    renderIntegTable(filtered);
+};
+
+function renderIntegTop3(completedList) {
+    const container = document.getElementById('integ-top3-container');
+    if(!container) return;
+
+    let top3 = completedList.slice(0, 3);
+    
+    if (top3.length === 0) {
+        container.innerHTML = '<div class="glass-card p-6 text-center text-slate-400 text-xs font-bold col-span-3">아직 3개 부서 통합이 완료된 프로젝트가 없습니다.</div>';
         return;
     }
 
-    const sMap = { 
-        'pending': '<span class="text-slate-500 font-bold text-[11px]">대기</span>', 
-        'progress': '<span class="text-blue-600 font-bold text-[11px]">진행(제작)</span>', 
-        'inspecting': '<span class="text-amber-600 font-bold text-[11px]">진행(검수)</span>', 
-        'completed': '<span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-black text-[11px] border border-emerald-200">완료(출하)</span>', 
-        'rejected': '<span class="text-rose-600 font-bold text-[11px]">보류</span>' 
+    container.innerHTML = top3.map(d => {
+        let mDiff = d.estMd - d.finalMd;
+        let mClass = mDiff >= 0 ? 'text-emerald-500' : 'text-rose-500';
+        let mText = mDiff >= 0 ? `${mDiff.toFixed(1)}MD 절감` : `${Math.abs(mDiff).toFixed(1)}MD 초과`;
+
+        const target = parseFloat(d.pcData.targetCost) || 0;
+        const actual = parseFloat(d.pcData.actualTotal) || 0;
+        let cDiff = target - actual;
+        let cClass = cDiff >= 0 ? 'text-blue-500' : 'text-rose-500';
+        let cText = cDiff >= 0 ? `₩ ${(cDiff/10000).toFixed(0)}만 절감` : `₩ ${(Math.abs(cDiff)/10000).toFixed(0)}만 초과`;
+
+        return `
+            <div class="glass-card p-5 cursor-pointer hover:border-indigo-300 transition-all duration-300" onclick="window.openIntegrationDashboard('${d.projectId}')">
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="text-[10px] font-black text-white bg-indigo-500 px-2 py-0.5 rounded shadow-sm">${d.pjtCode}</span>
+                    <span class="text-[10px] text-slate-400 font-bold">${d.shipDate}</span>
+                </div>
+                <h4 class="text-sm font-black text-slate-800 truncate mb-3">${d.pjtName}</h4>
+                <div class="flex justify-between items-center text-[11px] font-bold bg-slate-50 p-2 rounded-lg border border-slate-100">
+                    <div class="flex flex-col">
+                        <span class="text-slate-400">공수 성과</span>
+                        <span class="${mClass}">${mText}</span>
+                    </div>
+                    <div class="h-6 w-px bg-slate-200"></div>
+                    <div class="flex flex-col text-right">
+                        <span class="text-slate-400">원가 성과</span>
+                        <span class="${cClass}">${cText}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderIntegTable(list) {
+    const tbody = document.getElementById('integ-tbody');
+    if (!tbody) return;
+
+    if(list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center p-8 text-slate-400 font-bold">조건에 맞는 데이터가 없습니다.</td></tr>';
+        return;
+    }
+
+    const badgeMap = {
+        '완료': '<span class="text-emerald-600 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px] font-bold"><i class="fa-solid fa-check"></i> 완료</span>',
+        '대기중': '<span class="text-slate-400 border border-slate-200 px-1.5 py-0.5 rounded text-[10px] font-bold">대기중</span>',
+        '작성중': '<span class="text-blue-500 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded text-[10px] font-bold">작성중</span>',
+        '분석중': '<span class="text-blue-500 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded text-[10px] font-bold">분석중</span>'
     };
 
-    tbody.innerHTML = list.map(p => {
-        const safeName = (p.name || '').replace(/"/g, '&quot;').replace(/'/g, "\\'");
-        
+    tbody.innerHTML = list.map(d => {
+        let finalBadge = d.finalStatus === '통합완료' 
+            ? '<span class="bg-indigo-600 text-white px-2.5 py-1 rounded-md text-[10px] font-black shadow-sm">통합완료</span>'
+            : '<span class="bg-slate-100 text-slate-500 border border-slate-200 px-2.5 py-1 rounded-md text-[10px] font-bold">작성대기</span>';
+
+        let btnClass = d.finalStatus === '통합완료' 
+            ? 'bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-600 hover:text-white' 
+            : 'bg-white text-slate-400 border border-slate-200 hover:border-indigo-300 hover:text-indigo-500';
+            
+        let btnText = d.finalStatus === '통합완료' ? '<i class="fa-solid fa-chart-line"></i> 최종보고서 보기' : '<i class="fa-regular fa-file-lines"></i> 진행상황 보기';
+
         return `
-            <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">
-                <td class="p-3 text-center text-slate-500 font-bold">${p.category || '-'}</td>
-                <td class="p-3 text-center font-black text-indigo-700">${p.code || '-'}</td>
-                <td class="p-3 font-bold text-slate-700 truncate max-w-[300px]" title="${p.name}">${p.name || '-'}</td>
-                <td class="p-3 text-center text-slate-600">${p.company || '-'}</td>
-                <td class="p-3 text-center">${sMap[p.status] || p.status}</td>
-                <td class="p-3 text-center">
-                    <button onclick="window.openInspectionModal('${p.id}', '${safeName}', '${p.code}')" class="bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-500 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm">
-                        <i class="fa-solid fa-list-check"></i> 검수리스트
-                    </button>
-                </td>
-                <td class="p-3 text-center">
-                    <button onclick="window.openCompletionReportModal('${p.id}', '${safeName}', '${p.code}')" class="bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-600 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm">
-                        <i class="fa-solid fa-file-shield"></i> 완료보고
+            <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100 cursor-pointer" onclick="window.openIntegrationDashboard('${d.projectId}')">
+                <td class="p-3 text-center text-slate-500 font-bold">${d.shipDate}</td>
+                <td class="p-3 text-center font-black text-indigo-700">${d.pjtCode}</td>
+                <td class="p-3 font-bold text-slate-700 truncate max-w-[300px]">${d.pjtName}</td>
+                <td class="p-3 text-center">${badgeMap['완료']}</td>
+                <td class="p-3 text-center">${badgeMap[d.qStatus] || badgeMap['대기중']}</td>
+                <td class="p-3 text-center">${badgeMap[d.pStatus] || badgeMap['대기중']}</td>
+                <td class="p-3 text-center">${finalBadge}</td>
+                <td class="p-3 text-center" onclick="event.stopPropagation()">
+                    <button onclick="window.openIntegrationDashboard('${d.projectId}')" class="${btnClass} px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm whitespace-nowrap">
+                        ${btnText}
                     </button>
                 </td>
             </tr>
         `;
     }).join('');
+}
+
+
+// ========================================================
+// 💡 대시보드 모달 제어 및 렌더링
+// ==========================================
+window.openIntegrationDashboard = function(projectId) {
+    const data = window.integMergedData.find(d => d.projectId === projectId);
+    if(!data) return window.showToast("데이터를 찾을 수 없습니다.", "error");
+
+    document.getElementById('modal-integ-title').innerText = `[${data.pjtCode}] ${data.pjtName}`;
+    window.currentDashboardData = data; 
+
+    renderExecutiveSummary(data);
+    renderIntegCharts(data);
+    
+    // 탭 초기화
+    window.switchIntegTab('mfg');
+    renderTabContents(data);
+
+    document.getElementById('integration-dashboard-modal').classList.remove('hidden');
+    document.getElementById('integration-dashboard-modal').classList.add('flex');
 };
 
-// ==========================================
-// 1. 검수 리스트 (Inspection List) 관리
-// ==========================================
-window.openInspectionModal = function(pId, pName, pCode) {
-    document.getElementById('insp-pjt-id').value = pId;
-    document.getElementById('insp-pjt-id').dataset.code = pCode || '';
-    document.getElementById('insp-project-title').innerText = `[${pCode||'미지정'}] ${pName}`;
-    
-    document.getElementById('new-insp-text').value = '';
-    document.getElementById('new-insp-file').value = '';
-    document.getElementById('insp-file-name').innerText = '';
-    
-    document.getElementById('cr-inspection-modal').classList.remove('hidden');
-    document.getElementById('cr-inspection-modal').classList.add('flex');
+window.closeIntegrationDashboard = function() {
+    document.getElementById('integration-dashboard-modal').classList.add('hidden');
+    document.getElementById('integration-dashboard-modal').classList.remove('flex');
+};
 
-    if (currentInspUnsubscribe) currentInspUnsubscribe();
-    currentInspUnsubscribe = onSnapshot(query(collection(db, "project_inspections"), where("projectId", "==", pId)), (snap) => {
-        let list = [];
-        snap.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
-        list.sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
+function renderExecutiveSummary(data) {
+    // 1. 제조 M/H
+    let mDiff = data.estMd - data.finalMd;
+    document.getElementById('sum-md-actual').innerText = data.finalMd.toFixed(1);
+    const mBadge = document.getElementById('sum-md-badge');
+    if (mDiff >= 0) {
+        mBadge.className = "ml-auto text-[10px] font-bold px-2 py-0.5 rounded border bg-blue-50 text-blue-600 border-blue-200";
+        mBadge.innerText = `${mDiff.toFixed(1)}MD 절감 달성`;
+    } else {
+        mBadge.className = "ml-auto text-[10px] font-bold px-2 py-0.5 rounded border bg-rose-50 text-rose-600 border-rose-200";
+        mBadge.innerText = `${Math.abs(mDiff).toFixed(1)}MD 초과`;
+    }
+
+    // 2. 품질 성과 (NCR 건수로 임시 비율 계산. 실제론 NCR 데이터 땡겨와야함)
+    let ncrCount = 0;
+    if (window.ncrData) {
+        ncrCount = window.ncrData.filter(n => String(n.pjtCode).replace(/\s/g,'').toUpperCase() === data.pjtCode.replace(/\s/g,'').toUpperCase()).length;
+    }
+    // 예시용 비율 (가상 수치)
+    let qRate = ncrCount > 0 ? (ncrCount * 0.12).toFixed(2) : '0.00';
+    document.getElementById('sum-q-rate').innerText = qRate;
+    const qBadge = document.getElementById('sum-q-badge');
+    if (qRate < 1.0) {
+        qBadge.className = "ml-auto text-[10px] font-bold px-2 py-0.5 rounded border bg-emerald-50 text-emerald-600 border-emerald-200";
+        qBadge.innerText = `결함 발생 ${ncrCount}건 (양호)`;
+    } else {
+        qBadge.className = "ml-auto text-[10px] font-bold px-2 py-0.5 rounded border bg-amber-50 text-amber-600 border-amber-200";
+        qBadge.innerText = `결함 발생 ${ncrCount}건 (주의)`;
+    }
+
+    // 3. 원가 성과
+    const targetCost = parseFloat(data.pcData.targetCost) || 0;
+    const actualCost = parseFloat(data.pcData.actualTotal) || 0;
+    let cDiff = targetCost - actualCost;
+    
+    document.getElementById('sum-c-saving').innerText = cDiff > 0 ? cDiff.toLocaleString() : '0';
+    const cBadge = document.getElementById('sum-c-mc');
+    let mcRate = targetCost > 0 ? (actualCost / targetCost * 100).toFixed(1) : 0;
+    cBadge.innerText = `MC율 ${mcRate}%`;
+    if (mcRate > 100) {
+        cBadge.className = "ml-auto text-[10px] font-bold px-2 py-0.5 rounded border bg-rose-50 text-rose-600 border-rose-200";
+    } else {
+        cBadge.className = "ml-auto text-[10px] font-bold px-2 py-0.5 rounded border bg-purple-50 text-purple-600 border-purple-200";
+    }
+}
+
+// -------------------------------------------
+// 💡 차트 렌더링 (애니메이션 추가)
+// -------------------------------------------
+function destroyIntegChart(id) {
+    if (window.integChartInstances[id]) {
+        window.integChartInstances[id].destroy();
+        window.integChartInstances[id] = null;
+    }
+}
+
+function renderIntegCharts(data) {
+    // 1. 원가 도넛 차트
+    destroyIntegChart('cost');
+    const ctxCost = document.getElementById('integ-chart-cost')?.getContext('2d');
+    if (ctxCost) {
+        const targetCost = parseFloat(data.pcData.targetCost) || 0;
+        const actNew = parseFloat(data.pcData.actualMaterial) || 0;
+        const actInv = parseFloat(data.pcData.actualProc) || 0;
+        const actFail = parseFloat(data.pcData.actualEtc) || 0;
         
-        const listEl = document.getElementById('inspection-list');
-        if(list.length === 0) {
-            listEl.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 검수리스트가 없습니다.</div>';
-            return;
-        }
+        let actualTotal = actNew + actInv + actFail;
+        let rem = targetCost - actualTotal;
+        if(rem < 0) rem = 0;
 
-        listEl.innerHTML = list.map(item => {
-            let dateStr = item.createdAt ? new Date(item.createdAt).toLocaleString() : '';
-            let safeContent = String(item.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
-            return `
-                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
-                    <div class="flex justify-between items-start">
-                        <div class="flex items-center gap-2">
-                            <span class="font-bold text-emerald-700 text-sm">${item.authorName || '작성자'}</span>
-                            <span class="text-[10px] text-slate-400 font-medium">${dateStr}</span>
-                        </div>
-                        <button onclick="window.deleteInspectionItem('${item.id}')" class="text-slate-300 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button>
-                    </div>
-                    <div class="text-sm text-slate-700 font-medium break-words">${safeContent}</div>
-                    ${item.fileUrl ? `<a href="${item.fileUrl}" target="_blank" class="text-xs text-emerald-600 hover:text-emerald-800 font-bold underline mt-1 w-fit"><i class="fa-solid fa-file-arrow-down"></i> 검수리스트 파일 열기</a>` : ''}
-                </div>
-            `;
-        }).join('');
+        document.getElementById('donut-center-budget').innerText = (targetCost / 10000).toFixed(0) + '만';
+
+        window.integChartInstances['cost'] = new Chart(ctxCost, {
+            type: 'doughnut',
+            data: {
+                labels: ['신규구매', '재고사용', '실패비용', '잔여(절감)'],
+                datasets: [{
+                    data: [actNew, actInv, actFail, rem],
+                    backgroundColor: ['#3b82f6', '#8b5cf6', '#f43f5e', '#10b981'],
+                    borderWidth: 0, hoverOffset: 8, cutout: '75%'
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                animation: {
+                    animateScale: true,
+                    animateRotate: true,
+                    duration: 1500,
+                    easing: 'easeOutQuart'
+                },
+                plugins: { 
+                    legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: {size: 10} } },
+                    datalabels: { display: false }
+                }
+            }
+        });
+    }
+
+    // 2. 공수 Bar 차트
+    destroyIntegChart('md');
+    const ctxMd = document.getElementById('integ-chart-md')?.getContext('2d');
+    if (ctxMd) {
+        window.integChartInstances['md'] = new Chart(ctxMd, {
+            type: 'bar',
+            data: {
+                labels: ['투입 공수 (M/H)'],
+                datasets: [
+                    { label: '계획', data: [data.estMd], backgroundColor: '#94a3b8', borderRadius: 6, barPercentage: 0.6 },
+                    { label: '실적', data: [data.finalMd], backgroundColor: '#3b82f6', borderRadius: 6, barPercentage: 0.6 }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                animation: {
+                    duration: 1500,
+                    easing: 'easeOutBounce',
+                    y: { from: 500 }
+                },
+                plugins: { 
+                    legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: {size: 10} } },
+                    datalabels: { anchor: 'end', align: 'top', font: {weight: 'bold', size: 11}, color: '#475569' }
+                },
+                scales: { x: { grid: {display: false} }, y: { beginAtZero: true, grid: { borderDash: [4,4] } } }
+            }
+        });
+    }
+
+    // 3. 공정 비율 도넛 차트
+    destroyIntegChart('process');
+    const ctxProc = document.getElementById('integ-chart-process')?.getContext('2d');
+    if (ctxProc) {
+        // 임시 비율 생성
+        let p1 = data.finalMd * 0.55; // 기구조립
+        let p2 = data.finalMd * 0.35; // 전장배선
+        let p3 = data.finalMd * 0.05; // 셋업
+        let p4 = data.finalMd * 0.05; // 기타
+        
+        window.integChartInstances['process'] = new Chart(ctxProc, {
+            type: 'doughnut',
+            data: {
+                labels: ['기구조립', '전장배선', '셋업/조정', '기타/수정'],
+                datasets: [{
+                    data: [p1, p2, p3, p4],
+                    backgroundColor: ['#3b82f6', '#10b981', '#a855f7', '#f59e0b'],
+                    borderWidth: 4, borderColor: '#ffffff', hoverOffset: 8, cutout: '65%'
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                animation: {
+                    animateScale: true,
+                    animateRotate: true,
+                    duration: 1800,
+                    easing: 'easeOutBack'
+                },
+                plugins: { 
+                    legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 8, font: {size: 10} } },
+                    datalabels: { display: false }
+                }
+            }
+        });
+    }
+}
+
+// -------------------------------------------
+// 💡 탭 및 하단 컨텐츠 렌더링
+// -------------------------------------------
+window.switchIntegTab = function(tabName) {
+    ['mfg', 'qual', 'pur'].forEach(name => {
+        document.getElementById('tab-' + name)?.classList.remove('active');
+        document.getElementById('content-' + name)?.classList.add('hidden');
     });
-};
-
-window.closeInspectionModal = function() {
-    document.getElementById('cr-inspection-modal').classList.add('hidden');
-    document.getElementById('cr-inspection-modal').classList.remove('flex');
-    if (currentInspUnsubscribe) currentInspUnsubscribe();
-};
-
-window.saveInspectionItem = async function() {
-    const pId = document.getElementById('insp-pjt-id').value;
-    const pCode = document.getElementById('insp-pjt-id').dataset.code;
-    const title = document.getElementById('insp-project-title').innerText;
-    const content = document.getElementById('new-insp-text').value.trim();
-    const fileInput = document.getElementById('new-insp-file');
-    const btn = document.getElementById('btn-insp-save');
-
-    if (!content && fileInput.files.length === 0) {
-        return window.showToast("내용을 입력하거나 파일을 첨부하세요.", "error");
-    }
-
-    btn.innerHTML = '저장중...'; btn.disabled = true;
-
-    try {
-        let fileUrl = null;
-        if (fileInput.files.length > 0) {
-            if(!window.googleAccessToken) throw new Error("구글 인증이 필요합니다. [구글 드라이브 연동] 버튼을 클릭하세요.");
-            
-            window.showToast("파일을 드라이브에 업로드 중입니다...");
-            
-            // 1. PJT 폴더 확인/생성
-            const folderName = pCode ? pCode : title;
-            const pjtFolderId = await window.getOrCreateDriveFolder(folderName, CR_DRIVE_PARENT_FOLDER);
-            
-            // 2. '검수리스트' 하위 폴더 확인/생성
-            const inspFolderId = await window.getOrCreateDriveFolder("검수리스트", pjtFolderId);
-
-            // 3. 파일 업로드 로직 (기존 함수 재활용 혹은 직접 fetch)
-            const metadata = { name: fileInput.files[0].name, parents: [inspFolderId] };
-            const form = new FormData();
-            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-            form.append('file', fileInput.files[0]);
-            
-            const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-                method: 'POST',
-                headers: { 'Authorization': 'Bearer ' + window.googleAccessToken },
-                body: form
-            });
-            
-            if (!res.ok) throw new Error("업로드 실패");
-            const data = await res.json();
-            fileUrl = `https://drive.google.com/file/d/${data.id}/view`;
-        }
-
-        await addDoc(collection(db, "project_inspections"), {
-            projectId: pId,
-            content: content,
-            fileUrl: fileUrl,
-            authorUid: window.currentUser?.uid || 'guest',
-            authorName: window.userProfile?.name || '알수없음',
-            createdAt: Date.now()
-        });
-
-        window.showToast("검수리스트가 등록되었습니다.");
-        document.getElementById('new-insp-text').value = '';
-        document.getElementById('new-insp-file').value = '';
-        document.getElementById('insp-file-name').innerText = '';
-
-    } catch(e) {
-        window.showToast(e.message, "error");
-    } finally {
-        btn.innerHTML = '등록'; btn.disabled = false;
-    }
-};
-
-window.deleteInspectionItem = async function(id) {
-    if(confirm("이 검수리스트를 삭제하시겠습니까?")) {
-        try {
-            await deleteDoc(doc(db, "project_inspections", id));
-            window.showToast("삭제되었습니다.");
-        } catch(e) { window.showToast("삭제 실패", "error"); }
-    }
-};
-
-
-// ==========================================
-// 2. 품질 완료보고 (Completion Report) 관리
-// ==========================================
-window.openCompletionReportModal = async function(pId, pName, pCode) {
-    document.getElementById('cr-rep-pjt-id').value = pId;
-    document.getElementById('cr-rep-project-title').innerText = `[${pCode||'미지정'}] ${pName}`;
     
-    // 초기화
-    document.getElementById('cr-rep-doc-id').value = '';
-    ['cr-int-start', 'cr-int-end', 'cr-ext-start', 'cr-ext-end', 'cr-comments'].forEach(id => document.getElementById(id).value = '');
-    document.getElementById('cr-int-status').value = '미진행';
-    document.getElementById('cr-ext-status').value = '미진행';
-    document.getElementById('cr-lessons-tbody').innerHTML = '';
+    document.getElementById('tab-' + tabName)?.classList.add('active');
+    document.getElementById('content-' + tabName)?.classList.remove('hidden');
+};
+
+function renderTabContents(data) {
+    // 1. 제조팀 (crData.lessons에 저장됨)
+    const mfgLessons = data.crData.lessons || [];
+    renderGoodBadBlock('mfg-goodbad-container', mfgLessons, '제작');
+
+    // 2. 품질팀 (crData.qualityLessons & qualityPerformances)
+    const qualLessons = data.crData.qualityLessons || [];
+    renderGoodBadBlock('qual-goodbad-container', qualLessons, '품질');
     
-    document.getElementById('cr-comment-img').value = '';
-    document.getElementById('cr-img-name').innerText = '';
-    document.getElementById('cr-saved-img-container').classList.add('hidden');
-    document.getElementById('cr-saved-img').src = '';
-
-    document.getElementById('cr-report-modal').classList.remove('hidden');
-    document.getElementById('cr-report-modal').classList.add('flex');
-
-    try {
-        const q = query(collection(db, "project_completion_reports"), where("projectId", "==", pId));
-        const snap = await getDocs(q);
-        
-        if (!snap.empty) {
-            const docData = snap.docs[0].data();
-            document.getElementById('cr-rep-doc-id').value = snap.docs[0].id;
-            
-            if(docData.internalSch) {
-                document.getElementById('cr-int-start').value = docData.internalSch.start || '';
-                document.getElementById('cr-int-end').value = docData.internalSch.end || '';
-                document.getElementById('cr-int-status').value = docData.internalSch.status || '미진행';
-            }
-            if(docData.customerSch) {
-                document.getElementById('cr-ext-start').value = docData.customerSch.start || '';
-                document.getElementById('cr-ext-end').value = docData.customerSch.end || '';
-                document.getElementById('cr-ext-status').value = docData.customerSch.status || '미진행';
-            }
-            
-            document.getElementById('cr-comments').value = docData.comments || '';
-            
-            if(docData.commentImage) {
-                document.getElementById('cr-saved-img').src = docData.commentImage;
-                document.getElementById('cr-saved-img-container').classList.remove('hidden');
-            }
-
-            if(docData.lessons && docData.lessons.length > 0) {
-                docData.lessons.forEach(l => window.addCrLessonRow(l));
-            } else {
-                window.addCrLessonRow();
-            }
+    const qTbody = document.getElementById('qual-perf-tbody');
+    if(qTbody) {
+        const qPerf = data.crData.qualityPerformances || [];
+        if(qPerf.length === 0) {
+            qTbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-400">데이터 없음</td></tr>';
         } else {
-            // 없으면 기본 row 1개 추가
-            window.addCrLessonRow();
+            qTbody.innerHTML = qPerf.map(p => `
+                <tr class="border-b border-slate-50 hover:bg-slate-50">
+                    <td class="p-2 text-center font-bold text-slate-500">${p.category}</td>
+                    <td class="p-2 font-bold text-slate-700">${p.item}</td>
+                    <td class="p-2 text-slate-600 break-all">${p.content}</td>
+                    <td class="p-2 text-center font-bold">${p.oldVal}</td>
+                    <td class="p-2 text-center font-bold text-emerald-600">${p.newVal}</td>
+                    <td class="p-2 text-center font-black text-indigo-600">${p.rateVal}%</td>
+                </tr>
+            `).join('');
         }
-    } catch(e) { console.error(e); }
-};
+    }
 
-window.closeCompletionReportModal = function() {
-    document.getElementById('cr-report-modal').classList.add('hidden');
-    document.getElementById('cr-report-modal').classList.remove('flex');
-};
+    // 3. 구매팀 (pcData.pcLessons & pcPerformances)
+    const purLessons = data.pcData.pcLessons || [];
+    renderGoodBadBlock('pur-goodbad-container', purLessons, '원가');
 
-window.addCrLessonRow = function(data = null) {
-    const tbody = document.getElementById('cr-lessons-tbody');
-    const tr = document.createElement('tr');
-    tr.className = "cr-lesson-row border-b border-slate-100 hover:bg-slate-50 transition-colors";
-    
-    const typeVal = data ? data.type : 'Good';
-    const catVal = data ? data.category : '품질개선';
-    const itemVal = data ? data.item : '';
-    const hlVal = data ? data.highlight : '';
-    const llVal = data ? data.lowlight : '';
+    const pTbody = document.getElementById('pur-perf-tbody');
+    if(pTbody) {
+        const pPerf = data.pcData.pcPerformances || [];
+        if(pPerf.length === 0) {
+            pTbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-400">데이터 없음</td></tr>';
+        } else {
+            pTbody.innerHTML = pPerf.map(p => `
+                <tr class="border-b border-slate-50 hover:bg-slate-50">
+                    <td class="p-2 text-center font-bold text-slate-500">${p.category}</td>
+                    <td class="p-2 font-bold text-slate-700">${p.item}</td>
+                    <td class="p-2 text-center text-slate-500">${p.company}</td>
+                    <td class="p-2 text-slate-600 break-all">${p.content}</td>
+                    <td class="p-2 text-right font-bold text-rose-500">${(parseFloat(p.amount)||0).toLocaleString()}</td>
+                    <td class="p-2 text-center font-black text-indigo-600">${p.cr}%</td>
+                </tr>
+            `).join('');
+        }
+    }
+}
 
-    tr.innerHTML = `
-        <td class="p-2 border-r border-slate-100">
-            <select class="ls-type w-full border border-slate-300 rounded px-2 py-1.5 text-xs font-bold outline-teal-500">
-                <option value="Good" ${typeVal==='Good'?'selected':''} class="text-emerald-600">Good</option>
-                <option value="Bad" ${typeVal==='Bad'?'selected':''} class="text-rose-600">Bad</option>
-            </select>
-        </td>
-        <td class="p-2 border-r border-slate-100">
-            <select class="ls-category w-full border border-slate-300 rounded px-2 py-1.5 text-xs font-bold text-slate-700 outline-teal-500">
-                <option value="품질개선" ${catVal==='품질개선'?'selected':''}>품질개선</option>
-                <option value="납기단축" ${catVal==='납기단축'?'selected':''}>납기단축</option>
-                <option value="원가절감" ${catVal==='원가절감'?'selected':''}>원가절감</option>
-                <option value="제작" ${catVal==='제작'?'selected':''}>제작</option>
-            </select>
-        </td>
-        <td class="p-2 border-r border-slate-100">
-            <input type="text" class="ls-item w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-teal-500" value="${itemVal}" placeholder="아이템명">
-        </td>
-        <td class="p-2 border-r border-slate-100">
-            <textarea class="ls-high w-full border border-slate-300 rounded p-2 text-xs outline-teal-500 resize-y min-h-[40px]" placeholder="잘된 점 / 개선안">${hlVal}</textarea>
-        </td>
-        <td class="p-2 border-r border-slate-100">
-            <textarea class="ls-low w-full border border-slate-300 rounded p-2 text-xs outline-teal-500 resize-y min-h-[40px]" placeholder="문제점 / 아쉬운 점">${llVal}</textarea>
-        </td>
-        <td class="p-2 text-center">
-            <button onclick="this.closest('tr').remove()" class="text-slate-300 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button>
-        </td>
-    `;
-    tbody.appendChild(tr);
-};
+function renderGoodBadBlock(containerId, lessons, defaultCat) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
 
-window.removeSavedCrImage = async function() {
-    if(!confirm("저장된 사진을 삭제하시겠습니까?")) return;
-    document.getElementById('cr-saved-img-container').classList.add('hidden');
-    document.getElementById('cr-saved-img').src = '';
-    // 실제 저장은 save 버튼 누를때 반영됨 (또는 바로 업데이트 가능하지만 폼 일관성을 위해 뷰만 제거)
-};
+    if (!lessons || lessons.length === 0) {
+        container.innerHTML = `<div class="col-span-2 text-center p-6 text-slate-400 font-bold border border-dashed rounded-xl">작성된 총평이 없습니다.</div>`;
+        return;
+    }
 
-window.saveCompletionReport = async function() {
-    const pId = document.getElementById('cr-rep-pjt-id').value;
-    const docId = document.getElementById('cr-rep-doc-id').value;
-    const btn = document.getElementById('btn-cr-save');
-    
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 저장중...';
-    btn.disabled = true;
+    let goodHtml = '';
+    let badHtml = '';
+
+    lessons.forEach(l => {
+        // 제조팀의 경우 type이 Good/Bad로 명확히 나뉨. 품질/구매는 highlight/lowlight가 공존
+        if (l.type === 'Good' || l.highlight) {
+            goodHtml += `<li class="mb-2 last:mb-0"><span class="font-bold text-slate-700 block mb-0.5">[${l.item || defaultCat}]</span> <span class="text-slate-600">${l.highlight.replace(/\n/g, '<br>')}</span></li>`;
+        }
+        if (l.type === 'Bad' || l.lowlight) {
+            badHtml += `<li class="mb-2 last:mb-0"><span class="font-bold text-slate-700 block mb-0.5">[${l.item || defaultCat}]</span> <span class="text-slate-600">${l.lowlight.replace(/\n/g, '<br>')}</span></li>`;
+        }
+    });
+
+    let html = '';
+    if(goodHtml) {
+        html += `
+            <div class="bg-[#f0fdf4] border border-[#bbf7d0] rounded-xl p-5 shadow-sm">
+                <h5 class="text-sm font-black text-emerald-700 mb-3 flex items-center gap-2"><i class="fa-regular fa-thumbs-up"></i> Good Point</h5>
+                <ul class="text-xs leading-relaxed">${goodHtml}</ul>
+            </div>
+        `;
+    }
+    if(badHtml) {
+        html += `
+            <div class="bg-[#fff1f2] border border-[#fecdd3] rounded-xl p-5 shadow-sm">
+                <h5 class="text-sm font-black text-rose-700 mb-3 flex items-center gap-2"><i class="fa-regular fa-thumbs-down"></i> Bad Point</h5>
+                <ul class="text-xs leading-relaxed">${badHtml}</ul>
+            </div>
+        `;
+    }
+
+    if(!html) html = `<div class="col-span-2 text-center p-6 text-slate-400 font-bold border border-dashed rounded-xl">내용 없음</div>`;
+    container.innerHTML = html;
+}
+
+// -------------------------------------------
+// 💡 엑셀 다운로드 (ExcelJS)
+// -------------------------------------------
+window.exportIntegrationExcel = async function() {
+    const data = window.currentDashboardData;
+    if (!data) return;
+
+    if (typeof window.ExcelJS === 'undefined') {
+        return window.showToast("ExcelJS 모듈이 로드되지 않았습니다.", "error");
+    }
 
     try {
-        let base64Image = document.getElementById('cr-saved-img').src; // 기존 이미지 유지
-        if (document.getElementById('cr-saved-img-container').classList.contains('hidden')) {
-            base64Image = null; // 사용자가 삭제 버튼을 누른 경우
-        }
+        window.showToast("통합 완료보고서 엑셀을 생성 중입니다...", "success");
+        const wb = new window.ExcelJS.Workbook();
+        const ws = wb.addWorksheet('통합_완료보고서', { views: [{ showGridLines: false }] });
 
-        const fileInput = document.getElementById('cr-comment-img');
-        if (fileInput.files.length > 0) {
-            base64Image = await new Promise((resolve) => {
-                if(window.resizeAndConvertToBase64) {
-                    window.resizeAndConvertToBase64(fileInput.files[0], res => resolve(res));
-                } else { resolve(null); }
-            });
-        }
+        ws.columns = [
+            { width: 5 }, { width: 20 }, { width: 30 }, { width: 20 }, { width: 30 }, { width: 5 }
+        ];
 
-        const lessons = [];
-        document.querySelectorAll('.cr-lesson-row').forEach(tr => {
-            lessons.push({
-                type: tr.querySelector('.ls-type').value,
-                category: tr.querySelector('.ls-category').value,
-                item: tr.querySelector('.ls-item').value.trim(),
-                highlight: tr.querySelector('.ls-high').value.trim(),
-                lowlight: tr.querySelector('.ls-low').value.trim()
-            });
-        });
+        const setBg = (cell, color) => { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } }; };
+        const setFont = (cell, opts) => { cell.font = { name: '맑은 고딕', ...opts }; };
+        const setBorder = (cell) => { cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; };
 
-        const payload = {
-            projectId: pId,
-            internalSch: {
-                start: document.getElementById('cr-int-start').value,
-                end: document.getElementById('cr-int-end').value,
-                status: document.getElementById('cr-int-status').value
-            },
-            customerSch: {
-                start: document.getElementById('cr-ext-start').value,
-                end: document.getElementById('cr-ext-end').value,
-                status: document.getElementById('cr-ext-status').value
-            },
-            comments: document.getElementById('cr-comments').value.trim(),
-            commentImage: base64Image,
-            lessons: lessons,
-            authorUid: window.currentUser?.uid || 'guest',
-            authorName: window.userProfile?.name || '알수없음',
-            updatedAt: Date.now()
+        ws.mergeCells('B2:E3');
+        const titleCell = ws.getCell('B2');
+        titleCell.value = `[통합 완료보고서] ${data.pjtName}`;
+        setFont(titleCell, { size: 18, bold: true, color: { argb: 'FF1E293B' } });
+        titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+
+        let currRow = 5;
+
+        // 1. KPI Summary
+        ws.mergeCells(`B${currRow}:E${currRow}`);
+        ws.getCell(`B${currRow}`).value = '■ Executive Summary';
+        setFont(ws.getCell(`B${currRow}`), { bold: true, size: 14 });
+        currRow++;
+
+        let rKpiHead = ws.addRow(['', '제조/일정 성과 (M/H)', '품질 성과 (결함률)', '원가 예산 절감 성과 (원)', '']);
+        rKpiHead.eachCell((c,n) => { if(n>=2 && n<=4) { setBg(c, 'FF334155'); setFont(c, {color:{argb:'FFFFFFFF'}, bold:true}); c.alignment={horizontal:'center'}; setBorder(c); } });
+        
+        let mDiff = data.estMd - data.finalMd;
+        let cDiff = (parseFloat(data.pcData.targetCost)||0) - (parseFloat(data.pcData.actualTotal)||0);
+        let rKpiVal = ws.addRow(['', `${data.finalMd.toFixed(1)} MD\n(${mDiff>=0?'절감':'초과'})`, '품질결함 확인요망', `₩ ${cDiff > 0 ? cDiff.toLocaleString() : 0}\n(${cDiff>=0?'절감':'초과'})`, '']);
+        rKpiVal.eachCell((c,n) => { if(n>=2 && n<=4) { setBorder(c); c.alignment={horizontal:'center', vertical:'middle', wrapText:true}; } });
+        currRow += 3;
+
+        // 2. 팀별 상세 - 헬퍼 함수
+        const addSection = (title, lessons, perfs, teamType) => {
+            ws.mergeCells(`B${currRow}:E${currRow}`);
+            ws.getCell(`B${currRow}`).value = `■ ${title}`;
+            setFont(ws.getCell(`B${currRow}`), { bold: true, size: 14 });
+            currRow++;
+
+            // Good / Bad
+            ws.mergeCells(`B${currRow}:E${currRow}`);
+            ws.getCell(`B${currRow}`).value = '1) 프로젝트 총평 (Good & Bad)';
+            setFont(ws.getCell(`B${currRow}`), { bold: true, size: 11 });
+            currRow++;
+
+            if(lessons && lessons.length > 0) {
+                lessons.forEach(l => {
+                    let hl = l.highlight || (l.type === 'Good' ? l.highlight : '');
+                    let ll = l.lowlight || (l.type === 'Bad' ? l.lowlight : '');
+                    
+                    if(hl) {
+                        ws.mergeCells(`B${currRow}:E${currRow}`);
+                        ws.getCell(`B${currRow}`).value = `[Good] ${l.item || l.category || ''}\n${hl}`;
+                        ws.getCell(`B${currRow}`).alignment = { wrapText: true, vertical: 'top' };
+                        ws.getCell(`B${currRow}`).font = { color: {argb:'FF059669'} };
+                        currRow++;
+                    }
+                    if(ll) {
+                        ws.mergeCells(`B${currRow}:E${currRow}`);
+                        ws.getCell(`B${currRow}`).value = `[Bad] ${l.item || l.category || ''}\n${ll}`;
+                        ws.getCell(`B${currRow}`).alignment = { wrapText: true, vertical: 'top' };
+                        ws.getCell(`B${currRow}`).font = { color: {argb:'FFE11D48'} };
+                        currRow++;
+                    }
+                });
+            } else {
+                ws.mergeCells(`B${currRow}:E${currRow}`);
+                ws.getCell(`B${currRow}`).value = '내용 없음';
+                currRow++;
+            }
+            currRow++;
+
+            // 실적 (품질/구매만)
+            if(perfs && perfs.length > 0) {
+                ws.mergeCells(`B${currRow}:E${currRow}`);
+                ws.getCell(`B${currRow}`).value = '2) 세부 실적';
+                setFont(ws.getCell(`B${currRow}`), { bold: true, size: 11 });
+                currRow++;
+
+                let hRow;
+                if(teamType === 'qual') hRow = ws.addRow(['', '구분', '항목/내용', '개선율(%)', '']);
+                else hRow = ws.addRow(['', '업체명', '진행내용', '절감액(원)', '']);
+                
+                hRow.eachCell((c,n) => { if(n>=2 && n<=4) { setBg(c, 'FFF1F5F9'); setFont(c, {bold:true}); setBorder(c); c.alignment={horizontal:'center'}; } });
+
+                perfs.forEach(p => {
+                    let vRow;
+                    if(teamType === 'qual') vRow = ws.addRow(['', p.category, `[${p.item}] ${p.content}`, `${p.rateVal}%`, '']);
+                    else vRow = ws.addRow(['', p.company, `[${p.item}] ${p.content}`, p.amount, '']);
+                    
+                    vRow.eachCell((c,n) => { if(n>=2 && n<=4) { setBorder(c); c.alignment={vertical:'middle', wrapText:true}; } });
+                });
+                currRow += perfs.length + 1;
+            }
+            currRow++;
         };
 
-        if (docId) {
-            await setDoc(doc(db, "project_completion_reports", docId), payload, { merge: true });
-        } else {
-            payload.createdAt = Date.now();
-            await addDoc(collection(db, "project_completion_reports"), payload);
-        }
+        addSection('제조팀 상세보고', data.crData.lessons, null, 'mfg');
+        addSection('품질팀 상세보고', data.crData.qualityLessons, data.crData.qualityPerformances, 'qual');
+        addSection('구매팀 상세보고', data.pcData.pcLessons, data.pcData.pcPerformances, 'pur');
 
-        window.showToast("완료보고서가 저장되었습니다.", "success");
-        window.closeCompletionReportModal();
+        const buffer = await wb.xlsx.writeBuffer();
+        window.saveAs(new Blob([buffer]), `통합완료보고서_${data.pjtCode}.xlsx`);
 
     } catch(e) {
-        window.showToast("저장 실패: " + e.message, "error");
-    } finally {
-        btn.innerHTML = '<i class="fa-solid fa-check"></i> 보고서 저장';
-        btn.disabled = false;
+        console.error(e);
+        window.showToast("엑셀 저장 실패", "error");
     }
 };
