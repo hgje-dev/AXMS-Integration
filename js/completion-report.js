@@ -14,6 +14,8 @@ window.currentIntegFilter = 'all';
 window.integChartInstances = {};
 window.currentDashboardData = null;
 
+const LABOR_RATE = 217440; // 1공수 당 인건비 (하드코딩 기준값)
+
 window.initCompletionReport = function() {
     console.log("✅ 통합 완료보고(PJT 결산) 페이지 로드 완료");
     
@@ -79,6 +81,12 @@ function mergeIntegrationData() {
             
             estMd: parseFloat(pjt.estMd) || 0,
             finalMd: parseFloat(pjt.finalMd) || 0,
+            
+            // 제조일정 관련 데이터 복사 (표 렌더링을 위해)
+            d_asmEst: pjt.d_asmEst || '',
+            d_asmEndEst: pjt.d_asmEndEst || '',
+            d_asmSt: pjt.d_asmSt || '',
+            d_asmEn: pjt.d_asmEn || '',
             
             // 품질 데이터 추출
             qStatus: qStatus,
@@ -261,7 +269,6 @@ window.hideIntegrationProject = async function(projectId) {
     }
 };
 
-
 // ========================================================
 // 💡 대시보드 모달 제어 및 부서별 렌더링
 // ==========================================
@@ -350,10 +357,9 @@ window.switchIntegTab = function(tabName) {
     if(window.currentDashboardData) {
         // 레이아웃이 적용될 틈(reflow)을 조금 준 후 렌더링합니다.
         setTimeout(() => {
-            if(tabName === 'mfg') renderMfgCharts(window.currentDashboardData);
             if(tabName === 'qual') renderQualCharts(window.currentDashboardData);
             if(tabName === 'pur') renderPurCharts(window.currentDashboardData);
-        }, 100);
+        }, 50); // 제조팀은 HTML 테이블로 렌더링되므로 차트 딜레이 불필요
     }
 };
 
@@ -364,90 +370,156 @@ function destroyIntegChart(id) {
     }
 }
 
-// 제조팀 차트
-function renderMfgCharts(data) {
-    // 1. 공수 Bar 차트
-    destroyIntegChart('md');
-    const ctxMd = document.getElementById('integ-chart-md')?.getContext('2d');
-    if (ctxMd) {
-        window.integChartInstances['md'] = new Chart(ctxMd, {
-            type: 'bar',
-            data: {
-                labels: ['투입 공수 (M/H)'],
-                datasets: [
-                    { label: '계획', data: [data.estMd], backgroundColor: '#94a3b8', borderRadius: 6, barPercentage: 0.6 },
-                    { label: '실적', data: [data.finalMd], backgroundColor: '#3b82f6', borderRadius: 6, barPercentage: 0.6 }
-                ]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                animation: { duration: 1500, easing: 'easeOutBounce', y: { from: 500 } },
-                plugins: { 
-                    legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: {size: 10} } },
-                    datalabels: { anchor: 'end', align: 'top', font: {weight: 'bold', size: 11}, color: '#475569' }
-                },
-                scales: { x: { grid: {display: false} }, y: { beginAtZero: true, grid: { borderDash: [4,4] }, max: Math.max(data.estMd, data.finalMd) * 1.3 } }
-            }
-        });
-    }
+// ==========================================
+// 💡 날짜 차이 계산 유틸리티 (단축/지연)
+// ==========================================
+function getDaysDiff(startStr, endStr) {
+    if(!startStr || !endStr) return { days: 0, text: '-' };
+    const start = new Date(startStr);
+    const end = new Date(endStr);
+    if(isNaN(start.getTime()) || isNaN(end.getTime())) return { days: 0, text: '-' };
+    
+    const diffTime = Math.abs(end - start);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // 시작일 포함
+    return { days: diffDays, text: diffDays };
+}
 
-    // 2. 주차별 제작 진행률 (S-Curve Line)
-    destroyIntegChart('schedule');
-    const ctxSch = document.getElementById('integ-chart-schedule')?.getContext('2d');
-    if (ctxSch) {
-        window.integChartInstances['schedule'] = new Chart(ctxSch, {
-            type: 'line',
-            data: {
-                labels: ['1주차', '2주차', '3주차', '4주차', '완료'],
-                datasets: [
-                    { label: '계획', data: [20, 40, 60, 80, 100], borderColor: '#cbd5e1', borderDash: [5,5], fill: false, tension: 0.3 },
-                    { label: '실적', data: [25, 48, 75, 90, 100], borderColor: '#10b981', backgroundColor: '#10b981', fill: false, tension: 0.3, borderWidth: 3, pointRadius: 5 }
-                ]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                animation: { duration: 2000, easing: 'easeOutQuart' },
-                plugins: { 
-                    legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: {size: 10} } },
-                    datalabels: { display: false }
-                },
-                scales: { x: { grid: {display: false} }, y: { min: 0, max: 110, ticks: { callback: function(val){return val+'%';} } } }
-            }
-        });
-    }
+// -------------------------------------------
+// 하단 컨텐츠 렌더링 로직 (제조 HTML 표 포함)
+// -------------------------------------------
+function renderTabContents(data) {
+    // 💡 1. 제조팀 - 상세 보고 HTML 테이블 (캡쳐본 디자인 적용)
+    document.getElementById('mfg-plan-st').innerText = data.d_asmEst || '-';
+    document.getElementById('mfg-plan-en').innerText = data.d_asmEndEst || '-';
+    let planDiff = getDaysDiff(data.d_asmEst, data.d_asmEndEst);
+    document.getElementById('mfg-plan-days').innerText = planDiff.text;
 
-    // 3. 공정 비율 도넛 차트
-    destroyIntegChart('process');
-    const ctxProc = document.getElementById('integ-chart-process')?.getContext('2d');
-    if (ctxProc) {
-        let p1 = data.finalMd * 0.55; 
-        let p2 = data.finalMd * 0.35; 
-        let p3 = data.finalMd * 0.05; 
-        let p4 = data.finalMd * 0.05; 
+    document.getElementById('mfg-act-st').innerText = data.d_asmSt || '-';
+    document.getElementById('mfg-act-en').innerText = data.d_asmEn || '-';
+    let actDiff = getDaysDiff(data.d_asmSt, data.d_asmEn);
+    document.getElementById('mfg-act-days').innerText = actDiff.text;
+    
+    // 오차 일수 계산 (실제 소요일 - 계획 소요일)
+    if(planDiff.days > 0 && actDiff.days > 0) {
+        let diff = actDiff.days - planDiff.days;
+        let diffEl = document.getElementById('mfg-diff-days');
+        let boxEl = document.getElementById('mfg-diff-box');
+        let iconEl = document.getElementById('mfg-diff-icon');
         
-        window.integChartInstances['process'] = new Chart(ctxProc, {
-            type: 'doughnut',
-            data: {
-                labels: ['기구조립', '전장배선', '셋업/조정', '기타/수정'],
-                datasets: [{
-                    data: [p1, p2, p3, p4],
-                    backgroundColor: ['#3b82f6', '#10b981', '#a855f7', '#f59e0b'],
-                    borderWidth: 4, borderColor: '#ffffff', hoverOffset: 8, cutout: '65%'
-                }]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                animation: { animateScale: true, animateRotate: true, duration: 1800, easing: 'easeOutBack' },
-                plugins: { 
-                    legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 8, font: {size: 10} } },
-                    datalabels: { display: false }
-                }
-            }
-        });
+        diffEl.innerText = Math.abs(diff);
+        if(diff > 0) {
+            boxEl.className = "mfg-td-gray w-32 shadow-sm rounded-r-md text-rose-600";
+            iconEl.innerText = "▲";
+        } else if (diff < 0) {
+            boxEl.className = "mfg-td-gray w-32 shadow-sm rounded-r-md text-blue-600";
+            iconEl.innerText = "▼";
+            diffEl.parentElement.previousElementSibling.innerText = "단축"; // 헤더 텍스트 변경
+        } else {
+            boxEl.className = "mfg-td-gray w-32 shadow-sm rounded-r-md text-emerald-600";
+            iconEl.innerText = "-";
+        }
+    }
+
+    // 공수 및 비용 테이블
+    let eMd = data.estMd || 0;
+    let aMd = data.finalMd || 0;
+    
+    document.getElementById('mfg-est-md').innerText = eMd;
+    document.getElementById('mfg-est-cost').innerText = (eMd * LABOR_RATE).toLocaleString();
+    
+    document.getElementById('mfg-act-md').innerText = aMd;
+    document.getElementById('mfg-act-cost').innerText = (aMd * LABOR_RATE).toLocaleString();
+
+    // 오차 공수 계산
+    let mdDiff = aMd - eMd;
+    let mdDiffEl = document.getElementById('mfg-md-diff');
+    let mdDiffBox = document.getElementById('mfg-md-diff-box');
+    let mdDiffIcon = document.getElementById('mfg-md-diff-icon');
+    
+    mdDiffEl.innerText = Math.abs(mdDiff).toFixed(1);
+    if(mdDiff > 0) {
+        mdDiffBox.className = "mfg-td-gray w-32 shadow-sm rounded-r-md text-rose-600";
+        mdDiffIcon.innerText = "▲";
+    } else if (mdDiff < 0) {
+        mdDiffBox.className = "mfg-td-gray w-32 shadow-sm rounded-r-md text-blue-600";
+        mdDiffIcon.innerText = "▼";
+        mdDiffBox.previousElementSibling.innerText = "단축";
+    } else {
+        mdDiffBox.className = "mfg-td-gray w-32 shadow-sm rounded-r-md text-emerald-600";
+        mdDiffIcon.innerText = "-";
+    }
+
+    // 오차 비용 계산
+    let costDiff = (aMd * LABOR_RATE) - (eMd * LABOR_RATE);
+    let costDiffEl = document.getElementById('mfg-cost-diff');
+    let costDiffBox = document.getElementById('mfg-cost-diff-box');
+    let costDiffIcon = document.getElementById('mfg-cost-diff-icon');
+    
+    costDiffEl.innerText = Math.abs(costDiff).toLocaleString();
+    if(costDiff > 0) {
+        costDiffBox.className = "mfg-td-gray w-40 shadow-sm rounded-r-md text-rose-600";
+        costDiffIcon.innerText = "▲";
+    } else if (costDiff < 0) {
+        costDiffBox.className = "mfg-td-gray w-40 shadow-sm rounded-r-md text-blue-600";
+        costDiffIcon.innerText = "▼";
+        costDiffBox.previousElementSibling.innerText = "절감";
+    } else {
+        costDiffBox.className = "mfg-td-gray w-40 shadow-sm rounded-r-md text-emerald-600";
+        costDiffIcon.innerText = "-";
+    }
+
+    const mfgLessons = data.crData.lessons || [];
+    renderGoodBadBlock('mfg-goodbad-container', mfgLessons, '제작');
+
+
+    // 2. 품질팀 (crData.qualityLessons & qualityPerformances)
+    const qualLessons = data.crData.qualityLessons || [];
+    renderGoodBadBlock('qual-goodbad-container', qualLessons, '품질');
+    
+    const qTbody = document.getElementById('qual-perf-tbody');
+    if(qTbody) {
+        const qPerf = data.crData.qualityPerformances || [];
+        if(qPerf.length === 0) {
+            qTbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-400">데이터 없음</td></tr>';
+        } else {
+            qTbody.innerHTML = qPerf.map(p => `
+                <tr class="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                    <td class="p-2 text-center font-bold text-slate-500">${p.category}</td>
+                    <td class="p-2 font-bold text-slate-700">${p.item}</td>
+                    <td class="p-2 text-slate-600 break-all">${p.content}</td>
+                    <td class="p-2 text-center font-bold">${p.oldVal}</td>
+                    <td class="p-2 text-center font-bold text-emerald-600">${p.newVal}</td>
+                    <td class="p-2 text-center font-black text-indigo-600">${p.rateVal}%</td>
+                </tr>
+            `).join('');
+        }
+    }
+
+    // 3. 구매팀 (pcData.pcLessons & pcPerformances)
+    const purLessons = data.pcData.pcLessons || [];
+    renderGoodBadBlock('pur-goodbad-container', purLessons, '원가');
+
+    const pTbody = document.getElementById('pur-perf-tbody');
+    if(pTbody) {
+        const pPerf = data.pcData.pcPerformances || [];
+        if(pPerf.length === 0) {
+            pTbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-400">데이터 없음</td></tr>';
+        } else {
+            pTbody.innerHTML = pPerf.map(p => `
+                <tr class="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                    <td class="p-2 text-center font-bold text-slate-500">${p.category}</td>
+                    <td class="p-2 font-bold text-slate-700">${p.item}</td>
+                    <td class="p-2 text-center text-slate-500">${p.company}</td>
+                    <td class="p-2 text-slate-600 break-all">${p.content}</td>
+                    <td class="p-2 text-right font-bold text-rose-500">${(parseFloat(p.amount)||0).toLocaleString()}</td>
+                    <td class="p-2 text-center font-black text-indigo-600">${p.cr}%</td>
+                </tr>
+            `).join('');
+        }
     }
 }
 
-// 품질팀 차트
+// 💡 품질팀 차트 렌더링 (2개의 차트)
 function renderQualCharts(data) {
     destroyIntegChart('qualNcr');
     const ctxNcr = document.getElementById('integ-chart-qual-ncr')?.getContext('2d');
@@ -472,9 +544,40 @@ function renderQualCharts(data) {
             }
         });
     }
+
+    destroyIntegChart('qualProcess');
+    const ctxQualProc = document.getElementById('integ-chart-qual-process')?.getContext('2d');
+    if (ctxQualProc) {
+        window.integChartInstances['qualProcess'] = new Chart(ctxQualProc, {
+            type: 'bar',
+            data: {
+                labels: ['가공', '조립', '전장', '셋업'],
+                datasets: [{
+                    label: '불량 건수',
+                    data: [12, 5, 2, 1], // 임시 데이터
+                    backgroundColor: '#8b5cf6',
+                    borderRadius: 6,
+                    barPercentage: 0.5
+                }]
+            },
+            options: {
+                indexAxis: 'y', // 가로 바 차트
+                responsive: true, maintainAspectRatio: false,
+                animation: { duration: 1500, easing: 'easeOutExpo', x: { from: 500 } },
+                plugins: { 
+                    legend: { display: false },
+                    datalabels: { anchor: 'end', align: 'right', color: '#6366f1', font: {weight: '900', size: 12} }
+                },
+                scales: { 
+                    x: { display: false, max: 15 }, // 여백 주기 위해 최대값 여유
+                    y: { grid: { display: false }, ticks: { font: {weight: 'bold', size: 11}, color: '#475569' } } 
+                }
+            }
+        });
+    }
 }
 
-// 구매팀 차트
+// 💡 구매팀 차트 렌더링 (크기 폭발 방지 및 프리미엄화)
 function renderPurCharts(data) {
     destroyIntegChart('cost');
     const ctxCost = document.getElementById('integ-chart-cost')?.getContext('2d');
@@ -530,76 +633,32 @@ function renderPurCharts(data) {
             sData = [30, 65, 15]; // 임시
         }
 
+        // 그라데이션 적용
+        const gradient = ctxPurSaving.createLinearGradient(0, 0, 0, 300);
+        gradient.addColorStop(0, '#34d399'); 
+        gradient.addColorStop(1, '#059669');
+
         window.integChartInstances['purSaving'] = new Chart(ctxPurSaving, {
             type: 'bar',
             data: {
                 labels: labels,
                 datasets: [{
-                    label: '원가 절감액', data: sData, backgroundColor: '#10b981', borderRadius: 4, barPercentage: 0.5
+                    label: '원가 절감액', data: sData, backgroundColor: gradient, borderRadius: 6, barPercentage: 0.4
                 }]
             },
             options: {
                 responsive: true, maintainAspectRatio: false,
-                animation: { duration: 1500, easing: 'easeOutExpo', y: { from: 200 } },
-                plugins: { legend: { display: false }, datalabels: { display: false } },
-                scales: { x: { grid: {display: false} }, y: { beginAtZero: true, grid: { borderDash: [4,4] } } }
+                animation: { duration: 1500, easing: 'easeOutExpo', y: { from: 300 } },
+                plugins: { 
+                    legend: { display: false }, 
+                    datalabels: { anchor: 'end', align: 'top', color: '#059669', font: {weight: 'bold', size: 11} } 
+                },
+                scales: { 
+                    x: { grid: {display: false}, ticks: { font: {weight: 'bold', size: 11}, color: '#64748b' } }, 
+                    y: { beginAtZero: true, grid: { borderDash: [4,4] } } 
+                }
             }
         });
-    }
-}
-
-// -------------------------------------------
-// 하단 컨텐츠 (Good/Bad 및 실적 테이블) 렌더링
-// -------------------------------------------
-function renderTabContents(data) {
-    // 1. 제조팀 (crData.lessons에 저장됨)
-    const mfgLessons = data.crData.lessons || [];
-    renderGoodBadBlock('mfg-goodbad-container', mfgLessons, '제작');
-
-    // 2. 품질팀 (crData.qualityLessons & qualityPerformances)
-    const qualLessons = data.crData.qualityLessons || [];
-    renderGoodBadBlock('qual-goodbad-container', qualLessons, '품질');
-    
-    const qTbody = document.getElementById('qual-perf-tbody');
-    if(qTbody) {
-        const qPerf = data.crData.qualityPerformances || [];
-        if(qPerf.length === 0) {
-            qTbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-400">데이터 없음</td></tr>';
-        } else {
-            qTbody.innerHTML = qPerf.map(p => `
-                <tr class="border-b border-slate-50 hover:bg-slate-50 transition-colors">
-                    <td class="p-2 text-center font-bold text-slate-500">${p.category}</td>
-                    <td class="p-2 font-bold text-slate-700">${p.item}</td>
-                    <td class="p-2 text-slate-600 break-all">${p.content}</td>
-                    <td class="p-2 text-center font-bold">${p.oldVal}</td>
-                    <td class="p-2 text-center font-bold text-emerald-600">${p.newVal}</td>
-                    <td class="p-2 text-center font-black text-indigo-600">${p.rateVal}%</td>
-                </tr>
-            `).join('');
-        }
-    }
-
-    // 3. 구매팀 (pcData.pcLessons & pcPerformances)
-    const purLessons = data.pcData.pcLessons || [];
-    renderGoodBadBlock('pur-goodbad-container', purLessons, '원가');
-
-    const pTbody = document.getElementById('pur-perf-tbody');
-    if(pTbody) {
-        const pPerf = data.pcData.pcPerformances || [];
-        if(pPerf.length === 0) {
-            pTbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-400">데이터 없음</td></tr>';
-        } else {
-            pTbody.innerHTML = pPerf.map(p => `
-                <tr class="border-b border-slate-50 hover:bg-slate-50 transition-colors">
-                    <td class="p-2 text-center font-bold text-slate-500">${p.category}</td>
-                    <td class="p-2 font-bold text-slate-700">${p.item}</td>
-                    <td class="p-2 text-center text-slate-500">${p.company}</td>
-                    <td class="p-2 text-slate-600 break-all">${p.content}</td>
-                    <td class="p-2 text-right font-bold text-rose-500">${(parseFloat(p.amount)||0).toLocaleString()}</td>
-                    <td class="p-2 text-center font-black text-indigo-600">${p.cr}%</td>
-                </tr>
-            `).join('');
-        }
     }
 }
 
