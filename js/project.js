@@ -327,11 +327,16 @@ window.renderProjectStatusList = function() {
         }
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><div class="flex items-center justify-center gap-1 flex-wrap"><button onclick="window.openLinkModal('${item.id}', '${safeNameJs}')" class="text-slate-400 hover:text-teal-500 transition-colors bg-slate-50 px-1.5 py-0.5 rounded shadow-sm border border-slate-200"><i class="fa-solid fa-link"></i></button>${linksHtml}</div></td>`;
         
+        // 💡 [수정] 완료보고 버튼 논리 세분화 (완료대기, 완료요청, 송부완료)
         let crBtnHtml = '';
-        if (item.status === 'completed') {
-            crBtnHtml = `<span class="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded border border-slate-200">송부완료</span>`;
+        if (item.status !== 'completed') {
+            crBtnHtml = `<span class="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded border border-slate-200 cursor-not-allowed">완료대기</span>`;
         } else {
-            crBtnHtml = `<button onclick="event.stopPropagation(); window.openCrReqModal('${item.id}', '${safeNameJs}')" class="text-[10px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-500 hover:text-white px-2 py-1 rounded border border-rose-200 transition-colors shadow-sm whitespace-nowrap">완료요청</button>`;
+            if (item.crSent) {
+                crBtnHtml = `<span class="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-1 rounded border border-blue-200 shadow-sm cursor-not-allowed">송부완료</span>`;
+            } else {
+                crBtnHtml = `<button onclick="event.stopPropagation(); window.openCrReqModal('${item.id}', '${safeNameJs}')" class="text-[10px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-500 hover:text-white px-2 py-1 rounded border border-rose-200 transition-colors shadow-sm whitespace-nowrap">완료요청</button>`;
+            }
         }
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center">${crBtnHtml}</td>`;
         trHtml += `</tr>`;
@@ -379,14 +384,20 @@ window.generateMediaHtml = function(filesArray) {
     return result;
 };
 
+// ==========================================
+// 💡 PJT 완료보고 송부 및 임시저장 (수정)
+// ==========================================
 window.openCrReqModal = function(id, title) {
+    const proj = (window.currentProjectStatusList || []).find(p => p.id === id);
+    const temp = proj && proj.crTempData ? proj.crTempData : {};
+
     const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
     const setHtml = (eid, val) => { const el = document.getElementById(eid); if(el) el.innerHTML = val; };
 
     setVal('cr-req-pjt-id', id);
     setHtml('cr-req-project-title', title);
-    setVal('cr-req-good', '');
-    setVal('cr-req-bad', '');
+    setVal('cr-req-good', temp.good || '');
+    setVal('cr-req-bad', temp.bad || '');
     setVal('cr-req-spec-file', '');
     setHtml('cr-req-spec-names', '');
     setVal('cr-req-design-file', '');
@@ -407,6 +418,38 @@ window.closeCrReqModal = function() {
     }
 };
 
+// 💡 임시저장 기능 추가
+window.tempSaveCrReq = async function() {
+    const pIdEl = document.getElementById('cr-req-pjt-id');
+    const goodTxtEl = document.getElementById('cr-req-good');
+    const badTxtEl = document.getElementById('cr-req-bad');
+    
+    if(!pIdEl || !goodTxtEl || !badTxtEl) return;
+
+    const pId = pIdEl.value;
+    const goodTxt = goodTxtEl.value;
+    const badTxt = badTxtEl.value;
+
+    if(!pId) return window.showToast("프로젝트 ID를 찾을 수 없습니다.", "error");
+
+    const btn = document.getElementById('btn-cr-req-temp');
+    if(btn) { btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 저장중...'; btn.disabled = true; }
+
+    try {
+        await setDoc(doc(db, "projects_status", pId), { 
+            crTempData: { good: goodTxt, bad: badTxt },
+            updatedAt: Date.now()
+        }, { merge: true });
+        
+        window.showToast("임시저장 되었습니다.", "success");
+        window.closeCrReqModal();
+    } catch(e) {
+        window.showToast("임시저장 중 오류가 발생했습니다.", "error");
+    } finally {
+        if(btn) { btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> 임시저장'; btn.disabled = false; }
+    }
+};
+
 window.submitCrReq = async function() {
     const pIdEl = document.getElementById('cr-req-pjt-id');
     const goodTxtEl = document.getElementById('cr-req-good');
@@ -420,7 +463,7 @@ window.submitCrReq = async function() {
     const badTxt = badTxtEl.value.trim();
 
     if(!goodTxt && !badTxt) return window.showToast("Good Point 또는 Bad Point를 작성해주세요.", "warning");
-    if(!confirm("완료요청을 송부하시겠습니까?\n프로젝트 상태가 '완료'로 변경되며 품질/구매팀에 전달됩니다.")) return;
+    if(!confirm("완료요청을 송부하시겠습니까?\n송부 완료 후에는 수정이 어렵습니다.")) return;
 
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 처리중...';
     btn.disabled = true;
@@ -450,7 +493,14 @@ window.submitCrReq = async function() {
             }
         }
 
-        batch.update(pjtRef, { status: 'completed', d_shipEn: window.getLocalDateStr(new Date()), updatedAt: Date.now() });
+        // 💡 송부 시 crSent 상태 true로 설정 및 임시저장 초기화
+        batch.update(pjtRef, { 
+            status: 'completed', 
+            crSent: true,
+            crTempData: null,
+            d_shipEn: window.getLocalDateStr(new Date()), 
+            updatedAt: Date.now() 
+        });
 
         const crRef = doc(collection(db, "project_completion_reports"));
         const crLessons = [];
