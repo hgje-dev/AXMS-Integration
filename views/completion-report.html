@@ -1,322 +1,229 @@
-<style>
-    .glass-card {
-        background: #ffffff;
-        border-radius: 1.5rem;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 10px 25px -5px rgba(0, 0, 0, 0.05);
-        border: 1px solid rgba(226, 232, 240, 0.8);
-        transition: all 0.3s ease;
-    }
-    .glass-card:hover {
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 20px 30px -10px rgba(0, 0, 0, 0.1);
-        transform: translateY(-2px);
-    }
-    .kpi-text-gradient {
-        background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }
-    .custom-tab-btn.active {
-        color: #4f46e5;
-        border-bottom: 3px solid #4f46e5;
-        font-weight: 900;
-        background-color: #eef2ff;
-    }
-    .custom-tab-btn {
-        color: #64748b;
-        border-bottom: 3px solid transparent;
-        font-weight: 700;
-    }
-    .animate-fade-in {
-        animation: fadeIn 0.4s ease-out forwards;
-    }
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-</style>
-
-<div class="space-y-6 max-w-[1600px] mx-auto pb-10 flex flex-col min-h-[85vh] antialiased">
-    <div class="flex flex-col md:flex-row justify-between items-end gap-4 shrink-0 border-b border-slate-200 pb-4">
+<div class="space-y-6 max-w-[1600px] mx-auto pb-10 flex flex-col h-[85vh]">
+    <div class="flex flex-col md:flex-row justify-between items-end gap-4 shrink-0">
         <div>
-            <h2 class="text-2xl font-black text-slate-800 flex items-center gap-2">
-                <div class="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shadow-inner">
-                    <i class="fa-solid fa-clipboard-check text-xl"></i>
-                </div>
-                통합 완료보고 (PJT 결산)
+            <h2 class="text-xl font-black text-slate-800 flex items-center gap-2">
+                <i class="fa-solid fa-file-shield text-rose-500"></i> 품질 완료보고 (Q-Report)
             </h2>
-            <p class="text-xs font-bold text-slate-500 mt-2">제조, 품질, 구매 3팀의 피드백이 취합된 최종 프로젝트 결산 대시보드입니다.</p>
+            <p class="text-xs font-bold text-slate-500 mt-1">제조팀에서 송부된 프로젝트의 품질 검수 및 최종 승인을 관리합니다.</p>
         </div>
         <div class="flex items-center gap-2">
             <div class="relative">
                 <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                <input type="text" id="cr-main-search" oninput="window.filterIntegrationList()" placeholder="PJT코드, 프로젝트명 검색..." class="w-64 border border-slate-300 rounded-xl pl-8 pr-3 py-2.5 text-sm font-bold text-slate-600 outline-indigo-500 shadow-sm bg-white focus:ring-2 focus:ring-indigo-100 transition-all">
+                <input type="text" id="qr-search" oninput="window.qrShowPjtAuto(this); window.filterQrList();" autocomplete="off" placeholder="PJT코드, 프로젝트명 검색 (초성 가능)..." class="w-72 border border-slate-300 rounded-xl pl-8 pr-3 py-2 text-xs font-bold text-slate-600 outline-rose-500 shadow-sm bg-white">
             </div>
-            <button onclick="window.filterIntegrationList('all')" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2.5 rounded-xl text-xs font-bold transition-colors shadow-sm">
-                <i class="fa-solid fa-rotate-right mr-1"></i> 초기화
+            <button onclick="window.filterQrStatus('all')" class="text-[11px] font-bold text-slate-500 hover:text-slate-700 bg-white border border-slate-300 px-3 py-2 rounded-xl shadow-sm whitespace-nowrap transition-colors">
+                <i class="fa-solid fa-rotate-right"></i> 초기화
             </button>
+            <button onclick="window.authenticateGoogle()" id="btn-qr-google-auth" class="text-[11px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl shadow-sm hover:bg-amber-100 transition-colors flex items-center gap-1.5">
+                <i class="fa-brands fa-google"></i> 구글 드라이브 연동
+            </button>
+            <div id="qr-google-auth-status" class="hidden items-center gap-1.5 text-[11px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-xl shadow-sm">
+                <i class="fa-brands fa-google-drive"></i> 드라이브 연동됨
+            </div>
         </div>
     </div>
 
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 shrink-0">
-        <div class="glass-card p-5 border-l-4 border-l-slate-400 cursor-pointer" onclick="window.setIntegrationFilter('all')">
-            <div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-slate-500">완료 보고 대상 PJT (설비)</span><i class="fa-solid fa-layer-group text-slate-300 text-lg"></i></div>
-            <p class="text-3xl font-black text-slate-700"><span id="integ-dash-total">0</span><span class="text-sm text-slate-400 ml-1">건</span></p>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-5 shrink-0 mb-2">
+        <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-4 border-l-slate-300 cursor-pointer hover:bg-slate-50 transition-all" onclick="window.filterQrStatus('대기중')">
+            <div class="flex justify-between items-center mb-1">
+                <span class="text-[11px] font-bold text-slate-500">대기중</span>
+                <i class="fa-solid fa-pause text-slate-300 text-lg"></i>
+            </div>
+            <span class="text-3xl font-black text-slate-700" id="qr-dash-pending">0</span>
         </div>
-        <div class="glass-card p-5 border-l-4 border-l-amber-400 cursor-pointer" onclick="window.setIntegrationFilter('pending')">
-            <div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-amber-600">작성 대기중 (일부 부서)</span><i class="fa-solid fa-hourglass-half text-amber-300 text-lg"></i></div>
-            <p class="text-3xl font-black text-amber-600"><span id="integ-dash-pending">0</span><span class="text-sm text-amber-400 ml-1">건</span></p>
+        <div class="bg-white rounded-2xl p-5 border shadow-sm flex flex-col justify-center border-l-4 border-l-blue-400 cursor-pointer hover:bg-blue-50 transition-all" onclick="window.filterQrStatus('작성중')">
+            <div class="flex justify-between items-center mb-1">
+                <span class="text-[11px] font-bold text-blue-600">작성중</span>
+                <i class="fa-solid fa-pen-to-square text-blue-300 text-lg"></i>
+            </div>
+            <span class="text-3xl font-black text-blue-700" id="qr-dash-writing">0</span>
         </div>
-        <div class="glass-card p-5 border-l-4 border-l-emerald-500 cursor-pointer bg-emerald-50/30" onclick="window.setIntegrationFilter('completed')">
-            <div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-emerald-700">통합 보고 완료</span><i class="fa-solid fa-check-double text-emerald-400 text-lg"></i></div>
-            <p class="text-3xl font-black text-emerald-600"><span id="integ-dash-completed">0</span><span class="text-sm text-emerald-500 ml-1">건</span></p>
-        </div>
-        <div class="glass-card p-5 border-l-4 border-l-indigo-500 cursor-pointer bg-indigo-50/30">
-            <div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-indigo-700">전체 원가 절감액(추정)</span><i class="fa-solid fa-sack-dollar text-indigo-300 text-lg"></i></div>
-            <p class="text-2xl font-black text-indigo-600 truncate pt-1">₩ <span id="integ-dash-saving">0</span></p>
-        </div>
-    </div>
-
-    <div>
-        <h3 class="text-sm font-black text-slate-700 mb-3 flex items-center gap-2"><i class="fa-solid fa-star text-amber-400"></i> 최근 통합 완료된 프로젝트 (Top 3)</h3>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-5" id="integ-top3-container">
-            <div class="glass-card p-6 text-center text-slate-400 text-xs font-bold col-span-3">데이터를 불러오는 중입니다...</div>
+        <div class="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 shadow-sm flex flex-col justify-center border-l-4 border-l-emerald-500 cursor-pointer hover:bg-emerald-100 transition-all" onclick="window.filterQrStatus('완료')">
+            <div class="flex justify-between items-center mb-1">
+                <span class="text-[11px] font-bold text-emerald-700">완료</span>
+                <i class="fa-solid fa-check-double text-emerald-400 text-lg"></i>
+            </div>
+            <span class="text-3xl font-black text-emerald-700" id="qr-dash-completed">0</span>
         </div>
     </div>
 
-    <div class="glass-card flex-1 flex flex-col overflow-hidden mt-2">
-        <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-            <h3 class="text-sm font-black text-slate-700"><i class="fa-solid fa-list-ul text-slate-400 mr-1"></i> 프로젝트별 보고서 취합 현황</h3>
-            <span class="text-[10px] font-bold text-slate-500 border px-2 py-1 rounded bg-white">3개 부서 모두 '완료' 시 최종 보고서가 생성됩니다.</span>
-        </div>
-        <div class="overflow-auto custom-scrollbar flex-1 bg-white">
+    <div class="bg-white rounded-3xl shadow-sm border border-slate-200 flex-1 flex flex-col overflow-hidden">
+        <div class="overflow-auto custom-scrollbar flex-1 bg-slate-50/30">
             <table class="w-full text-left border-collapse whitespace-nowrap">
                 <thead class="bg-slate-800 text-white text-[11px] sticky top-0 z-20 shadow-sm">
                     <tr>
-                        <th class="p-3 text-center border-r border-slate-600 w-28">출하일자</th>
+                        <th class="p-3 text-center border-r border-slate-600 w-28">제조 송부일자</th>
+                        <th class="p-3 text-center border-r border-slate-600 w-28 text-emerald-300">품질 완료일자</th>
                         <th class="p-3 text-center border-r border-slate-600 w-32">PJT 코드</th>
                         <th class="p-3 border-r border-slate-600 min-w-[200px]">프로젝트명</th>
-                        <th class="p-3 text-center border-r border-slate-600 w-24 text-blue-300">제조(PJT)</th>
-                        <th class="p-3 text-center border-r border-slate-600 w-24 text-rose-300">품질(Q)</th>
-                        <th class="p-3 text-center border-r border-slate-600 w-24 text-emerald-300">구매(Cost)</th>
-                        <th class="p-3 text-center border-r border-slate-600 w-28 text-amber-300">최종 상태</th>
-                        <th class="p-3 text-center w-28">대시보드</th>
+                        <th class="p-3 text-center border-r border-slate-600 w-28">내부검수</th>
+                        <th class="p-3 text-center border-r border-slate-600 w-28">고객검수</th>
+                        <th class="p-3 text-center border-r border-slate-600 w-32">품질 최종상태</th>
+                        <th class="p-3 text-center w-32">관리</th>
                     </tr>
                 </thead>
-                <tbody id="integ-tbody" class="text-xs divide-y divide-slate-100 text-slate-700">
-                </tbody>
+                <tbody id="qr-tbody" class="text-xs divide-y divide-slate-200 text-slate-700">
+                    </tbody>
             </table>
         </div>
     </div>
 </div>
 
-<div id="integration-dashboard-modal" class="fixed inset-0 z-[300] hidden items-center justify-center bg-slate-900/80 backdrop-blur-md py-6 px-4 transition-opacity">
-    <div class="bg-[#f8fafc] rounded-3xl shadow-2xl w-full max-w-[1400px] flex flex-col h-full max-h-[95vh] overflow-hidden transform transition-all border border-slate-300">
-        
-        <div class="px-8 py-5 border-b border-slate-200 bg-white flex justify-between items-center shrink-0 shadow-sm z-10">
-            <div>
-                <span class="bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-md text-[10px] font-black tracking-widest mb-2 inline-block">통합 완료보고서</span>
-                <h2 class="text-2xl font-black text-slate-800 flex items-center gap-2" id="modal-integ-title">
-                    [PJT-CODE] 프로젝트명
-                </h2>
-            </div>
+<div id="qr-detail-modal" class="fixed inset-0 z-[300] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10 transition-opacity">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-5xl flex flex-col h-[800px] md:h-[90vh] overflow-hidden transform transition-all">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-rose-50 shrink-0">
+            <h2 class="text-base font-extrabold text-rose-800 flex items-center gap-2">
+                <i class="fa-solid fa-file-shield text-rose-500"></i> 품질 검수 및 승인 처리
+            </h2>
             <div class="flex items-center gap-3">
-                <button onclick="window.exportIntegrationExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
-                    <i class="fa-solid fa-file-excel"></i> 엑셀 보고서 다운로드
-                </button>
-                <button onclick="window.closeIntegrationDashboard()" class="w-10 h-10 rounded-full bg-slate-100 text-slate-500 hover:bg-rose-100 hover:text-rose-600 flex items-center justify-center transition-colors">
-                    <i class="fa-solid fa-xmark text-xl"></i>
-                </button>
+                <span id="qr-status-badge" class="text-[10px] font-bold px-2 py-0.5 rounded shadow-sm border"></span>
+                <button onclick="window.closeQrModal()" class="text-rose-400 hover:text-rose-600 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
             </div>
         </div>
         
-        <div class="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6">
-            
-            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-                <h3 class="text-xs font-black text-slate-400 tracking-widest uppercase mb-4 flex items-center gap-2"><i class="fa-solid fa-chart-simple"></i> Executive Summary</h3>
-                <div class="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-100">
-                    <div class="px-4 py-2 flex flex-col justify-center">
-                        <span class="text-[11px] font-bold text-slate-500 mb-1">제조 / 일정 성과</span>
-                        <div class="flex items-end gap-2">
-                            <span class="text-3xl font-black kpi-text-gradient" id="sum-md-actual">0</span>
-                            <span class="text-sm font-bold text-slate-400 mb-1">M/H</span>
-                            <span id="sum-md-badge" class="ml-auto text-[10px] font-bold px-2 py-0.5 rounded border"></span>
+        <div class="flex-1 p-6 overflow-y-auto custom-scrollbar space-y-6 bg-slate-50/50">
+            <input type="hidden" id="qr-doc-id">
+            <input type="hidden" id="qr-pjt-id">
+
+            <div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm flex justify-between items-center">
+                <span id="qr-project-title" class="text-sm font-black text-indigo-700"></span>
+                <span id="qr-project-date" class="text-[10px] font-bold text-slate-400"></span>
+            </div>
+
+            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                <h3 class="text-xs font-black text-slate-700 mb-4 border-b pb-2"><i class="fa-regular fa-calendar-check text-indigo-500 mr-1"></i> 검수 일정 관리</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="space-y-3 p-4 bg-indigo-50/30 rounded-xl border border-indigo-100">
+                        <h4 class="text-[11px] font-bold text-indigo-700">내부 검수</h4>
+                        <div class="flex items-center gap-2">
+                            <input type="date" id="qr-int-start" class="border border-slate-300 rounded px-2 py-1.5 text-xs font-bold text-slate-600 flex-1 outline-indigo-500">
+                            <span class="text-slate-400">~</span>
+                            <input type="date" id="qr-int-end" class="border border-slate-300 rounded px-2 py-1.5 text-xs font-bold text-slate-600 flex-1 outline-indigo-500">
                         </div>
+                        <select id="qr-int-status" class="w-full border border-slate-300 rounded px-3 py-2 text-xs font-bold outline-indigo-500">
+                            <option value="미진행">미진행</option>
+                            <option value="진행중">진행중</option>
+                            <option value="보류">보류</option>
+                            <option value="완료">완료</option>
+                        </select>
                     </div>
-                    <div class="px-4 py-2 flex flex-col justify-center">
-                        <span class="text-[11px] font-bold text-slate-500 mb-1">종합 품질 성과 (NCR 결함률)</span>
-                        <div class="flex items-end gap-2">
-                            <span class="text-3xl font-black kpi-text-gradient" id="sum-q-rate">0.0</span>
-                            <span class="text-sm font-bold text-slate-400 mb-1">%</span>
-                            <span id="sum-q-badge" class="ml-auto text-[10px] font-bold px-2 py-0.5 rounded border"></span>
+                    <div class="space-y-3 p-4 bg-rose-50/30 rounded-xl border border-rose-100">
+                        <h4 class="text-[11px] font-bold text-rose-700">고객 검수 (FAT/SAT)</h4>
+                        <div class="flex items-center gap-2">
+                            <input type="date" id="qr-ext-start" class="border border-slate-300 rounded px-2 py-1.5 text-xs font-bold text-slate-600 flex-1 outline-rose-500">
+                            <span class="text-slate-400">~</span>
+                            <input type="date" id="qr-ext-end" class="border border-slate-300 rounded px-2 py-1.5 text-xs font-bold text-slate-600 flex-1 outline-rose-500">
                         </div>
-                    </div>
-                    <div class="px-4 py-2 flex flex-col justify-center">
-                        <span class="text-[11px] font-bold text-slate-500 mb-1">원가 예산 절감 성과</span>
-                        <div class="flex items-end gap-2">
-                            <span class="text-3xl font-black kpi-text-gradient" id="sum-c-saving">0</span>
-                            <span class="text-sm font-bold text-slate-400 mb-1">원</span>
-                            <span id="sum-c-mc" class="ml-auto text-[10px] font-bold px-2 py-0.5 rounded border bg-purple-50 text-purple-600 border-purple-200"></span>
-                        </div>
+                        <select id="qr-ext-status" class="w-full border border-slate-300 rounded px-3 py-2 text-xs font-bold outline-rose-500">
+                            <option value="미진행">미진행</option>
+                            <option value="진행중">진행중</option>
+                            <option value="보류">보류</option>
+                            <option value="완료">완료</option>
+                        </select>
                     </div>
                 </div>
             </div>
 
-            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-[400px]">
-                <div class="flex border-b border-slate-200 bg-slate-50/50 px-2 pt-2">
-                    <button onclick="window.switchIntegTab('mfg')" id="tab-mfg" class="custom-tab-btn active px-6 py-3 text-sm transition-all rounded-t-lg flex items-center gap-2">
-                        <i class="fa-solid fa-gears"></i> 제조팀 상세보고
-                    </button>
-                    <button onclick="window.switchIntegTab('qual')" id="tab-qual" class="custom-tab-btn px-6 py-3 text-sm transition-all rounded-t-lg flex items-center gap-2">
-                        <i class="fa-solid fa-shield-halved"></i> 품질팀 상세보고
-                    </button>
-                    <button onclick="window.switchIntegTab('pur')" id="tab-pur" class="custom-tab-btn px-6 py-3 text-sm transition-all rounded-t-lg flex items-center gap-2">
-                        <i class="fa-solid fa-cart-shopping"></i> 구매팀 상세보고
-                    </button>
+            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                <h3 class="text-xs font-black text-slate-700 mb-3 border-b pb-2"><i class="fa-solid fa-thumbs-up text-emerald-500 mr-1"></i> Lessons Learned (Good / Bad)</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs border-collapse min-w-[800px]">
+                        <thead class="bg-slate-50 text-slate-500 border-b border-slate-200">
+                            <tr>
+                                <th class="p-2 text-center w-32">구분</th>
+                                <th class="p-2 w-48">Item (아이템명)</th>
+                                <th class="p-2 w-1/3 text-emerald-600"><i class="fa-solid fa-check mr-1"></i> Highlight (잘된 점)</th>
+                                <th class="p-2 w-1/3 text-rose-600"><i class="fa-solid fa-xmark mr-1"></i> Lowlight (아쉬운 점)</th>
+                                <th class="p-2 text-center w-12"><i class="fa-solid fa-trash-can"></i></th>
+                            </tr>
+                        </thead>
+                        <tbody id="qr-goodbad-tbody" class="divide-y divide-slate-100">
+                            </tbody>
+                    </table>
+                </div>
+                <div class="mt-3 flex justify-center">
+                    <button onclick="window.addQrGoodBadRow()" class="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-colors border border-emerald-200 shadow-sm flex items-center gap-1.5"><i class="fa-solid fa-plus"></i> 항목 추가</button>
+                </div>
+            </div>
+
+            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                <h3 class="text-xs font-black text-slate-700 mb-3 border-b pb-2"><i class="fa-solid fa-clipboard-list text-teal-500 mr-1"></i> 품질 개선 및 실적 관리</h3>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs border-collapse min-w-[1000px]">
+                        <thead class="bg-slate-50 text-slate-500 border-b border-slate-200">
+                            <tr>
+                                <th class="p-2 text-center w-28">구분</th>
+                                <th class="p-2 w-40">ITEM</th>
+                                <th class="p-2 w-auto">진행내용</th>
+                                <th class="p-2 text-center w-24">기준(건/원/일)</th>
+                                <th class="p-2 text-center w-24">실적(건/원/일)</th>
+                                <th class="p-2 text-center w-24 text-emerald-600">개선수치</th>
+                                <th class="p-2 text-center w-24 text-indigo-600">개선율(%)</th>
+                                <th class="p-2 text-center w-12"><i class="fa-solid fa-trash-can"></i></th>
+                            </tr>
+                        </thead>
+                        <tbody id="qr-performances-tbody" class="divide-y divide-slate-100">
+                            </tbody>
+                    </table>
+                </div>
+                <div class="mt-4 flex justify-center">
+                    <button onclick="window.addQrPerformanceRow()" class="bg-teal-50 text-teal-600 px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-teal-100 transition-colors border border-teal-200 shadow-sm flex items-center gap-1.5"><i class="fa-solid fa-plus"></i> 실적 항목 추가</button>
+                </div>
+            </div>
+
+            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                <h4 class="text-xs font-black text-slate-700 mb-2"><i class="fa-regular fa-comment-dots text-amber-500 mr-1"></i> 품질 종합 검토 의견</h4>
+                <textarea id="qr-comments" placeholder="검수 결과 및 승인 의견을 기재하세요." class="w-full h-24 border border-slate-300 rounded-lg p-3 text-sm outline-rose-500 custom-scrollbar resize-y bg-slate-50 focus:bg-white"></textarea>
+            </div>
+
+            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                <h4 class="text-xs font-black text-slate-700 mb-3"><i class="fa-solid fa-file-invoice text-indigo-500 mr-1"></i> 품질 검사 성적서 첨부 (다중 선택/드래그)</h4>
+                <div class="border-2 border-dashed border-rose-200 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-rose-50 transition-colors relative"
+                     onclick="document.getElementById('qr-files').click()"
+                     ondragover="event.preventDefault(); this.classList.add('bg-rose-50', 'border-rose-400');"
+                     ondragleave="event.preventDefault(); this.classList.remove('bg-rose-50', 'border-rose-400');"
+                     ondrop="event.preventDefault(); this.classList.remove('bg-rose-50', 'border-rose-400'); document.getElementById('qr-files').files = event.dataTransfer.files; window.updateQrFileNames();">
+                    <i class="fa-solid fa-file-arrow-up text-3xl text-rose-300 mb-2 pointer-events-none"></i>
+                    <p class="text-xs font-bold text-slate-500 pointer-events-none">클릭하거나 검사성적서 파일 드래그</p>
+                    <input type="file" id="qr-files" class="hidden" multiple onchange="window.updateQrFileNames()">
+                    <div id="qr-file-names" class="text-[11px] text-rose-600 font-bold mt-2 text-center pointer-events-none"></div>
                 </div>
                 
-                <div class="p-6 flex-1 bg-slate-50/50">
-                    
-                    <div id="content-mfg" class="animate-fade-in space-y-6">
-                        
-                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[280px]">
-                                <h4 class="text-sm font-black text-slate-800 mb-1">목표 대비 공수 실적</h4>
-                                <p class="text-[10px] font-bold text-slate-400 mb-4">계획 M/H vs 최종 M/H 비교</p>
-                                <div class="relative w-full flex-1 min-h-0 pb-2"><canvas id="integ-chart-md"></canvas></div>
-                            </div>
-                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[280px]">
-                                <h4 class="text-sm font-black text-slate-800 mb-1">주차별 제작 진행률</h4>
-                                <p class="text-[10px] font-bold text-slate-400 mb-4">계획 대비 실제 진행 (S-Curve)</p>
-                                <div class="relative w-full flex-1 min-h-0 pb-2"><canvas id="integ-chart-schedule"></canvas></div>
-                            </div>
-                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[280px]">
-                                <h4 class="text-sm font-black text-slate-800 mb-1">공정별 투입 공수 비중</h4>
-                                <p class="text-[10px] font-bold text-slate-400 mb-4">기구조립 / 전장배선 등 공정 비율</p>
-                                <div class="relative w-full flex-1 min-h-0 pb-2"><canvas id="integ-chart-process"></canvas></div>
-                            </div>
-                        </div>
-
-                        <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                            <div class="flex justify-between items-end border-b border-slate-100 pb-3 mb-5">
-                                <h4 class="text-sm font-black text-slate-800"><i class="fa-solid fa-chart-gantt text-indigo-500 mr-1.5"></i> 제조 일정 및 비용 성과 분석</h4>
-                                <span class="text-[10px] font-bold text-slate-400">(1공수 : 8h/1Day, 직접직 인건비 기준)</span>
-                            </div>
-                            
-                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                <div class="flex flex-col h-[240px]">
-                                    <h5 class="text-xs font-bold text-slate-500 mb-2">제작 소요일 비교 (계획 vs 실적)</h5>
-                                    <div class="relative w-full flex-1 min-h-0"><canvas id="mfg-perf-schedule-chart"></canvas></div>
-                                </div>
-
-                                <div class="flex flex-col justify-center bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 border border-slate-700 relative overflow-hidden shadow-lg h-[240px]">
-                                    <div class="absolute right-0 top-0 w-40 h-40 bg-indigo-500/20 rounded-bl-full -mr-10 -mt-10 blur-xl"></div>
-                                    <h5 class="text-xs font-bold text-slate-400 mb-5 relative z-10"><i class="fa-solid fa-coins text-amber-400 mr-1"></i> 공수 비용 (인건비) 분석</h5>
-                                    
-                                    <div class="flex justify-between items-center mb-4 relative z-10">
-                                        <span class="text-sm font-medium text-slate-300">예상 공수 비용</span>
-                                        <span class="text-lg font-bold text-slate-400" id="mfg-perf-est-cost">0 원</span>
-                                    </div>
-                                    <div class="flex justify-between items-center pb-5 border-b border-slate-700 relative z-10">
-                                        <span class="text-sm font-bold text-white">실제 투입 비용</span>
-                                        <span class="text-2xl font-black text-white" id="mfg-perf-act-cost">0 원</span>
-                                    </div>
-                                    
-                                    <div class="flex justify-between items-end mt-5 relative z-10">
-                                        <span class="text-sm font-black text-slate-300" id="mfg-perf-diff-label">비용 절감액</span>
-                                        <div class="flex items-center gap-3">
-                                            <span id="mfg-perf-diff-badge" class="px-2 py-0.5 rounded text-[10px] font-bold"></span>
-                                            <span class="text-3xl font-black tracking-tight" id="mfg-perf-diff-cost">0 원</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="flex items-center justify-between border-b border-slate-200 pb-2 mt-4">
-                            <h4 class="text-sm font-black text-slate-700"><i class="fa-solid fa-paperclip text-slate-400 mr-1"></i> 제조팀 프로젝트 총평 (Good & Bad)</h4>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="mfg-goodbad-container">
-                            </div>
-                    </div>
-
-                    <div id="content-qual" class="hidden animate-fade-in space-y-6">
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[320px]">
-                                <h4 class="text-sm font-black text-slate-800 mb-1">부적합(NCR) 발생 유형</h4>
-                                <p class="text-[10px] font-bold text-slate-400 mb-4">구조개선 / 설계오류 등 주요 원인 분석</p>
-                                <div class="relative w-full flex-1 min-h-0 flex items-center justify-center pb-2">
-                                    <canvas id="integ-chart-qual-ncr"></canvas>
-                                </div>
-                            </div>
-                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[320px]">
-                                <h4 class="text-sm font-black text-slate-800 mb-1">공정별 불량 점유율</h4>
-                                <p class="text-[10px] font-bold text-slate-400 mb-4">가공, 조립, 전장 등 공정 단계별 불량 발생 비중</p>
-                                <div class="relative w-full flex-1 min-h-0 pb-2">
-                                    <canvas id="integ-chart-qual-process"></canvas>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="flex items-center justify-between border-b border-slate-200 pb-2 mt-4">
-                            <h4 class="text-sm font-black text-slate-700"><i class="fa-solid fa-check-double text-slate-400 mr-1"></i> 품질팀 프로젝트 총평 (Good & Bad)</h4>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="qual-goodbad-container">
-                            </div>
-                        <div class="mt-6 border-t border-slate-200 pt-4">
-                            <h4 class="text-xs font-black text-slate-500 mb-3">품질 개선 및 실적 상세</h4>
-                            <div class="overflow-x-auto border border-slate-200 rounded-lg bg-white">
-                                <table class="w-full text-left text-xs">
-                                    <thead class="bg-slate-50 text-slate-500 border-b">
-                                        <tr><th class="p-2 text-center w-20">구분</th><th class="p-2 w-32">ITEM</th><th class="p-2">개선 내용</th><th class="p-2 text-center w-24">기준</th><th class="p-2 text-center w-24">실적</th><th class="p-2 text-center w-20 text-indigo-600">개선율</th></tr>
-                                    </thead>
-                                    <tbody id="qual-perf-tbody" class="divide-y divide-slate-100"></tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="content-pur" class="hidden animate-fade-in space-y-6">
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[320px]">
-                                <h4 class="text-sm font-black text-slate-800 mb-1">프로젝트 예산 집행 구조</h4>
-                                <p class="text-[10px] font-bold text-slate-400 mb-4">계획 대비 실제 투입 및 잔여 예산</p>
-                                <div class="relative w-full flex-1 min-h-0 flex items-center justify-center pb-2">
-                                    <canvas id="integ-chart-cost"></canvas>
-                                    <div class="absolute flex flex-col items-center justify-center pointer-events-none">
-                                        <span class="text-[10px] font-bold text-slate-400">총 예산</span>
-                                        <span class="text-lg font-black text-slate-700" id="donut-center-budget">0</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[320px]">
-                                <h4 class="text-sm font-black text-slate-800 mb-1">주요 업체별 원가 절감액</h4>
-                                <p class="text-[10px] font-bold text-slate-400 mb-4">V/E 협상 및 재고 활용 성과 (단위: 백만 원)</p>
-                                <div class="relative w-full flex-1 min-h-0 pb-2">
-                                    <canvas id="integ-chart-pur-saving"></canvas>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="flex items-center justify-between border-b border-slate-200 pb-2 mt-4">
-                            <h4 class="text-sm font-black text-slate-700"><i class="fa-solid fa-won-sign text-slate-400 mr-1"></i> 구매팀 프로젝트 총평 (Good & Bad)</h4>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="pur-goodbad-container">
-                            </div>
-                        <div class="mt-6 border-t border-slate-200 pt-4">
-                            <h4 class="text-xs font-black text-slate-500 mb-3">원가 절감 및 실적 상세</h4>
-                            <div class="overflow-x-auto border border-slate-200 rounded-lg bg-white">
-                                <table class="w-full text-left text-xs">
-                                    <thead class="bg-slate-50 text-slate-500 border-b">
-                                        <tr><th class="p-2 text-center w-20">구분</th><th class="p-2 w-32">ITEM</th><th class="p-2 w-32">업체명</th><th class="p-2">진행 내용</th><th class="p-2 text-right w-24">절감액(원)</th><th class="p-2 text-center w-20 text-indigo-600">CR(%)</th></tr>
-                                    </thead>
-                                    <tbody id="pur-perf-tbody" class="divide-y divide-slate-100"></tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <div id="qr-existing-files" class="mt-4 flex flex-col gap-2"></div>
             </div>
 
+            <div class="bg-slate-100 p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                <h4 class="text-sm font-black text-slate-700">품질 최종 승인 상태</h4>
+                <select id="qr-final-status" class="border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-black text-slate-700 outline-none focus:ring-2 focus:ring-rose-200 shadow-sm bg-white cursor-pointer">
+                    <option value="대기중">대기중</option>
+                    <option value="작성중">작성중</option>
+                    <option value="완료" class="bg-emerald-100 text-emerald-800">✅ 완료</option>
+                    <option value="반려" class="bg-rose-100 text-rose-800">❌ 반려</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="px-6 py-4 border-t bg-white flex justify-end gap-2 shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+            <button onclick="window.closeQrModal()" class="px-6 py-3 bg-slate-100 border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 transition-colors">닫기</button>
+            <button id="btn-qr-save" onclick="window.saveQualityReport()" class="px-8 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
+                <i class="fa-solid fa-check-double"></i> 품질보고 저장
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="upload-progress-modal" class="fixed inset-0 z-[9999] hidden items-center justify-center bg-slate-900/80 backdrop-blur-sm transition-opacity">
+    <div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm flex flex-col items-center text-center">
+        <i class="fa-solid fa-cloud-arrow-up text-4xl text-indigo-500 mb-4 animate-bounce"></i>
+        <h3 class="text-lg font-black text-slate-800 mb-2">파일 업로드 중...</h3>
+        <p id="upload-progress-filename" class="text-xs text-slate-500 mb-6 truncate w-full px-4">파일명.ext</p>
+        <div class="w-full bg-slate-100 rounded-full h-3 mb-2 overflow-hidden border border-slate-200">
+            <div id="upload-progress-bar" class="bg-indigo-500 h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+        <div class="flex justify-between w-full text-xs font-bold text-slate-600">
+            <span id="upload-progress-text">0%</span>
+            <span id="upload-progress-size">0 MB / 0 MB</span>
         </div>
     </div>
 </div>
