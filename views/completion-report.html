@@ -180,14 +180,44 @@
                     <div id="content-mfg" class="animate-fade-in space-y-6">
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[320px]">
-                                <h4 class="text-sm font-black text-slate-800 mb-1">목표 대비 공수 실적</h4>
-                                <p class="text-[10px] font-bold text-slate-400 mb-4">계획 M/H vs 최종 M/H 비교</p>
-                                <div class="relative w-full flex-1 min-h-0 pb-2"><canvas id="integ-chart-md"></canvas></div>
+                                <h4 class="text-sm font-black text-slate-800 mb-1">제작 일정 계획 vs 실행 비교</h4>
+                                <p class="text-[10px] font-bold text-slate-400 mb-4">계획 소요일과 실제 소요일 비교 분석 (단위: 일)</p>
+                                <div class="relative w-full flex-1 min-h-0 pb-2">
+                                    <canvas id="mfg-chart-schedule"></canvas>
+                                </div>
                             </div>
+
                             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[320px]">
-                                <h4 class="text-sm font-black text-slate-800 mb-1">주차별 제작 진행률</h4>
-                                <p class="text-[10px] font-bold text-slate-400 mb-4">계획 대비 실제 진행 (S-Curve)</p>
-                                <div class="relative w-full flex-1 min-h-0 pb-2"><canvas id="integ-chart-schedule"></canvas></div>
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <h4 class="text-sm font-black text-slate-800 mb-1">예상 vs 최종 공수 비용 오차</h4>
+                                        <p class="text-[10px] font-bold text-slate-400 mb-4">투입 공수 기반 인건비 산출 (1MD = 217,440원 기준)</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <span id="mfg-cost-diff-badge" class="px-2 py-0.5 rounded text-[10px] font-bold shadow-sm"></span>
+                                    </div>
+                                </div>
+                                <div class="relative w-full flex-1 min-h-0 pb-2">
+                                    <canvas id="mfg-chart-cost"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[360px]">
+                            <div class="flex justify-between items-center border-b border-slate-100 pb-3 mb-4">
+                                <div>
+                                    <h4 class="text-sm font-black text-slate-800"><i class="fa-solid fa-code-compare text-indigo-500 mr-1.5"></i> 전설비(이전 유사 프로젝트) 성과 비교 분석</h4>
+                                    <p class="text-[10px] font-bold text-slate-400 mt-1">과거 완료된 프로젝트와 일정/공수 효율성을 직관적으로 비교합니다.</p>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <label class="text-[11px] font-bold text-slate-500">비교할 전설비 선택:</label>
+                                    <select id="mfg-prev-pjt-select" onchange="window.updatePrevPjtChart()" class="border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-bold text-indigo-700 outline-none bg-indigo-50 hover:bg-indigo-100 cursor-pointer shadow-sm transition-colors">
+                                        <option value="">전설비 선택 안함</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="relative w-full flex-1 min-h-0 pb-2">
+                                <canvas id="mfg-chart-prev-comp"></canvas>
                             </div>
                         </div>
 
@@ -241,7 +271,7 @@
                                 <p class="text-[10px] font-bold text-slate-400 mb-4">계획 대비 실제 투입 및 잔여 예산</p>
                                 <div class="relative w-full flex-1 min-h-0 flex items-center justify-center pb-2">
                                     <canvas id="integ-chart-cost"></canvas>
-                                    </div>
+                                </div>
                             </div>
                             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[320px]">
                                 <h4 class="text-sm font-black text-slate-800 mb-1">주요 업체별 원가 절감액</h4>
