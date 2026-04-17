@@ -27,7 +27,7 @@
         font-weight: 700;
     }
     .animate-fade-in {
-        animation: fadeIn 0.4s ease-out forwards;
+        animation: fadeIn 0.3s ease-out forwards;
     }
     @keyframes fadeIn {
         from { opacity: 0; transform: translateY(10px); }
@@ -99,7 +99,8 @@
                         <th class="p-3 text-center border-r border-slate-600 w-24 text-rose-300">품질(Q)</th>
                         <th class="p-3 text-center border-r border-slate-600 w-24 text-emerald-300">구매(Cost)</th>
                         <th class="p-3 text-center border-r border-slate-600 w-28 text-amber-300">최종 상태</th>
-                        <th class="p-3 text-center w-28">대시보드</th>
+                        <th class="p-3 text-center border-r border-slate-600 w-28">대시보드</th>
+                        <th class="p-3 text-center w-16">관리</th>
                     </tr>
                 </thead>
                 <tbody id="integ-tbody" class="text-xs divide-y divide-slate-100 text-slate-700">
@@ -181,17 +182,17 @@
                             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[280px]">
                                 <h4 class="text-sm font-black text-slate-800 mb-1">목표 대비 공수 실적</h4>
                                 <p class="text-[10px] font-bold text-slate-400 mb-4">계획 M/H vs 최종 M/H 비교</p>
-                                <div class="flex-1 relative w-full"><canvas id="integ-chart-md"></canvas></div>
+                                <div class="relative w-full flex-1 min-h-0 pb-2"><canvas id="integ-chart-md"></canvas></div>
                             </div>
                             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[280px]">
                                 <h4 class="text-sm font-black text-slate-800 mb-1">주차별 제작 진행률</h4>
                                 <p class="text-[10px] font-bold text-slate-400 mb-4">계획 대비 실제 진행 (S-Curve)</p>
-                                <div class="flex-1 relative w-full"><canvas id="integ-chart-schedule"></canvas></div>
+                                <div class="relative w-full flex-1 min-h-0 pb-2"><canvas id="integ-chart-schedule"></canvas></div>
                             </div>
                             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[280px]">
                                 <h4 class="text-sm font-black text-slate-800 mb-1">공정별 투입 공수 비중</h4>
                                 <p class="text-[10px] font-bold text-slate-400 mb-4">기구조립 / 전장배선 등 공정 비율</p>
-                                <div class="flex-1 relative w-full"><canvas id="integ-chart-process"></canvas></div>
+                                <div class="relative w-full flex-1 min-h-0 pb-2"><canvas id="integ-chart-process"></canvas></div>
                             </div>
                         </div>
 
@@ -207,7 +208,9 @@
                             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[280px]">
                                 <h4 class="text-sm font-black text-slate-800 mb-1">부적합(NCR) 발생 유형</h4>
                                 <p class="text-[10px] font-bold text-slate-400 mb-4">구조개선 / 설계오류 등 원인 분석</p>
-                                <div class="flex-1 relative w-full"><canvas id="integ-chart-qual-ncr"></canvas></div>
+                                <div class="relative w-full flex-1 min-h-0 pb-2 flex items-center justify-center">
+                                    <canvas id="integ-chart-qual-ncr"></canvas>
+                                </div>
                             </div>
                         </div>
 
@@ -234,8 +237,8 @@
                             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[280px]">
                                 <h4 class="text-sm font-black text-slate-800 mb-1">프로젝트 예산 집행 구조</h4>
                                 <p class="text-[10px] font-bold text-slate-400 mb-4">계획 대비 실제 투입 및 잔여 예산</p>
-                                <div class="flex-1 relative flex items-center justify-center">
-                                    <div class="w-full h-full relative"><canvas id="integ-chart-cost"></canvas></div>
+                                <div class="relative w-full flex-1 min-h-0 flex items-center justify-center pb-2">
+                                    <canvas id="integ-chart-cost"></canvas>
                                     <div class="absolute flex flex-col items-center justify-center pointer-events-none">
                                         <span class="text-[10px] font-bold text-slate-400">총 예산</span>
                                         <span class="text-lg font-black text-slate-700" id="donut-center-budget">0</span>
@@ -245,7 +248,7 @@
                             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[280px]">
                                 <h4 class="text-sm font-black text-slate-800 mb-1">주요 업체별 원가 절감액</h4>
                                 <p class="text-[10px] font-bold text-slate-400 mb-4">V/E 협상 및 재고 활용 성과 (단위: 백만 원)</p>
-                                <div class="flex-1 relative w-full"><canvas id="integ-chart-pur-saving"></canvas></div>
+                                <div class="relative w-full flex-1 min-h-0 pb-2"><canvas id="integ-chart-pur-saving"></canvas></div>
                             </div>
                         </div>
 
