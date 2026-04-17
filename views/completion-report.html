@@ -99,7 +99,8 @@
                         <th class="p-3 text-center border-r border-slate-600 w-24 text-rose-300">품질(Q)</th>
                         <th class="p-3 text-center border-r border-slate-600 w-24 text-emerald-300">구매(Cost)</th>
                         <th class="p-3 text-center border-r border-slate-600 w-28 text-amber-300">최종 상태</th>
-                        <th class="p-3 text-center w-28">대시보드</th>
+                        <th class="p-3 text-center border-r border-slate-600 w-28">대시보드</th>
+                        <th class="p-3 text-center w-16">관리</th>
                     </tr>
                 </thead>
                 <tbody id="integ-tbody" class="text-xs divide-y divide-slate-100 text-slate-700">
@@ -110,7 +111,7 @@
 </div>
 
 <div id="integration-dashboard-modal" class="fixed inset-0 z-[300] hidden items-center justify-center bg-slate-900/80 backdrop-blur-md py-6 px-4 transition-opacity">
-    <div class="bg-[#f8fafc] rounded-3xl shadow-2xl w-full max-w-[1400px] flex flex-col h-full max-h-[95vh] overflow-hidden transform transition-all border border-slate-300">
+    <div class="bg-[#f8fafc] rounded-3xl shadow-2xl w-full max-w-[1500px] flex flex-col h-full max-h-[95vh] overflow-hidden transform transition-all border border-slate-300">
         
         <div class="px-8 py-5 border-b border-slate-200 bg-white flex justify-between items-center shrink-0 shadow-sm z-10">
             <div>
@@ -161,7 +162,7 @@
                 </div>
             </div>
 
-            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-[400px]">
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-[500px]">
                 <div class="flex border-b border-slate-200 bg-slate-50/50 px-2 pt-2">
                     <button onclick="window.switchIntegTab('mfg')" id="tab-mfg" class="custom-tab-btn active px-6 py-3 text-sm transition-all rounded-t-lg flex items-center gap-2">
                         <i class="fa-solid fa-gears"></i> 제조팀 상세보고
@@ -174,61 +175,19 @@
                     </button>
                 </div>
                 
-                <div class="p-6 flex-1 bg-slate-50/50">
+                <div class="p-6 flex-1 bg-white">
                     
                     <div id="content-mfg" class="animate-fade-in space-y-6">
-                        
-                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[280px]">
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[320px]">
                                 <h4 class="text-sm font-black text-slate-800 mb-1">목표 대비 공수 실적</h4>
                                 <p class="text-[10px] font-bold text-slate-400 mb-4">계획 M/H vs 최종 M/H 비교</p>
                                 <div class="relative w-full flex-1 min-h-0 pb-2"><canvas id="integ-chart-md"></canvas></div>
                             </div>
-                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[280px]">
+                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[320px]">
                                 <h4 class="text-sm font-black text-slate-800 mb-1">주차별 제작 진행률</h4>
                                 <p class="text-[10px] font-bold text-slate-400 mb-4">계획 대비 실제 진행 (S-Curve)</p>
                                 <div class="relative w-full flex-1 min-h-0 pb-2"><canvas id="integ-chart-schedule"></canvas></div>
-                            </div>
-                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[280px]">
-                                <h4 class="text-sm font-black text-slate-800 mb-1">공정별 투입 공수 비중</h4>
-                                <p class="text-[10px] font-bold text-slate-400 mb-4">기구조립 / 전장배선 등 공정 비율</p>
-                                <div class="relative w-full flex-1 min-h-0 pb-2"><canvas id="integ-chart-process"></canvas></div>
-                            </div>
-                        </div>
-
-                        <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                            <div class="flex justify-between items-end border-b border-slate-100 pb-3 mb-5">
-                                <h4 class="text-sm font-black text-slate-800"><i class="fa-solid fa-chart-gantt text-indigo-500 mr-1.5"></i> 제조 일정 및 비용 성과 분석</h4>
-                                <span class="text-[10px] font-bold text-slate-400">(1공수 : 8h/1Day, 직접직 인건비 기준)</span>
-                            </div>
-                            
-                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                <div class="flex flex-col h-[240px]">
-                                    <h5 class="text-xs font-bold text-slate-500 mb-2">제작 소요일 비교 (계획 vs 실적)</h5>
-                                    <div class="relative w-full flex-1 min-h-0"><canvas id="mfg-perf-schedule-chart"></canvas></div>
-                                </div>
-
-                                <div class="flex flex-col justify-center bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 border border-slate-700 relative overflow-hidden shadow-lg h-[240px]">
-                                    <div class="absolute right-0 top-0 w-40 h-40 bg-indigo-500/20 rounded-bl-full -mr-10 -mt-10 blur-xl"></div>
-                                    <h5 class="text-xs font-bold text-slate-400 mb-5 relative z-10"><i class="fa-solid fa-coins text-amber-400 mr-1"></i> 공수 비용 (인건비) 분석</h5>
-                                    
-                                    <div class="flex justify-between items-center mb-4 relative z-10">
-                                        <span class="text-sm font-medium text-slate-300">예상 공수 비용</span>
-                                        <span class="text-lg font-bold text-slate-400" id="mfg-perf-est-cost">0 원</span>
-                                    </div>
-                                    <div class="flex justify-between items-center pb-5 border-b border-slate-700 relative z-10">
-                                        <span class="text-sm font-bold text-white">실제 투입 비용</span>
-                                        <span class="text-2xl font-black text-white" id="mfg-perf-act-cost">0 원</span>
-                                    </div>
-                                    
-                                    <div class="flex justify-between items-end mt-5 relative z-10">
-                                        <span class="text-sm font-black text-slate-300" id="mfg-perf-diff-label">비용 절감액</span>
-                                        <div class="flex items-center gap-3">
-                                            <span id="mfg-perf-diff-badge" class="px-2 py-0.5 rounded text-[10px] font-bold"></span>
-                                            <span class="text-3xl font-black tracking-tight" id="mfg-perf-diff-cost">0 원</span>
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
                         </div>
 
@@ -282,11 +241,7 @@
                                 <p class="text-[10px] font-bold text-slate-400 mb-4">계획 대비 실제 투입 및 잔여 예산</p>
                                 <div class="relative w-full flex-1 min-h-0 flex items-center justify-center pb-2">
                                     <canvas id="integ-chart-cost"></canvas>
-                                    <div class="absolute flex flex-col items-center justify-center pointer-events-none">
-                                        <span class="text-[10px] font-bold text-slate-400">총 예산</span>
-                                        <span class="text-lg font-black text-slate-700" id="donut-center-budget">0</span>
                                     </div>
-                                </div>
                             </div>
                             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[320px]">
                                 <h4 class="text-sm font-black text-slate-800 mb-1">주요 업체별 원가 절감액</h4>
