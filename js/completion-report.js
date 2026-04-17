@@ -1,5 +1,5 @@
 import { db } from './firebase.js';
-import { collection, doc, setDoc, query, onSnapshot, where, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { collection, doc, query, onSnapshot, where, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 let integPjtUnsubscribe = null;
 let integCrUnsubscribe = null;
@@ -14,26 +14,46 @@ window.currentIntegFilter = 'all';
 window.integChartInstances = {};
 window.currentDashboardData = null;
 
-const LABOR_RATE = 217440; // 1공수 당 인건비 (하드코딩 기준값)
+// 💡 구매팀 도넛 차트 가운데에 텍스트를 고정하기 위한 커스텀 플러그인 추가
+const donutCenterTextPlugin = {
+    id: 'centerText',
+    beforeDraw: function(chart) {
+        if (chart.config.type !== 'doughnut' || !chart.config.options.plugins.centerText) return;
+        let ctx = chart.ctx; 
+        ctx.restore();
+        
+        let centerX = (chart.chartArea.left + chart.chartArea.right) / 2;
+        let centerY = (chart.chartArea.top + chart.chartArea.bottom) / 2;
 
-// 💡 날짜 차이 계산 (기간 소요일)
-function getDaysDiff(startStr, endStr) {
-    if(!startStr || !endStr) return { days: 0, text: '-' };
-    const start = new Date(startStr);
-    const end = new Date(endStr);
-    if(isNaN(start.getTime()) || isNaN(end.getTime())) return { days: 0, text: '-' };
-    const diffTime = Math.abs(end - start);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // 시작일 포함
-    return { days: diffDays, text: diffDays };
-}
+        let textTop = "총 예산";
+        let textBottom = chart.config.options.plugins.centerText.text || "0";
+
+        ctx.textAlign = "center"; 
+        ctx.textBaseline = "middle";
+        
+        ctx.font = "bold 11px Pretendard"; 
+        ctx.fillStyle = "#94a3b8"; 
+        ctx.fillText(textTop, centerX, centerY - 14);
+
+        ctx.font = "900 20px Pretendard"; 
+        ctx.fillStyle = "#1e293b"; 
+        ctx.fillText(textBottom, centerX, centerY + 12);
+
+        ctx.save();
+    }
+};
 
 window.initCompletionReport = function() {
     console.log("✅ 통합 완료보고(PJT 결산) 페이지 로드 완료");
+    
+    // 차트 플러그인 등 초기 세팅
     Chart.defaults.font.family = "'Pretendard', sans-serif";
+    
     window.fetchIntegrationData();
 };
 
 window.fetchIntegrationData = function() {
+    // 1. Projects Status (완료된 설비 프로젝트 위주)
     if (integPjtUnsubscribe) integPjtUnsubscribe();
     integPjtUnsubscribe = onSnapshot(collection(db, "projects_status"), (snap) => {
         window.integProjects = [];
@@ -41,6 +61,7 @@ window.fetchIntegrationData = function() {
         mergeIntegrationData();
     });
 
+    // 2. Project Completion Reports (품질팀 데이터 & 제조팀 1차 데이터)
     if (integCrUnsubscribe) integCrUnsubscribe();
     integCrUnsubscribe = onSnapshot(collection(db, "project_completion_reports"), (snap) => {
         window.integCrReports = [];
@@ -48,6 +69,7 @@ window.fetchIntegrationData = function() {
         mergeIntegrationData();
     });
 
+    // 3. Product Costs (구매팀 데이터)
     if (integPcUnsubscribe) integPcUnsubscribe();
     integPcUnsubscribe = onSnapshot(collection(db, "product_costs"), (snap) => {
         window.integPcReports = [];
@@ -61,14 +83,15 @@ function mergeIntegrationData() {
 
     window.integMergedData = [];
     
-    // 제조 완료(completed) & 카테고리 설비 & 숨김 아님
+    // 💡 요구사항: "제조PJT 에서 설비에 대한 송부완료된 프로젝트만 보여주면돼!"
+    // status === 'completed' (제조팀 완료) AND category === '설비'
     let completedPjts = window.integProjects.filter(p => p.status === 'completed' && p.category === '설비' && !p.isHiddenFromIntegration);
 
     completedPjts.forEach(pjt => {
         let crReport = window.integCrReports.find(cr => cr.projectId === pjt.id) || {};
         let pcReport = window.integPcReports.find(pc => pc.projectId === pjt.id) || {};
 
-        let mStatus = '완료'; 
+        let mStatus = '완료'; // projects_status가 completed이므로 무조건 완료
         let qStatus = crReport.qualityStatus || '대기중'; 
         let pStatus = pcReport.status || '대기중';       
 
@@ -86,14 +109,11 @@ function mergeIntegrationData() {
             estMd: parseFloat(pjt.estMd) || 0,
             finalMd: parseFloat(pjt.finalMd) || 0,
             
-            d_asmEst: pjt.d_asmEst || '',
-            d_asmEndEst: pjt.d_asmEndEst || '',
-            d_asmSt: pjt.d_asmSt || '',
-            d_asmEn: pjt.d_asmEn || '',
-            
+            // 품질 데이터 추출
             qStatus: qStatus,
             crData: crReport,
             
+            // 구매 데이터 추출
             pStatus: pStatus,
             pcData: pcReport,
 
@@ -102,7 +122,9 @@ function mergeIntegrationData() {
         });
     });
 
+    // 최신순 정렬
     window.integMergedData.sort((a,b) => b.updatedAt - a.updatedAt);
+    
     window.filterIntegrationList();
 }
 
@@ -123,9 +145,11 @@ window.filterIntegrationList = function(resetStr) {
     let total = 0, pending = 0, completed = 0, totalSaving = 0;
     
     let filtered = window.integMergedData.filter(d => {
+        // 통계 계산
         total++;
         if (d.finalStatus === '통합완료') {
             completed++;
+            // 총 예산 절감액 합산 (구매팀 actualTotal < targetCost 일때)
             const target = parseFloat(d.pcData.targetCost) || 0;
             const actual = parseFloat(d.pcData.actualTotal) || 0;
             if (target > 0 && target > actual) {
@@ -135,9 +159,11 @@ window.filterIntegrationList = function(resetStr) {
             pending++;
         }
 
+        // 탭 필터 적용
         if (window.currentIntegFilter === 'pending' && d.finalStatus !== '작성대기') return false;
         if (window.currentIntegFilter === 'completed' && d.finalStatus !== '통합완료') return false;
 
+        // 검색어 필터
         if (searchKeyword) {
             const str = `${d.pjtCode} ${d.pjtName}`.toLowerCase();
             if (!str.includes(searchKeyword) && !(window.matchString && window.matchString(searchKeyword, str))) return false;
@@ -146,6 +172,7 @@ window.filterIntegrationList = function(resetStr) {
         return true;
     });
 
+    // 미니 대시보드 업데이트
     if(document.getElementById('integ-dash-total')) document.getElementById('integ-dash-total').innerText = total;
     if(document.getElementById('integ-dash-pending')) document.getElementById('integ-dash-pending').innerText = pending;
     if(document.getElementById('integ-dash-completed')) document.getElementById('integ-dash-completed').innerText = completed;
@@ -241,10 +268,27 @@ function renderIntegTable(list) {
                         ${btnText}
                     </button>
                 </td>
+                <td class="p-3 text-center" onclick="event.stopPropagation()">
+                    <button onclick="window.hideIntegrationProject('${d.projectId}')" class="text-slate-300 hover:text-rose-500 transition-colors p-1.5 rounded-lg hover:bg-rose-50" title="목록에서 제외(숨기기)">
+                        <i class="fa-solid fa-eye-slash"></i>
+                    </button>
+                </td>
             </tr>
         `;
     }).join('');
 }
+
+// 💡 리스트에서 항목 숨기기 기능 (Soft Delete)
+window.hideIntegrationProject = async function(projectId) {
+    if (!confirm("이 프로젝트를 통합 완료보고 목록에서 제외(숨기기)하시겠습니까?\n(실제 데이터는 삭제되지 않으며 취합 리스트에서만 사라집니다.)")) return;
+    
+    try {
+        await setDoc(doc(db, "projects_status", projectId), { isHiddenFromIntegration: true }, { merge: true });
+        window.showToast("목록에서 제외(숨김) 처리되었습니다.", "success");
+    } catch(e) {
+        window.showToast("처리 실패: " + e.message, "error");
+    }
+};
 
 
 // ========================================================
@@ -273,6 +317,7 @@ window.closeIntegrationDashboard = function() {
 };
 
 function renderExecutiveSummary(data) {
+    // 1. 제조 M/H
     let mDiff = data.estMd - data.finalMd;
     document.getElementById('sum-md-actual').innerText = data.finalMd.toFixed(1);
     const mBadge = document.getElementById('sum-md-badge');
@@ -284,6 +329,7 @@ function renderExecutiveSummary(data) {
         mBadge.innerText = `${Math.abs(mDiff).toFixed(1)}MD 초과`;
     }
 
+    // 2. 품질 성과 (가상 수치. 실제 NCR 연동시 보강)
     let ncrCount = 0;
     if (window.ncrData) {
         ncrCount = window.ncrData.filter(n => String(n.pjtCode).replace(/\s/g,'').toUpperCase() === data.pjtCode.replace(/\s/g,'').toUpperCase()).length;
@@ -299,6 +345,7 @@ function renderExecutiveSummary(data) {
         qBadge.innerText = `결함 발생 ${ncrCount}건 (주의)`;
     }
 
+    // 3. 원가 성과
     const targetCost = parseFloat(data.pcData.targetCost) || 0;
     const actualCost = parseFloat(data.pcData.actualTotal) || 0;
     let cDiff = targetCost - actualCost;
@@ -318,15 +365,19 @@ function renderExecutiveSummary(data) {
 // 💡 부서별 탭 전환 및 차트 개별 렌더링
 // -------------------------------------------
 window.switchIntegTab = function(tabName) {
+    // Hide all
     ['mfg', 'qual', 'pur'].forEach(name => {
         document.getElementById('tab-' + name)?.classList.remove('active');
         document.getElementById('content-' + name)?.classList.add('hidden');
     });
     
+    // Show active
     document.getElementById('tab-' + tabName)?.classList.add('active');
     document.getElementById('content-' + tabName)?.classList.remove('hidden');
 
+    // 💡 탭을 전환할 때 해당 탭 안의 차트를 그려서 0x0 렌더링 버그 방지 및 애니메이션 효과 극대화
     if(window.currentDashboardData) {
+        // 레이아웃이 적용될 틈(reflow)을 조금 준 후 렌더링합니다.
         setTimeout(() => {
             if(tabName === 'mfg') renderMfgCharts(window.currentDashboardData);
             if(tabName === 'qual') renderQualCharts(window.currentDashboardData);
@@ -342,9 +393,9 @@ function destroyIntegChart(id) {
     }
 }
 
-// 💡 제조팀 신규 차트 세팅 (일정 비교 가로 바)
+// 제조팀 차트 (2칸 렌더링으로 꽉 차게 변경됨)
 function renderMfgCharts(data) {
-    // 기존 상단 3개 차트는 유지
+    // 1. 공수 Bar 차트
     destroyIntegChart('md');
     const ctxMd = document.getElementById('integ-chart-md')?.getContext('2d');
     if (ctxMd) {
@@ -369,6 +420,7 @@ function renderMfgCharts(data) {
         });
     }
 
+    // 2. 주차별 제작 진행률 (S-Curve Line)
     destroyIntegChart('schedule');
     const ctxSch = document.getElementById('integ-chart-schedule')?.getContext('2d');
     if (ctxSch) {
@@ -392,72 +444,9 @@ function renderMfgCharts(data) {
             }
         });
     }
-
-    destroyIntegChart('process');
-    const ctxProc = document.getElementById('integ-chart-process')?.getContext('2d');
-    if (ctxProc) {
-        let p1 = data.finalMd * 0.55; 
-        let p2 = data.finalMd * 0.35; 
-        let p3 = data.finalMd * 0.05; 
-        let p4 = data.finalMd * 0.05; 
-        
-        window.integChartInstances['process'] = new Chart(ctxProc, {
-            type: 'doughnut',
-            data: {
-                labels: ['기구조립', '전장배선', '셋업/조정', '기타/수정'],
-                datasets: [{
-                    data: [p1, p2, p3, p4],
-                    backgroundColor: ['#3b82f6', '#10b981', '#a855f7', '#f59e0b'],
-                    borderWidth: 4, borderColor: '#ffffff', hoverOffset: 8, cutout: '65%'
-                }]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                animation: { animateScale: true, animateRotate: true, duration: 1800, easing: 'easeOutBack' },
-                plugins: { 
-                    legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 8, font: {size: 10} } },
-                    datalabels: { display: false }
-                }
-            }
-        });
-    }
-
-    // 💡 신규: 제조 일정 비교 (가로 바)
-    destroyIntegChart('mfgScheduleComp');
-    const ctxSchComp = document.getElementById('mfg-perf-schedule-chart')?.getContext('2d');
-    if (ctxSchComp) {
-        let planDiff = getDaysDiff(data.d_asmEst, data.d_asmEndEst);
-        let actDiff = getDaysDiff(data.d_asmSt, data.d_asmEn);
-        
-        window.integChartInstances['mfgScheduleComp'] = new Chart(ctxSchComp, {
-            type: 'bar',
-            data: {
-                labels: ['계획 소요일', '실제 소요일'],
-                datasets: [{
-                    data: [planDiff.days, actDiff.days],
-                    backgroundColor: ['#cbd5e1', '#6366f1'],
-                    borderRadius: 6,
-                    barPercentage: 0.5
-                }]
-            },
-            options: {
-                indexAxis: 'y',
-                responsive: true, maintainAspectRatio: false,
-                animation: { duration: 1500, easing: 'easeOutExpo', x: { from: 0 } },
-                plugins: { 
-                    legend: { display: false },
-                    datalabels: { anchor: 'end', align: 'right', color: '#475569', font: {weight: '900', size: 12}, formatter: (val) => val + ' 일' }
-                },
-                scales: { 
-                    x: { display: false, max: Math.max(planDiff.days, actDiff.days, 10) * 1.3 }, 
-                    y: { grid: { display: false }, ticks: { font: {weight: 'bold', size: 12}, color: '#334155' } } 
-                }
-            }
-        });
-    }
 }
 
-// 💡 품질팀 차트
+// 품질팀 차트
 function renderQualCharts(data) {
     destroyIntegChart('qualNcr');
     const ctxNcr = document.getElementById('integ-chart-qual-ncr')?.getContext('2d');
@@ -501,13 +490,13 @@ function renderQualCharts(data) {
             options: {
                 indexAxis: 'y', // 가로 바 차트
                 responsive: true, maintainAspectRatio: false,
-                animation: { duration: 1500, easing: 'easeOutExpo', x: { from: 0 } },
+                animation: { duration: 1500, easing: 'easeOutExpo', x: { from: 500 } },
                 plugins: { 
                     legend: { display: false },
                     datalabels: { anchor: 'end', align: 'right', color: '#6366f1', font: {weight: '900', size: 12} }
                 },
                 scales: { 
-                    x: { display: false, max: 15 },
+                    x: { display: false, max: 15 }, // 여백 주기 위해 최대값 여유
                     y: { grid: { display: false }, ticks: { font: {weight: 'bold', size: 11}, color: '#475569' } } 
                 }
             }
@@ -515,7 +504,7 @@ function renderQualCharts(data) {
     }
 }
 
-// 💡 구매팀 차트 (안 튀어나오게 수정 완료)
+// 💡 구매팀 차트 렌더링
 function renderPurCharts(data) {
     destroyIntegChart('cost');
     const ctxCost = document.getElementById('integ-chart-cost')?.getContext('2d');
@@ -529,7 +518,7 @@ function renderPurCharts(data) {
         let rem = targetCost - actualTotal;
         if(rem < 0) rem = 0;
 
-        document.getElementById('donut-center-budget').innerText = (targetCost / 10000).toFixed(0) + '만';
+        let totalBudgetText = (targetCost / 10000).toFixed(0) + '만';
 
         window.integChartInstances['cost'] = new Chart(ctxCost, {
             type: 'doughnut',
@@ -538,7 +527,11 @@ function renderPurCharts(data) {
                 datasets: [{
                     data: [actNew, actInv, actFail, rem],
                     backgroundColor: ['#3b82f6', '#8b5cf6', '#f43f5e', '#10b981'],
-                    borderWidth: 0, hoverOffset: 8, cutout: '75%'
+                    borderWidth: 2,
+                    borderColor: '#ffffff',
+                    hoverOffset: 6, 
+                    cutout: '75%',
+                    borderRadius: 4
                 }]
             },
             options: {
@@ -546,19 +539,22 @@ function renderPurCharts(data) {
                 animation: { animateScale: true, animateRotate: true, duration: 1500, easing: 'easeOutQuart' },
                 plugins: { 
                     legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: {size: 10} } },
-                    datalabels: { display: false }
+                    datalabels: { display: false },
+                    centerText: { text: totalBudgetText } // 커스텀 플러그인용 변수
                 }
-            }
+            },
+            plugins: [donutCenterTextPlugin] // 💡 인라인 플러그인 장착
         });
     }
 
     destroyIntegChart('purSaving');
     const ctxPurSaving = document.getElementById('integ-chart-pur-saving')?.getContext('2d');
     if (ctxPurSaving) {
+        // pcPerformances에서 업체별 절감액 합산하여 표시
         let compMap = {};
         if (data.pcData.pcPerformances) {
             data.pcData.pcPerformances.forEach(p => {
-                if(p.company && p.amount) compMap[p.company] = (compMap[p.company]||0) + (p.amount / 1000000); 
+                if(p.company && p.amount) compMap[p.company] = (compMap[p.company]||0) + (p.amount / 1000000); // 백만원 단위
             });
         }
         
@@ -567,67 +563,36 @@ function renderPurCharts(data) {
         
         if(labels.length === 0) {
             labels = ['업체A', '업체B', '업체C'];
-            sData = [30, 65, 15]; 
+            sData = [30, 65, 15]; // 임시
         }
-
-        const gradient = ctxPurSaving.createLinearGradient(0, 0, 0, 300);
-        gradient.addColorStop(0, '#34d399'); 
-        gradient.addColorStop(1, '#059669');
 
         window.integChartInstances['purSaving'] = new Chart(ctxPurSaving, {
             type: 'bar',
             data: {
                 labels: labels,
                 datasets: [{
-                    label: '원가 절감액', data: sData, backgroundColor: gradient, borderRadius: 6, barPercentage: 0.4
+                    label: '원가 절감액', data: sData, backgroundColor: '#10b981', borderRadius: 4, barPercentage: 0.5
                 }]
             },
             options: {
                 responsive: true, maintainAspectRatio: false,
-                animation: { duration: 1500, easing: 'easeOutExpo', y: { from: 300 } },
-                plugins: { legend: { display: false }, datalabels: { anchor: 'end', align: 'top', color: '#059669', font: {weight: 'bold', size: 11} } },
-                scales: { x: { grid: {display: false}, ticks: { font: {weight: 'bold', size: 11}, color: '#64748b' } }, y: { beginAtZero: true, grid: { borderDash: [4,4] }, max: Math.max(...sData, 10)*1.3 } }
+                animation: { duration: 1500, easing: 'easeOutExpo', y: { from: 200 } },
+                plugins: { legend: { display: false }, datalabels: { display: false } },
+                scales: { x: { grid: {display: false} }, y: { beginAtZero: true, grid: { borderDash: [4,4] } } }
             }
         });
     }
 }
 
 // -------------------------------------------
-// 💡 하단 컨텐츠 렌더링 로직 (제조 Dashboard 데이터 삽입)
+// 하단 컨텐츠 (Good/Bad 및 실적 테이블) 렌더링
 // -------------------------------------------
 function renderTabContents(data) {
-    // 💡 1. 제조팀 - 대시보드 비용 계산
-    let eMd = data.estMd || 0;
-    let aMd = data.finalMd || 0;
-    let eCost = eMd * LABOR_RATE;
-    let aCost = aMd * LABOR_RATE;
-    let cDiff = eCost - aCost; 
-    
-    document.getElementById('mfg-perf-est-cost').innerText = eCost.toLocaleString() + ' 원';
-    document.getElementById('mfg-perf-act-cost').innerText = aCost.toLocaleString() + ' 원';
-    
-    let diffLabel = document.getElementById('mfg-perf-diff-label');
-    let diffCost = document.getElementById('mfg-perf-diff-cost');
-    let diffBadge = document.getElementById('mfg-perf-diff-badge');
-    
-    diffCost.innerText = Math.abs(cDiff).toLocaleString() + ' 원';
-    if(cDiff >= 0) {
-        diffLabel.innerText = '비용 절감액';
-        diffCost.className = 'text-3xl font-black tracking-tight text-emerald-400';
-        diffBadge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
-        diffBadge.innerHTML = '<i class="fa-solid fa-arrow-down"></i> 단축';
-    } else {
-        diffLabel.innerText = '비용 초과액';
-        diffCost.className = 'text-3xl font-black tracking-tight text-rose-400';
-        diffBadge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30';
-        diffBadge.innerHTML = '<i class="fa-solid fa-arrow-up"></i> 초과';
-    }
-
+    // 1. 제조팀 (crData.lessons에 저장됨)
     const mfgLessons = data.crData.lessons || [];
     renderGoodBadBlock('mfg-goodbad-container', mfgLessons, '제작');
 
-
-    // 2. 품질팀 
+    // 2. 품질팀 (crData.qualityLessons & qualityPerformances)
     const qualLessons = data.crData.qualityLessons || [];
     renderGoodBadBlock('qual-goodbad-container', qualLessons, '품질');
     
@@ -650,7 +615,7 @@ function renderTabContents(data) {
         }
     }
 
-    // 3. 구매팀 
+    // 3. 구매팀 (pcData.pcLessons & pcPerformances)
     const purLessons = data.pcData.pcLessons || [];
     renderGoodBadBlock('pur-goodbad-container', purLessons, '원가');
 
@@ -687,6 +652,7 @@ function renderGoodBadBlock(containerId, lessons, defaultCat) {
     let badHtml = '';
 
     lessons.forEach(l => {
+        // 제조팀의 경우 type이 Good/Bad로 명확히 나뉨. 품질/구매는 highlight/lowlight가 공존
         if (l.type === 'Good' || l.highlight) {
             goodHtml += `<li class="mb-2 last:mb-0"><span class="font-bold text-slate-700 block mb-0.5">[${l.item || defaultCat}]</span> <span class="text-slate-600">${l.highlight.replace(/\n/g, '<br>')}</span></li>`;
         }
