@@ -37,16 +37,21 @@ window.appRoutes = {
     'repair': { url: './views/request.html', init: () => { window.currentAppId = 'repair'; if(window.loadRequestsData) window.loadRequestsData('repair'); } }
 };
 
+// 💡 햄버거 메뉴에 있는 모든 앱 추가
 window.availableApps = {
-    'dashboard-home': { title: '대시보드', icon: 'fa-solid fa-chart-pie', color: 'text-indigo-600' },
-    'project-status': { title: 'PJT현황', icon: 'fa-solid fa-table-list', color: 'text-slate-600' },
-    'workhours': { title: '투입 현황', icon: 'fa-solid fa-user-clock', color: 'text-slate-600' },
-    'weekly-log': { title: '주간일지', icon: 'fa-solid fa-calendar-week', color: 'text-slate-600' },
-    'collab': { title: '협업/조립', icon: 'fa-regular fa-handshake', color: 'text-blue-600' },
-    'purchase': { title: '구매의뢰', icon: 'fa-solid fa-cart-flatbed', color: 'text-emerald-600' },
-    'repair': { title: '수리/점검', icon: 'fa-solid fa-stethoscope', color: 'text-rose-600' },
-    'simulation': { title: '시뮬레이션', icon: 'fa-solid fa-bolt', color: 'text-amber-500' },
-    'quality-report': { title: '품질 완료보고', icon: 'fa-solid fa-file-shield', color: 'text-rose-600' }
+    'dashboard-home': { title: '통합 대시보드', icon: 'fa-solid fa-chart-pie', color: 'text-indigo-600' },
+    'completion-report': { title: '통합 완료보고', icon: 'fa-solid fa-clipboard-check', color: 'text-indigo-600' },
+    'project-status': { title: 'PJT 현황판', icon: 'fa-solid fa-table-list', color: 'text-indigo-600' },
+    'workhours': { title: '투입 현황', icon: 'fa-solid fa-user-clock', color: 'text-indigo-600' },
+    'weekly-log': { title: '주간 업무 일지', icon: 'fa-solid fa-calendar-week', color: 'text-indigo-600' },
+    'product-cost': { title: 'Product Cost', icon: 'fa-solid fa-coins', color: 'text-emerald-600' },
+    'mfg-cost': { title: '제조 Cost', icon: 'fa-solid fa-sack-dollar', color: 'text-amber-600' },
+    'ncr-dashboard': { title: 'NCR 대시보드', icon: 'fa-solid fa-magnifying-glass-chart', color: 'text-rose-500' },
+    'quality-report': { title: '품질 완료보고', icon: 'fa-solid fa-file-shield', color: 'text-rose-500' },
+    'collab': { title: '협업/조립 요청서', icon: 'fa-regular fa-handshake', color: 'text-blue-500' },
+    'purchase': { title: '모듈 구매 의뢰서', icon: 'fa-solid fa-cart-flatbed', color: 'text-emerald-500' },
+    'repair': { title: '수리/점검 요청서', icon: 'fa-solid fa-stethoscope', color: 'text-rose-500' },
+    'simulation': { title: '공수 시뮬레이션 Pro', icon: 'fa-solid fa-bolt', color: 'text-indigo-600' }
 };
 
 window.quickMenuItems = JSON.parse(localStorage.getItem('axbis_quick_menu')) || ['dashboard-home', 'project-status', 'workhours', 'weekly-log'];
@@ -69,7 +74,8 @@ window.renderQuickMenu = function() {
         </div>`;
     });
 
-    if (window.quickMenuItems.length < 5) {
+    // 💡 최대 개수를 6개로 상향
+    if (window.quickMenuItems.length < 6) {
         html += `<button onclick="window.openQuickMenuAdd(event)" class="w-7 h-7 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center hover:bg-indigo-500 hover:text-white transition-colors shrink-0 shadow-sm"><i class="fa-solid fa-plus text-xs"></i></button>`;
     }
 
@@ -106,7 +112,8 @@ window.openQuickMenuAdd = function(e) {
 };
 
 window.addQuickMenu = function(key) {
-    if (window.quickMenuItems.length >= 5) return window.showToast('최대 5개까지만 추가 가능합니다.', 'warning');
+    // 💡 최대 개수 체크 6개로 수정 및 알림 메시지 변경
+    if (window.quickMenuItems.length >= 6) return window.showToast('최대 6개까지만 추가 가능합니다.', 'warning');
     if (!window.quickMenuItems.includes(key)) {
         window.quickMenuItems.push(key);
         localStorage.setItem('axbis_quick_menu', JSON.stringify(window.quickMenuItems));
