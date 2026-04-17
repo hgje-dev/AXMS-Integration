@@ -37,21 +37,21 @@ window.appRoutes = {
     'repair': { url: './views/request.html', init: () => { window.currentAppId = 'repair'; if(window.loadRequestsData) window.loadRequestsData('repair'); } }
 };
 
-// 💡 햄버거 메뉴에 있는 모든 앱 추가
+// 💡 텍스트 길이를 최소화하여 6개가 전부 들어가도록 수정
 window.availableApps = {
-    'dashboard-home': { title: '통합 대시보드', icon: 'fa-solid fa-chart-pie', color: 'text-indigo-600' },
-    'completion-report': { title: '통합 완료보고', icon: 'fa-solid fa-clipboard-check', color: 'text-indigo-600' },
-    'project-status': { title: 'PJT 현황판', icon: 'fa-solid fa-table-list', color: 'text-indigo-600' },
+    'dashboard-home': { title: '대시보드', icon: 'fa-solid fa-chart-pie', color: 'text-indigo-600' },
+    'completion-report': { title: '완료보고', icon: 'fa-solid fa-clipboard-check', color: 'text-indigo-600' },
+    'project-status': { title: 'PJT현황', icon: 'fa-solid fa-table-list', color: 'text-indigo-600' },
     'workhours': { title: '투입 현황', icon: 'fa-solid fa-user-clock', color: 'text-indigo-600' },
-    'weekly-log': { title: '주간 업무 일지', icon: 'fa-solid fa-calendar-week', color: 'text-indigo-600' },
+    'weekly-log': { title: '주간일지', icon: 'fa-solid fa-calendar-week', color: 'text-indigo-600' },
     'product-cost': { title: 'Product Cost', icon: 'fa-solid fa-coins', color: 'text-emerald-600' },
     'mfg-cost': { title: '제조 Cost', icon: 'fa-solid fa-sack-dollar', color: 'text-amber-600' },
     'ncr-dashboard': { title: 'NCR 대시보드', icon: 'fa-solid fa-magnifying-glass-chart', color: 'text-rose-500' },
-    'quality-report': { title: '품질 완료보고', icon: 'fa-solid fa-file-shield', color: 'text-rose-500' },
-    'collab': { title: '협업/조립 요청서', icon: 'fa-regular fa-handshake', color: 'text-blue-500' },
-    'purchase': { title: '모듈 구매 의뢰서', icon: 'fa-solid fa-cart-flatbed', color: 'text-emerald-500' },
-    'repair': { title: '수리/점검 요청서', icon: 'fa-solid fa-stethoscope', color: 'text-rose-500' },
-    'simulation': { title: '공수 시뮬레이션 Pro', icon: 'fa-solid fa-bolt', color: 'text-indigo-600' }
+    'quality-report': { title: '품질보고', icon: 'fa-solid fa-file-shield', color: 'text-rose-500' },
+    'collab': { title: '협업/조립', icon: 'fa-regular fa-handshake', color: 'text-blue-500' },
+    'purchase': { title: '구매의뢰', icon: 'fa-solid fa-cart-flatbed', color: 'text-emerald-500' },
+    'repair': { title: '수리/점검', icon: 'fa-solid fa-stethoscope', color: 'text-rose-500' },
+    'simulation': { title: '시뮬레이션', icon: 'fa-solid fa-bolt', color: 'text-indigo-600' }
 };
 
 window.quickMenuItems = JSON.parse(localStorage.getItem('axbis_quick_menu')) || ['dashboard-home', 'project-status', 'workhours', 'weekly-log'];
@@ -65,20 +65,20 @@ window.renderQuickMenu = function() {
         const app = window.availableApps[key];
         if (!app) return;
         
-        // 💡 도형 사이즈, 폰트(text-[10px]), 패딩(px-2.5, py-1) 최소화로 스크롤 방지
+        // 💡 폰트 사이즈(9px), 여백(px-2, py-0.5), 아이콘 크기 최소화
         html += `
-        <div class="group relative flex items-center bg-white border border-slate-200 px-2.5 py-1 rounded-full shadow-sm cursor-pointer hover:bg-indigo-50 transition-colors shrink-0" draggable="true" ondragstart="window.dragQmStart(event, ${index})" ondragover="event.preventDefault()" ondrop="window.dragQmDrop(event, ${index})">
-            <div onclick="window.openApp('${key}', '${app.title}')" class="flex items-center gap-1.5">
-                <i class="${app.icon} ${app.color} text-[10px]"></i>
-                <span class="text-[10px] font-bold text-slate-700 whitespace-nowrap">${app.title}</span>
+        <div class="group relative flex items-center bg-white border border-slate-200 px-2 py-0.5 rounded-full shadow-sm cursor-pointer hover:bg-indigo-50 transition-colors shrink-0" draggable="true" ondragstart="window.dragQmStart(event, ${index})" ondragover="event.preventDefault()" ondrop="window.dragQmDrop(event, ${index})">
+            <div onclick="window.openApp('${key}', '${app.title}')" class="flex items-center gap-1">
+                <i class="${app.icon} ${app.color} text-[9px]"></i>
+                <span class="text-[9px] font-bold text-slate-700 whitespace-nowrap">${app.title}</span>
             </div>
-            <button onclick="window.removeQuickMenu(event, ${index})" class="ml-1 w-3.5 h-3.5 rounded-full flex items-center justify-center text-slate-300 hover:text-white hover:bg-rose-500 opacity-0 group-hover:opacity-100 transition-all"><i class="fa-solid fa-xmark text-[9px]"></i></button>
+            <button onclick="window.removeQuickMenu(event, ${index})" class="ml-1 w-3 h-3 rounded-full flex items-center justify-center text-slate-300 hover:text-white hover:bg-rose-500 opacity-0 group-hover:opacity-100 transition-all"><i class="fa-solid fa-xmark text-[8px]"></i></button>
         </div>`;
     });
 
-    // 💡 최대 6개 제한 & 플러스 버튼 크기(w-6 h-6) 축소
+    // 💡 6개 제한 및 플러스 아이콘 크기 최소화
     if (window.quickMenuItems.length < 6) {
-        html += `<button onclick="window.openQuickMenuAdd(event)" class="w-6 h-6 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center hover:bg-indigo-500 hover:text-white transition-colors shrink-0 shadow-sm"><i class="fa-solid fa-plus text-[10px]"></i></button>`;
+        html += `<button onclick="window.openQuickMenuAdd(event)" class="w-5 h-5 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center hover:bg-indigo-500 hover:text-white transition-colors shrink-0 shadow-sm"><i class="fa-solid fa-plus text-[9px]"></i></button>`;
     }
 
     container.innerHTML = html;
@@ -103,10 +103,10 @@ window.openQuickMenuAdd = function(e) {
         for (let key in window.availableApps) {
             if (!window.quickMenuItems.includes(key)) {
                 const app = window.availableApps[key];
-                html += `<li class="px-4 py-2 hover:bg-indigo-50 cursor-pointer text-xs font-bold text-slate-600 flex items-center gap-2 border-b border-slate-50 last:border-0 transition-colors" onclick="window.addQuickMenu('${key}')"><i class="${app.icon} ${app.color}"></i> ${app.title}</li>`;
+                html += `<li class="px-3 py-2 hover:bg-indigo-50 cursor-pointer text-[11px] font-bold text-slate-600 flex items-center gap-1.5 border-b border-slate-50 last:border-0 transition-colors" onclick="window.addQuickMenu('${key}')"><i class="${app.icon} ${app.color}"></i> ${app.title}</li>`;
             }
         }
-        if (html === '') html = '<li class="px-3 py-2 text-xs text-slate-400 text-center">추가할 메뉴가 없습니다.</li>';
+        if (html === '') html = '<li class="px-3 py-2 text-[10px] text-slate-400 text-center">추가할 메뉴가 없습니다.</li>';
         drop.innerHTML = html;
     } else {
         drop.classList.add('hidden');
