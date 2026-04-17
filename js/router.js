@@ -64,19 +64,21 @@ window.renderQuickMenu = function() {
     window.quickMenuItems.forEach((key, index) => {
         const app = window.availableApps[key];
         if (!app) return;
+        
+        // 💡 도형 사이즈, 폰트(text-[10px]), 패딩(px-2.5, py-1) 최소화로 스크롤 방지
         html += `
-        <div class="group relative flex items-center bg-white border border-slate-200 px-3 py-1.5 rounded-full shadow-sm cursor-pointer hover:bg-indigo-50 transition-colors shrink-0" draggable="true" ondragstart="window.dragQmStart(event, ${index})" ondragover="event.preventDefault()" ondrop="window.dragQmDrop(event, ${index})">
+        <div class="group relative flex items-center bg-white border border-slate-200 px-2.5 py-1 rounded-full shadow-sm cursor-pointer hover:bg-indigo-50 transition-colors shrink-0" draggable="true" ondragstart="window.dragQmStart(event, ${index})" ondragover="event.preventDefault()" ondrop="window.dragQmDrop(event, ${index})">
             <div onclick="window.openApp('${key}', '${app.title}')" class="flex items-center gap-1.5">
-                <i class="${app.icon} ${app.color} text-[11px]"></i>
-                <span class="text-[11px] font-bold text-slate-700 whitespace-nowrap">${app.title}</span>
+                <i class="${app.icon} ${app.color} text-[10px]"></i>
+                <span class="text-[10px] font-bold text-slate-700 whitespace-nowrap">${app.title}</span>
             </div>
-            <button onclick="window.removeQuickMenu(event, ${index})" class="ml-2 w-4 h-4 rounded-full flex items-center justify-center text-slate-300 hover:text-white hover:bg-rose-500 opacity-0 group-hover:opacity-100 transition-all"><i class="fa-solid fa-xmark text-[9px]"></i></button>
+            <button onclick="window.removeQuickMenu(event, ${index})" class="ml-1 w-3.5 h-3.5 rounded-full flex items-center justify-center text-slate-300 hover:text-white hover:bg-rose-500 opacity-0 group-hover:opacity-100 transition-all"><i class="fa-solid fa-xmark text-[9px]"></i></button>
         </div>`;
     });
 
-    // 💡 최대 개수를 6개로 상향
+    // 💡 최대 6개 제한 & 플러스 버튼 크기(w-6 h-6) 축소
     if (window.quickMenuItems.length < 6) {
-        html += `<button onclick="window.openQuickMenuAdd(event)" class="w-7 h-7 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center hover:bg-indigo-500 hover:text-white transition-colors shrink-0 shadow-sm"><i class="fa-solid fa-plus text-xs"></i></button>`;
+        html += `<button onclick="window.openQuickMenuAdd(event)" class="w-6 h-6 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center hover:bg-indigo-500 hover:text-white transition-colors shrink-0 shadow-sm"><i class="fa-solid fa-plus text-[10px]"></i></button>`;
     }
 
     container.innerHTML = html;
@@ -112,7 +114,6 @@ window.openQuickMenuAdd = function(e) {
 };
 
 window.addQuickMenu = function(key) {
-    // 💡 최대 개수 체크 6개로 수정 및 알림 메시지 변경
     if (window.quickMenuItems.length >= 6) return window.showToast('최대 6개까지만 추가 가능합니다.', 'warning');
     if (!window.quickMenuItems.includes(key)) {
         window.quickMenuItems.push(key);
@@ -152,7 +153,6 @@ window.openApp = async function(viewId, title) {
     const appContent = document.getElementById('app-content');
     if(document.getElementById('nav-title')) document.getElementById('nav-title').innerText = title || '';
 
-    // 💡 2. 앞서 윈도우 객체에 담아둔 변수를 올바르게 호출하도록 수정!
     const route = window.appRoutes[routeKey] || window.appRoutes['dashboard-home'];
 
     try {
