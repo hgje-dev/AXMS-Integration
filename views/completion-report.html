@@ -59,7 +59,7 @@
 
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 shrink-0">
         <div class="glass-card p-5 border-l-4 border-l-slate-400 cursor-pointer" onclick="window.setIntegrationFilter('all')">
-            <div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-slate-500">완료 보고 대상 PJT</span><i class="fa-solid fa-layer-group text-slate-300 text-lg"></i></div>
+            <div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-slate-500">완료 보고 대상 PJT (설비)</span><i class="fa-solid fa-layer-group text-slate-300 text-lg"></i></div>
             <p class="text-3xl font-black text-slate-700"><span id="integ-dash-total">0</span><span class="text-sm text-slate-400 ml-1">건</span></p>
         </div>
         <div class="glass-card p-5 border-l-4 border-l-amber-400 cursor-pointer" onclick="window.setIntegrationFilter('pending')">
@@ -71,7 +71,7 @@
             <p class="text-3xl font-black text-emerald-600"><span id="integ-dash-completed">0</span><span class="text-sm text-emerald-500 ml-1">건</span></p>
         </div>
         <div class="glass-card p-5 border-l-4 border-l-indigo-500 cursor-pointer bg-indigo-50/30">
-            <div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-indigo-700">전체 공수 절감액(추정)</span><i class="fa-solid fa-sack-dollar text-indigo-300 text-lg"></i></div>
+            <div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-indigo-700">전체 원가 절감액(추정)</span><i class="fa-solid fa-sack-dollar text-indigo-300 text-lg"></i></div>
             <p class="text-2xl font-black text-indigo-600 truncate pt-1">₩ <span id="integ-dash-saving">0</span></p>
         </div>
     </div>
@@ -161,32 +161,6 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[320px]">
-                    <h4 class="text-sm font-black text-slate-800 mb-1">프로젝트 예산 집행 구조</h4>
-                    <p class="text-[10px] font-bold text-slate-400 mb-4">계획 대비 실제 투입 및 잔여 예산</p>
-                    <div class="flex-1 relative flex items-center justify-center">
-                        <div class="w-full h-full relative"><canvas id="integ-chart-cost"></canvas></div>
-                        <div class="absolute flex flex-col items-center justify-center pointer-events-none">
-                            <span class="text-[10px] font-bold text-slate-400">총 예산</span>
-                            <span class="text-lg font-black text-slate-700" id="donut-center-budget">0</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[320px]">
-                    <h4 class="text-sm font-black text-slate-800 mb-1">목표 대비 공수 실적</h4>
-                    <p class="text-[10px] font-bold text-slate-400 mb-4">계획 M/H vs 최종 M/H 비교</p>
-                    <div class="flex-1 relative w-full"><canvas id="integ-chart-md"></canvas></div>
-                </div>
-
-                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[320px]">
-                    <h4 class="text-sm font-black text-slate-800 mb-1">공정별 투입 공수 비중</h4>
-                    <p class="text-[10px] font-bold text-slate-400 mb-4">기구조립 / 전장배선 등 공정별 M/H 비율</p>
-                    <div class="flex-1 relative w-full"><canvas id="integ-chart-process"></canvas></div>
-                </div>
-            </div>
-
             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-[400px]">
                 <div class="flex border-b border-slate-200 bg-slate-50/50 px-2 pt-2">
                     <button onclick="window.switchIntegTab('mfg')" id="tab-mfg" class="custom-tab-btn active px-6 py-3 text-sm transition-all rounded-t-lg flex items-center gap-2">
@@ -200,9 +174,28 @@
                     </button>
                 </div>
                 
-                <div class="p-6 flex-1 bg-white">
+                <div class="p-6 flex-1 bg-slate-50/50">
+                    
                     <div id="content-mfg" class="animate-fade-in space-y-6">
-                        <div class="flex items-center justify-between border-b pb-2">
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[280px]">
+                                <h4 class="text-sm font-black text-slate-800 mb-1">목표 대비 공수 실적</h4>
+                                <p class="text-[10px] font-bold text-slate-400 mb-4">계획 M/H vs 최종 M/H 비교</p>
+                                <div class="flex-1 relative w-full"><canvas id="integ-chart-md"></canvas></div>
+                            </div>
+                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[280px]">
+                                <h4 class="text-sm font-black text-slate-800 mb-1">주차별 제작 진행률</h4>
+                                <p class="text-[10px] font-bold text-slate-400 mb-4">계획 대비 실제 진행 (S-Curve)</p>
+                                <div class="flex-1 relative w-full"><canvas id="integ-chart-schedule"></canvas></div>
+                            </div>
+                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[280px]">
+                                <h4 class="text-sm font-black text-slate-800 mb-1">공정별 투입 공수 비중</h4>
+                                <p class="text-[10px] font-bold text-slate-400 mb-4">기구조립 / 전장배선 등 공정 비율</p>
+                                <div class="flex-1 relative w-full"><canvas id="integ-chart-process"></canvas></div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between border-b border-slate-200 pb-2 mt-4">
                             <h4 class="text-sm font-black text-slate-700"><i class="fa-solid fa-paperclip text-slate-400 mr-1"></i> 제조팀 프로젝트 총평 (Good & Bad)</h4>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="mfg-goodbad-container">
@@ -210,14 +203,22 @@
                     </div>
 
                     <div id="content-qual" class="hidden animate-fade-in space-y-6">
-                        <div class="flex items-center justify-between border-b pb-2">
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[280px]">
+                                <h4 class="text-sm font-black text-slate-800 mb-1">부적합(NCR) 발생 유형</h4>
+                                <p class="text-[10px] font-bold text-slate-400 mb-4">구조개선 / 설계오류 등 원인 분석</p>
+                                <div class="flex-1 relative w-full"><canvas id="integ-chart-qual-ncr"></canvas></div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between border-b border-slate-200 pb-2 mt-4">
                             <h4 class="text-sm font-black text-slate-700"><i class="fa-solid fa-check-double text-slate-400 mr-1"></i> 품질팀 프로젝트 총평 (Good & Bad)</h4>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="qual-goodbad-container">
                             </div>
-                        <div class="mt-6 border-t pt-4">
+                        <div class="mt-6 border-t border-slate-200 pt-4">
                             <h4 class="text-xs font-black text-slate-500 mb-3">품질 개선 및 실적 상세</h4>
-                            <div class="overflow-x-auto border border-slate-200 rounded-lg">
+                            <div class="overflow-x-auto border border-slate-200 rounded-lg bg-white">
                                 <table class="w-full text-left text-xs">
                                     <thead class="bg-slate-50 text-slate-500 border-b">
                                         <tr><th class="p-2 text-center w-20">구분</th><th class="p-2 w-32">ITEM</th><th class="p-2">개선 내용</th><th class="p-2 text-center w-24">기준</th><th class="p-2 text-center w-24">실적</th><th class="p-2 text-center w-20 text-indigo-600">개선율</th></tr>
@@ -229,14 +230,33 @@
                     </div>
 
                     <div id="content-pur" class="hidden animate-fade-in space-y-6">
-                        <div class="flex items-center justify-between border-b pb-2">
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[280px]">
+                                <h4 class="text-sm font-black text-slate-800 mb-1">프로젝트 예산 집행 구조</h4>
+                                <p class="text-[10px] font-bold text-slate-400 mb-4">계획 대비 실제 투입 및 잔여 예산</p>
+                                <div class="flex-1 relative flex items-center justify-center">
+                                    <div class="w-full h-full relative"><canvas id="integ-chart-cost"></canvas></div>
+                                    <div class="absolute flex flex-col items-center justify-center pointer-events-none">
+                                        <span class="text-[10px] font-bold text-slate-400">총 예산</span>
+                                        <span class="text-lg font-black text-slate-700" id="donut-center-budget">0</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col h-[280px]">
+                                <h4 class="text-sm font-black text-slate-800 mb-1">주요 업체별 원가 절감액</h4>
+                                <p class="text-[10px] font-bold text-slate-400 mb-4">V/E 협상 및 재고 활용 성과 (단위: 백만 원)</p>
+                                <div class="flex-1 relative w-full"><canvas id="integ-chart-pur-saving"></canvas></div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between border-b border-slate-200 pb-2 mt-4">
                             <h4 class="text-sm font-black text-slate-700"><i class="fa-solid fa-won-sign text-slate-400 mr-1"></i> 구매팀 프로젝트 총평 (Good & Bad)</h4>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="pur-goodbad-container">
                             </div>
-                        <div class="mt-6 border-t pt-4">
+                        <div class="mt-6 border-t border-slate-200 pt-4">
                             <h4 class="text-xs font-black text-slate-500 mb-3">원가 절감 및 실적 상세</h4>
-                            <div class="overflow-x-auto border border-slate-200 rounded-lg">
+                            <div class="overflow-x-auto border border-slate-200 rounded-lg bg-white">
                                 <table class="w-full text-left text-xs">
                                     <thead class="bg-slate-50 text-slate-500 border-b">
                                         <tr><th class="p-2 text-center w-20">구분</th><th class="p-2 w-32">ITEM</th><th class="p-2 w-32">업체명</th><th class="p-2">진행 내용</th><th class="p-2 text-right w-24">절감액(원)</th><th class="p-2 text-center w-20 text-indigo-600">CR(%)</th></tr>
