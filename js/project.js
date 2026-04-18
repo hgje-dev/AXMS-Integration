@@ -11,10 +11,8 @@ let currentPurchaseUnsubscribe = null;
 let currentDesignUnsubscribe = null;
 let currentPjtScheduleUnsubscribe = null;
 
-// 공유 드라이브 (또는 공유 폴더) ID
 const TARGET_DRIVE_FOLDER = "1ae5JiICk9ZQEaPVNhR6H4TlPs_Np03kQ";
 
-// 💡 초기 기본값 설정
 window.currentProjDashView = 'list';
 window.currentProjPartTab = '제조';
 window.currentStatusFilter = 'all';
@@ -28,9 +26,6 @@ window.ncrData = [];
 window.currentLogMembers = []; 
 window.currentSelectedMembers = [];
 
-// ==========================================
-// 💡 안전망(Safe Guard) 및 공통 유틸리티
-// ==========================================
 
 if (!window.getLocalDateStr) {
     window.getLocalDateStr = function(dateObj) {
@@ -108,10 +103,6 @@ window.updateMultiFileNames = function(inputEl, displayElId) {
     } catch(e) { console.error("파일명 업데이트 에러:", e); }
 };
 
-// ==========================================
-// 💡 알림 카운트 및 데이터 로드
-// ==========================================
-
 window.loadCounts = function() {
     try {
         onSnapshot(collection(db, "project_comments"), (snap) => { window.projectCommentCounts = {}; snap.forEach(doc => { let d = doc.data(); let pid = d.projectId || d.reqId; if(pid) window.projectCommentCounts[pid] = (window.projectCommentCounts[pid]||0)+1; }); window.renderProjectStatusList(); });
@@ -178,9 +169,6 @@ window.resetAllFilters = function() {
     window.filterProjectStatus('all');
 };
 
-// ==========================================
-// 💡 필터링 및 대시보드
-// ==========================================
 window.getFilteredProjects = function() {
     let list = window.currentProjectStatusList || [];
     
@@ -322,9 +310,6 @@ window.loadProjectStatusData = function() {
     });
 };
 
-// ==========================================
-// 💡 리스트 화면 렌더링
-// ==========================================
 window.renderProjectStatusList = function() {
     const tbody = document.getElementById('proj-dash-tbody'); 
     if(!tbody) return;
@@ -437,9 +422,6 @@ window.renderProjectStatusList = function() {
     tbody.innerHTML = htmlStr;
 };
 
-// ==========================================
-// 💡 이미지 렌더러 (엑스박스 방지)
-// ==========================================
 window.generateMediaHtml = function(filesArray) {
     if (!filesArray || !Array.isArray(filesArray) || filesArray.length === 0) return '';
     
@@ -460,7 +442,6 @@ window.generateMediaHtml = function(filesArray) {
             let fileIdMatch = f.url ? f.url.match(/\/d\/(.+?)\/view/) : null;
             
             if (fileIdMatch) {
-                // 구글 드라이브 파일일 경우 고품질 썸네일과 원본 뷰어 매핑
                 viewUrl = `https://drive.google.com/file/d/${fileIdMatch[1]}/view`;
                 thumbUrl = `https://drive.google.com/thumbnail?id=${fileIdMatch[1]}&sz=w600`;
             }
@@ -495,15 +476,14 @@ window.generateMediaHtml = function(filesArray) {
     return result;
 };
 
-// ==========================================
-// 💡 구글 드라이브 파일 업로드 (2-Step 공유 폴더 우회)
-// ==========================================
+// 💡 [핵심 수정] 만료 에러 401 캐치 및 드라이브 스코프 호환 보장
 window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
     if (!window.googleAccessToken) return null;
+    
+    // 💡 싱글 쿼테이션(') 완벽 제거 및 이스케이프
     const safeFolderName = getSafeString(folderName).replace(/[\/\\]/g, '_').replace(/'/g, "\\'") || '미분류 프로젝트';
     
     const tryCreateFolder = async (parentId) => {
-        // 💡 공유 드라이브 접근 권한 파라미터 (supportsAllDrives=true)
         const query = `name='${safeFolderName}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
         const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&supportsAllDrives=true&includeItemsFromAllDrives=true`;
         
@@ -512,7 +492,7 @@ window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
         });
         const folderData = await findRes.json();
         
-        // 💡 만료 에러 캐치 추가
+        // 💡 만료/권한 에러 강력 캐치
         if (folderData.error) {
             if (folderData.error.code === 401) throw new Error("TOKEN_EXPIRED");
             throw new Error(folderData.error.message);
@@ -543,13 +523,11 @@ window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
     };
 
     try {
-        // 1차 시도: 공유 드라이브 특정 폴더
         return await tryCreateFolder(parentFolderId);
     } catch(e) {
-        if (e.message === "TOKEN_EXPIRED") throw new Error("구글 보안 토큰이 만료되었습니다. 창을 닫고 상단의 버튼을 눌러 다시 로그인해주세요.");
+        if (e.message === "TOKEN_EXPIRED") throw new Error("구글 보안 토큰이 만료되었습니다. 창을 닫고 상단의 [구글 연동 필요] 버튼을 눌러 다시 로그인해주세요.");
         console.warn("⚠️ 지정된 공유 폴더 접근 권한이 없어 내 드라이브(root)에 생성을 시도합니다:", e);
         try {
-            // 2차 시도 (폴백): 사용자 개인 드라이브 root
             return await tryCreateFolder('root');
         } catch(e2) {
             if (e2.message === "TOKEN_EXPIRED") throw new Error("구글 보안 토큰이 만료되었습니다. 창을 닫고 다시 연동해주세요.");
@@ -560,7 +538,7 @@ window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
 };
 
 async function handleDriveUploadWithProgress(file, projectName, subFolderName = null, fileIndex = 1, totalFiles = 1) {
-    // 💡 1시간 만료 엄격하게 사전 차단
+    // 💡 1시간 만료 엄격하게 사전 차단 로직 (조용한 만료 방지)
     const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
     if (!window.googleAccessToken || !storedExpiry || Date.now() > parseInt(storedExpiry)) {
         window.googleAccessToken = null;
@@ -598,7 +576,6 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
     if(progressSize) progressSize.innerText = `0.00 MB / ${totalMb} MB`;
 
     try {
-        // 1단계: 메타데이터 빈 파일 생성 (supportsAllDrives 옵션 추가)
         const metaRes = await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
             method: 'POST',
             headers: {
@@ -616,7 +593,6 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
         const metaData = await metaRes.json();
         const fileId = metaData.id;
 
-        // 2단계: 생성된 파일에 바이너리 덮어쓰기 (PATCH)
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
             xhr.open('PATCH', `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media&supportsAllDrives=true`, true);
@@ -667,9 +643,6 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
     }
 }
 
-// ==========================================
-// 💡 프로젝트 정보 입력 폼 모달 (등록/수정)
-// ==========================================
 window.openProjStatusWriteModal = function() {
     try {
         const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
@@ -821,7 +794,6 @@ window.saveProjStatus = async function(btn) {
             payload[key] = getVal(elementId); 
         }
 
-        // 💡 Firestore 에러 방지: 모든 undefined 값을 null로 강제 변환
         const cleanPayload = JSON.parse(JSON.stringify(payload));
         Object.keys(cleanPayload).forEach(key => {
             if (cleanPayload[key] === undefined) cleanPayload[key] = null;
@@ -850,7 +822,6 @@ window.saveProjStatus = async function(btn) {
             
             if (window.googleAccessToken) {
                 const folderName = cleanPayload.code ? cleanPayload.code : cleanPayload.name;
-                // 비동기로 폴더 자동생성 
                 window.getOrCreateDriveFolder(folderName, TARGET_DRIVE_FOLDER)
                     .then(fid => {
                         if(fid) console.log("드라이브 폴더 자동생성 완료:", folderName);
@@ -883,7 +854,6 @@ window.calcFinalMd = function() {
     }
 };
 
-// 💡 팀원 다중선택
 window.addProjectMember = function(name) { 
     if(!name) return; 
     window.currentSelectedMembers = window.currentSelectedMembers || [];
@@ -995,7 +965,6 @@ window.restoreProjectHistory = async function(histId, projectId) {
     }
 };
 
-// 💡 현황판 내 뷰 토글 
 window.toggleProjDashView = function(view) {
     window.currentProjDashView = view;
     
@@ -1004,8 +973,8 @@ window.toggleProjDashView = function(view) {
     const calC = document.getElementById('proj-dash-calendar-container');
     
     if(listC) listC.classList.add('hidden'); 
-    if(ganttC) ganttC.classList.add('hidden'); 
-    if(calC) calC.classList.add('hidden');
+    if(ganttC) { ganttC.classList.add('hidden'); ganttC.classList.remove('flex'); } 
+    if(calC) { calC.classList.add('hidden'); calC.classList.remove('flex'); }
     
     ['list', 'gantt', 'calendar'].forEach(function(b) {
         const btn = document.getElementById('btn-pd-' + b); 
@@ -1019,113 +988,182 @@ window.toggleProjDashView = function(view) {
     
     if(view === 'list' && listC) {
         listC.classList.remove('hidden');
+        if(window.renderProjectStatusList) window.renderProjectStatusList();
     } else if(view === 'gantt' && ganttC) { 
         ganttC.classList.remove('hidden'); 
+        ganttC.classList.add('flex');
         if(window.renderProjGantt) window.renderProjGantt(); 
     } else if(view === 'calendar' && calC) { 
         calC.classList.remove('hidden'); 
+        calC.classList.add('flex');
         if(window.renderProjCalendar) window.renderProjCalendar(); 
     }
 };
 
-// 💡 뷰어 렌더링 - 간트
+// 💡 [핵심 수정] 뷰어 렌더링 - 완벽한 간트 차트 형식
 window.scrollToGanttToday = function() {
+    const container = document.getElementById('proj-dash-gantt-content');
     const todayLine = document.getElementById('gantt-today-line');
-    if(todayLine) {
-        todayLine.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    if(container && todayLine) {
+        // Scroll the horizontal container to the today line
+        const lineOffset = todayLine.offsetLeft;
+        const containerWidth = container.offsetWidth;
+        container.scrollTo({ left: lineOffset - (containerWidth / 2) + 150, behavior: 'smooth' });
     }
 };
 
 window.renderProjGantt = function() {
-    const container = document.getElementById('proj-dash-gantt-content');
-    if(!container) return;
-    const projects = window.getFilteredProjects();
-    
-    if(projects.length === 0) {
-        container.innerHTML = '<div class="text-center p-10 text-slate-500 font-bold">조건에 맞는 프로젝트가 없습니다.</div>';
-        return;
-    }
-
-    let html = '<div class="p-4 space-y-2 min-w-[800px]">';
-    projects.forEach(p => {
-        let start = p.d_asmSt || p.d_asmEst;
-        let end = p.d_shipEn || p.d_shipEst;
-        let title = `[${p.code}] ${p.name}`;
+    try {
+        const container = document.getElementById('proj-dash-gantt-content');
+        if(!container) return;
+        const projects = window.getFilteredProjects();
         
-        let barHtml = '';
-        if(start && end) {
-            barHtml = `<div class="absolute left-0 top-0 h-full bg-gradient-to-r from-indigo-400 to-rose-400 w-full rounded-full"></div>`;
+        if(projects.length === 0) {
+            container.innerHTML = '<div class="text-center p-10 text-slate-500 font-bold">조건에 맞는 프로젝트가 없습니다.</div>';
+            return;
         }
+
+        let minDate = new Date(); minDate.setDate(minDate.getDate() - 7);
+        let maxDate = new Date(); maxDate.setDate(maxDate.getDate() + 14);
         
-        html += `
-        <div class="bg-white border border-slate-200 rounded-lg p-3 shadow-sm flex items-center justify-between hover:border-indigo-300 transition-colors cursor-pointer" onclick="window.editProjStatus('${p.id}')">
-            <div class="w-1/3 truncate font-bold text-slate-700 text-xs" title="${title}">${title}</div>
-            <div class="flex-1 flex items-center gap-2 px-4">
-                <div class="text-[10px] font-bold text-indigo-500 w-20 text-right">${start || '미정'}</div>
-                <div class="flex-1 h-3 bg-slate-100 rounded-full relative overflow-hidden">
+        projects.forEach(p => {
+            const s = new Date(p.d_asmSt || p.d_asmEst || p.d_shipEst || p.createdAt);
+            const e = new Date(p.d_shipEn || p.d_shipEst || p.d_asmEst || p.createdAt);
+            if (!isNaN(s.getTime()) && s < minDate) minDate = new Date(s);
+            if (!isNaN(e.getTime()) && e > maxDate) maxDate = new Date(e);
+        });
+        
+        minDate.setDate(minDate.getDate() - 7);
+        maxDate.setDate(maxDate.getDate() + 7);
+        
+        const totalDays = Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24));
+        if (totalDays <= 0) return;
+
+        let headerHtml = '<div class="flex relative h-8 border-b border-slate-200 mb-2 ml-[300px]">';
+        for(let i=0; i<=totalDays; i++) { 
+            if (i % 7 === 0) { 
+                let d = new Date(minDate); d.setDate(d.getDate() + i);
+                let pct = (i / totalDays) * 100;
+                headerHtml += `<div class="absolute text-[10px] text-slate-400 font-bold -translate-x-1/2 bottom-1" style="left:${pct}%">${d.getMonth()+1}/${d.getDate()}</div>`;
+            }
+        }
+        headerHtml += '</div>';
+
+        let todayPct = ((new Date() - minDate) / (1000 * 60 * 60 * 24)) / totalDays * 100;
+
+        let html = `<div class="relative min-w-[1000px] p-4 bg-white rounded-lg">`;
+        html += headerHtml;
+        html += `<div class="relative">`;
+        
+        // 💡 오늘 날짜 기준선
+        if(todayPct >= 0 && todayPct <= 100) {
+            html += `<div id="gantt-today-line" class="absolute top-0 bottom-0 w-[2px] bg-rose-500/80 z-20 pointer-events-none" style="left: calc(300px + ${todayPct}% - 300px); margin-left: 300px;">
+                        <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-rose-500 text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm">오늘</div>
+                     </div>`;
+        }
+
+        projects.forEach(p => {
+            let startStr = p.d_asmSt || p.d_asmEst || p.d_shipEst;
+            let endStr = p.d_shipEn || p.d_shipEst || p.d_asmEst;
+            let title = `[${p.code||'-'}] ${p.name}`;
+            
+            let sDate = new Date(startStr);
+            let eDate = new Date(endStr);
+            
+            let barHtml = '';
+            if(!isNaN(sDate.getTime()) && !isNaN(eDate.getTime())) {
+                if (sDate > eDate) { let t = sDate; sDate = eDate; eDate = t; }
+                let leftPct = ((sDate - minDate) / (1000 * 60 * 60 * 24)) / totalDays * 100;
+                let widthPct = ((eDate - sDate) / (1000 * 60 * 60 * 24)) / totalDays * 100;
+                
+                if (leftPct < 0) { widthPct += leftPct; leftPct = 0; }
+                if (leftPct + widthPct > 100) { widthPct = 100 - leftPct; }
+                if (widthPct < 0.5) widthPct = 0.5;
+
+                barHtml = `<div class="absolute h-5 rounded-full bg-gradient-to-r from-indigo-400 to-indigo-600 shadow-sm" style="left:${leftPct}%; width:${widthPct}%;"></div>`;
+            } else {
+                barHtml = `<div class="text-[10px] text-slate-400 italic px-4 w-full text-center">일정 미지정</div>`;
+            }
+            
+            html += `
+            <div class="flex items-center text-xs group w-full mb-3 hover:bg-slate-50 p-1.5 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-indigo-100" onclick="window.editProjStatus('${p.id}')">
+                <div class="w-[280px] font-bold truncate pr-4 text-slate-700 shrink-0" title="${title}">${title}</div>
+                <div class="flex-1 relative h-8 flex items-center border-l border-slate-200 pl-4 bg-slate-50/50 rounded-r-lg">
                     ${barHtml}
                 </div>
-                <div class="text-[10px] font-bold text-rose-500 w-20">${end || '미정'}</div>
-            </div>
-            <div class="w-24 text-right text-[11px] font-black text-emerald-600">${p.progress||0}%</div>
-        </div>`;
-    });
-    html += '</div>';
-    container.innerHTML = html;
-};
-
-// 💡 뷰어 렌더링 - 캘린더
-window.renderProjCalendar = function() {
-    const container = document.getElementById('proj-dash-calendar-content');
-    if(!container) return;
-    
-    const projects = window.getFilteredProjects();
-    const now = window.calendarCurrentDate || new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
-    
-    let html = `
-    <div class="flex justify-between items-center mb-4">
-        <button onclick="window.calendarCurrentDate.setMonth(window.calendarCurrentDate.getMonth()-1); window.renderProjCalendar()" class="p-2 text-slate-400 hover:text-indigo-600"><i class="fa-solid fa-chevron-left"></i></button>
-        <h3 class="text-sm font-black text-slate-800">${year}년 ${month}월 출하/조립 일정</h3>
-        <button onclick="window.calendarCurrentDate.setMonth(window.calendarCurrentDate.getMonth()+1); window.renderProjCalendar()" class="p-2 text-slate-400 hover:text-indigo-600"><i class="fa-solid fa-chevron-right"></i></button>
-    </div>
-    `;
-    
-    html += `<div class="grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-lg overflow-hidden">`;
-    const days = ['일','월','화','수','목','금','토'];
-    days.forEach(d => html += `<div class="bg-slate-50 text-center py-2 text-[10px] font-bold ${d==='일'?'text-rose-500':(d==='토'?'text-blue-500':'text-slate-600')}">${d}</div>`);
-    
-    const firstDay = new Date(year, month - 1, 1).getDay();
-    const lastDate = new Date(year, month, 0).getDate();
-    
-    for(let i=0; i<firstDay; i++) html += `<div class="bg-white min-h-[100px] p-1 opacity-50"></div>`;
-    
-    for(let d=1; d<=lastDate; d++) {
-        let dStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-        let isToday = dStr === window.getLocalDateStr(new Date());
+                <div class="w-16 text-right text-[11px] font-black text-emerald-600 shrink-0 pr-2">${p.progress||0}%</div>
+            </div>`;
+        });
         
-        let dayPjts = projects.filter(p => p.d_shipEst === dStr || p.d_shipEn === dStr || p.d_asmSt === dStr || p.d_asmEst === dStr);
+        html += `</div></div>`;
+        container.innerHTML = html;
         
-        let pjtHtml = dayPjts.map(p => {
-            let isShip = (p.d_shipEst === dStr || p.d_shipEn === dStr);
-            let badgeClass = isShip ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-indigo-50 text-indigo-600 border-indigo-200';
-            let icon = isShip ? 'fa-truck-fast' : 'fa-wrench';
-            return `<div class="text-[9px] font-bold border px-1 py-0.5 rounded mb-0.5 truncate cursor-pointer ${badgeClass}" onclick="window.editProjStatus('${p.id}')" title="[${p.code}] ${p.name}"><i class="fa-solid ${icon} mr-1"></i>${p.code||p.name}</div>`;
-        }).join('');
+        // 렌더링 직후 스크롤 이동
+        setTimeout(window.scrollToGanttToday, 50);
         
-        html += `<div class="bg-white min-h-[100px] p-1 border-t-2 ${isToday?'border-indigo-500':'border-transparent'} flex flex-col">
-            <span class="text-[10px] font-bold text-slate-500 text-center mb-1 ${isToday?'bg-indigo-600 text-white rounded-full w-5 h-5 mx-auto leading-5':''}">${d}</span>
-            <div class="flex-1 overflow-y-auto custom-scrollbar">${pjtHtml}</div>
-        </div>`;
+    } catch(e) {
+        console.error("Gantt Rendering Error:", e);
+        const container = document.getElementById('proj-dash-gantt-content');
+        if(container) container.innerHTML = `<div class="text-center p-10 text-rose-500 font-bold">간트 차트를 렌더링하는 중 오류가 발생했습니다.<br>${e.message}</div>`;
     }
-    html += `</div>`;
-    container.innerHTML = html;
 };
 
-// ==========================================
-// 💡 구매 관리 모달 (안전장치 적용)
-// ==========================================
+// 💡 [핵심 수정] 뷰어 렌더링 - 캘린더 오류 방어
+window.renderProjCalendar = function() {
+    try {
+        const container = document.getElementById('proj-dash-calendar-content');
+        if(!container) return;
+        
+        const projects = window.getFilteredProjects();
+        const now = window.calendarCurrentDate || new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth() + 1;
+        
+        let html = `
+        <div class="flex justify-between items-center mb-4">
+            <button onclick="window.calendarCurrentDate.setMonth(window.calendarCurrentDate.getMonth()-1); window.renderProjCalendar()" class="p-2 text-slate-400 hover:text-indigo-600"><i class="fa-solid fa-chevron-left"></i></button>
+            <h3 class="text-sm font-black text-slate-800">${year}년 ${month}월 출하/조립 일정</h3>
+            <button onclick="window.calendarCurrentDate.setMonth(window.calendarCurrentDate.getMonth()+1); window.renderProjCalendar()" class="p-2 text-slate-400 hover:text-indigo-600"><i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+        `;
+        
+        html += `<div class="grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-lg overflow-hidden">`;
+        const days = ['일','월','화','수','목','금','토'];
+        days.forEach(d => html += `<div class="bg-slate-50 text-center py-2 text-[10px] font-bold ${d==='일'?'text-rose-500':(d==='토'?'text-blue-500':'text-slate-600')}">${d}</div>`);
+        
+        const firstDay = new Date(year, month - 1, 1).getDay();
+        const lastDate = new Date(year, month, 0).getDate();
+        
+        for(let i=0; i<firstDay; i++) html += `<div class="bg-white min-h-[100px] p-1 opacity-50"></div>`;
+        
+        for(let d=1; d<=lastDate; d++) {
+            let dStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            let isToday = dStr === window.getLocalDateStr(new Date());
+            
+            let dayPjts = projects.filter(p => p.d_shipEst === dStr || p.d_shipEn === dStr || p.d_asmSt === dStr || p.d_asmEst === dStr);
+            
+            let pjtHtml = dayPjts.map(p => {
+                let isShip = (p.d_shipEst === dStr || p.d_shipEn === dStr);
+                let badgeClass = isShip ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-indigo-50 text-indigo-600 border-indigo-200';
+                let icon = isShip ? 'fa-truck-fast' : 'fa-wrench';
+                let titleSafe = `[${p.code||'-'}] ${p.name}`.replace(/"/g, '&quot;');
+                return `<div class="text-[9px] font-bold border px-1 py-0.5 rounded mb-0.5 truncate cursor-pointer shadow-sm ${badgeClass}" onclick="window.editProjStatus('${p.id}')" title="${titleSafe}"><i class="fa-solid ${icon} mr-1"></i>${p.code||p.name}</div>`;
+            }).join('');
+            
+            html += `<div class="bg-white min-h-[100px] p-1 border-t-2 ${isToday?'border-indigo-500':'border-transparent'} flex flex-col">
+                <span class="text-[10px] font-bold text-slate-500 text-center mb-1 ${isToday?'bg-indigo-600 text-white rounded-full w-5 h-5 mx-auto leading-5 shadow-md':''}">${d}</span>
+                <div class="flex-1 overflow-y-auto custom-scrollbar">${pjtHtml}</div>
+            </div>`;
+        }
+        html += `</div>`;
+        container.innerHTML = html;
+    } catch(e) {
+        console.error("Calendar Rendering Error:", e);
+        const container = document.getElementById('proj-dash-calendar-content');
+        if(container) container.innerHTML = `<div class="text-center p-10 text-rose-500 font-bold">달력을 렌더링하는 중 오류가 발생했습니다.<br>${e.message}</div>`;
+    }
+};
+
 window.openPurchaseModal = function(projectId, title) { 
     try {
         const modal = document.getElementById('purchase-modal');
@@ -1227,7 +1265,6 @@ window.savePurchaseItem = async function() {
             createdAt: Date.now() 
         };
         
-        // 💡 Firestore 에러 완벽 방지: undefined 값을 null로 변환
         const cleanPayload = JSON.parse(JSON.stringify(payload));
         Object.keys(cleanPayload).forEach(k => { if(cleanPayload[k] === undefined) cleanPayload[k] = null; });
         
@@ -1252,9 +1289,6 @@ window.deletePurchase = async function(id) {
     } 
 };
 
-// ==========================================
-// 💡 설계 파일 관리 모달 (안전장치 적용)
-// ==========================================
 window.openDesignModal = function(projectId, title) { 
     try {
         const modal = document.getElementById('design-modal');
@@ -1380,9 +1414,6 @@ window.deleteDesign = async function(id) {
     } 
 };
 
-// ==========================================
-// 💡 일정표 관리 모달 (안전장치 적용)
-// ==========================================
 window.openPjtScheduleModal = function(projectId, title) { 
     try {
         const modal = document.getElementById('pjt-schedule-modal');
@@ -1439,7 +1470,7 @@ window.openPjtScheduleModal = function(projectId, title) {
 
 window.closePjtScheduleModal = function() { const m = document.getElementById('pjt-schedule-modal'); if(m){m.classList.add('hidden');m.classList.remove('flex');} if (currentPjtScheduleUnsubscribe) currentPjtScheduleUnsubscribe(); };
 window.resetPjtScheduleForm = function() { 
-    const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
+    const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) value = val; };
     setVal('editing-sch-id', ''); setVal('new-sch-text', ''); setVal('new-sch-file', ''); 
     const fname = document.getElementById('sch-file-name'); if(fname) fname.innerText = ''; 
 };
@@ -1508,11 +1539,7 @@ window.deletePjtSchedule = async function(id) {
     } 
 };
 
-// ==========================================
-// 💡 생산일지 관리 모달 (안전장치 적용 및 팀원 추가 기능 복구)
-// ==========================================
-
-// 💡 1. 팀원 목록 관리를 위한 함수 새로 작성
+// 💡 1. 생산일지 팀원 추가 기능 구현 함수 (UI 복원)
 window.addLogMember = function(name) {
     if(!name) return;
     window.currentLogMembers = window.currentLogMembers || [];
@@ -1546,7 +1573,8 @@ window.renderLogMembers = function() {
 
 window.openDailyLogModal = function(projectId) { 
     try {
-        if(window.initGoogleAPI) window.initGoogleAPI(); // 💡 매번 열 때 구글 연동 체크 새로고침
+        // 💡 매번 생산일지를 열 때마다 구글 연동이 풀리지 않았는지 재확인
+        if(window.initGoogleAPI) window.initGoogleAPI(); 
         
         const modal = document.getElementById('daily-log-modal');
         if(!modal) { safeShowError('생산일지 모달창 요소를 찾을 수 없습니다.'); return; }
@@ -1733,9 +1761,6 @@ window.clearDailyLogFile = function(e) {
     if(input) input.value = ''; if(wrap) wrap.classList.add('hidden');
 };
 
-// ==========================================
-// 💡 투입 MD 기록 관리 모달 (안전장치 적용)
-// ==========================================
 window.openMdLogModal = function(projectId, title, curMd) { 
     try {
         const modal = document.getElementById('md-log-modal');
@@ -1815,9 +1840,6 @@ window.deleteMdLog = async function(id, projectId) { if(!confirm("삭제하시�
 window.editMdLog = function(id) { const log = (window.currentMdLogs || []).find(l => l.id === id); if(!log) return; document.getElementById('editing-md-id').value = id; document.getElementById('new-md-date').value = log.date || window.getLocalDateStr(new Date()); document.getElementById('new-md-val').value = log.md || ''; document.getElementById('new-md-desc').value = log.desc || ''; window.currentLogMembers = (log.members && typeof log.members === 'string') ? log.members.split(',').map(s=>s.trim()).filter(Boolean) : []; if(window.renderLogMembers) window.renderLogMembers(); const btnSave = document.getElementById('btn-md-save'); if(btnSave) btnSave.innerText = '수정'; const btnCancel = document.getElementById('btn-md-cancel'); if(btnCancel) btnCancel.classList.remove('hidden'); };
 window.updateProjectTotalMd = async function(projectId) { const snap = await getDocs(query(collection(db, "project_md_logs"), where("projectId", "==", projectId))); let total = 0; snap.forEach(docSnap => total += parseFloat(docSnap.data().md) || 0); const projRef = doc(db, "projects_status", projectId); const projSnap = await getDoc(projRef); if(projSnap.exists()) { const outMd = parseFloat(projSnap.data().outMd) || 0; await setDoc(projRef, { currentMd: total, finalMd: total + outMd }, { merge: true }); } };
 
-// ==========================================
-// 💡 코멘트, 이슈, 링크 등 나머지 모달창
-// ==========================================
 window.openIssueModal = function(projectId, title) { 
     const modal = document.getElementById('issue-modal'); if(!modal) { safeShowError("이슈 모달 요소 없음"); return; }
     modal.classList.remove('hidden'); modal.classList.add('flex'); 
@@ -1868,7 +1890,7 @@ window.openCommentModal = function(projectId, title) {
             list.innerHTML = topLevel.map(c => {
                 let safeContent = getSafeString(c.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
                 let mainBtnHtml = (c.authorUid === (window.currentUser&&window.currentUser.uid) || (window.userProfile&&window.userProfile.role==='admin')) ? `<button onclick="window.editComment('${c.id}')" class="text-slate-400 hover:text-amber-500 px-1"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteComment('${c.id}')" class="text-slate-400 hover:text-rose-500 px-1"><i class="fa-solid fa-trash-can"></i></button>` : '';
-                return `<div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm"><div class="flex justify-between items-start mb-3"><div class="flex items-center gap-2"><span class="font-black text-slate-800 text-[15px]">${getSafeString(c.authorName)}</span><span class="text-xs font-medium text-slate-400">${window.getDateTimeStr(new Date(getSafeMillis(c.createdAt)))}</span></div><div class="flex gap-2"><button onclick="window.setReplyTo('${c.id}', '${getSafeString(c.authorName)}')" class="text-[11px] bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-1 rounded-lg font-bold shadow-sm">답글달기</button>${mainBtnHtml}</div></div><div class="text-slate-800 text-[14px] font-medium pl-1 break-words">${safeContent}</div></div>`;
+                return `<div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm"><div class="flex justify-between items-start mb-3"><div class="flex items-center gap-2"><span class="font-bold text-slate-800 text-[15px]">${getSafeString(c.authorName)}</span><span class="text-xs font-medium text-slate-400">${window.getDateTimeStr(new Date(getSafeMillis(c.createdAt)))}</span></div><div class="flex gap-2"><button onclick="window.setReplyTo('${c.id}', '${getSafeString(c.authorName)}')" class="text-[11px] bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-1 rounded-lg font-bold shadow-sm">답글달기</button>${mainBtnHtml}</div></div><div class="text-slate-800 text-[14px] font-medium pl-1 break-words">${safeContent}</div></div>`;
             }).join('');
         }); 
     } catch(e) { safeShowError('코멘트 로드 에러', e); }
