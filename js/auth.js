@@ -26,8 +26,8 @@ window.tempUserUid = "";
 
 const googleProvider = new GoogleAuthProvider();
 
-// 💡 로그인 시점에 드라이브, 지메일, 시트 연동 권한(Scope)을 한 번에 요청합니다!
-googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
+// 💡 로그인 시점에 공유 드라이브 접근을 위해 권한(Scope)을 'drive' 전체로 상향합니다!
+googleProvider.addScope('https://www.googleapis.com/auth/drive');
 googleProvider.addScope('https://www.googleapis.com/auth/gmail.send');
 googleProvider.addScope('https://www.googleapis.com/auth/spreadsheets.readonly');
 
@@ -36,7 +36,7 @@ window.googleLogin = async () => {
     const err = document.getElementById('login-error');
     if(err) err.classList.add('hidden');
 
-    window.isSigningUp = true; // 가입 중 튕김 방지 락(Lock) 걸기
+    window.isSigningUp = true; 
 
     try {
         const result = await signInWithPopup(auth, googleProvider);
@@ -44,29 +44,27 @@ window.googleLogin = async () => {
 
         // 🚨 요청사항 반영: @axbis.ai 이메일이 아니면 깔끔하게 "가입 불가능 합니다" 출력 후 쫓아냄
         if (!user.email || !user.email.endsWith('@axbis.ai')) {
-            try { await user.delete(); } catch(e) { await signOut(auth); } // 계정 생성 즉시 파기 및 로그아웃
-            window.isSigningUp = false; // 락 해제
+            try { await user.delete(); } catch(e) { await signOut(auth); } 
+            window.isSigningUp = false; 
             if (err) {
                 err.innerHTML = "가입 불가능 합니다";
                 err.classList.remove('hidden');
             }
-            return; // 여기서 로직 종료
+            return; 
         }
 
-        // 💡 로그인 성공 시, OAuth 토큰을 추출하여 로컬 저장소에 저장 (구글 API 연동 자동화)
+        // 💡 로그인 성공 시, OAuth 토큰을 추출하여 로컬 저장소에 저장
         const credential = GoogleAuthProvider.credentialFromResult(result);
         if (credential && credential.accessToken) {
             window.googleAccessToken = credential.accessToken;
             localStorage.setItem('axmsGoogleTokenV2', credential.accessToken);
-            localStorage.setItem('axmsGoogleTokenExpiryV2', Date.now() + 3500 * 1000); // 약 1시간 유효
+            localStorage.setItem('axmsGoogleTokenExpiryV2', Date.now() + 3500 * 1000); 
         }
 
-        // DB에 기존 유저인지 확인
         const userDocRef = doc(db, "users", user.uid);
         const userDoc = await getDoc(userDocRef);
 
         if (!userDoc.exists()) {
-            // [신규 사용자] 이메일과 UID를 절대 지워지지 않게 전역 변수에 꽉 묶어둠 (undefined 원천 차단)
             window.tempUserEmail = user.email;
             window.tempUserUid = user.uid;
             
@@ -77,15 +75,12 @@ window.googleLogin = async () => {
             document.getElementById('signup-view').classList.remove('hidden');
             if(document.getElementById('auth-title')) document.getElementById('auth-title').innerText = "추가 정보 입력";
         } else {
-            // [기존 사용자] 로그인 성공
             window.isSigningUp = false; 
             
-            // 최고 관리자 강제 부여 체크
             if (user.email === 'mfg@axbis.ai' && userDoc.data().role !== 'admin') {
                 await setDoc(userDocRef, { role: 'admin' }, { merge: true });
             }
             
-            // 안전하게 메인화면 진입
             location.reload();
         }
     } catch (er) {
@@ -98,14 +93,12 @@ window.googleLogin = async () => {
     }
 };
 
-// 💡 2. 신규 사용자 추가 정보 저장 및 가입 처리 (알림/메일 발송 제거)
 window.completeGoogleSignup = async () => {
     const n = document.getElementById('signup-name')?.value.trim();
     const t = document.getElementById('signup-dept')?.value;
     const pos = document.getElementById('signup-position')?.value || '매니저';
     const err = document.getElementById('signup-error');
     
-    // 🚨 undefined 방지: 아까 안전하게 묶어둔 이메일과 UID를 가져옵니다.
     const finalEmail = window.tempUserEmail || auth.currentUser?.email;
     const finalUid = window.tempUserUid || auth.currentUser?.uid;
 
@@ -121,10 +114,8 @@ window.completeGoogleSignup = async () => {
     }
 
     try {
-        // 최고관리자 지정 (mfg@axbis.ai)
         let initialRole = (finalEmail === 'mfg@axbis.ai') ? 'admin' : 'pending';
 
-        // Firestore에 데이터 저장 (이메일이 무조건 들어감)
         await setDoc(doc(db, "users", finalUid), {
             email: finalEmail,
             name: n,
@@ -147,7 +138,6 @@ window.completeGoogleSignup = async () => {
                 window.logout(); 
             }, 3000);
         } else {
-            // 최고 관리자인 경우 즉시 접속
             window.isSigningUp = false; 
             location.reload(); 
         }
@@ -156,7 +146,6 @@ window.completeGoogleSignup = async () => {
     }
 };
 
-// 💡 명시적으로 오프라인 처리하며 로그아웃
 window.logout = async () => { 
     if (window.currentUser) {
         try { await setDoc(doc(db, "users", window.currentUser.uid), { isOnline: false, lastActive: Date.now() }, { merge: true }); } catch(e) {}
@@ -165,10 +154,8 @@ window.logout = async () => {
     location.reload(); 
 };
 
-// 💡 3. 로그인 상태 감지 및 UI 렌더링
 window.initAuthListeners = () => {
     onAuthStateChanged(auth, async (u) => {
-        // 신규 가입 폼을 작성 중일 때는 시스템이 튕겨내지 않도록 방어!
         if (window.isSigningUp) return; 
 
         if (u) {
@@ -177,53 +164,46 @@ window.initAuthListeners = () => {
                 if (uS.exists()) { 
                     window.userProfile = uS.data(); 
                     
-                    // 신규 가입자 승인 대기 처리
                     if(window.userProfile.role === 'pending') { 
                         const e = document.getElementById('login-error'); 
                         if(e) { e.innerHTML="가입은 완료되었으나, 관리자 승인 대기 중입니다."; e.classList.remove('hidden'); } 
                         await signOut(auth); return; 
                     } 
                     
-                    // 마지막 안전장치: 최고관리자 자동 승격
                     if (u.email === 'mfg@axbis.ai' && window.userProfile.role !== 'admin') {
                         window.userProfile.role = 'admin';
                         await setDoc(doc(db, "users", u.uid), { role: 'admin' }, { merge: true });
                     }
                     
                 } else { 
-                    // DB에 정보가 없는 경우 차단된 계정으로 간주
                     const e = document.getElementById('login-error'); 
                     if(e) { e.innerHTML="관리자에 의해 삭제되거나 존재하지 않는 계정입니다."; e.classList.remove('hidden'); } 
                     await signOut(auth); 
                     return; 
                 }
                 
-                // 권한 객체 초기화 보장
                 if (!window.userProfile.permissions) window.userProfile.permissions = {}; 
                 const dP = { collab:true, purchase:true, assembly:true, repair:true, 'project-status':true, 'weekly-log':true }; 
                 for (let p in dP) { if (window.userProfile.permissions[p] === undefined) window.userProfile.permissions[p] = true; }
                 
                 window.currentUser = u;
                 
-                // 💡 접속 상태 갱신 (Heartbeat 로직)
                 const updatePresence = async () => {
                     if(window.currentUser) {
                         try { await setDoc(doc(db, "users", window.currentUser.uid), { isOnline: true, lastActive: Date.now() }, { merge: true }); } catch(e){}
                     }
                 };
-                updatePresence(); // 로그인 즉시 갱신
+                updatePresence(); 
                 if(window.presenceInterval) clearInterval(window.presenceInterval);
-                window.presenceInterval = setInterval(updatePresence, 5 * 60 * 1000); // 5분마다 상태 갱신
+                window.presenceInterval = setInterval(updatePresence, 5 * 60 * 1000);
 
                 document.getElementById('login-modal')?.classList.add('hidden'); 
                 const pt = document.getElementById('portal-container'); if(pt) { pt.classList.remove('hidden'); pt.classList.add('flex'); }
                 
-                // 사이드바 유저 정보 업데이트
                 if(document.getElementById('sidebar-user-name')) document.getElementById('sidebar-user-name').innerText = window.userProfile.name; 
                 if(document.getElementById('sidebar-user-position')) document.getElementById('sidebar-user-position').innerText = window.userProfile.position || '직책 미지정'; 
                 if(document.getElementById('sidebar-team-badge')) document.getElementById('sidebar-team-badge').innerText = window.userProfile.team || window.userProfile.department;
                 
-                // 역할 뱃지 렌더링
                 const rB=document.getElementById('nav-role-badge'), bA=document.getElementById('btn-admin');
                 if (window.userProfile.role === 'admin') { 
                     if(rB){ rB.className='bg-purple-500 text-white px-2 py-0.5 rounded text-[10px] hidden sm:block'; rB.innerText='👑 최고 관리자';} 
@@ -238,7 +218,6 @@ window.initAuthListeners = () => {
                     if(bA){ bA.classList.add('hidden'); } 
                 }
                 
-                // 실시간 구독 리스너 연결
                 if(allUsersUnsubscribe) allUsersUnsubscribe(); allUsersUnsubscribe=onSnapshot(collection(db,"users"), s=>{ window.allSystemUsers=[]; s.forEach(d=>window.allSystemUsers.push({uid:d.id,...d.data()})); if(document.getElementById('admin-modal')&&!document.getElementById('admin-modal').classList.contains('hidden') && window.renderAdminUsers) window.renderAdminUsers(); });
                 if(teamMembersUnsubscribe) teamMembersUnsubscribe(); teamMembersUnsubscribe=onSnapshot(collection(db,"team_members"), s=>{ window.teamMembers=[]; s.forEach(d=>window.teamMembers.push({id:d.id,...d.data()})); if(window.populateUserDropdowns) window.populateUserDropdowns(); if(window.renderTeamMembers) window.renderTeamMembers(); if(!document.getElementById('view-dashboard-home')?.classList.contains('hidden') && window.processDashboardData) window.processDashboardData(); });
                 
@@ -252,17 +231,13 @@ window.initAuthListeners = () => {
                 console.error("데이터베이스 읽기 에러:", firestoreError);
             }
         } else { 
-            // 로그아웃 상태
             window.currentUser=null; document.getElementById('login-modal')?.classList.remove('hidden'); 
             const pt=document.getElementById('portal-container'); if(pt) { pt.classList.add('hidden'); pt.classList.remove('flex'); } 
-            
-            // 타이머 정리
             if(window.presenceInterval) clearInterval(window.presenceInterval);
         }
     });
 };
 
-// 💡 4. 내 정보 설정 모달 제어
 window.openSettingsModal = () => {
     if (!window.userProfile) return;
     document.getElementById('set-name').value = window.userProfile.name || '';
@@ -310,11 +285,9 @@ window.saveUserSettings = async () => {
     }
 };
 
-// 💡 5. 관리자 유저 관리 모달
 window.openAdminModal = () => { document.getElementById('admin-modal').classList.remove('hidden'); document.getElementById('admin-modal').classList.add('flex'); window.renderAdminUsers(); };
 window.closeAdminModal = () => { document.getElementById('admin-modal').classList.add('hidden'); document.getElementById('admin-modal').classList.remove('flex'); };
 
-// 💡 관리자용 유저 리스트 테이블 렌더링
 window.renderAdminUsers = () => {
     const tb = document.getElementById('admin-users-tbody'); if (!tb) return;
     if (window.allSystemUsers.length === 0) { tb.innerHTML = '<tr><td colspan="7" class="text-center p-6 text-slate-500 font-bold">등록된 사용자가 없습니다.</td></tr>'; return; }
@@ -333,7 +306,7 @@ window.renderAdminUsers = () => {
     ];
 
     let html = '';
-    const now = Date.now(); // 현재 시간 캐싱
+    const now = Date.now(); 
 
     sortedUsers.forEach(u => {
         const p = u.permissions || {}; 
@@ -353,7 +326,6 @@ window.renderAdminUsers = () => {
                             ${teamOpts}
                          </select>`;
 
-        // 💡 접속 상태 판단 (10분 이내 Heartbeat가 있으면 온라인)
         const lastActive = u.lastActive || 0;
         const isOnline = u.isOnline !== false && (now - lastActive < 10 * 60 * 1000);
         
@@ -402,44 +374,9 @@ window.renderAdminUsers = () => {
     tb.innerHTML = html;
 };
 
-// 소속 팀 변경 함수
-window.updateUserTeam = async (uid, team) => { 
-    try { 
-        await setDoc(doc(db, "users", uid), { team: team, department: team }, { merge: true }); 
-        if(window.showToast) window.showToast("소속 팀이 변경되었습니다."); 
-    } catch (e) { 
-        if(window.showToast) window.showToast("오류 발생", "error"); 
-    } 
-};
-
-window.updateUserPosition = async (uid, pos) => { 
-    try { await setDoc(doc(db, "users", uid), { position: pos }, { merge: true }); if(window.showToast) window.showToast("직책이 변경되었습니다."); } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } 
-};
-
-window.updateUserRole = async (uid, role) => { 
-    try { await setDoc(doc(db, "users", uid), { role: role }, { merge: true }); if(window.showToast) window.showToast("등급이 변경되었습니다."); } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } 
-};
-
-window.updateUserPerm = async (uid, key, val) => { 
-    try { const uR = doc(db, "users", uid); const uD = await getDoc(uR); if (uD.exists()) { let p = uD.data().permissions || {}; p[key] = val; await setDoc(uR, { permissions: p }, { merge: true }); if(window.showToast) window.showToast("권한이 업데이트되었습니다."); } } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } 
-};
-
-window.approveUser = async (uid) => {
-    try {
-        await setDoc(doc(db, "users", uid), { role: 'user' }, { merge: true });
-        if(window.showToast) window.showToast("계정이 정상적으로 승인되었습니다.", "success");
-    } catch(e) {
-        if(window.showToast) window.showToast("승인 처리 실패", "error");
-        console.error(e);
-    }
-};
-
-window.deleteUser = async (uid) => { 
-    if (!confirm("이 사용자를 정말 삭제하시겠습니까?\n\n삭제 시 해당 사용자의 시스템 접근이 즉시 영구 차단됩니다.\n(참고: 동일한 이메일로 다시 회원가입을 하려면 Firebase Authentication 콘솔에서도 계정을 삭제해주셔야 합니다.)")) return; 
-    try { 
-        await deleteDoc(doc(db, "users", uid)); 
-        if(window.showToast) window.showToast("계정 권한이 영구적으로 삭제(차단) 되었습니다."); 
-    } catch (e) { 
-        if(window.showToast) window.showToast("오류 발생", "error"); 
-    } 
-};
+window.updateUserTeam = async (uid, team) => { try { await setDoc(doc(db, "users", uid), { team: team, department: team }, { merge: true }); if(window.showToast) window.showToast("소속 팀이 변경되었습니다."); } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } };
+window.updateUserPosition = async (uid, pos) => { try { await setDoc(doc(db, "users", uid), { position: pos }, { merge: true }); if(window.showToast) window.showToast("직책이 변경되었습니다."); } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } };
+window.updateUserRole = async (uid, role) => { try { await setDoc(doc(db, "users", uid), { role: role }, { merge: true }); if(window.showToast) window.showToast("등급이 변경되었습니다."); } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } };
+window.updateUserPerm = async (uid, key, val) => { try { const uR = doc(db, "users", uid); const uD = await getDoc(uR); if (uD.exists()) { let p = uD.data().permissions || {}; p[key] = val; await setDoc(uR, { permissions: p }, { merge: true }); if(window.showToast) window.showToast("권한이 업데이트되었습니다."); } } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } };
+window.approveUser = async (uid) => { try { await setDoc(doc(db, "users", uid), { role: 'user' }, { merge: true }); if(window.showToast) window.showToast("계정이 정상적으로 승인되었습니다.", "success"); } catch(e) { window.showToast("승인 처리 실패", "error"); } };
+window.deleteUser = async (uid) => { if (!confirm("이 사용자를 정말 삭제하시겠습니까?\n\n삭제 시 해당 사용자의 시스템 접근이 즉시 영구 차단됩니다.")) return; try { await deleteDoc(doc(db, "users", uid)); if(window.showToast) window.showToast("계정 권한이 영구적으로 삭제(차단) 되었습니다."); } catch (e) { window.showToast("오류 발생", "error"); } };
