@@ -15,7 +15,8 @@ googleProvider.addScope('https://www.googleapis.com/auth/gmail.send');
 googleProvider.addScope('https://www.googleapis.com/auth/spreadsheets.readonly');
 
 googleProvider.setCustomParameters({ 
-    prompt: 'select_account'
+    prompt: 'consent',
+    access_type: 'offline'
 });
 
 window.googleLogin = async () => {
@@ -41,7 +42,6 @@ window.googleLogin = async () => {
         if (credential && credential.accessToken) {
             window.googleAccessToken = credential.accessToken;
             localStorage.setItem('axmsGoogleTokenV2', credential.accessToken);
-            // 토큰 유효기간 약 1시간 저장
             localStorage.setItem('axmsGoogleTokenExpiryV2', Date.now() + 3500 * 1000); 
         }
 
@@ -126,14 +126,13 @@ window.logout = async () => {
     location.reload(); 
 };
 
-// 💡 [핵심 해결] 백그라운드 자동 로그인 시 토큰이 없으면 강제로 첫 화면으로 돌려보냄
 window.initAuthListeners = () => {
     onAuthStateChanged(auth, async (u) => {
         if (window.isSigningUp) return; 
         
         if (u) {
             try {
-                // 💡 구글 권한 만료 체크: 만료되었으면 조용히 로그아웃 시켜서 [구글 계정으로 시작하기] 화면 띄움
+                // 구글 권한 만료 체크
                 const token = localStorage.getItem('axmsGoogleTokenV2');
                 const expiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
                 if (!token || !expiry || Date.now() > parseInt(expiry)) {
@@ -163,8 +162,16 @@ window.initAuthListeners = () => {
                     
                     window.currentUser = u; 
                     
+                    // UI 정상 표시
                     const loginModal = document.getElementById('login-modal'); if (loginModal) loginModal.classList.add('hidden'); 
                     const pt = document.getElementById('portal-container'); if (pt) { pt.classList.remove('hidden'); pt.classList.add('flex'); }
+                    
+                    // 💡 환영 메시지 복구 (최초 1회만 표시)
+                    if (!window.welcomeToastShown) {
+                        if(window.showToast) window.showToast(`${window.userProfile.name}님, 반갑습니다! 오늘 하루도 화이팅하세요 🚀`, "success");
+                        window.welcomeToastShown = true;
+                    }
+
                     if (document.getElementById('sidebar-user-name')) document.getElementById('sidebar-user-name').innerText = window.userProfile.name || '이름 없음'; 
                     if (document.getElementById('sidebar-team-badge')) document.getElementById('sidebar-team-badge').innerText = window.userProfile.team || '소속 없음';
                     
@@ -259,7 +266,7 @@ window.renderAdminUsers = () => {
         const currentTeam = u.team || u.department || ''; const teamOpts = teamsList.map(t => `<option value="${t}" ${currentTeam === t ? 'selected' : ''}>${t}</option>`).join('');
         const safeTeam = `<select class="border border-slate-300 rounded px-2 py-1.5 text-xs font-bold ${isP ? 'text-rose-600 bg-white' : 'text-slate-600'} w-full focus:outline-none" onchange="window.updateUserTeam('${u.uid}', this.value)">${currentTeam ? '' : '<option value="" disabled selected>팀 미지정</option>'}${teamOpts}</select>`;
         const lastActiveStr = u.lastActive ? new Date(u.lastActive).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '기록 없음';
-        html += `<tr class="${trClass}"><td class="p-3 text-center font-bold text-slate-700">${u.name}${safePos}</td><td class="p-3 text-center">${safeTeam}</td><td class="p-3 text-center text-slate-500">${u.email}</td><td class="p-3 text-center text-[9px] text-slate-400">${lastActiveStr}</td><td class="p-3 text-center"><select class="border border-slate-300 rounded px-2 py-1.5 text-xs font-bold ${isP ? 'text-rose-600 bg-white' : 'text-slate-600'}" onchange="window.updateUserRole('${u.uid}', this.value)"><option value="pending" ${u.role === 'pending' ? 'selected' : ''}>승인 대기</option><option value="user" ${u.role === 'user' ? 'selected' : ''}>일반 사용자</option><option value="admin" ${u.role === 'admin' ? 'selected' : ''}>시스템 관리자</option></select></td><td class="p-3"><div class="flex flex-wrap gap-3 justify-center"><label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p.collab ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','collab',this.checked)">협업</label></div></td><td class="p-3 text-center"><div class="flex items-center justify-center gap-2">${isP ? `<button onclick="window.approveUser('${u.uid}')" class="bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold">✅ 승인</button>` : ''}<button onclick="window.deleteUser('${u.uid}')" class="text-rose-500 px-2.5 py-1.5 rounded-lg border border-rose-200"><i class="fa-solid fa-trash-can"></i></button></div></td></tr>`;
+        html += `<tr class="${trClass}"><td class="p-3 text-center font-bold text-slate-700">${u.name}${safePos}</td><td class="p-3 text-center">${safeTeam}</td><td class="p-3 text-center text-slate-500">${u.email}</td><td class="p-3 text-center text-[9px] text-slate-400">${lastActiveStr}</td><td class="p-3 text-center"><select class="border border-slate-300 rounded px-2 py-1.5 text-xs font-bold ${isP ? 'text-rose-600 bg-white' : 'text-slate-600'}" onchange="window.updateUserRole('${u.uid}', this.value)"><option value="pending" ${u.role === 'pending' ? 'selected' : ''}>승인 대기</option><option value="user" ${u.role === 'user' ? 'selected' : ''}>일반 사용자</option><option value="master" ${u.role === 'master' ? 'selected' : ''}>마스터</option><option value="admin" ${u.role === 'admin' ? 'selected' : ''}>시스템 관리자</option></select></td><td class="p-3"><div class="flex flex-wrap gap-3 justify-center"><label class="flex items-center gap-1 text-[11px] font-bold text-slate-600 cursor-pointer"><input type="checkbox" ${p.collab ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','collab',this.checked)">협업</label></div></td><td class="p-3 text-center"><div class="flex items-center justify-center gap-2">${isP ? `<button onclick="window.approveUser('${u.uid}')" class="bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold">✅ 승인</button>` : ''}<button onclick="window.deleteUser('${u.uid}')" class="text-rose-500 px-2.5 py-1.5 rounded-lg border border-rose-200"><i class="fa-solid fa-trash-can"></i></button></div></td></tr>`;
     });
     tb.innerHTML = html;
 };
