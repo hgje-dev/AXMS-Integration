@@ -13,6 +13,14 @@ let currentPjtScheduleUnsubscribe = null;
 
 const TARGET_DRIVE_FOLDER = "1ae5JiICk9ZQEaPVNhR6H4TlPs_Np03kQ";
 
+// 대한민국 공휴일 데이터
+const KR_HOLIDAYS = new Set([
+    '2024-01-01', '2024-02-09', '2024-02-12', '2024-03-01', '2024-04-10', '2024-05-06', '2024-05-15', '2024-06-06', '2024-08-15', '2024-09-16', '2024-09-17', '2024-09-18', '2024-10-03', '2024-10-09', '2024-12-25',
+    '2025-01-01', '2025-01-28', '2025-01-29', '2025-01-30', '2025-03-01', '2025-03-03', '2025-05-05', '2025-05-06', '2025-06-06', '2025-08-15', '2025-10-03', '2025-10-06', '2025-10-07', '2025-10-09', '2025-12-25',
+    '2026-01-01', '2026-02-16', '2026-02-17', '2026-02-18', '2026-03-01', '2026-03-02', '2026-05-05', '2026-05-24', '2026-05-25', '2026-06-06', '2026-08-15', '2026-09-24', '2026-09-25', '2026-09-26', '2026-10-03', '2026-10-05', '2026-10-09', '2026-12-25',
+    '2027-01-01', '2027-02-06', '2027-02-07', '2027-02-08', '2027-02-09', '2027-03-01', '2027-05-05', '2027-05-13', '2027-06-06', '2027-08-15', '2027-08-16', '2027-09-14', '2027-09-15', '2027-09-16', '2027-10-03', '2027-10-09', '2027-10-11', '2027-12-25'
+]);
+
 // 💡 전역 상태 초기화
 window.currentProjDashView = 'list';
 window.currentProjPartTab = '제조';
@@ -440,12 +448,12 @@ window.renderProjectStatusList = function() {
 // 💡 [핵심] 클라이언트 단에서 직접 구글 드라이브 업로드 (Cloud Functions 에러 방지)
 // ==========================================
 
-async function getOrCreateSubfolder(parentFolderId, folderName) {
+window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
     const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
     if (!window.googleAccessToken || !storedExpiry || Date.now() > parseInt(storedExpiry)) {
         throw new Error("TOKEN_EXPIRED");
     }
-    const safeFolderName = encodeURIComponent(folderName.replace(/['\/\\]/g, '_'));
+    const safeFolderName = encodeURIComponent(getSafeString(folderName).replace(/['\/\\]/g, '_') || '미분류 프로젝트');
     const query = `name='${safeFolderName}' and mimeType='application/vnd.google-apps.folder' and '${parentFolderId}' in parents and trashed=false`;
     
     const findRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&supportsAllDrives=true&includeItemsFromAllDrives=true`, { 
@@ -454,68 +462,79 @@ async function getOrCreateSubfolder(parentFolderId, folderName) {
     const folderData = await findRes.json();
     if(folderData.error) throw new Error(folderData.error.message);
 
-    if (folderData.files && folderData.files.length > 0) {
-        return folderData.files[0].id;
-    } else {
-        const createRes = await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
-            method: 'POST',
-            headers: { 'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: folderName.replace(/['\/\\]/g, '_'), mimeType: 'application/vnd.google-apps.folder', parents: [parentFolderId] })
-        });
-        const newData = await createRes.json();
-        if(newData.error) throw new Error(newData.error.message);
-        return newData.id;
-    }
-}
+    if (folderData.files && folderData.files.length > 0) return folderData.files[0].id;
+    
+    const createRes = await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: getSafeString(folderName).replace(/['\/\\]/g, '_') || '미분류 프로젝트', mimeType: 'application/vnd.google-apps.folder', parents: [parentFolderId] })
+    });
+    const newData = await createRes.json();
+    if(newData.error) throw new Error(newData.error.message);
+    return newData.id;
+};
 
-window.uploadFileToDrive = async function(file, folderId) {
+window.uploadFileWithProgress = async function(file, folderName, subFolderName = null, fileIndex = 1, totalFiles = 1) {
     const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
     if (!window.googleAccessToken || !storedExpiry || Date.now() > parseInt(storedExpiry)) {
         throw new Error("TOKEN_EXPIRED");
     }
 
-    const metadata = { name: file.name, parents: [folderId] };
-    const form = new FormData();
-    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-    form.append('file', file);
-    
     const progressModal = document.getElementById('upload-progress-modal');
     const progressBar = document.getElementById('upload-progress-bar');
     const progressText = document.getElementById('upload-progress-text');
     const progressSize = document.getElementById('upload-progress-size');
+    const progressFilename = document.getElementById('upload-progress-filename');
     
-    if (progressModal) progressModal.classList.replace('hidden', 'flex');
-
-    return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', true);
-        xhr.setRequestHeader('Authorization', 'Bearer ' + window.googleAccessToken);
-        
-        xhr.upload.onprogress = function(e) {
-            if (e.lengthComputable && progressBar) {
-                const percent = Math.round((e.loaded / e.total) * 100);
-                const loadedMb = (e.loaded / (1024 * 1024)).toFixed(2);
-                const totalMb = (e.total / (1024 * 1024)).toFixed(2);
-                progressBar.style.width = percent + '%';
-                if(progressText) progressText.innerText = percent + '%';
-                if(progressSize) progressSize.innerText = `${loadedMb} MB / ${totalMb} MB`;
-            }
-        };
-
-        xhr.onload = function() {
-            if (progressModal) progressModal.classList.replace('flex', 'hidden');
-            if (xhr.status >= 200 && xhr.status < 300) { 
-                resolve(JSON.parse(xhr.responseText).id); 
-            } else { 
-                reject(new Error(`업로드 실패 (HTTP ${xhr.status})`)); 
-            }
-        };
-        xhr.onerror = () => {
-            if (progressModal) progressModal.classList.replace('flex', 'hidden');
-            reject(new Error("네트워크 오류"));
+    if(progressModal) progressModal.classList.replace('hidden', 'flex');
+    if(progressFilename) progressFilename.innerText = `[${fileIndex}/${totalFiles}] ${file.name}`;
+    
+    try {
+        let targetFolderId = await window.getOrCreateDriveFolder(folderName, TARGET_DRIVE_FOLDER);
+        if (subFolderName) {
+            targetFolderId = await window.getOrCreateDriveFolder(subFolderName, targetFolderId);
         }
-        xhr.send(form);
-    });
+
+        return await new Promise((resolve, reject) => {
+            const metadata = { name: file.name, parents: [targetFolderId] };
+            const form = new FormData();
+            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+            form.append('file', file);
+            
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', true);
+            xhr.setRequestHeader('Authorization', 'Bearer ' + window.googleAccessToken);
+            
+            xhr.upload.onprogress = function(e) {
+                if (e.lengthComputable && progressBar) {
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    const loadedMb = (e.loaded / (1024 * 1024)).toFixed(2);
+                    const totalMb = (e.total / (1024 * 1024)).toFixed(2);
+                    progressBar.style.width = percent + '%';
+                    if(progressText) progressText.innerText = percent + '%';
+                    if(progressSize) progressSize.innerText = `${loadedMb} MB / ${totalMb} MB`;
+                }
+            };
+
+            xhr.onload = function() {
+                if (xhr.status >= 200 && xhr.status < 300) { 
+                    if(progressModal && fileIndex === totalFiles) progressModal.classList.replace('flex', 'hidden');
+                    resolve(`https://drive.google.com/file/d/${JSON.parse(xhr.responseText).id}/view`); 
+                } else { 
+                    if(progressModal) progressModal.classList.replace('flex', 'hidden');
+                    reject(new Error(`업로드 실패 (HTTP ${xhr.status})`)); 
+                }
+            };
+            xhr.onerror = () => {
+                if(progressModal) progressModal.classList.replace('flex', 'hidden');
+                reject(new Error("네트워크 오류"));
+            };
+            xhr.send(form);
+        });
+    } catch(e) {
+        if(progressModal) progressModal.classList.replace('flex', 'hidden');
+        throw e;
+    }
 };
 
 // ==========================================
@@ -687,10 +706,10 @@ window.saveProjStatus = async function(btn) {
             cleanPayload.createdAt = Date.now(); cleanPayload.currentMd = 0; cleanPayload.authorUid = (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system'; cleanPayload.authorName = (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system';
             await addDoc(collection(db, "projects_status"), cleanPayload); safeShowSuccess("성공적으로 등록되었습니다."); 
             
-            // 💡 새 프로젝트 등록 시 드라이브 폴더 자동 생성
+            // 새 프로젝트 등록 시 드라이브 폴더 자동 생성 시도
             try {
                 const folderName = cleanPayload.code ? cleanPayload.code : cleanPayload.name;
-                await getOrCreateSubfolder(TARGET_DRIVE_FOLDER, folderName);
+                await window.getOrCreateDriveFolder(folderName, TARGET_DRIVE_FOLDER);
             } catch(e) {
                 console.warn("폴더 생성 지연(무시가능):", e);
             }
@@ -750,7 +769,7 @@ window.loadProjectHistory = async function(projectId) {
 };
 
 window.restoreProjectHistory = async function(histId, projectId) {
-    if(!confirm("이 시점의 데이터로 프로젝트를 복원하시겠습니까?\n(현재 상태는 덮어씌워집니다)")) return;
+    if(!confirm("이 시점의 데이터로 프로젝트 복원하시겠습니까?\n(현재 상태는 덮어씌워집니다)")) return;
     try {
         const hSnap = await getDoc(doc(db, "project_history", histId));
         if(hSnap.exists()) {
@@ -782,14 +801,13 @@ window.toggleProjDashView = function(view) {
     else if(view === 'calendar' && calC) { calC.classList.remove('hidden'); calC.classList.add('flex'); if(window.renderProjCalendar) window.renderProjCalendar(); }
 };
 
-// 💡 [간트 차트 렌더링 수정] 여백 15일~45일 추가하여 오늘 날짜선 보장
+// 💡 [간트 차트 렌더링 수정] 여백 및 공휴일 표시 추가
 window.scrollToGanttToday = function() {
     const container = document.getElementById('proj-dash-gantt-content');
     const todayLine = document.getElementById('gantt-today-line');
     if(container && todayLine) {
-        const lineOffset = todayLine.offsetLeft;
-        const containerWidth = container.offsetWidth;
-        container.scrollTo({ left: lineOffset - (containerWidth / 2) + 150, behavior: 'smooth' });
+        const targetLeft = todayLine.offsetLeft;
+        container.scrollTo({ left: targetLeft - (container.clientWidth / 2), behavior: 'smooth' });
     }
 };
 
@@ -817,21 +835,32 @@ window.renderProjGantt = function() {
         const totalDays = Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24));
         if (totalDays <= 0) return;
 
-        let headerHtml = '<div class="flex relative h-8 border-b border-slate-200 mb-2 ml-[300px]">';
+        let headerHtml = '<div class="flex relative h-8 border-b border-slate-200 mb-2 ml-[300px] min-w-max">';
+        let bgHtml = '<div class="absolute top-8 bottom-0 left-[300px] right-0 pointer-events-none flex z-0">';
+        
         for(let i=0; i<=totalDays; i++) { 
-            if (i % 7 === 0) { 
-                let d = new Date(minDate); d.setDate(d.getDate() + i);
-                let pct = (i / totalDays) * 100;
-                headerHtml += `<div class="absolute text-[10px] text-slate-400 font-bold -translate-x-1/2 bottom-1" style="left:${pct}%">${d.getMonth()+1}/${d.getDate()}</div>`;
+            let d = new Date(minDate); d.setDate(d.getDate() + i);
+            let pct = (i / totalDays) * 100;
+            let isWknd = d.getDay() === 0 || d.getDay() === 6;
+            let isHol = KR_HOLIDAYS.has(window.getLocalDateStr(d));
+            let color = (isWknd || isHol) ? 'text-rose-400' : 'text-slate-400';
+            let bgClass = (isWknd || isHol) ? 'bg-rose-50/30' : 'border-r border-slate-100/50';
+            let widthPct = (1 / totalDays) * 100;
+            
+            if (totalDays < 40 || i % 2 === 0) { 
+                headerHtml += `<div class="absolute text-[9px] ${color} font-bold -translate-x-1/2 bottom-1" style="left:${pct}%">${d.getMonth()+1}/${d.getDate()}</div>`;
             }
+            bgHtml += `<div class="${bgClass}" style="width:${widthPct}%;"></div>`;
         }
         headerHtml += '</div>';
+        bgHtml += '</div>';
 
         let todayPct = ((new Date() - minDate) / (1000 * 60 * 60 * 24)) / totalDays * 100;
 
         let html = `<div class="relative min-w-[1000px] p-4 bg-white rounded-lg">`;
         html += headerHtml;
-        html += `<div class="relative">`;
+        html += bgHtml;
+        html += `<div class="relative z-10">`;
         
         if(todayPct >= 0 && todayPct <= 100) {
             html += `<div id="gantt-today-line" class="absolute top-0 bottom-0 w-[2px] bg-rose-500/80 z-20 pointer-events-none" style="left: calc(300px + ${todayPct}% - 300px); margin-left: 300px;">
@@ -861,9 +890,9 @@ window.renderProjGantt = function() {
             }
             
             html += `
-            <div class="flex items-center text-xs group w-full mb-3 hover:bg-slate-50 p-1.5 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-indigo-100" onclick="window.editProjStatus('${p.id}')">
-                <div class="w-[280px] font-bold truncate pr-4 text-slate-700 shrink-0" title="${title}">${title}</div>
-                <div class="flex-1 relative h-8 flex items-center border-l border-slate-200 pl-4 bg-slate-50/50 rounded-r-lg">
+            <div class="flex items-center text-xs group w-full mb-3 hover:bg-white/80 p-1.5 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-indigo-100" onclick="window.editProjStatus('${p.id}')">
+                <div class="w-[280px] font-bold truncate pr-4 text-slate-700 shrink-0 bg-white shadow-sm px-2 py-1 rounded" title="${title}">${title}</div>
+                <div class="flex-1 relative h-8 flex items-center border-l border-slate-200 pl-4 bg-transparent rounded-r-lg">
                     ${barHtml}
                 </div>
                 <div class="w-16 text-right text-[11px] font-black text-emerald-600 shrink-0 pr-2">${p.progress||0}%</div>
@@ -957,12 +986,9 @@ window.savePurchaseItem = async function() {
         let filesData = [];
         if (fileInput.files.length > 0) {
             let total = fileInput.files.length;
-            let targetFolderId = await getOrCreateSubfolder(TARGET_DRIVE_FOLDER, folderName);
-            targetFolderId = await getOrCreateSubfolder(targetFolderId, '구매');
-            
             for(let i=0; i<total; i++) {
-                let fileId = await window.uploadFileToDrive(fileInput.files[i], targetFolderId);
-                filesData.push({ name: fileInput.files[i].name, url: `https://drive.google.com/file/d/${fileId}/view` });
+                let url = await window.uploadFileWithProgress(fileInput.files[i], folderName, '구매', i+1, total);
+                filesData.push({ name: fileInput.files[i].name, url: url });
             }
         }
         const payload = { projectId: pId, content: content, files: filesData, authorUid: (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system', authorName: (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system', createdAt: Date.now() };
@@ -1014,12 +1040,9 @@ window.saveDesignItem = async function() {
         let filesData = [];
         if (fileInput.files.length > 0) {
             let total = fileInput.files.length;
-            let targetFolderId = await getOrCreateSubfolder(TARGET_DRIVE_FOLDER, folderName);
-            targetFolderId = await getOrCreateSubfolder(targetFolderId, '설계');
-            
             for(let i=0; i<total; i++) {
-                let fileId = await window.uploadFileToDrive(fileInput.files[i], targetFolderId);
-                filesData.push({ name: fileInput.files[i].name, url: `https://drive.google.com/file/d/${fileId}/view` });
+                let url = await window.uploadFileWithProgress(fileInput.files[i], folderName, '설계', i+1, total);
+                filesData.push({ name: fileInput.files[i].name, url: url });
             }
         }
         const payload = { projectId: pId, content: content, files: filesData, authorUid: (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system', authorName: (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system', createdAt: Date.now() };
@@ -1071,12 +1094,9 @@ window.savePjtScheduleItem = async function() {
         let filesData = [];
         if (fileInput.files.length > 0) {
             let total = fileInput.files.length;
-            let targetFolderId = await getOrCreateSubfolder(TARGET_DRIVE_FOLDER, folderName);
-            targetFolderId = await getOrCreateSubfolder(targetFolderId, '일정');
-            
             for(let i=0; i<total; i++) {
-                let fileId = await window.uploadFileToDrive(fileInput.files[i], targetFolderId);
-                filesData.push({ name: fileInput.files[i].name, url: `https://drive.google.com/file/d/${fileId}/view` });
+                let url = await window.uploadFileWithProgress(fileInput.files[i], folderName, '일정', i+1, total);
+                filesData.push({ name: fileInput.files[i].name, url: url });
             }
         }
         const payload = { projectId: pId, content: content, files: filesData, authorUid: (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system', authorName: (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system', createdAt: Date.now() };
@@ -1090,8 +1110,38 @@ window.savePjtScheduleItem = async function() {
 window.deletePjtSchedule = async function(id) { if(confirm("삭제하시겠습니까?")) { try { await deleteDoc(doc(db, "project_schedules", id)); safeShowSuccess("삭제되었습니다."); } catch(e) { safeShowError("삭제 실패", e); } } };
 
 // ==========================================
-// 💡 생산일지 모달 (팀원추가 로직 포함 및 100% 원본 유지)
+// 💡 생산일지 모달 (팀원추가 로직 포함)
 // ==========================================
+window.addLogMember = function(name) {
+    if(!name) return;
+    window.currentLogMembers = window.currentLogMembers || [];
+    if(!window.currentLogMembers.includes(name)) {
+        window.currentLogMembers.push(name);
+        if(window.renderLogMembers) window.renderLogMembers();
+    }
+    const el1 = document.getElementById('log-member-add');
+    if(el1) el1.selectedIndex = 0;
+    const el2 = document.getElementById('md-member-add');
+    if(el2) el2.selectedIndex = 0;
+};
+
+window.removeLogMember = function(name) {
+    window.currentLogMembers = window.currentLogMembers || [];
+    window.currentLogMembers = window.currentLogMembers.filter(n => n !== name);
+    if(window.renderLogMembers) window.renderLogMembers();
+};
+
+window.renderLogMembers = function() {
+    const container = document.getElementById('log-selected-members');
+    const memInput = document.getElementById('log-members');
+    const membersList = window.currentLogMembers || [];
+    if(memInput) memInput.value = membersList.join(', ');
+    if(container) {
+        container.innerHTML = membersList.map(function(name) {
+            return `<span class="bg-sky-100 text-sky-700 px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1.5 shadow-sm">${name} <i class="fa-solid fa-xmark cursor-pointer hover:text-rose-500 bg-white/50 rounded-full px-1 py-0.5" onclick="window.removeLogMember('${name}')"></i></span>`;
+        }).join('');
+    }
+};
 
 window.openDailyLogModal = function(projectId) { 
     try {
@@ -1198,12 +1248,9 @@ window.saveDailyLogItem = async function() {
         
         if (fileInput && fileInput.files.length > 0) {
             let total = fileInput.files.length;
-            let targetFolderId = await getOrCreateSubfolder(TARGET_DRIVE_FOLDER, folderName);
-            targetFolderId = await getOrCreateSubfolder(targetFolderId, '생산일지');
-            
             for(let i=0; i<total; i++) {
-                let fileId = await window.uploadFileToDrive(fileInput.files[i], targetFolderId);
-                filesData.push({ name: fileInput.files[i].name, url: `https://drive.google.com/file/d/${fileId}/view` });
+                let url = await window.uploadFileWithProgress(fileInput.files[i], folderName, '생산일지', i+1, total);
+                filesData.push({ name: fileInput.files[i].name, url: url });
             }
         }
 
@@ -1524,3 +1571,13 @@ window.renderNcrList = function(pjtCode) {
         return `<tr class="hover:bg-slate-50 transition-colors bg-white border-b border-slate-100"><td class="p-3 text-center font-bold text-slate-500 whitespace-nowrap">${getSafeString(n.ncrNo) || '-'}</td><td class="p-3 text-center text-slate-500 whitespace-nowrap">${getSafeString(n.date) || '-'}</td><td class="p-3 text-center text-slate-500 whitespace-nowrap">${getSafeString(n.drawingNo) || '-'}</td><td class="p-3 text-center text-slate-500 whitespace-nowrap">${getSafeString(n.partName) || '-'}</td><td class="p-3 text-center whitespace-nowrap"><span class="bg-slate-100 px-2 py-1 border border-slate-200 rounded font-bold">${getSafeString(n.type) || '-'}</span></td><td class="p-3 font-medium ${isComp ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-700'} break-all">${getSafeString(n.content).replace(/</g, '&lt;').replace(/>/g, '&gt;') || '-'}</td><td class="p-3 text-center whitespace-nowrap">${isComp ? `<span class="bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">완료</span>` : `<span class="bg-rose-50 text-rose-600 border border-rose-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">진행중</span>`}</td></tr>`;
     }).join('');
 };
+
+// 💡 스크립트 로드 시 마스터 데이터를 확실하게 불러옵니다.
+document.addEventListener('DOMContentLoaded', () => {
+    if (window.loadProjectCodeMaster) {
+        window.loadProjectCodeMaster();
+    }
+});
+if (window.loadProjectCodeMaster) {
+    window.loadProjectCodeMaster();
+}
