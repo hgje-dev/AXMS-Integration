@@ -445,8 +445,40 @@ window.renderProjectStatusList = function() {
 };
 
 // ==========================================
-// 💡 [핵심 해결] 강제 최상단 프로그레스 바 동적 생성 및 업로드 로직
+// 💡 [핵심 수정] 클라이언트 단에서 직접 구글 드라이브 업로드 (백엔드 에러 원천 차단)
 // ==========================================
+
+window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
+    const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
+    if (!window.googleAccessToken || !storedExpiry || Date.now() > parseInt(storedExpiry)) {
+        throw new Error("TOKEN_EXPIRED");
+    }
+    
+    // 💡 [버그 픽스] 공백, 한글, 특수문자 완벽 인코딩 지원
+    const safeFolderName = getSafeString(folderName).replace(/['\/\\]/g, '_').trim() || '미분류 프로젝트';
+    const queryStr = `name='${safeFolderName.replace(/'/g, "\\'")}' and mimeType='application/vnd.google-apps.folder' and '${parentFolderId}' in parents and trashed=false`;
+    
+    const findRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(queryStr)}&supportsAllDrives=true&includeItemsFromAllDrives=true`, { 
+        headers: { 'Authorization': 'Bearer ' + window.googleAccessToken } 
+    });
+    
+    if(!findRes.ok) throw new Error(`Google API Query Error: ${findRes.status}`);
+    const folderData = await findRes.json();
+    if(folderData.error) throw new Error(folderData.error.message);
+
+    if (folderData.files && folderData.files.length > 0) {
+        return folderData.files[0].id;
+    } else {
+        const createRes = await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: safeFolderName, mimeType: 'application/vnd.google-apps.folder', parents: [parentFolderId] })
+        });
+        const newData = await createRes.json();
+        if(newData.error) throw new Error(newData.error.message);
+        return newData.id;
+    }
+};
 
 window.uploadFileWithProgress = async function(file, folderName, subFolderName = null, fileIndex = 1, totalFiles = 1) {
     const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
@@ -454,7 +486,7 @@ window.uploadFileWithProgress = async function(file, folderName, subFolderName =
         throw new Error("TOKEN_EXPIRED");
     }
 
-    // 💡 HTML 의존성 제거: 무조건 최상단(z-99999)에 강제로 프로그레스 모달을 생성합니다.
+    // 💡 [버그 픽스] z-index 99999로 무조건 최상단에 뜨는 프로그레스 바 강제 생성
     let progressModal = document.getElementById('global-upload-progress-modal');
     if (!progressModal) {
         progressModal = document.createElement('div');
@@ -544,6 +576,7 @@ window.uploadFileWithProgress = async function(file, folderName, subFolderName =
     } catch(e) {
         progressModal.classList.add('hidden');
         progressModal.classList.remove('flex');
+        console.error("Upload Error:", e);
         throw e;
     }
 };
@@ -571,6 +604,7 @@ window.generateMediaHtml = function(filesArray) {
             let fileIdMatch = f.url ? f.url.match(/\/d\/(.+?)\/view/) : null;
             
             if (fileIdMatch) {
+                // 구글 드라이브 파일일 경우 고품질 썸네일과 원본 뷰어 매핑
                 viewUrl = `https://drive.google.com/file/d/${fileIdMatch[1]}/view`;
                 thumbUrl = `https://drive.google.com/thumbnail?id=${fileIdMatch[1]}&sz=w600`;
             }
@@ -716,6 +750,7 @@ window.saveProjStatus = async function(btn) {
             cleanPayload.createdAt = Date.now(); cleanPayload.currentMd = 0; cleanPayload.authorUid = (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system'; cleanPayload.authorName = (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system';
             await addDoc(collection(db, "projects_status"), cleanPayload); safeShowSuccess("성공적으로 등록되었습니다."); 
             
+            // 새 프로젝트 등록 시 드라이브 폴더 자동 생성 시도
             try {
                 const folderName = cleanPayload.code ? cleanPayload.code : cleanPayload.name;
                 await window.getOrCreateDriveFolder(folderName, TARGET_DRIVE_FOLDER);
