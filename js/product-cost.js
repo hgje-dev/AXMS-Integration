@@ -9,13 +9,12 @@ window.pcReports = [];
 window.pcProjects = {};
 window.currentPcStatusFilter = 'all'; 
 
-const PC_DRIVE_PARENT_FOLDER = "1ae5JiICk9ZQEaPVNhR6H4TlPs_Np03kQ"; // PJT 현황 메인 폴더 동일 사용
+const PC_DRIVE_PARENT_FOLDER = "1ae5JiICk9ZQEaPVNhR6H4TlPs_Np03kQ"; 
 
 window.initProductCost = function() {
     console.log("✅ Product Cost 페이지 로드 완료");
     if(window.initGoogleAPI) window.initGoogleAPI();
     
-    // 1. 프로젝트 기본 정보 구독 (제조팀 피드백은 제거됨)
     if(pjtUnsubscribe) pjtUnsubscribe();
     pjtUnsubscribe = onSnapshot(collection(db, "projects_status"), snap => {
         window.pcProjects = {};
@@ -85,7 +84,6 @@ window.filterPcList = function() {
     window.renderPcList(filtered);
 };
 
-// 💡 초성 검색 팝업
 window.pcShowPjtAuto = function(input) {
     const val = input.value.trim().toLowerCase();
     let drop = document.getElementById('pc-pjt-autocomplete-dynamic');
@@ -158,7 +156,6 @@ document.addEventListener('click', function(e) {
     }
 });
 
-
 window.renderPcList = function(list) {
     const tbody = document.getElementById('pc-tbody');
     if (!tbody) return;
@@ -181,7 +178,6 @@ window.renderPcList = function(list) {
     tbody.innerHTML = list.map(r => {
         const dateStr = r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '-';
         const compDateStr = ((r.status === '완료' || r.status === '분석 완료') && r.updatedAt) ? new Date(r.updatedAt).toLocaleDateString() : '-';
-        const safeName = (r.pjtName || '').replace(/"/g, '&quot;').replace(/'/g, "\\'");
         
         let stat = r.status || '대기중';
         const target = parseFloat(r.targetCost) || 0;
@@ -239,14 +235,12 @@ window.openPcModal = function(docId) {
     document.getElementById('pc-project-title').innerText = `[${report.pjtCode}] ${report.pjtName}`;
     document.getElementById('pc-project-date').innerText = `생성일자: ${new Date(report.createdAt).toLocaleDateString()}`;
 
-    // 1. 예정원가 및 실적 입력
     document.getElementById('pc-planned-cost').value = report.targetCost || '';
     document.getElementById('pc-actual-new').value = report.actualMaterial || '';
     document.getElementById('pc-actual-inv').value = report.actualProc || '';
     document.getElementById('pc-actual-fail').value = report.actualEtc || '';
     window.calcPcBudget();
 
-    // 2. Lessons Learned 테이블
     document.getElementById('pc-goodbad-tbody').innerHTML = '';
     if(report.pcLessons && report.pcLessons.length > 0) {
         report.pcLessons.forEach(l => window.addPcGoodBadRow(l));
@@ -254,7 +248,6 @@ window.openPcModal = function(docId) {
         window.addPcGoodBadRow(); 
     }
 
-    // 3. 실적 관리 테이블
     document.getElementById('pc-performances-tbody').innerHTML = '';
     if(report.pcPerformances && report.pcPerformances.length > 0) {
         report.pcPerformances.forEach(p => window.addPcPerformanceRow(p));
@@ -330,8 +323,6 @@ window.calcPcBudget = function() {
     else mcEl.parentNode.classList.replace('text-rose-600', 'text-emerald-600');
 };
 
-
-// 💡 동적 행: Good/Bad
 window.addPcGoodBadRow = function(data = null) {
     const tbody = document.getElementById('pc-goodbad-tbody');
     const tr = document.createElement('tr');
@@ -367,7 +358,6 @@ window.addPcGoodBadRow = function(data = null) {
     tbody.appendChild(tr);
 };
 
-// 💡 동적 행: 실적 관리 (1줄 통합)
 window.addPcPerformanceRow = function(data = null) {
     const tbody = document.getElementById('pc-performances-tbody');
     const tr = document.createElement('tr');
@@ -436,7 +426,6 @@ window.calcPcPerformanceRow = function(inputEl) {
     crEl.innerText = cr.toFixed(1);
 };
 
-
 window.updatePcFileNames = function() {
     const inputEl = document.getElementById('pc-files');
     const displayEl = document.getElementById('pc-file-names');
@@ -445,48 +434,88 @@ window.updatePcFileNames = function() {
     else displayEl.innerHTML = inputEl.files.length === 1 ? inputEl.files[0].name : `${inputEl.files[0].name} 외 ${inputEl.files.length - 1}개`;
 };
 
+// 💡 [핵심 수정] 구글 드라이브 파일 업로드 에러 캐치 강화 및 supportsAllDrives 적용
 async function pcUploadToDrive(file, folderName) {
-    if(!window.googleAccessToken) throw new Error("구글 연동 필요");
+    const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
+    if (!window.googleAccessToken || !storedExpiry || Date.now() > parseInt(storedExpiry)) {
+        throw new Error("구글 인증 토큰이 만료되었습니다. 로그아웃 후 다시 연동해주세요.");
+    }
     
-    // 1. PJT 폴더 ID 찾기
-    const q1 = `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and '${PC_DRIVE_PARENT_FOLDER}' in parents and trashed=false`;
-    const r1 = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q1)}`, { headers: {'Authorization': 'Bearer ' + window.googleAccessToken}});
+    const q1 = `name='${encodeURIComponent(folderName.replace(/['\/\\]/g, '_'))}' and mimeType='application/vnd.google-apps.folder' and '${PC_DRIVE_PARENT_FOLDER}' in parents and trashed=false`;
+    const r1 = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q1}&supportsAllDrives=true&includeItemsFromAllDrives=true`, { headers: {'Authorization': 'Bearer ' + window.googleAccessToken}});
     const d1 = await r1.json();
-    let pjtFid = (d1.files && d1.files.length > 0) ? d1.files[0].id : null;
+    if(d1.error) {
+        if (d1.error.code === 401) throw new Error("TOKEN_EXPIRED");
+        throw new Error(`[API 조회 에러] ${d1.error.message}`);
+    }
     
+    let pjtFid = (d1.files && d1.files.length > 0) ? d1.files[0].id : null;
     if(!pjtFid) {
-        const res = await fetch('https://www.googleapis.com/drive/v3/files', {
+        const res = await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
             method: 'POST', headers: {'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json'},
-            body: JSON.stringify({name: folderName, mimeType: 'application/vnd.google-apps.folder', parents: [PC_DRIVE_PARENT_FOLDER]})
+            body: JSON.stringify({name: folderName.replace(/['\/\\]/g, '_'), mimeType: 'application/vnd.google-apps.folder', parents: [PC_DRIVE_PARENT_FOLDER]})
         });
-        const data = await res.json(); pjtFid = data.id;
+        const data = await res.json(); 
+        if(data.error) throw new Error(`[API 생성 에러] ${data.error.message}`);
+        pjtFid = data.id;
     }
 
-    // 2. '원가분석' 폴더 ID 찾기
     const q2 = `name='원가분석' and mimeType='application/vnd.google-apps.folder' and '${pjtFid}' in parents and trashed=false`;
-    const r2 = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q2)}`, { headers: {'Authorization': 'Bearer ' + window.googleAccessToken}});
+    const r2 = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q2)}&supportsAllDrives=true&includeItemsFromAllDrives=true`, { headers: {'Authorization': 'Bearer ' + window.googleAccessToken}});
     const d2 = await r2.json();
+    if(d2.error) throw new Error(`[하위 폴더 조회 에러] ${d2.error.message}`);
+    
     let pcFid = (d2.files && d2.files.length > 0) ? d2.files[0].id : null;
-
     if(!pcFid) {
-        const res = await fetch('https://www.googleapis.com/drive/v3/files', {
+        const res = await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
             method: 'POST', headers: {'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json'},
             body: JSON.stringify({name: '원가분석', mimeType: 'application/vnd.google-apps.folder', parents: [pjtFid]})
         });
-        const data = await res.json(); pcFid = data.id;
+        const data = await res.json(); 
+        if(data.error) throw new Error(`[하위 폴더 생성 에러] ${data.error.message}`);
+        pcFid = data.id;
     }
 
-    // 3. 파일 업로드 (기존 UI ProgressBar 사용 가능)
     const metadata = { name: file.name, parents: [pcFid] };
-    const form = new FormData();
-    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-    form.append('file', file);
+    const form = new FormData(); form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' })); form.append('file', file);
     
-    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-        method: 'POST', headers: {'Authorization': 'Bearer ' + window.googleAccessToken}, body: form
+    const progressModal = document.getElementById('upload-progress-modal');
+    const progressBar = document.getElementById('upload-progress-bar');
+    const progressText = document.getElementById('upload-progress-text');
+    const progressSize = document.getElementById('upload-progress-size');
+    
+    if (progressModal) progressModal.classList.replace('hidden', 'flex');
+
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', true);
+        xhr.setRequestHeader('Authorization', 'Bearer ' + window.googleAccessToken);
+        
+        xhr.upload.onprogress = function(e) {
+            if (e.lengthComputable && progressBar) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                const loadedMb = (e.loaded / (1024 * 1024)).toFixed(2);
+                const totalMb = (e.total / (1024 * 1024)).toFixed(2);
+                progressBar.style.width = percent + '%';
+                if(progressText) progressText.innerText = percent + '%';
+                if(progressSize) progressSize.innerText = `${loadedMb} MB / ${totalMb} MB`;
+            }
+        };
+
+        xhr.onload = function() {
+            if (progressModal) progressModal.classList.replace('flex', 'hidden');
+            if (xhr.status >= 200 && xhr.status < 300) { 
+                resolve(`https://drive.google.com/file/d/${JSON.parse(xhr.responseText).id}/view`); 
+            } else { 
+                reject(new Error(`업로드 실패 (HTTP ${xhr.status})`)); 
+            }
+        };
+        xhr.onerror = () => {
+            if (progressModal) progressModal.classList.replace('flex', 'hidden');
+            reject(new Error("네트워크 오류"));
+        }
+        xhr.send(form);
     });
-    const result = await res.json();
-    return `https://drive.google.com/file/d/${result.id}/view`;
 }
 
 window.saveProductCostReport = async function() {
@@ -510,7 +539,6 @@ window.saveProductCostReport = async function() {
             }
         }
 
-        // Good/Bad 데이터 수집
         const pcLessons = [];
         document.querySelectorAll('.pc-goodbad-row').forEach(tr => {
             pcLessons.push({
@@ -521,7 +549,6 @@ window.saveProductCostReport = async function() {
             });
         });
 
-        // 실적 관리 데이터 수집
         const pcPerformances = [];
         document.querySelectorAll('.pc-perf-row').forEach(tr => {
             pcPerformances.push({
