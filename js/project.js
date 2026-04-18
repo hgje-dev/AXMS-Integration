@@ -11,10 +11,9 @@ let currentPurchaseUnsubscribe = null;
 let currentDesignUnsubscribe = null;
 let currentPjtScheduleUnsubscribe = null;
 
-// 공유 드라이브 (또는 공유 폴더) ID
 const TARGET_DRIVE_FOLDER = "1ae5JiICk9ZQEaPVNhR6H4TlPs_Np03kQ";
 
-// 💡 초기 기본값 설정
+// 💡 전역 상태 초기화
 window.currentProjDashView = 'list';
 window.currentProjPartTab = '제조';
 window.currentStatusFilter = 'all';
@@ -438,6 +437,87 @@ window.renderProjectStatusList = function() {
 };
 
 // ==========================================
+// 💡 [핵심 수정] 백엔드(Cloud Functions) 연동 드라이브 업로드
+// ==========================================
+
+window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
+    const safeFolderName = getSafeString(folderName).replace(/['\/\\]/g, '_') || '미분류 프로젝트';
+    
+    try {
+        const response = await fetch('https://us-central1-axms-e9655.cloudfunctions.net/getOrCreateFolder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folderName: safeFolderName, parentFolderId: parentFolderId })
+        });
+        
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "서버 응답 오류");
+        return data.id;
+    } catch(e) {
+        console.error("서버 폴더 생성 에러:", e);
+        throw new Error(`폴더 생성 실패: 서버 통신 오류 (${e.message})`);
+    }
+};
+
+async function handleDriveUploadWithProgress(file, projectName, subFolderName = null, fileIndex = 1, totalFiles = 1) {
+    if (!file) throw new Error("업로드할 파일이 없습니다.");
+
+    const progressModal = document.getElementById('upload-progress-modal');
+    const progressBar = document.getElementById('upload-progress-bar');
+    const progressText = document.getElementById('upload-progress-text');
+    
+    if(progressModal) progressModal.classList.replace('hidden', 'flex');
+    if(progressBar) progressBar.style.width = '30%';
+    if(progressText) progressText.innerText = '폴더 확인 중...';
+
+    try {
+        let targetFolderId = await window.getOrCreateDriveFolder(projectName, TARGET_DRIVE_FOLDER);
+        if (subFolderName) {
+            targetFolderId = await window.getOrCreateDriveFolder(subFolderName, targetFolderId);
+        }
+
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file); // Base64 변환
+            reader.onload = async () => {
+                try {
+                    if(progressBar) progressBar.style.width = '70%';
+                    if(progressText) progressText.innerText = '서버로 전송 중... (조금만 기다려주세요)';
+
+                    const base64Data = reader.result;
+                    const response = await fetch('https://us-central1-axms-e9655.cloudfunctions.net/uploadFileToDrive', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            fileName: file.name,
+                            mimeType: file.type || 'application/octet-stream',
+                            base64Data: base64Data,
+                            folderId: targetFolderId
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(data.error || "업로드 실패");
+                    
+                    if(progressModal) progressModal.classList.replace('flex', 'hidden');
+                    resolve(`https://drive.google.com/file/d/${data.id}/view`);
+                } catch(err) {
+                    if(progressModal) progressModal.classList.replace('flex', 'hidden');
+                    reject(err);
+                }
+            };
+            reader.onerror = () => {
+                if(progressModal) progressModal.classList.replace('flex', 'hidden');
+                reject(new Error("파일 읽기 실패"));
+            };
+        });
+    } catch(err) {
+        if(progressModal) progressModal.classList.replace('flex', 'hidden');
+        throw err;
+    }
+}
+
+// ==========================================
 // 💡 이미지 렌더러 (엑스박스 방지)
 // ==========================================
 window.generateMediaHtml = function(filesArray) {
@@ -495,193 +575,21 @@ window.generateMediaHtml = function(filesArray) {
     return result;
 };
 
-// 💡 [핵심 수정] 만료 에러 401 캐치 및 드라이브 스코프 호환 보장
-window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
-    if (!window.googleAccessToken) return null;
-    
-    // 💡 싱글 쿼테이션(') 완벽 제거 및 이스케이프
-    const safeFolderName = getSafeString(folderName).replace(/[\/\\]/g, '_').replace(/'/g, "\\'") || '미분류 프로젝트';
-    
-    const tryCreateFolder = async (parentId) => {
-        const query = `name='${safeFolderName}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
-        const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&supportsAllDrives=true&includeItemsFromAllDrives=true&corpora=allDrives`;
-        
-        const findRes = await fetch(url, {
-            headers: { 'Authorization': 'Bearer ' + window.googleAccessToken }
-        });
-        const folderData = await findRes.json();
-        
-        // 💡 만료/권한 에러 강력 캐치
-        if (folderData.error) {
-            if (folderData.error.code === 401) throw new Error("TOKEN_EXPIRED");
-            throw new Error(folderData.error.message);
-        }
-        
-        if (folderData.files && folderData.files.length > 0) {
-            return folderData.files[0].id;
-        } else {
-            const createRes = await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
-                method: 'POST',
-                headers: { 
-                    'Authorization': 'Bearer ' + window.googleAccessToken, 
-                    'Content-Type': 'application/json' 
-                },
-                body: JSON.stringify({ 
-                    name: safeFolderName, 
-                    mimeType: 'application/vnd.google-apps.folder', 
-                    parents: [parentId] 
-                })
-            });
-            const newFolderData = await createRes.json();
-            if (newFolderData.error) {
-                if (newFolderData.error.code === 401) throw new Error("TOKEN_EXPIRED");
-                throw new Error(newFolderData.error.message);
-            }
-            return newFolderData.id;
-        }
-    };
-
-    try {
-        return await tryCreateFolder(parentFolderId);
-    } catch(e) {
-        if (e.message === "TOKEN_EXPIRED") throw new Error("구글 보안 토큰이 만료되었습니다. 창을 닫고 상단의 [구글 연동 필요] 버튼을 눌러 다시 로그인해주세요.");
-        console.warn("⚠️ 지정된 공유 폴더 접근 권한이 없어 내 드라이브(root)에 생성을 시도합니다:", e);
-        try {
-            return await tryCreateFolder('root');
-        } catch(e2) {
-            if (e2.message === "TOKEN_EXPIRED") throw new Error("구글 보안 토큰이 만료되었습니다. 창을 닫고 다시 연동해주세요.");
-            console.error("❌ 폴더 생성 최종 실패:", e2);
-            return null;
-        }
-    }
-};
-
-async function handleDriveUploadWithProgress(file, projectName, subFolderName = null, fileIndex = 1, totalFiles = 1) {
-    // 💡 1시간 만료 엄격하게 사전 차단 로직 (조용한 만료 방지)
-    const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
-    if (!window.googleAccessToken || !storedExpiry || Date.now() > parseInt(storedExpiry)) {
-        window.googleAccessToken = null;
-        if(window.initGoogleAPI) window.initGoogleAPI();
-        throw new Error("구글 보안 토큰이 만료되었습니다. 창을 닫고 상단의 [구글 연동 필요] 버튼을 눌러 다시 로그인해주세요.");
-    }
-    
-    if (!file) throw new Error("업로드할 파일이 없습니다.");
-
-    let targetFolderId = await window.getOrCreateDriveFolder(projectName, TARGET_DRIVE_FOLDER);
-    if (!targetFolderId) throw new Error("폴더 접근 또는 생성 권한이 부족합니다. 구글 드라이브 연동 상태를 확인하세요.");
-
-    if (subFolderName) {
-        const subFolderId = await window.getOrCreateDriveFolder(subFolderName, targetFolderId);
-        if (subFolderId) targetFolderId = subFolderId;
-    }
-
-    const progressModal = document.getElementById('upload-progress-modal');
-    const progressBar = document.getElementById('upload-progress-bar');
-    const progressText = document.getElementById('upload-progress-text');
-    const progressSize = document.getElementById('upload-progress-size');
-    const progressFilename = document.getElementById('upload-progress-filename');
-    
-    if(progressModal) {
-        progressModal.classList.remove('hidden');
-        progressModal.classList.add('flex');
-    }
-    if(progressBar) progressBar.style.width = '0%';
-    if(progressText) progressText.innerText = '0%';
-    
-    let fileCounterText = totalFiles > 1 ? `[${fileIndex}/${totalFiles}] ` : '';
-    if(progressFilename) progressFilename.innerText = fileCounterText + file.name;
-    
-    const totalMb = (file.size / (1024 * 1024)).toFixed(2);
-    if(progressSize) progressSize.innerText = `0.00 MB / ${totalMb} MB`;
-
-    try {
-        const metaRes = await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
-            method: 'POST',
-            headers: {
-                'Authorization': 'Bearer ' + window.googleAccessToken,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ name: file.name, parents: [targetFolderId] })
-        });
-        
-        if (!metaRes.ok) {
-            const errBody = await metaRes.json();
-            throw new Error(errBody.error ? errBody.error.message : "구글 드라이브 파일 메타데이터 생성 실패");
-        }
-        
-        const metaData = await metaRes.json();
-        const fileId = metaData.id;
-
-        return new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open('PATCH', `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media&supportsAllDrives=true`, true);
-            xhr.setRequestHeader('Authorization', 'Bearer ' + window.googleAccessToken);
-            xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
-
-            xhr.upload.onprogress = function(e) {
-                if (e.lengthComputable) {
-                    const percent = Math.round((e.loaded / e.total) * 100);
-                    const loadedMb = (e.loaded / (1024 * 1024)).toFixed(2);
-                    if(progressBar) progressBar.style.width = percent + '%';
-                    if(progressText) progressText.innerText = percent + '%';
-                    if(progressSize) progressSize.innerText = `${loadedMb} MB / ${totalMb} MB`;
-                }
-            };
-
-            xhr.onload = function() {
-                if (fileIndex === totalFiles) {
-                    if(progressModal) {
-                        progressModal.classList.add('hidden');
-                        progressModal.classList.remove('flex');
-                    }
-                }
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    resolve(`https://drive.google.com/file/d/${fileId}/view`);
-                } else {
-                    if(progressModal) {
-                        progressModal.classList.add('hidden');
-                        progressModal.classList.remove('flex');
-                    }
-                    reject(new Error("파일 내용 업로드 거절됨. (네트워크 상태 또는 드라이브 용량 문제)"));
-                }
-            };
-
-            xhr.onerror = function() {
-                if(progressModal) {
-                    progressModal.classList.add('hidden');
-                    progressModal.classList.remove('flex');
-                }
-                reject(new Error("인터넷 연결이 끊어졌거나 네트워크 오류가 발생했습니다."));
-            };
-
-            xhr.send(file);
-        });
-    } catch(err) {
-        if(progressModal) { progressModal.classList.add('hidden'); progressModal.classList.remove('flex'); }
-        throw err;
-    }
-}
-
+// ==========================================
+// 💡 프로젝트 정보 입력 폼 모달 (등록/수정)
+// ==========================================
 window.openProjStatusWriteModal = function() {
     try {
         const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
         
-        setVal('ps-id', '');
-        setVal('ps-code', '');
-        setVal('ps-name', '');
-        setVal('ps-company', '');
-        setVal('ps-part', window.currentProjPartTab || '제조');
-        setVal('ps-category', '');
-        setVal('ps-status', 'pending');
-        setVal('ps-progress-pct', '0');
+        setVal('ps-id', ''); setVal('ps-code', ''); setVal('ps-name', ''); setVal('ps-company', '');
+        setVal('ps-part', window.currentProjPartTab || '제조'); setVal('ps-category', ''); setVal('ps-status', 'pending'); setVal('ps-progress-pct', '0');
         
         const members = window.teamMembers || [];
         const mHtml = '<option value="">선택</option>' + members.map(t => `<option value="${t.name||''}">${t.name||''} (${t.part||''})</option>`).join('');
         
-        const managerSelect = document.getElementById('ps-manager'); 
-        if(managerSelect) managerSelect.innerHTML = mHtml;
-        const memberSelect = document.getElementById('ps-member-add'); 
-        if(memberSelect) memberSelect.innerHTML = mHtml;
+        const managerSelect = document.getElementById('ps-manager'); if(managerSelect) managerSelect.innerHTML = mHtml;
+        const memberSelect = document.getElementById('ps-member-add'); if(memberSelect) memberSelect.innerHTML = mHtml;
 
         const dateFields = ['ps-est-md', 'ps-current-md', 'ps-final-md', 'ps-tot-pers', 'ps-out-pers', 'ps-out-md', 'ps-d-rcv-est', 'ps-d-asm-est', 'ps-d-ship-est', 'ps-d-ship-en', 'ps-d-asm-end-est', 'ps-d-asm-st', 'ps-d-asm-en', 'ps-d-ins-st', 'ps-d-ins-en', 'ps-d-set-st', 'ps-d-set-en'];
         dateFields.forEach(id => setVal(id, ''));
@@ -689,26 +597,16 @@ window.openProjStatusWriteModal = function() {
         window.currentSelectedMembers = [];
         if(window.renderSelectedMembers) window.renderSelectedMembers();
 
-        const btnHistory = document.getElementById('btn-view-history');
-        if (btnHistory) btnHistory.classList.add('hidden'); 
+        const btnHistory = document.getElementById('btn-view-history'); if (btnHistory) btnHistory.classList.add('hidden'); 
         
         const modal = document.getElementById('proj-status-write-modal');
         if(!modal) { safeShowError('프로젝트 등록 모달창 요소를 찾을 수 없습니다.'); return; }
         
-        modal.classList.remove('hidden'); 
-        modal.classList.add('flex'); 
-    } catch(e) {
-        safeShowError('프로젝트 등록 모달을 여는 중 오류가 발생했습니다.', e);
-    }
+        modal.classList.remove('hidden'); modal.classList.add('flex'); 
+    } catch(e) { safeShowError('프로젝트 등록 모달을 여는 중 오류가 발생했습니다.', e); }
 };
 
-window.closeProjStatusWriteModal = function() {
-    const modal = document.getElementById('proj-status-write-modal');
-    if(modal) {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-    }
-};
+window.closeProjStatusWriteModal = function() { const modal = document.getElementById('proj-status-write-modal'); if(modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); } };
 
 window.editProjStatus = function(id) {
     try {
@@ -717,25 +615,13 @@ window.editProjStatus = function(id) {
         
         const members = window.teamMembers || [];
         const mHtml = '<option value="">선택</option>' + members.map(t => `<option value="${t.name||''}">${t.name||''} (${t.part||''})</option>`).join('');
-        
         const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
         
-        setVal('ps-id', item.id);
-        setVal('ps-code', item.code || '');
-        setVal('ps-name', item.name || '');
-        setVal('ps-company', item.company || '');
-        setVal('ps-part', item.part || '제조');
-        setVal('ps-category', item.category || '');
-        setVal('ps-status', item.status || 'pending');
-        setVal('ps-progress-pct', item.progress !== undefined ? item.progress : 0);
+        setVal('ps-id', item.id); setVal('ps-code', item.code || ''); setVal('ps-name', item.name || ''); setVal('ps-company', item.company || '');
+        setVal('ps-part', item.part || '제조'); setVal('ps-category', item.category || ''); setVal('ps-status', item.status || 'pending'); setVal('ps-progress-pct', item.progress !== undefined ? item.progress : 0);
         
-        const managerSelect = document.getElementById('ps-manager'); 
-        if(managerSelect) {
-            managerSelect.innerHTML = mHtml;
-            managerSelect.value = item.manager || '';
-        }
-        const memberSelect = document.getElementById('ps-member-add'); 
-        if(memberSelect) memberSelect.innerHTML = mHtml;
+        const managerSelect = document.getElementById('ps-manager'); if(managerSelect) { managerSelect.innerHTML = mHtml; managerSelect.value = item.manager || ''; }
+        const memberSelect = document.getElementById('ps-member-add'); if(memberSelect) memberSelect.innerHTML = mHtml;
 
         window.currentSelectedMembers = (item.members && typeof item.members === 'string') ? item.members.split(',').map(s=>s.trim()).filter(Boolean) : []; 
         if(window.renderSelectedMembers) window.renderSelectedMembers();
@@ -743,8 +629,7 @@ window.editProjStatus = function(id) {
         setVal('ps-est-md', item.estMd !== undefined ? item.estMd : '');
         setVal('ps-current-md', item.currentMd !== undefined ? item.currentMd : '');
         
-        const cMd = parseFloat(item.currentMd) || 0; 
-        const oMd = parseFloat(item.outMd) || 0; 
+        const cMd = parseFloat(item.currentMd) || 0; const oMd = parseFloat(item.outMd) || 0; 
         setVal('ps-final-md', (cMd + oMd).toFixed(1));
         
         setVal('ps-tot-pers', item.totPers !== undefined ? item.totPers : '');
@@ -752,101 +637,58 @@ window.editProjStatus = function(id) {
         setVal('ps-out-md', item.outMd !== undefined ? item.outMd : '');
         
         const dateMappings = { 'd_rcvEst': 'ps-d-rcv-est', 'd_asmEst': 'ps-d-asm-est', 'd_asmEndEst': 'ps-d-asm-end-est', 'd_shipEst': 'ps-d-ship-est', 'd_asmSt': 'ps-d-asm-st', 'd_asmEn': 'ps-d-asm-en', 'd_insSt': 'ps-d-ins-st', 'd_insEn': 'ps-d-ins-en', 'd_shipEn': 'ps-d-ship-en', 'd_setSt': 'ps-d-set-st', 'd_setEn': 'ps-d-set-en' };
-        for (const [key, elementId] of Object.entries(dateMappings)) { 
-            setVal(elementId, item[key] || '');
-        }
+        for (const [key, elementId] of Object.entries(dateMappings)) { setVal(elementId, item[key] || ''); }
         
-        const btnHistory = document.getElementById('btn-view-history');
-        if (btnHistory) btnHistory.classList.remove('hidden'); 
+        const btnHistory = document.getElementById('btn-view-history'); if (btnHistory) btnHistory.classList.remove('hidden'); 
         
         const modal = document.getElementById('proj-status-write-modal');
         if(!modal) { safeShowError('프로젝트 수정 모달창 요소를 찾을 수 없습니다.'); return; }
         
-        modal.classList.remove('hidden'); 
-        modal.classList.add('flex'); 
-    } catch(e) {
-        safeShowError('데이터를 불러오는 중 오류가 발생했습니다.', e);
-    }
+        modal.classList.remove('hidden'); modal.classList.add('flex'); 
+    } catch(e) { safeShowError('데이터를 불러오는 중 오류가 발생했습니다.', e); }
 };
 
 window.saveProjStatus = async function(btn) {
     try {
         if(btn) { btn.disabled = true; btn.innerHTML = '저장중...'; }
         
-        const idEl = document.getElementById('ps-id');
-        const codeEl = document.getElementById('ps-code');
-        const nameEl = document.getElementById('ps-name');
-        
-        if(!codeEl || !nameEl) {
-            if(btn){ btn.disabled = false; btn.innerHTML = '저장하기'; }
-            return safeShowError("입력 폼 요소를 찾을 수 없습니다.");
-        }
+        const idEl = document.getElementById('ps-id'); const codeEl = document.getElementById('ps-code'); const nameEl = document.getElementById('ps-name');
+        if(!codeEl || !nameEl) { if(btn){ btn.disabled = false; btn.innerHTML = '저장하기'; } return safeShowError("입력 폼 요소를 찾을 수 없습니다."); }
 
-        const id = idEl.value; 
-        let code = codeEl.value.trim(); 
-        let name = nameEl.value.trim();
-        
-        if(!code || !name) { 
-            if(btn){ btn.disabled = false; btn.innerHTML = '저장하기'; } 
-            return safeShowError("PJT 코드와 프로젝트명을 모두 입력하세요."); 
-        }
+        const id = idEl.value; let code = codeEl.value.trim(); let name = nameEl.value.trim();
+        if(!code || !name) { if(btn){ btn.disabled = false; btn.innerHTML = '저장하기'; } return safeShowError("PJT 코드와 프로젝트명을 모두 입력하세요."); }
 
-        const currentMdEl = document.getElementById('ps-current-md');
-        const outMdEl = document.getElementById('ps-out-md');
-        const currentMd = currentMdEl ? (parseFloat(currentMdEl.value) || 0) : 0; 
-        const outMd = outMdEl ? (parseFloat(outMdEl.value) || 0) : 0;
+        const currentMdEl = document.getElementById('ps-current-md'); const outMdEl = document.getElementById('ps-out-md');
+        const currentMd = currentMdEl ? (parseFloat(currentMdEl.value) || 0) : 0; const outMd = outMdEl ? (parseFloat(outMdEl.value) || 0) : 0;
         
         const getVal = (eid) => { const el = document.getElementById(eid); return el ? el.value : ''; };
 
         const payload = { 
-            code: code, name: name, 
-            company: getVal('ps-company'), part: getVal('ps-part') || '제조', category: getVal('ps-category'), 
-            status: getVal('ps-status') || 'pending', progress: parseInt(getVal('ps-progress-pct')) || 0, 
-            manager: getVal('ps-manager'), members: getVal('ps-members'), 
-            estMd: parseFloat(getVal('ps-est-md')) || 0, outMd: outMd, finalMd: currentMd + outMd, 
-            totPers: parseInt(getVal('ps-tot-pers'))||0, outPers: parseInt(getVal('ps-out-pers'))||0, 
+            code: code, name: name, company: getVal('ps-company'), part: getVal('ps-part') || '제조', category: getVal('ps-category'), 
+            status: getVal('ps-status') || 'pending', progress: parseInt(getVal('ps-progress-pct')) || 0, manager: getVal('ps-manager'), members: getVal('ps-members'), 
+            estMd: parseFloat(getVal('ps-est-md')) || 0, outMd: outMd, finalMd: currentMd + outMd, totPers: parseInt(getVal('ps-tot-pers'))||0, outPers: parseInt(getVal('ps-out-pers'))||0, 
             updatedAt: Date.now() 
         };
         
         const dateMappings = { 'd_rcvEst': 'ps-d-rcv-est', 'd_asmEst': 'ps-d-asm-est', 'd_asmEndEst': 'ps-d-asm-end-est', 'd_shipEst': 'ps-d-ship-est', 'd_asmSt': 'ps-d-asm-st', 'd_asmEn': 'ps-d-asm-en', 'd_insSt': 'ps-d-ins-st', 'd_insEn': 'ps-d-ins-en', 'd_shipEn': 'ps-d-ship-en', 'd_setSt': 'ps-d-set-st', 'd_setEn': 'ps-d-set-en' };
-        for (const [key, elementId] of Object.entries(dateMappings)) { 
-            payload[key] = getVal(elementId); 
-        }
+        for (const [key, elementId] of Object.entries(dateMappings)) { payload[key] = getVal(elementId); }
 
         const cleanPayload = JSON.parse(JSON.stringify(payload));
-        Object.keys(cleanPayload).forEach(key => {
-            if (cleanPayload[key] === undefined) cleanPayload[key] = null;
-        });
+        Object.keys(cleanPayload).forEach(key => { if (cleanPayload[key] === undefined) cleanPayload[key] = null; });
 
         if(id) { 
             const oldSnap = await getDoc(doc(db, "projects_status", id));
             if(oldSnap.exists()) {
-                await addDoc(collection(db, "project_history"), { 
-                    projectId: id, 
-                    snapshot: oldSnap.data(), 
-                    changedBy: (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'Unknown', 
-                    changedAt: Date.now() 
-                });
+                await addDoc(collection(db, "project_history"), { projectId: id, snapshot: oldSnap.data(), changedBy: (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'Unknown', changedAt: Date.now() });
             }
-            await setDoc(doc(db, "projects_status", id), cleanPayload, { merge: true }); 
-            safeShowSuccess("성공적으로 수정되었습니다."); 
+            await setDoc(doc(db, "projects_status", id), cleanPayload, { merge: true }); safeShowSuccess("성공적으로 수정되었습니다."); 
         } else { 
-            cleanPayload.createdAt = Date.now(); 
-            cleanPayload.currentMd = 0; 
-            cleanPayload.authorUid = (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system';
-            cleanPayload.authorName = (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system';
+            cleanPayload.createdAt = Date.now(); cleanPayload.currentMd = 0; cleanPayload.authorUid = (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system'; cleanPayload.authorName = (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system';
+            await addDoc(collection(db, "projects_status"), cleanPayload); safeShowSuccess("성공적으로 등록되었습니다."); 
             
-            await addDoc(collection(db, "projects_status"), cleanPayload); 
-            safeShowSuccess("성공적으로 등록되었습니다."); 
-            
-            if (window.googleAccessToken) {
-                const folderName = cleanPayload.code ? cleanPayload.code : cleanPayload.name;
-                window.getOrCreateDriveFolder(folderName, TARGET_DRIVE_FOLDER)
-                    .then(fid => {
-                        if(fid) console.log("드라이브 폴더 자동생성 완료:", folderName);
-                    })
-                    .catch(e => console.warn("드라이브 폴더 생성 실패", e));
-            }
+            // 백엔드 연동을 통한 새 폴더 생성 시도 (에러 무시)
+            const folderName = cleanPayload.code ? cleanPayload.code : cleanPayload.name;
+            window.getOrCreateDriveFolder(folderName, TARGET_DRIVE_FOLDER).catch(e => console.warn("새 PJT 폴더 생성 실패 (무시됨)", e));
         } 
         
         if(window.closeProjStatusWriteModal) window.closeProjStatusWriteModal(); 
@@ -857,139 +699,66 @@ window.saveProjStatus = async function(btn) {
     }
 };
 
-window.deleteProjStatus = async function(id) { 
-    if(!confirm("삭제하시겠습니까?")) return; 
-    try { await deleteDoc(doc(db, "projects_status", id)); safeShowSuccess("삭제되었습니다."); } catch(e) { safeShowError("삭제 실패", e); } 
-};
-
-window.calcFinalMd = function() { 
-    const curMdEl = document.getElementById('ps-current-md');
-    const outMdEl = document.getElementById('ps-out-md');
-    const finalMdEl = document.getElementById('ps-final-md');
-    if(curMdEl && outMdEl && finalMdEl) {
-        const curMd = parseFloat(curMdEl.value) || 0; 
-        const outMd = parseFloat(outMdEl.value) || 0; 
-        finalMdEl.value = (curMd + outMd).toFixed(1); 
-    }
-};
+window.deleteProjStatus = async function(id) { if(!confirm("삭제하시겠습니까?")) return; try { await deleteDoc(doc(db, "projects_status", id)); safeShowSuccess("삭제되었습니다."); } catch(e) { safeShowError("삭제 실패", e); } };
+window.calcFinalMd = function() { const curMdEl = document.getElementById('ps-current-md'); const outMdEl = document.getElementById('ps-out-md'); const finalMdEl = document.getElementById('ps-final-md'); if(curMdEl && outMdEl && finalMdEl) { const curMd = parseFloat(curMdEl.value) || 0; const outMd = parseFloat(outMdEl.value) || 0; finalMdEl.value = (curMd + outMd).toFixed(1); } };
 
 window.addProjectMember = function(name) { 
-    if(!name) return; 
-    window.currentSelectedMembers = window.currentSelectedMembers || [];
-    if(!window.currentSelectedMembers.includes(name)) { 
-        window.currentSelectedMembers.push(name); 
-        if(window.renderSelectedMembers) window.renderSelectedMembers(); 
-    } 
-    const el = document.getElementById('ps-member-add');
-    if(el) el.selectedIndex = 0; 
+    if(!name) return; window.currentSelectedMembers = window.currentSelectedMembers || [];
+    if(!window.currentSelectedMembers.includes(name)) { window.currentSelectedMembers.push(name); if(window.renderSelectedMembers) window.renderSelectedMembers(); } 
+    const el = document.getElementById('ps-member-add'); if(el) el.selectedIndex = 0; 
 };
-
 window.removeProjectMember = function(name) { 
-    window.currentSelectedMembers = window.currentSelectedMembers || [];
-    window.currentSelectedMembers = window.currentSelectedMembers.filter(n => n !== name); 
+    window.currentSelectedMembers = window.currentSelectedMembers || []; window.currentSelectedMembers = window.currentSelectedMembers.filter(n => n !== name); 
     if(window.renderSelectedMembers) window.renderSelectedMembers(); 
 };
-
 window.renderSelectedMembers = function() { 
-    const container = document.getElementById('ps-selected-members'); 
-    const memInput = document.getElementById('ps-members');
-    const membersList = window.currentSelectedMembers || [];
+    const container = document.getElementById('ps-selected-members'); const memInput = document.getElementById('ps-members'); const membersList = window.currentSelectedMembers || [];
     if(memInput) memInput.value = membersList.join(', '); 
-    if(container) {
-        container.innerHTML = membersList.map(function(name) {
-            return `<span class="bg-indigo-100 text-indigo-700 px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1.5 shadow-sm">${name} <i class="fa-solid fa-xmark cursor-pointer hover:text-rose-500 bg-white/50 rounded-full px-1 py-0.5" onclick="window.removeProjectMember('${name}')"></i></span>`;
-        }).join(''); 
-    }
+    if(container) { container.innerHTML = membersList.map(function(name) { return `<span class="bg-indigo-100 text-indigo-700 px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1.5 shadow-sm">${name} <i class="fa-solid fa-xmark cursor-pointer hover:text-rose-500 bg-white/50 rounded-full px-1 py-0.5" onclick="window.removeProjectMember('${name}')"></i></span>`; }).join(''); }
 };
 
 window.openProjHistoryModal = function() {
     try {
-        const el = document.getElementById('ps-id');
-        if(!el) return;
-        const projectId = el.value;
-        if(!projectId) return;
-        
+        const el = document.getElementById('ps-id'); if(!el) return; const projectId = el.value; if(!projectId) return;
         const modal = document.getElementById('proj-history-modal');
-        if(modal) {
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-            if(window.loadProjectHistory) window.loadProjectHistory(projectId);
-        }
+        if(modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); if(window.loadProjectHistory) window.loadProjectHistory(projectId); }
     } catch(e) {}
 };
-
-window.closeProjHistoryModal = function() {
-    const modal = document.getElementById('proj-history-modal');
-    if(modal) {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-    }
-};
+window.closeProjHistoryModal = function() { const modal = document.getElementById('proj-history-modal'); if(modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); } };
 
 window.loadProjectHistory = async function(projectId) {
-    const listEl = document.getElementById('proj-history-list');
-    if(!listEl) return;
+    const listEl = document.getElementById('proj-history-list'); if(!listEl) return;
     listEl.innerHTML = '<div class="text-center p-6 text-slate-400 font-bold"><i class="fa-solid fa-spinner fa-spin"></i> 이력을 불러오는 중...</div>';
-    
     try {
-        const q = query(collection(db, "project_history"), where("projectId", "==", projectId));
-        const snap = await getDocs(q);
-        let hList = []; 
-        
-        snap.forEach(function(doc) {
-            let data = doc.data();
-            data.id = doc.id;
-            hList.push(data);
-        }); 
-        
+        const q = query(collection(db, "project_history"), where("projectId", "==", projectId)); const snap = await getDocs(q); let hList = []; 
+        snap.forEach(function(doc) { let data = doc.data(); data.id = doc.id; hList.push(data); }); 
         hList.sort(function(a,b) { return b.changedAt - a.changedAt; });
-        
-        if(hList.length === 0) { 
-            listEl.innerHTML = '<div class="text-center p-6 text-slate-400 font-bold">저장된 변경 이력이 없습니다.</div>'; 
-            return; 
-        }
+        if(hList.length === 0) { listEl.innerHTML = '<div class="text-center p-6 text-slate-400 font-bold">저장된 변경 이력이 없습니다.</div>'; return; }
         
         let historyHtml = '';
         hList.forEach(function(h) {
             const dateStr = window.getDateTimeStr(new Date(h.changedAt));
-            historyHtml += `<li class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center hover:shadow-md transition-shadow">
-                                <div>
-                                    <div class="font-black text-sm text-slate-700">${dateStr}</div>
-                                    <div class="text-[11px] text-slate-500 mt-1">변경자: <span class="font-bold text-indigo-600">${h.changedBy}</span></div>
-                                </div>
-                                <button onclick="window.restoreProjectHistory('${h.id}', '${projectId}')" class="bg-amber-100 text-amber-700 hover:bg-amber-200 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors shadow-sm"><i class="fa-solid fa-rotate-left"></i> 이 시점으로 복원</button>
-                            </li>`;
+            historyHtml += `<li class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center hover:shadow-md transition-shadow"><div><div class="font-black text-sm text-slate-700">${dateStr}</div><div class="text-[11px] text-slate-500 mt-1">변경자: <span class="font-bold text-indigo-600">${h.changedBy}</span></div></div><button onclick="window.restoreProjectHistory('${h.id}', '${projectId}')" class="bg-amber-100 text-amber-700 hover:bg-amber-200 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors shadow-sm"><i class="fa-solid fa-rotate-left"></i> 이 시점으로 복원</button></li>`;
         });
         listEl.innerHTML = historyHtml;
-    } catch(e) { 
-        listEl.innerHTML = '<div class="text-center p-6 text-rose-500 font-bold">이력을 불러오는데 실패했습니다.</div>'; 
-    }
+    } catch(e) { listEl.innerHTML = '<div class="text-center p-6 text-rose-500 font-bold">이력을 불러오는데 실패했습니다.</div>'; }
 };
 
 window.restoreProjectHistory = async function(histId, projectId) {
     if(!confirm("이 시점의 데이터로 프로젝트를 복원하시겠습니까?\n(현재 상태는 덮어씌워집니다)")) return;
-    
     try {
         const hSnap = await getDoc(doc(db, "project_history", histId));
         if(hSnap.exists()) {
-            const oldData = hSnap.data().snapshot; 
-            oldData.updatedAt = Date.now();
+            const oldData = hSnap.data().snapshot; oldData.updatedAt = Date.now();
             await setDoc(doc(db, "projects_status", projectId), oldData);
-            safeShowSuccess("복원되었습니다."); 
-            if(window.closeProjHistoryModal) window.closeProjHistoryModal(); 
-            if(window.editProjStatus) window.editProjStatus(projectId);
+            safeShowSuccess("복원되었습니다."); if(window.closeProjHistoryModal) window.closeProjHistoryModal(); if(window.editProjStatus) window.editProjStatus(projectId);
         }
-    } catch(e) { 
-        safeShowError("복원 실패", e); 
-    }
+    } catch(e) { safeShowError("복원 실패", e); }
 };
 
 window.toggleProjDashView = function(view) {
     window.currentProjDashView = view;
-    
-    const listC = document.getElementById('proj-dash-list-container');
-    const ganttC = document.getElementById('proj-dash-gantt-container');
-    const calC = document.getElementById('proj-dash-calendar-container');
+    const listC = document.getElementById('proj-dash-list-container'); const ganttC = document.getElementById('proj-dash-gantt-container'); const calC = document.getElementById('proj-dash-calendar-container');
     
     if(listC) listC.classList.add('hidden'); 
     if(ganttC) { ganttC.classList.add('hidden'); ganttC.classList.remove('flex'); } 
@@ -1001,30 +770,18 @@ window.toggleProjDashView = function(view) {
     });
     
     const activeBtn = document.getElementById('btn-pd-' + view); 
-    if(activeBtn) {
-        activeBtn.className = "px-2 py-1 text-[11px] font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-colors whitespace-nowrap";
-    }
+    if(activeBtn) activeBtn.className = "px-2 py-1 text-[11px] font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-colors whitespace-nowrap";
     
-    if(view === 'list' && listC) {
-        listC.classList.remove('hidden');
-        if(window.renderProjectStatusList) window.renderProjectStatusList();
-    } else if(view === 'gantt' && ganttC) { 
-        ganttC.classList.remove('hidden'); 
-        ganttC.classList.add('flex');
-        if(window.renderProjGantt) window.renderProjGantt(); 
-    } else if(view === 'calendar' && calC) { 
-        calC.classList.remove('hidden'); 
-        calC.classList.add('flex');
-        if(window.renderProjCalendar) window.renderProjCalendar(); 
-    }
+    if(view === 'list' && listC) { listC.classList.remove('hidden'); if(window.renderProjectStatusList) window.renderProjectStatusList(); } 
+    else if(view === 'gantt' && ganttC) { ganttC.classList.remove('hidden'); ganttC.classList.add('flex'); if(window.renderProjGantt) window.renderProjGantt(); } 
+    else if(view === 'calendar' && calC) { calC.classList.remove('hidden'); calC.classList.add('flex'); if(window.renderProjCalendar) window.renderProjCalendar(); }
 };
 
-// 💡 [핵심 수정] 뷰어 렌더링 - 완벽한 간트 차트 형식
+// 💡 [간트 차트 렌더링 수정] 여백 15일~45일 추가하여 오늘 날짜선 보장
 window.scrollToGanttToday = function() {
     const container = document.getElementById('proj-dash-gantt-content');
     const todayLine = document.getElementById('gantt-today-line');
     if(container && todayLine) {
-        // Scroll the horizontal container to the today line
         const lineOffset = todayLine.offsetLeft;
         const containerWidth = container.offsetWidth;
         container.scrollTo({ left: lineOffset - (containerWidth / 2) + 150, behavior: 'smooth' });
@@ -1042,19 +799,16 @@ window.renderProjGantt = function() {
             return;
         }
 
-        let minDate = new Date(); minDate.setDate(minDate.getDate() - 7);
-        let maxDate = new Date(); maxDate.setDate(maxDate.getDate() + 14);
+        let minDate = new Date(); minDate.setDate(minDate.getDate() - 15);
+        let maxDate = new Date(); maxDate.setDate(maxDate.getDate() + 45);
         
         projects.forEach(p => {
-            const s = new Date(p.d_asmSt || p.d_asmEst || p.d_shipEst || p.createdAt);
-            const e = new Date(p.d_shipEn || p.d_shipEst || p.d_asmEst || p.createdAt);
+            const s = new Date(p.d_asmSt || p.d_asmEst || p.createdAt);
+            const e = new Date(p.d_shipEn || p.d_shipEst || p.createdAt);
             if (!isNaN(s.getTime()) && s < minDate) minDate = new Date(s);
             if (!isNaN(e.getTime()) && e > maxDate) maxDate = new Date(e);
         });
-        
-        minDate.setDate(minDate.getDate() - 7);
-        maxDate.setDate(maxDate.getDate() + 7);
-        
+
         const totalDays = Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24));
         if (totalDays <= 0) return;
 
@@ -1074,7 +828,6 @@ window.renderProjGantt = function() {
         html += headerHtml;
         html += `<div class="relative">`;
         
-        // 💡 오늘 날짜 기준선
         if(todayPct >= 0 && todayPct <= 100) {
             html += `<div id="gantt-today-line" class="absolute top-0 bottom-0 w-[2px] bg-rose-500/80 z-20 pointer-events-none" style="left: calc(300px + ${todayPct}% - 300px); margin-left: 300px;">
                         <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-rose-500 text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm">오늘</div>
@@ -1094,11 +847,9 @@ window.renderProjGantt = function() {
                 if (sDate > eDate) { let t = sDate; sDate = eDate; eDate = t; }
                 let leftPct = ((sDate - minDate) / (1000 * 60 * 60 * 24)) / totalDays * 100;
                 let widthPct = ((eDate - sDate) / (1000 * 60 * 60 * 24)) / totalDays * 100;
-                
                 if (leftPct < 0) { widthPct += leftPct; leftPct = 0; }
                 if (leftPct + widthPct > 100) { widthPct = 100 - leftPct; }
                 if (widthPct < 0.5) widthPct = 0.5;
-
                 barHtml = `<div class="absolute h-5 rounded-full bg-gradient-to-r from-indigo-400 to-indigo-600 shadow-sm" style="left:${leftPct}%; width:${widthPct}%;"></div>`;
             } else {
                 barHtml = `<div class="text-[10px] text-slate-400 italic px-4 w-full text-center">일정 미지정</div>`;
@@ -1116,8 +867,6 @@ window.renderProjGantt = function() {
         
         html += `</div></div>`;
         container.innerHTML = html;
-        
-        // 렌더링 직후 스크롤 이동
         setTimeout(window.scrollToGanttToday, 50);
         
     } catch(e) {
@@ -1127,40 +876,26 @@ window.renderProjGantt = function() {
     }
 };
 
-// 💡 [핵심 수정] 뷰어 렌더링 - 캘린더 오류 방어
 window.renderProjCalendar = function() {
     try {
         const container = document.getElementById('proj-dash-calendar-content');
         if(!container) return;
-        
         const projects = window.getFilteredProjects();
         const now = window.calendarCurrentDate || new Date();
-        const year = now.getFullYear();
-        const month = now.getMonth() + 1;
+        const year = now.getFullYear(); const month = now.getMonth() + 1;
         
-        let html = `
-        <div class="flex justify-between items-center mb-4">
-            <button onclick="window.calendarCurrentDate.setMonth(window.calendarCurrentDate.getMonth()-1); window.renderProjCalendar()" class="p-2 text-slate-400 hover:text-indigo-600"><i class="fa-solid fa-chevron-left"></i></button>
-            <h3 class="text-sm font-black text-slate-800">${year}년 ${month}월 출하/조립 일정</h3>
-            <button onclick="window.calendarCurrentDate.setMonth(window.calendarCurrentDate.getMonth()+1); window.renderProjCalendar()" class="p-2 text-slate-400 hover:text-indigo-600"><i class="fa-solid fa-chevron-right"></i></button>
-        </div>
-        `;
-        
+        let html = `<div class="flex justify-between items-center mb-4"><button onclick="window.calendarCurrentDate.setMonth(window.calendarCurrentDate.getMonth()-1); window.renderProjCalendar()" class="p-2 text-slate-400 hover:text-indigo-600"><i class="fa-solid fa-chevron-left"></i></button><h3 class="text-sm font-black text-slate-800">${year}년 ${month}월 출하/조립 일정</h3><button onclick="window.calendarCurrentDate.setMonth(window.calendarCurrentDate.getMonth()+1); window.renderProjCalendar()" class="p-2 text-slate-400 hover:text-indigo-600"><i class="fa-solid fa-chevron-right"></i></button></div>`;
         html += `<div class="grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-lg overflow-hidden">`;
         const days = ['일','월','화','수','목','금','토'];
         days.forEach(d => html += `<div class="bg-slate-50 text-center py-2 text-[10px] font-bold ${d==='일'?'text-rose-500':(d==='토'?'text-blue-500':'text-slate-600')}">${d}</div>`);
         
-        const firstDay = new Date(year, month - 1, 1).getDay();
-        const lastDate = new Date(year, month, 0).getDate();
-        
+        const firstDay = new Date(year, month - 1, 1).getDay(); const lastDate = new Date(year, month, 0).getDate();
         for(let i=0; i<firstDay; i++) html += `<div class="bg-white min-h-[100px] p-1 opacity-50"></div>`;
         
         for(let d=1; d<=lastDate; d++) {
             let dStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
             let isToday = dStr === window.getLocalDateStr(new Date());
-            
             let dayPjts = projects.filter(p => p.d_shipEst === dStr || p.d_shipEn === dStr || p.d_asmSt === dStr || p.d_asmEst === dStr);
-            
             let pjtHtml = dayPjts.map(p => {
                 let isShip = (p.d_shipEst === dStr || p.d_shipEn === dStr);
                 let badgeClass = isShip ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-indigo-50 text-indigo-600 border-indigo-200';
@@ -1168,101 +903,49 @@ window.renderProjCalendar = function() {
                 let titleSafe = `[${p.code||'-'}] ${p.name}`.replace(/"/g, '&quot;');
                 return `<div class="text-[9px] font-bold border px-1 py-0.5 rounded mb-0.5 truncate cursor-pointer shadow-sm ${badgeClass}" onclick="window.editProjStatus('${p.id}')" title="${titleSafe}"><i class="fa-solid ${icon} mr-1"></i>${p.code||p.name}</div>`;
             }).join('');
-            
-            html += `<div class="bg-white min-h-[100px] p-1 border-t-2 ${isToday?'border-indigo-500':'border-transparent'} flex flex-col">
-                <span class="text-[10px] font-bold text-slate-500 text-center mb-1 ${isToday?'bg-indigo-600 text-white rounded-full w-5 h-5 mx-auto leading-5 shadow-md':''}">${d}</span>
-                <div class="flex-1 overflow-y-auto custom-scrollbar">${pjtHtml}</div>
-            </div>`;
+            html += `<div class="bg-white min-h-[100px] p-1 border-t-2 ${isToday?'border-indigo-500':'border-transparent'} flex flex-col"><span class="text-[10px] font-bold text-slate-500 text-center mb-1 ${isToday?'bg-indigo-600 text-white rounded-full w-5 h-5 mx-auto leading-5 shadow-md':''}">${d}</span><div class="flex-1 overflow-y-auto custom-scrollbar">${pjtHtml}</div></div>`;
         }
-        html += `</div>`;
-        container.innerHTML = html;
-    } catch(e) {
-        console.error("Calendar Rendering Error:", e);
-        const container = document.getElementById('proj-dash-calendar-content');
-        if(container) container.innerHTML = `<div class="text-center p-10 text-rose-500 font-bold">달력을 렌더링하는 중 오류가 발생했습니다.<br>${e.message}</div>`;
-    }
+        html += `</div>`; container.innerHTML = html;
+    } catch(e) { console.error("Calendar Rendering Error:", e); const container = document.getElementById('proj-dash-calendar-content'); if(container) container.innerHTML = `<div class="text-center p-10 text-rose-500 font-bold">달력을 렌더링하는 중 오류가 발생했습니다.<br>${e.message}</div>`; }
 };
 
+// ==========================================
+// 💡 구매 관리 모달
+// ==========================================
 window.openPurchaseModal = function(projectId, title) { 
     try {
         const modal = document.getElementById('purchase-modal');
         if(!modal) { safeShowError('구매 모달창 요소를 찾을 수 없습니다.'); return; }
-
         const reqIdEl = document.getElementById('pur-req-id'); if(reqIdEl) reqIdEl.value = projectId || '';
         const titleEl = document.getElementById('pur-project-title'); if(titleEl) titleEl.innerText = title || '';
-
         if(window.resetPurchaseForm) window.resetPurchaseForm();
-
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-
-        if(window.initGoogleAPI) window.initGoogleAPI();
+        modal.classList.remove('hidden'); modal.classList.add('flex');
 
         if (currentPurchaseUnsubscribe) currentPurchaseUnsubscribe();
         currentPurchaseUnsubscribe = onSnapshot(query(collection(db, "project_purchases"), where("projectId", "==", projectId)), function(snap) {
             try {
-                let list = [];
-                snap.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
-                list.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
-
-                const listEl = document.getElementById('purchase-list');
-                if(!listEl) return;
-
-                if(list.length === 0) {
-                    listEl.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 구매 내역이 없습니다.</div>';
-                    return;
-                }
-
+                let list = []; snap.forEach(doc => list.push({ id: doc.id, ...doc.data() })); list.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
+                const listEl = document.getElementById('purchase-list'); if(!listEl) return;
+                if(list.length === 0) { listEl.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 구매 내역이 없습니다.</div>'; return; }
                 listEl.innerHTML = list.map(item => {
                     let dateStr = item.createdAt ? window.getDateTimeStr(new Date(getSafeMillis(item.createdAt))) : '';
                     let safeContent = getSafeString(item.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
                     if(window.formatMentions) safeContent = window.formatMentions(safeContent);
                     let attachmentsHtml = window.generateMediaHtml(item.files);
-
-                    return `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
-                                <div class="flex justify-between items-start">
-                                    <div class="flex items-center gap-2"><span class="font-bold text-amber-600 text-sm">${getSafeString(item.authorName)}</span><span class="text-[10px] text-slate-400 font-medium">${dateStr}</span></div>
-                                    <div class="flex gap-2"><button onclick="window.deletePurchase('${item.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button></div>
-                                </div>
-                                <div class="text-[13px] text-slate-700 font-medium break-words leading-relaxed">${safeContent}</div>
-                                ${attachmentsHtml}
-                            </div>`;
+                    return `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2"><div class="flex justify-between items-start"><div class="flex items-center gap-2"><span class="font-bold text-amber-600 text-sm">${getSafeString(item.authorName)}</span><span class="text-[10px] text-slate-400 font-medium">${dateStr}</span></div><div class="flex gap-2"><button onclick="window.deletePurchase('${item.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button></div></div><div class="text-[13px] text-slate-700 font-medium break-words leading-relaxed">${safeContent}</div>${attachmentsHtml}</div>`;
                 }).join('');
-            } catch(e) {
-                console.error("구매 목록 렌더링 에러:", e);
-            }
+            } catch(e) { console.error("구매 목록 렌더링 에러:", e); }
         });
-    } catch(e) {
-        safeShowError('구매 모달창을 여는 중 에러가 발생했습니다.', e);
-    }
+    } catch(e) { safeShowError('구매 모달창을 여는 중 에러가 발생했습니다.', e); }
 };
-
 window.closePurchaseModal = function() { const m = document.getElementById('purchase-modal'); if(m){m.classList.add('hidden');m.classList.remove('flex');} if(currentPurchaseUnsubscribe) currentPurchaseUnsubscribe(); };
-window.resetPurchaseForm = function() { 
-    const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
-    setVal('editing-pur-id', ''); setVal('new-pur-text', ''); setVal('new-pur-file', ''); 
-    const fname = document.getElementById('pur-file-name'); if(fname) fname.innerText = ''; 
-};
-
+window.resetPurchaseForm = function() { const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; }; setVal('editing-pur-id', ''); setVal('new-pur-text', ''); setVal('new-pur-file', ''); const fname = document.getElementById('pur-file-name'); if(fname) fname.innerText = ''; };
 window.savePurchaseItem = async function() { 
-    const pIdEl = document.getElementById('pur-req-id');
-    const titleEl = document.getElementById('pur-project-title');
-    if(!pIdEl || !titleEl) return;
-    
-    const pId = pIdEl.value;
-    const title = titleEl.innerText;
-    
-    const proj = (window.currentProjectStatusList || []).find(p => p.id === pId);
-    const folderName = proj && proj.code ? proj.code : title;
-
-    const contentEl = document.getElementById('new-pur-text');
-    const fileInput = document.getElementById('new-pur-file');
-    const btn = document.getElementById('btn-pur-save');
-    
+    const pIdEl = document.getElementById('pur-req-id'); const titleEl = document.getElementById('pur-project-title'); if(!pIdEl || !titleEl) return;
+    const pId = pIdEl.value; const title = titleEl.innerText; const proj = (window.currentProjectStatusList || []).find(p => p.id === pId); const folderName = proj && proj.code ? proj.code : title;
+    const contentEl = document.getElementById('new-pur-text'); const fileInput = document.getElementById('new-pur-file'); const btn = document.getElementById('btn-pur-save');
     if(!contentEl || !fileInput || !btn) return;
-    
-    const content = contentEl.value.trim();
-    if(!content && fileInput.files.length === 0) return safeShowError("내용이나 파일을 첨부하세요.");
+    const content = contentEl.value.trim(); if(!content && fileInput.files.length === 0) return safeShowError("내용이나 파일을 첨부하세요.");
     
     btn.innerHTML = '저장중..'; btn.disabled = true;
     try { 
@@ -1274,125 +957,47 @@ window.savePurchaseItem = async function() {
                 filesData.push({ name: fileInput.files[i].name, url: url });
             }
         }
-        
-        const payload = { 
-            projectId: pId, 
-            content: content, 
-            files: filesData, 
-            authorUid: (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system', 
-            authorName: (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system', 
-            createdAt: Date.now() 
-        };
-        
-        // 💡 Firestore 에러 완벽 방지: undefined 값을 null로 변환
-        const cleanPayload = JSON.parse(JSON.stringify(payload));
-        Object.keys(cleanPayload).forEach(k => { if(cleanPayload[k] === undefined) cleanPayload[k] = null; });
-        
-        await addDoc(collection(db, "project_purchases"), cleanPayload);
-        safeShowSuccess("구매 내역이 등록되었습니다."); 
-        if(window.resetPurchaseForm) window.resetPurchaseForm(); 
-    } catch(e) { 
-        safeShowError("저장 실패", e); 
-    } finally { 
-        btn.innerHTML = '등록'; btn.disabled = false; 
-    }
+        const payload = { projectId: pId, content: content, files: filesData, authorUid: (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system', authorName: (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system', createdAt: Date.now() };
+        const cleanPayload = JSON.parse(JSON.stringify(payload)); Object.keys(cleanPayload).forEach(k => { if(cleanPayload[k] === undefined) cleanPayload[k] = null; });
+        await addDoc(collection(db, "project_purchases"), cleanPayload); safeShowSuccess("구매 내역이 등록되었습니다."); if(window.resetPurchaseForm) window.resetPurchaseForm(); 
+    } catch(e) { safeShowError("저장 실패", e); } finally { btn.innerHTML = '등록'; btn.disabled = false; }
 };
-
-window.deletePurchase = async function(id) { 
-    if(confirm("삭제하시겠습니까?")) { 
-        try { 
-            await deleteDoc(doc(db, "project_purchases", id)); 
-            safeShowSuccess("삭제되었습니다."); 
-        } catch(e) { 
-            safeShowError("삭제 실패", e); 
-        } 
-    } 
-};
+window.deletePurchase = async function(id) { if(confirm("삭제하시겠습니까?")) { try { await deleteDoc(doc(db, "project_purchases", id)); safeShowSuccess("삭제되었습니다."); } catch(e) { safeShowError("삭제 실패", e); } } };
 
 // ==========================================
-// 💡 설계 파일 관리 모달 (안전장치 적용)
+// 💡 설계 관리 모달
 // ==========================================
 window.openDesignModal = function(projectId, title) { 
     try {
-        const modal = document.getElementById('design-modal');
-        if(!modal) { safeShowError('설계 모달창 요소를 찾을 수 없습니다.'); return; }
-
-        const reqIdEl = document.getElementById('des-req-id'); if(reqIdEl) reqIdEl.value = projectId || '';
-        const titleEl = document.getElementById('des-project-title'); if(titleEl) titleEl.innerText = title || '';
-
-        if(window.resetDesignForm) window.resetDesignForm();
-
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-
-        if(window.initGoogleAPI) window.initGoogleAPI();
-
+        const modal = document.getElementById('design-modal'); if(!modal) { safeShowError('설계 모달창 요소를 찾을 수 없습니다.'); return; }
+        const reqIdEl = document.getElementById('des-req-id'); if(reqIdEl) reqIdEl.value = projectId || ''; const titleEl = document.getElementById('des-project-title'); if(titleEl) titleEl.innerText = title || '';
+        if(window.resetDesignForm) window.resetDesignForm(); modal.classList.remove('hidden'); modal.classList.add('flex');
+        
         if (currentDesignUnsubscribe) currentDesignUnsubscribe();
         currentDesignUnsubscribe = onSnapshot(query(collection(db, "project_designs"), where("projectId", "==", projectId)), function(snap) {
             try {
-                let list = [];
-                snap.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
-                list.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
-
-                const listEl = document.getElementById('design-list');
-                if(!listEl) return;
-
-                if(list.length === 0) {
-                    listEl.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 설계 파일이 없습니다.</div>';
-                    return;
-                }
-
+                let list = []; snap.forEach(doc => list.push({ id: doc.id, ...doc.data() })); list.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
+                const listEl = document.getElementById('design-list'); if(!listEl) return;
+                if(list.length === 0) { listEl.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 설계 파일이 없습니다.</div>'; return; }
                 listEl.innerHTML = list.map(item => {
                     let dateStr = item.createdAt ? window.getDateTimeStr(new Date(getSafeMillis(item.createdAt))) : '';
                     let safeContent = getSafeString(item.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
                     if(window.formatMentions) safeContent = window.formatMentions(safeContent);
                     let attachmentsHtml = window.generateMediaHtml(item.files);
-
-                    return `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
-                                <div class="flex justify-between items-start">
-                                    <div class="flex items-center gap-2"><span class="font-bold text-teal-600 text-sm">${getSafeString(item.authorName)}</span><span class="text-[10px] text-slate-400 font-medium">${dateStr}</span></div>
-                                    <div class="flex gap-2"><button onclick="window.deleteDesign('${item.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button></div>
-                                </div>
-                                <div class="text-[13px] text-slate-700 font-medium break-words leading-relaxed">${safeContent}</div>
-                                ${attachmentsHtml}
-                            </div>`;
+                    return `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2"><div class="flex justify-between items-start"><div class="flex items-center gap-2"><span class="font-bold text-teal-600 text-sm">${getSafeString(item.authorName)}</span><span class="text-[10px] text-slate-400 font-medium">${dateStr}</span></div><div class="flex gap-2"><button onclick="window.deleteDesign('${item.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button></div></div><div class="text-[13px] text-slate-700 font-medium break-words leading-relaxed">${safeContent}</div>${attachmentsHtml}</div>`;
                 }).join('');
-            } catch(e) {
-                console.error("설계 목록 렌더링 에러:", e);
-            }
+            } catch(e) { console.error("설계 목록 렌더링 에러:", e); }
         });
-    } catch(e) {
-        safeShowError('설계 모달창을 여는 중 에러가 발생했습니다.', e);
-    }
+    } catch(e) { safeShowError('설계 모달창을 여는 중 에러가 발생했습니다.', e); }
 };
-
 window.closeDesignModal = function() { const m = document.getElementById('design-modal'); if(m){m.classList.add('hidden');m.classList.remove('flex');} if (currentDesignUnsubscribe) currentDesignUnsubscribe(); };
-window.resetDesignForm = function() { 
-    const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
-    setVal('editing-des-id', ''); setVal('new-des-text', ''); setVal('new-des-file', ''); 
-    const fname = document.getElementById('des-file-name'); if(fname) fname.innerText = ''; 
-};
-
+window.resetDesignForm = function() { const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; }; setVal('editing-des-id', ''); setVal('new-des-text', ''); setVal('new-des-file', ''); const fname = document.getElementById('des-file-name'); if(fname) fname.innerText = ''; };
 window.saveDesignItem = async function() { 
-    const pIdEl = document.getElementById('des-req-id');
-    const titleEl = document.getElementById('des-project-title');
-    if(!pIdEl || !titleEl) return;
-    
-    const pId = pIdEl.value;
-    const title = titleEl.innerText;
-    
-    const proj = (window.currentProjectStatusList || []).find(p => p.id === pId);
-    const folderName = proj && proj.code ? proj.code : title;
-
-    const contentEl = document.getElementById('new-des-text');
-    const fileInput = document.getElementById('new-des-file');
-    const btn = document.getElementById('btn-des-save');
-    
+    const pIdEl = document.getElementById('des-req-id'); const titleEl = document.getElementById('des-project-title'); if(!pIdEl || !titleEl) return;
+    const pId = pIdEl.value; const title = titleEl.innerText; const proj = (window.currentProjectStatusList || []).find(p => p.id === pId); const folderName = proj && proj.code ? proj.code : title;
+    const contentEl = document.getElementById('new-des-text'); const fileInput = document.getElementById('new-des-file'); const btn = document.getElementById('btn-des-save');
     if(!contentEl || !fileInput || !btn) return;
-    
-    const content = contentEl.value.trim();
-    if(!content && fileInput.files.length === 0) return safeShowError("내용이나 파일을 첨부하세요.");
-    
+    const content = contentEl.value.trim(); if(!content && fileInput.files.length === 0) return safeShowError("내용이나 파일을 첨부하세요.");
     btn.innerHTML = '저장중..'; btn.disabled = true;
     try { 
         let filesData = [];
@@ -1403,124 +1008,47 @@ window.saveDesignItem = async function() {
                 filesData.push({ name: fileInput.files[i].name, url: url });
             }
         }
-        
-        const payload = { 
-            projectId: pId, 
-            content: content, 
-            files: filesData, 
-            authorUid: (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system', 
-            authorName: (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system', 
-            createdAt: Date.now() 
-        };
-        
-        const cleanPayload = JSON.parse(JSON.stringify(payload));
-        Object.keys(cleanPayload).forEach(k => { if(cleanPayload[k] === undefined) cleanPayload[k] = null; });
-
-        await addDoc(collection(db, "project_designs"), cleanPayload);
-        safeShowSuccess("설계 내역이 등록되었습니다."); 
-        if(window.resetDesignForm) window.resetDesignForm(); 
-    } catch(e) { 
-        safeShowError("저장 실패", e); 
-    } finally { 
-        btn.innerHTML = '등록'; btn.disabled = false; 
-    }
+        const payload = { projectId: pId, content: content, files: filesData, authorUid: (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system', authorName: (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system', createdAt: Date.now() };
+        const cleanPayload = JSON.parse(JSON.stringify(payload)); Object.keys(cleanPayload).forEach(k => { if(cleanPayload[k] === undefined) cleanPayload[k] = null; });
+        await addDoc(collection(db, "project_designs"), cleanPayload); safeShowSuccess("설계 내역이 등록되었습니다."); if(window.resetDesignForm) window.resetDesignForm(); 
+    } catch(e) { safeShowError("저장 실패", e); } finally { btn.innerHTML = '등록'; btn.disabled = false; }
 };
-
-window.deleteDesign = async function(id) { 
-    if(confirm("삭제하시겠습니까?")) { 
-        try { 
-            await deleteDoc(doc(db, "project_designs", id)); 
-            safeShowSuccess("삭제되었습니다."); 
-        } catch(e) { 
-            safeShowError("삭제 실패", e); 
-        } 
-    } 
-};
+window.deleteDesign = async function(id) { if(confirm("삭제하시겠습니까?")) { try { await deleteDoc(doc(db, "project_designs", id)); safeShowSuccess("삭제되었습니다."); } catch(e) { safeShowError("삭제 실패", e); } } };
 
 // ==========================================
-// 💡 일정표 관리 모달 (안전장치 적용)
+// 💡 일정표 모달
 // ==========================================
 window.openPjtScheduleModal = function(projectId, title) { 
     try {
-        const modal = document.getElementById('pjt-schedule-modal');
-        if(!modal) { safeShowError('일정표 모달창 요소를 찾을 수 없습니다.'); return; }
-
-        const reqIdEl = document.getElementById('sch-req-id'); if(reqIdEl) reqIdEl.value = projectId || '';
-        const titleEl = document.getElementById('sch-project-title'); if(titleEl) titleEl.innerText = title || '';
-
-        if(window.resetPjtScheduleForm) window.resetPjtScheduleForm();
-
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-
-        if(window.initGoogleAPI) window.initGoogleAPI();
-
+        const modal = document.getElementById('pjt-schedule-modal'); if(!modal) { safeShowError('일정표 모달창 요소를 찾을 수 없습니다.'); return; }
+        const reqIdEl = document.getElementById('sch-req-id'); if(reqIdEl) reqIdEl.value = projectId || ''; const titleEl = document.getElementById('sch-project-title'); if(titleEl) titleEl.innerText = title || '';
+        if(window.resetPjtScheduleForm) window.resetPjtScheduleForm(); modal.classList.remove('hidden'); modal.classList.add('flex');
+        
         if (currentPjtScheduleUnsubscribe) currentPjtScheduleUnsubscribe();
         currentPjtScheduleUnsubscribe = onSnapshot(query(collection(db, "project_schedules"), where("projectId", "==", projectId)), function(snap) {
             try {
-                let list = [];
-                snap.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
-                list.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
-
-                const listEl = document.getElementById('pjt-schedule-list');
-                if(!listEl) return;
-
-                if(list.length === 0) {
-                    listEl.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 PJT 일정이 없습니다.</div>';
-                    return;
-                }
-
+                let list = []; snap.forEach(doc => list.push({ id: doc.id, ...doc.data() })); list.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
+                const listEl = document.getElementById('pjt-schedule-list'); if(!listEl) return;
+                if(list.length === 0) { listEl.innerHTML = '<div class="text-center p-8 text-slate-400 font-bold">등록된 PJT 일정이 없습니다.</div>'; return; }
                 listEl.innerHTML = list.map(item => {
                     let dateStr = item.createdAt ? window.getDateTimeStr(new Date(getSafeMillis(item.createdAt))) : '';
                     let safeContent = getSafeString(item.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
                     if(window.formatMentions) safeContent = window.formatMentions(safeContent);
                     let attachmentsHtml = window.generateMediaHtml(item.files);
-
-                    return `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
-                                <div class="flex justify-between items-start">
-                                    <div class="flex items-center gap-2"><span class="font-bold text-fuchsia-600 text-sm">${getSafeString(item.authorName)}</span><span class="text-[10px] text-slate-400 font-medium">${dateStr}</span></div>
-                                    <div class="flex gap-2"><button onclick="window.deletePjtSchedule('${item.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button></div>
-                                </div>
-                                <div class="text-[13px] text-slate-700 font-medium break-words leading-relaxed">${safeContent}</div>
-                                ${attachmentsHtml}
-                            </div>`;
+                    return `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2"><div class="flex justify-between items-start"><div class="flex items-center gap-2"><span class="font-bold text-fuchsia-600 text-sm">${getSafeString(item.authorName)}</span><span class="text-[10px] text-slate-400 font-medium">${dateStr}</span></div><div class="flex gap-2"><button onclick="window.deletePjtSchedule('${item.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button></div></div><div class="text-[13px] text-slate-700 font-medium break-words leading-relaxed">${safeContent}</div>${attachmentsHtml}</div>`;
                 }).join('');
-            } catch(e) {
-                console.error("일정표 목록 렌더링 에러:", e);
-            }
+            } catch(e) { console.error("일정표 목록 렌더링 에러:", e); }
         });
-    } catch(e) {
-        safeShowError('일정표 모달창을 여는 중 에러가 발생했습니다.', e);
-    }
+    } catch(e) { safeShowError('일정표 모달창을 여는 중 에러가 발생했습니다.', e); }
 };
-
 window.closePjtScheduleModal = function() { const m = document.getElementById('pjt-schedule-modal'); if(m){m.classList.add('hidden');m.classList.remove('flex');} if (currentPjtScheduleUnsubscribe) currentPjtScheduleUnsubscribe(); };
-window.resetPjtScheduleForm = function() { 
-    const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
-    setVal('editing-sch-id', ''); setVal('new-sch-text', ''); setVal('new-sch-file', ''); 
-    const fname = document.getElementById('sch-file-name'); if(fname) fname.innerText = ''; 
-};
-
+window.resetPjtScheduleForm = function() { const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; }; setVal('editing-sch-id', ''); setVal('new-sch-text', ''); setVal('new-sch-file', ''); const fname = document.getElementById('sch-file-name'); if(fname) fname.innerText = ''; };
 window.savePjtScheduleItem = async function() { 
-    const pIdEl = document.getElementById('sch-req-id');
-    const titleEl = document.getElementById('sch-project-title');
-    if(!pIdEl || !titleEl) return;
-    
-    const pId = pIdEl.value;
-    const title = titleEl.innerText;
-    
-    const proj = (window.currentProjectStatusList || []).find(p => p.id === pId);
-    const folderName = proj && proj.code ? proj.code : title;
-
-    const contentEl = document.getElementById('new-sch-text');
-    const fileInput = document.getElementById('new-sch-file');
-    const btn = document.getElementById('btn-sch-save');
-    
+    const pIdEl = document.getElementById('sch-req-id'); const titleEl = document.getElementById('sch-project-title'); if(!pIdEl || !titleEl) return;
+    const pId = pIdEl.value; const title = titleEl.innerText; const proj = (window.currentProjectStatusList || []).find(p => p.id === pId); const folderName = proj && proj.code ? proj.code : title;
+    const contentEl = document.getElementById('new-sch-text'); const fileInput = document.getElementById('new-sch-file'); const btn = document.getElementById('btn-sch-save');
     if(!contentEl || !fileInput || !btn) return;
-    
-    const content = contentEl.value.trim();
-    if(!content && fileInput.files.length === 0) return safeShowError("내용이나 파일을 첨부하세요.");
-    
+    const content = contentEl.value.trim(); if(!content && fileInput.files.length === 0) return safeShowError("내용이나 파일을 첨부하세요.");
     btn.innerHTML = '저장중..'; btn.disabled = true;
     try { 
         let filesData = [];
@@ -1531,45 +1059,16 @@ window.savePjtScheduleItem = async function() {
                 filesData.push({ name: fileInput.files[i].name, url: url });
             }
         }
-        
-        const payload = { 
-            projectId: pId, 
-            content: content, 
-            files: filesData, 
-            authorUid: (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system', 
-            authorName: (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system', 
-            createdAt: Date.now() 
-        };
-        
-        const cleanPayload = JSON.parse(JSON.stringify(payload));
-        Object.keys(cleanPayload).forEach(k => { if(cleanPayload[k] === undefined) cleanPayload[k] = null; });
-
-        await addDoc(collection(db, "project_schedules"), cleanPayload);
-        safeShowSuccess("PJT 일정 내역이 등록되었습니다."); 
-        if(window.resetPjtScheduleForm) window.resetPjtScheduleForm(); 
-    } catch(e) { 
-        safeShowError("저장 실패", e); 
-    } finally { 
-        btn.innerHTML = '등록'; btn.disabled = false; 
-    }
+        const payload = { projectId: pId, content: content, files: filesData, authorUid: (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system', authorName: (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system', createdAt: Date.now() };
+        const cleanPayload = JSON.parse(JSON.stringify(payload)); Object.keys(cleanPayload).forEach(k => { if(cleanPayload[k] === undefined) cleanPayload[k] = null; });
+        await addDoc(collection(db, "project_schedules"), cleanPayload); safeShowSuccess("PJT 일정 내역이 등록되었습니다."); if(window.resetPjtScheduleForm) window.resetPjtScheduleForm(); 
+    } catch(e) { safeShowError("저장 실패", e); } finally { btn.innerHTML = '등록'; btn.disabled = false; }
 };
-
-window.deletePjtSchedule = async function(id) { 
-    if(confirm("삭제하시겠습니까?")) { 
-        try { 
-            await deleteDoc(doc(db, "project_schedules", id)); 
-            safeShowSuccess("삭제되었습니다."); 
-        } catch(e) { 
-            safeShowError("삭제 실패", e); 
-        } 
-    } 
-};
+window.deletePjtSchedule = async function(id) { if(confirm("삭제하시겠습니까?")) { try { await deleteDoc(doc(db, "project_schedules", id)); safeShowSuccess("삭제되었습니다."); } catch(e) { safeShowError("삭제 실패", e); } } };
 
 // ==========================================
-// 💡 생산일지 관리 모달 (안전장치 적용 및 팀원 추가 기능 복구)
+// 💡 생산일지 모달 (팀원추가 로직 포함 및 100% 원본 유지)
 // ==========================================
-
-// 💡 1. 팀원 목록 관리를 위한 함수 새로 작성
 window.addLogMember = function(name) {
     if(!name) return;
     window.currentLogMembers = window.currentLogMembers || [];
@@ -1591,9 +1090,7 @@ window.renderLogMembers = function() {
     const container = document.getElementById('log-selected-members');
     const memInput = document.getElementById('log-members');
     const membersList = window.currentLogMembers || [];
-    
     if(memInput) memInput.value = membersList.join(', ');
-    
     if(container) {
         container.innerHTML = membersList.map(function(name) {
             return `<span class="bg-sky-100 text-sky-700 px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1.5 shadow-sm">${name} <i class="fa-solid fa-xmark cursor-pointer hover:text-rose-500 bg-white/50 rounded-full px-1 py-0.5" onclick="window.removeLogMember('${name}')"></i></span>`;
@@ -1603,8 +1100,6 @@ window.renderLogMembers = function() {
 
 window.openDailyLogModal = function(projectId) { 
     try {
-        if(window.initGoogleAPI) window.initGoogleAPI(); // 💡 매번 열 때 구글 연동 체크 새로고침
-        
         const modal = document.getElementById('daily-log-modal');
         if(!modal) { safeShowError('생산일지 모달창 요소를 찾을 수 없습니다.'); return; }
         
@@ -1791,7 +1286,7 @@ window.clearDailyLogFile = function(e) {
 };
 
 // ==========================================
-// 💡 투입 MD 기록 관리 모달 (안전장치 적용)
+// 💡 투입 MD 기록 관리 모달
 // ==========================================
 window.openMdLogModal = function(projectId, title, curMd) { 
     try {
@@ -1873,7 +1368,7 @@ window.editMdLog = function(id) { const log = (window.currentMdLogs || []).find(
 window.updateProjectTotalMd = async function(projectId) { const snap = await getDocs(query(collection(db, "project_md_logs"), where("projectId", "==", projectId))); let total = 0; snap.forEach(docSnap => total += parseFloat(docSnap.data().md) || 0); const projRef = doc(db, "projects_status", projectId); const projSnap = await getDoc(projRef); if(projSnap.exists()) { const outMd = parseFloat(projSnap.data().outMd) || 0; await setDoc(projRef, { currentMd: total, finalMd: total + outMd }, { merge: true }); } };
 
 // ==========================================
-// 💡 코멘트, 이슈, 링크 등 나머지 모달창
+// 💡 이슈 모달
 // ==========================================
 window.openIssueModal = function(projectId, title) { 
     const modal = document.getElementById('issue-modal'); if(!modal) { safeShowError("이슈 모달 요소 없음"); return; }
@@ -1909,6 +1404,9 @@ window.toggleIssueStatus = async function(id, isResolved) { try { await setDoc(d
 window.editIssue = function(id) { const iss = window.currentIssues.find(i => i.id === id); if(!iss) return; document.getElementById('editing-issue-id').value = id; document.getElementById('new-issue-text').value = iss.content || ''; document.getElementById('btn-issue-save').innerText = '수정'; document.getElementById('new-issue-text').focus(); };
 window.deleteIssue = async function(id) { if(!confirm("이 이슈를 삭제하시겠습니까?")) return; try { await deleteDoc(doc(db, "project_issues", id)); safeShowSuccess("삭제됨"); } catch(e) { safeShowError("삭제 실패", e); } };
 
+// ==========================================
+// 💡 코멘트 모달
+// ==========================================
 window.openCommentModal = function(projectId, title) { 
     const modal = document.getElementById('comment-modal'); if(!modal) { safeShowError("코멘트 모달 요소 없음"); return; }
     modal.classList.remove('hidden'); modal.classList.add('flex'); 
@@ -1947,6 +1445,9 @@ window.setReplyTo = function(cid, name) { if(window.cancelCommentAction) window.
 window.cancelCommentAction = function() { document.getElementById('reply-to-id').value = ''; document.getElementById('editing-cmt-id').value = ''; document.getElementById('new-cmt-text').value = ''; document.getElementById('btn-cmt-save').innerText = '작성'; document.getElementById('reply-indicator').classList.add('hidden'); };
 window.deleteComment = async function(id) { if(!confirm("삭제하시겠습니까?")) return; try { await deleteDoc(doc(db, "project_comments", id)); const q = query(collection(db, "project_comments"), where("parentId", "==", id)); const snapshot = await getDocs(q); if(!snapshot.empty) { const batch = writeBatch(db); snapshot.forEach(d => batch.delete(d.ref)); await batch.commit(); } safeShowSuccess("삭제됨"); if(window.cancelCommentAction) window.cancelCommentAction(); } catch(e) { safeShowError("삭제 실패", e); } };
 
+// ==========================================
+// 💡 외부 링크 모달
+// ==========================================
 window.openLinkModal = function(projectId, title) { 
     const modal = document.getElementById('link-modal'); if(!modal) return safeShowError("링크 모달 요소 없음");
     modal.classList.remove('hidden'); modal.classList.add('flex'); 
@@ -1965,6 +1466,9 @@ window.saveLinkItem = async function() {
 };
 window.deleteLinkItem = async function(projectId, index) { if(!confirm("삭제하시겠습니까?")) return; const proj = window.currentProjectStatusList.find(p => p.id === projectId); if(!proj || !proj.links) return; let links = proj.links.slice(); links.splice(index, 1); try { await setDoc(doc(db, "projects_status", projectId), { links: links }, { merge: true }); safeShowSuccess("링크 삭제됨"); if(proj) proj.links = links; if(window.renderLinksList) window.renderLinksList(projectId); } catch(e) { safeShowError("삭제 실패", e); } };
 
+// ==========================================
+// 💡 부적합(NCR) 데이터 동기화
+// ==========================================
 window.loadNcrData = async function() {
     try {
         if(window.showToast) window.showToast("부적합(RAWDATA) 데이터를 가져오는 중입니다...", "success");
