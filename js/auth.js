@@ -10,12 +10,10 @@ window.tempUserEmail = "";
 window.tempUserUid = "";
 
 const googleProvider = new GoogleAuthProvider();
-// 💡 드라이브와 메일 발송 권한 요청
 googleProvider.addScope('https://www.googleapis.com/auth/drive');
 googleProvider.addScope('https://www.googleapis.com/auth/gmail.send');
 googleProvider.addScope('https://www.googleapis.com/auth/spreadsheets.readonly');
 
-// 💡 [원인 해결] 체크박스(권한) 동의 창을 무조건 강제로 띄우는 필수 옵션입니다!
 googleProvider.setCustomParameters({ 
     prompt: 'consent',
     access_type: 'offline'
@@ -30,7 +28,6 @@ window.googleLogin = async () => {
         const result = await signInWithPopup(auth, googleProvider);
         const user = result.user;
 
-        // 사내 이메일 도메인 필터링
         if (!user.email || !user.email.endsWith('@axbis.ai')) {
             try { await user.delete(); } catch(e) { await signOut(auth); } 
             window.isSigningUp = false; 
@@ -56,7 +53,8 @@ window.googleLogin = async () => {
             document.getElementById('signup-view').classList.remove('hidden');
         } else {
             window.isSigningUp = false; 
-            if (user.email === 'mfg@axbis.ai' && userDoc.data().role !== 'admin') { 
+            // 💡 [핵심 수정] hgje@axbis.ai 계정도 관리자로 즉시 승격시켜 무한 대기 루프를 뚫어줍니다.
+            if ((user.email === 'mfg@axbis.ai' || user.email === 'hgje@axbis.ai') && userDoc.data().role !== 'admin') { 
                 await setDoc(userDocRef, { role: 'admin' }, { merge: true }); 
             }
             location.reload();
@@ -65,7 +63,7 @@ window.googleLogin = async () => {
         window.isSigningUp = false; 
         console.error("❌ 로그인 팝업 실패:", er);
         if(err) { 
-            err.innerHTML = `로그인 실패: ${er.message}<br><span class="text-[10px] text-slate-500 mt-1 block">💡 브라우저 팝업 차단을 해제하거나, 권한을 확인해주세요.</span>`; 
+            err.innerHTML = `로그인 실패: ${er.message}<br><span class="text-[10px] text-slate-500 mt-1 block">💡 브라우저 팝업 차단을 해제하거나, 구글 클라우드(GCP) 설정을 확인해주세요.</span>`; 
             err.classList.remove('hidden'); 
         }
     }
@@ -83,7 +81,8 @@ window.completeGoogleSignup = async () => {
     if(!n) { if(err) err.innerHTML="이름을 입력해주세요."; err.classList.remove('hidden'); return; }
     
     try {
-        let initialRole = (finalEmail === 'mfg@axbis.ai') ? 'admin' : 'pending';
+        // 💡 [핵심 수정] 신규 가입 시에도 hgje@axbis.ai는 바로 관리자 부여
+        let initialRole = (finalEmail === 'mfg@axbis.ai' || finalEmail === 'hgje@axbis.ai') ? 'admin' : 'pending';
         await setDoc(doc(db, "users", finalUid), {
             email: finalEmail, name: n, team: t, department: t, position: pos, role: initialRole,
             permissions: { collab:true, purchase:true, assembly:true, repair:true, 'project-status':true, 'weekly-log':true }
@@ -169,7 +168,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// 관리자 및 설정 모달 관련 함수들
 window.openSettingsModal = () => {
     if (!window.userProfile) return;
     document.getElementById('set-name').value = window.userProfile.name || '';
