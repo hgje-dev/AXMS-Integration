@@ -54,16 +54,16 @@ window.notifyUser = async function(targetName, content, projectId, typeDesc) {
             const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
             if (window.googleAccessToken && storedExpiry && Date.now() < parseInt(storedExpiry)) {
                 const subject = `[AXBIS 알림] ${msgTitle}`;
-                const bodyHtml = `<div style="font-family: sans-serif; padding: 20px;"><h3>${msgTitle}</h3><p>${String(content).replace(/\n/g, '<br>')}</p></div>`;
+                const bodyHtml = `<div style="font-family: sans-serif; padding: 20px;"><div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;"><h3>${msgTitle}</h3><p>${String(content).replace(/\n/g, '<br>')}</p></div></div>`;
                 const emailRaw = `To: ${targetUser.email}\r\nSubject: =?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=\r\nContent-Type: text/html; charset="UTF-8"\r\n\r\n${bodyHtml}`;
                 const encodedEmail = btoa(unescape(encodeURIComponent(emailRaw))).replace(/\+/g, '-').replace(/\//g, '_');
                 
                 fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
                     method: 'POST', headers: { 'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ raw: encodedEmail })
-                }).catch(e => console.log("메일 발송 에러(무시가능):", e));
+                }).catch(e => console.warn("메일 발송 에러(무시가능):", e));
             } else {
-                if (window.showToast) window.showToast("구글 계정 연동이 만료되어 메일 알림이 발송되지 않았습니다.", "warning");
+                if (window.showToast) window.showToast("구글 계정 연동이 만료되어 앱 내 알림만 발송되었습니다.", "warning");
             }
         }
         return true;
