@@ -255,6 +255,9 @@ window.resetAllFilters = function() {
     window.filterProjectStatus('all');
 };
 
+// ==========================================
+// 💡 필터링 및 대시보드
+// ==========================================
 window.getFilteredProjects = function() {
     let list = window.currentProjectStatusList || [];
     
@@ -529,6 +532,7 @@ window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
         throw new Error("TOKEN_EXPIRED");
     }
     
+    // 💡 [버그 픽스] 공백, 한글, 특수문자 완벽 인코딩 지원
     const safeFolderName = getSafeString(folderName).replace(/['\/\\]/g, '_').trim() || '미분류 프로젝트';
     const queryStr = `name='${safeFolderName.replace(/'/g, "\\'")}' and mimeType='application/vnd.google-apps.folder' and '${parentFolderId}' in parents and trashed=false`;
     
@@ -560,6 +564,7 @@ window.uploadFileWithProgress = async function(file, folderName, subFolderName =
         throw new Error("TOKEN_EXPIRED");
     }
 
+    // 💡 [버그 픽스] z-index 99999로 무조건 최상단에 뜨는 프로그레스 바 강제 생성
     let progressModal = document.getElementById('global-upload-progress-modal');
     if (!progressModal) {
         progressModal = document.createElement('div');
@@ -654,6 +659,9 @@ window.uploadFileWithProgress = async function(file, folderName, subFolderName =
     }
 };
 
+// ==========================================
+// 💡 이미지 렌더러 (엑스박스 방지)
+// ==========================================
 window.generateMediaHtml = function(filesArray) {
     if (!filesArray || !Array.isArray(filesArray) || filesArray.length === 0) return '';
     
@@ -674,6 +682,7 @@ window.generateMediaHtml = function(filesArray) {
             let fileIdMatch = f.url ? f.url.match(/\/d\/(.+?)\/view/) : null;
             
             if (fileIdMatch) {
+                // 구글 드라이브 파일일 경우 고품질 썸네일과 원본 뷰어 매핑
                 viewUrl = `https://drive.google.com/file/d/${fileIdMatch[1]}/view`;
                 thumbUrl = `https://drive.google.com/thumbnail?id=${fileIdMatch[1]}&sz=w600`;
             }
@@ -819,6 +828,7 @@ window.saveProjStatus = async function(btn) {
             cleanPayload.createdAt = Date.now(); cleanPayload.currentMd = 0; cleanPayload.authorUid = (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system'; cleanPayload.authorName = (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system';
             await addDoc(collection(db, "projects_status"), cleanPayload); safeShowSuccess("성공적으로 등록되었습니다."); 
             
+            // 새 프로젝트 등록 시 드라이브 폴더 자동 생성 시도
             try {
                 const folderName = cleanPayload.code ? cleanPayload.code : cleanPayload.name;
                 await window.getOrCreateDriveFolder(folderName, TARGET_DRIVE_FOLDER);
@@ -914,7 +924,7 @@ window.toggleProjDashView = function(view) {
 };
 
 // ==========================================
-// 💡 간트 차트 렌더링 (높이 정렬 개선)
+// 💡 [간트 차트 렌더링 수정] 여백 및 공휴일 표시 추가
 // ==========================================
 window.scrollToGanttToday = function() {
     const container = document.getElementById('proj-dash-gantt-content');
@@ -956,20 +966,24 @@ window.renderProjGantt = function() {
             let pct = (i / totalDays) * 100;
             let isWknd = d.getDay() === 0 || d.getDay() === 6;
             let isHol = KR_HOLIDAYS.has(window.getLocalDateStr(d));
-            let color = (isWknd || isHol) ? 'text-rose-400' : 'text-slate-400';
-            let bgClass = (isWknd || isHol) ? 'bg-rose-50/50 border-r border-rose-100' : 'border-r border-slate-100/50';
+            let color = (isWknd || isHol) ? 'text-rose-500' : 'text-slate-500';
+            let bgClass = (isWknd || isHol) ? 'bg-rose-50/50 border-r border-rose-200' : 'border-r border-slate-200';
             
-            if (totalDays < 45 || i % 2 === 0) { 
-                dateHeaders += `<div class="absolute text-[9px] ${color} font-bold -translate-x-1/2 bottom-1" style="left:${pct}%">${d.getMonth()+1}/${d.getDate()}</div>`;
+            // 헤더 날짜 표시
+            if (totalDays < 45 || i % 2 === 0 || d.getDate() === 1) { 
+                let text = d.getDate() === 1 ? `${d.getMonth()+1}/${d.getDate()}` : `${d.getDate()}`;
+                let fontW = d.getDate() === 1 ? 'font-black' : 'font-bold';
+                dateHeaders += `<div class="absolute text-[10px] ${color} ${fontW} -translate-x-1/2 bottom-1" style="left:${pct}%">${text}</div>`;
             }
+            // 세로 배경선
             bgLines += `<div class="absolute top-0 bottom-0 ${bgClass}" style="left:${pct}%; width:${100/totalDays}%;"></div>`;
         }
 
         let todayPct = ((new Date() - minDate) / (1000 * 60 * 60 * 24)) / totalDays * 100;
         let todayLineHtml = '';
         if(todayPct >= 0 && todayPct <= 100) {
-            todayLineHtml = `<div id="gantt-today-line" class="absolute top-0 bottom-0 w-[2px] bg-rose-500 z-20 pointer-events-none" style="left: ${todayPct}%;">
-                                <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-rose-500 text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm">오늘</div>
+            todayLineHtml = `<div id="gantt-today-line" class="absolute top-0 bottom-0 w-[2px] bg-rose-500 z-30 pointer-events-none" style="left: ${todayPct}%;">
+                                <div class="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-t shadow-sm">오늘</div>
                              </div>`;
         }
 
@@ -990,47 +1004,68 @@ window.renderProjGantt = function() {
                 if (leftPct < 0) { widthPct += leftPct; leftPct = 0; }
                 if (leftPct + widthPct > 100) { widthPct = 100 - leftPct; }
                 if (widthPct < 0.5) widthPct = 0.5;
-                barHtml = `<div class="absolute h-5 rounded-full bg-gradient-to-r from-indigo-400 to-indigo-600 shadow-sm hover:scale-y-110 transition-transform cursor-pointer" style="left:${leftPct}%; width:${widthPct}%;"></div>`;
+
+                // 상태별 바 색상 변경
+                let gradient = 'from-indigo-400 to-indigo-600';
+                if (p.status === 'completed') gradient = 'from-emerald-400 to-emerald-600';
+                else if (p.status === 'inspecting') gradient = 'from-teal-400 to-teal-600';
+                else if (p.status === 'pending' || p.status === 'rejected') gradient = 'from-slate-400 to-slate-500';
+
+                barHtml = `<div class="absolute h-6 rounded-md bg-gradient-to-r ${gradient} shadow-md hover:brightness-110 hover:scale-y-110 transition-all cursor-pointer border border-white/20 flex items-center px-2 overflow-hidden z-20" style="left:${leftPct}%; width:${widthPct}%;">
+                    <span class="text-white text-[10px] font-black truncate drop-shadow-md leading-none">${p.progress||0}%</span>
+                </div>`;
             } else {
                 barHtml = `<div class="text-[10px] text-slate-400 italic px-4 w-full text-center">일정 미지정</div>`;
             }
             
-            // 기존 mb-3 마진을 없애고 h-10의 명시적 높이와 하단 테두리를 주어 정렬을 고정합니다.
+            // ✨ 핵심: 행(Row) 자체에 명시적 높이(h-12)와 테두리(border-b)를 부여하여 좌우 정렬을 완벽하게 맞춤
             rowsHtml += `
-            <div class="flex items-center text-xs group w-full h-10 border-b border-slate-50 hover:bg-slate-50 p-1.5 rounded-lg transition-colors cursor-pointer" onclick="window.editProjStatus('${p.id}')">
-                <div class="w-[280px] font-bold truncate pr-4 text-slate-700 shrink-0 bg-white shadow-sm px-2 py-1 rounded" title="${title}">${title}</div>
-                <div class="flex-1 relative h-7 bg-transparent rounded-full border border-slate-200 mx-2">
+            <div class="flex items-center w-full h-12 border-b border-slate-200 hover:bg-indigo-50/40 transition-colors group" onclick="window.editProjStatus('${p.id}')">
+                
+                <div class="w-[320px] shrink-0 sticky left-0 bg-white group-hover:bg-indigo-50/80 border-r border-slate-200 px-4 h-full flex items-center z-40 shadow-[2px_0_5px_rgba(0,0,0,0.03)] cursor-pointer">
+                    <div class="font-bold text-[11px] text-slate-700 truncate w-full" title="${title}">${title}</div>
+                </div>
+                
+                <div class="flex-1 relative h-full flex items-center mx-0 pointer-events-none group-hover:pointer-events-auto">
                     ${barHtml}
                 </div>
-                <div class="w-16 text-right text-[11px] font-black text-emerald-600 shrink-0 pr-2">${p.progress||0}%</div>
             </div>`;
         });
 
         let html = `
-        <div class="relative min-w-[1000px] p-4 bg-white rounded-lg h-full flex flex-col">
-            <div class="flex px-1.5">
-                <div class="w-[280px] shrink-0"></div>
-                <div class="flex-1 relative h-8 border-b border-slate-200 mx-2">${dateHeaders}</div>
-                <div class="w-16 shrink-0"></div>
-            </div>
-            <div class="flex flex-1 relative mt-2 px-1.5">
-                <div class="w-[280px] shrink-0"></div>
-                <div class="flex-1 relative mx-2">
-                    <div class="absolute inset-0 z-0 pointer-events-none">${bgLines}</div>
-                    ${todayLineHtml}
-                    <div class="relative z-10 w-full h-full">${rowsHtml}</div>
+        <div class="relative min-w-[800px] w-full bg-white flex flex-col">
+            
+            <div class="flex w-full h-10 border-b border-slate-300 bg-slate-100 sticky top-0 z-50 shadow-sm">
+                <div class="w-[320px] shrink-0 sticky left-0 bg-slate-100 border-r border-slate-300 px-4 flex items-center justify-center font-black text-xs text-slate-600 shadow-[2px_0_5px_rgba(0,0,0,0.05)] z-50">
+                    프로젝트명
                 </div>
-                <div class="w-16 shrink-0"></div>
+                <div class="flex-1 relative mx-0">
+                    ${dateHeaders}
+                </div>
             </div>
+            
+            <div class="flex flex-col relative w-full flex-1 min-h-[300px]">
+                
+                <div class="absolute inset-y-0 right-0 z-0 flex pointer-events-none" style="left: 320px;">
+                    ${bgLines}
+                    ${todayLineHtml}
+                </div>
+                
+                <div class="relative z-10 flex flex-col w-full pb-4">
+                    ${rowsHtml}
+                </div>
+            </div>
+            
         </div>`;
         
         container.innerHTML = html;
         
+        // 렌더링 완료 후 오늘 날짜로 부드럽게 스크롤
         setTimeout(() => {
             const todayLine = document.getElementById('gantt-today-line');
             if(container && todayLine) {
-                const targetLeft = todayLine.getBoundingClientRect().left - container.getBoundingClientRect().left;
-                container.scrollTo({ left: targetLeft - (container.clientWidth / 2), behavior: 'smooth' });
+                const targetLeft = todayLine.offsetLeft;
+                container.scrollTo({ left: targetLeft - (container.clientWidth / 2) + 160, behavior: 'smooth' });
             }
         }, 100);
         
@@ -1687,6 +1722,8 @@ window.openNcrModal = function(pjtCode, pjtName) {
     try {
         const titleEl = document.getElementById('ncr-project-title');
         if (titleEl) { titleEl.innerText = `[${getSafeString(pjtCode)}] ${getSafeString(pjtName)}`; titleEl.dataset.code = getSafeString(pjtCode); }
+        
+        // 💡 닫기 시 사이드바 뒤에 가려지지 않도록 강제로 모달 최상단 띄우기
         if(window.toggleSidebar) window.toggleSidebar(false); 
         
         const modal = document.getElementById('ncr-modal');
@@ -1710,3 +1747,16 @@ window.renderNcrList = function(pjtCode) {
         return `<tr class="hover:bg-slate-50 transition-colors bg-white border-b border-slate-100"><td class="p-3 text-center font-bold text-slate-500 whitespace-nowrap">${getSafeString(n.ncrNo) || '-'}</td><td class="p-3 text-center text-slate-500 whitespace-nowrap">${getSafeString(n.date) || '-'}</td><td class="p-3 text-center text-slate-500 whitespace-nowrap">${getSafeString(n.drawingNo) || '-'}</td><td class="p-3 text-center text-slate-500 whitespace-nowrap">${getSafeString(n.partName) || '-'}</td><td class="p-3 text-center whitespace-nowrap"><span class="bg-slate-100 px-2 py-1 border border-slate-200 rounded font-bold">${getSafeString(n.type) || '-'}</span></td><td class="p-3 font-medium ${isComp ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-700'} break-all">${getSafeString(n.content).replace(/</g, '&lt;').replace(/>/g, '&gt;') || '-'}</td><td class="p-3 text-center whitespace-nowrap">${isComp ? `<span class="bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">완료</span>` : `<span class="bg-rose-50 text-rose-600 border border-rose-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">진행중</span>`}</td></tr>`;
     }).join('');
 };
+
+// 💡 스크립트 로드 시 마스터 데이터를 확실하게 불러옵니다.
+document.addEventListener('DOMContentLoaded', () => {
+    const btnGoogleAuth = document.getElementById('btn-pjt-google-auth');
+    if (btnGoogleAuth) btnGoogleAuth.style.display = 'none';
+
+    if (window.loadProjectCodeMaster) {
+        window.loadProjectCodeMaster();
+    }
+});
+if (window.loadProjectCodeMaster) {
+    window.loadProjectCodeMaster();
+}
