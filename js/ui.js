@@ -1,6 +1,6 @@
 /* eslint-disable */
 import { db } from './firebase.js';
-import { collection, query, where, onSnapshot, doc, setDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { collection, query, where, onSnapshot, doc, setDoc, deleteDoc, writeBatch, addDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 // ==========================================
 // 💡 토스트 메시지 (알림 팝업) 시스템
@@ -330,3 +330,128 @@ document.addEventListener('click', function(e) {
         notifDrop.classList.add('hidden');
     }
 });
+
+
+// ==========================================
+// 💡 [추가] PJT 코드 마스터 기능 통합 로직
+// ==========================================
+
+window.loadProjectCodeMaster = function() {
+    onSnapshot(collection(db, "project_codes"), function(snap) {
+        window.pjtCodeMasterList = [];
+        snap.forEach(doc => {
+            window.pjtCodeMasterList.push({ id: doc.id, ...doc.data() });
+        });
+        window.pjtCodeMasterList.sort((a, b) => (a.code > b.code ? 1 : -1));
+        window.renderPjtCodeMaster();
+    });
+};
+
+window.openProjCodeMasterModal = function() {
+    const m = document.getElementById('proj-code-master-modal');
+    if (m) { m.classList.remove('hidden'); m.classList.add('flex'); }
+};
+
+window.closeProjCodeMasterModal = function() {
+    const m = document.getElementById('proj-code-master-modal');
+    if (m) { m.classList.add('hidden'); m.classList.remove('flex'); }
+};
+
+window.renderPjtCodeMaster = function() {
+    const tb = document.getElementById('pjt-code-tbody');
+    if (!tb) return;
+    if (!window.pjtCodeMasterList || window.pjtCodeMasterList.length === 0) {
+        tb.innerHTML = '<tr><td colspan="5" class="text-center p-4 text-slate-500 font-bold">등록된 PJT 코드가 없습니다.</td></tr>';
+        return;
+    }
+    tb.innerHTML = window.pjtCodeMasterList.map(p => `
+        <tr class="hover:bg-slate-50 border-b border-slate-100">
+            <td class="p-3 text-center"><input type="checkbox" class="pjt-chk w-4 h-4 accent-indigo-500" value="${p.id}" onchange="window.checkPjtSelection()"></td>
+            <td class="p-3 font-black text-indigo-700">${p.code}</td>
+            <td class="p-3 font-bold text-slate-700">${p.name}</td>
+            <td class="p-3 text-center text-slate-600">${p.company || '-'}</td>
+            <td class="p-3 text-center"><button onclick="window.deleteProjectCode('${p.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button></td>
+        </tr>
+    `).join('');
+};
+
+window.addProjectCode = async function() {
+    const code = document.getElementById('new-pjt-code').value.trim();
+    const name = document.getElementById('new-pjt-name').value.trim();
+    const company = document.getElementById('new-pjt-company').value.trim();
+    if (!code || !name) return window.showToast("코드와 프로젝트명은 필수입니다.", "error");
+    try {
+        await addDoc(collection(db, "project_codes"), { code, name, company, createdAt: Date.now() });
+        window.showToast("PJT 코드가 등록되었습니다.");
+        document.getElementById('new-pjt-code').value = '';
+        document.getElementById('new-pjt-name').value = '';
+        document.getElementById('new-pjt-company').value = '';
+    } catch(e) { window.showToast("등록 실패", "error"); }
+};
+
+window.deleteProjectCode = async function(id) {
+    if(!confirm("해당 PJT 코드를 삭제하시겠습니까?")) return;
+    try { 
+        await deleteDoc(doc(db, "project_codes", id)); 
+        window.showToast("삭제 완료"); 
+    } 
+    catch(e) { window.showToast("삭제 실패", "error"); }
+};
+
+window.toggleAllPjtCheckboxes = function(checked) {
+    document.querySelectorAll('.pjt-chk').forEach(cb => cb.checked = checked);
+    window.checkPjtSelection();
+};
+
+window.checkPjtSelection = function() {
+    const checked = document.querySelectorAll('.pjt-chk:checked').length;
+    const btn = document.getElementById('btn-delete-selected-pjts');
+    if (btn) {
+        if (checked > 0) btn.classList.remove('hidden');
+        else btn.classList.add('hidden');
+    }
+};
+
+window.deleteSelectedProjectCodes = async function() {
+    const cbs = document.querySelectorAll('.pjt-chk:checked');
+    if (cbs.length === 0) return;
+    if(!confirm(`선택한 ${cbs.length}개의 프로젝트를 일괄 삭제하시겠습니까?`)) return;
+    try {
+        const batch = writeBatch(db);
+        cbs.forEach(cb => { batch.delete(doc(db, "project_codes", cb.value)); });
+        await batch.commit();
+        window.showToast("일괄 삭제되었습니다.");
+        document.getElementById('pjt-master-checkbox').checked = false;
+        window.checkPjtSelection();
+    } catch(e) { window.showToast("일괄 삭제 실패", "error"); }
+};
+
+window.toggleBulkPjtInput = function() {
+    const area = document.getElementById('pjt-bulk-input-area');
+    if(area.classList.contains('hidden')) { area.classList.remove('hidden'); area.classList.add('flex'); }
+    else { area.classList.add('hidden'); area.classList.remove('flex'); }
+};
+
+window.processBulkPjtInput = async function() {
+    const text = document.getElementById('bulk-pjt-data').value;
+    if(!text.trim()) return window.showToast("데이터를 입력하세요.", "error");
+    const lines = text.split('\n');
+    let count = 0;
+    try {
+        const batch = writeBatch(db);
+        lines.forEach(line => {
+            const cols = line.split('\t');
+            if (cols.length >= 2 && cols[0].trim() && cols[1].trim()) {
+                const ref = doc(collection(db, "project_codes"));
+                batch.set(ref, { code: cols[0].trim(), name: cols[1].trim(), company: cols[2] ? cols[2].trim() : '', createdAt: Date.now() });
+                count++;
+            }
+        });
+        if (count > 0) {
+            await batch.commit();
+            window.showToast(`${count}건의 데이터가 일괄 등록되었습니다.`);
+            document.getElementById('bulk-pjt-data').value = '';
+            window.toggleBulkPjtInput();
+        } else { window.showToast("유효한 데이터가 없습니다.", "error"); }
+    } catch(e) { window.showToast("일괄 등록 실패", "error"); }
+};
