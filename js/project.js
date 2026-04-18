@@ -437,85 +437,86 @@ window.renderProjectStatusList = function() {
 };
 
 // ==========================================
-// 💡 [핵심 수정] 백엔드(Cloud Functions) 연동 드라이브 업로드
+// 💡 [핵심] 클라이언트 단에서 직접 구글 드라이브 업로드 (Cloud Functions 에러 방지)
 // ==========================================
 
-window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
-    const safeFolderName = getSafeString(folderName).replace(/['\/\\]/g, '_') || '미분류 프로젝트';
-    
-    try {
-        const response = await fetch('https://us-central1-axms-e9655.cloudfunctions.net/getOrCreateFolder', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ folderName: safeFolderName, parentFolderId: parentFolderId })
-        });
-        
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "서버 응답 오류");
-        return data.id;
-    } catch(e) {
-        console.error("서버 폴더 생성 에러:", e);
-        throw new Error(`폴더 생성 실패: 서버 통신 오류 (${e.message})`);
+async function getOrCreateSubfolder(parentFolderId, folderName) {
+    const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
+    if (!window.googleAccessToken || !storedExpiry || Date.now() > parseInt(storedExpiry)) {
+        throw new Error("TOKEN_EXPIRED");
     }
-};
+    const safeFolderName = encodeURIComponent(folderName.replace(/['\/\\]/g, '_'));
+    const query = `name='${safeFolderName}' and mimeType='application/vnd.google-apps.folder' and '${parentFolderId}' in parents and trashed=false`;
+    
+    const findRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&supportsAllDrives=true&includeItemsFromAllDrives=true`, { 
+        headers: { 'Authorization': 'Bearer ' + window.googleAccessToken } 
+    });
+    const folderData = await findRes.json();
+    if(folderData.error) throw new Error(folderData.error.message);
 
-async function handleDriveUploadWithProgress(file, projectName, subFolderName = null, fileIndex = 1, totalFiles = 1) {
-    if (!file) throw new Error("업로드할 파일이 없습니다.");
+    if (folderData.files && folderData.files.length > 0) {
+        return folderData.files[0].id;
+    } else {
+        const createRes = await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: folderName.replace(/['\/\\]/g, '_'), mimeType: 'application/vnd.google-apps.folder', parents: [parentFolderId] })
+        });
+        const newData = await createRes.json();
+        if(newData.error) throw new Error(newData.error.message);
+        return newData.id;
+    }
+}
 
+window.uploadFileToDrive = async function(file, folderId) {
+    const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
+    if (!window.googleAccessToken || !storedExpiry || Date.now() > parseInt(storedExpiry)) {
+        throw new Error("TOKEN_EXPIRED");
+    }
+
+    const metadata = { name: file.name, parents: [folderId] };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', file);
+    
     const progressModal = document.getElementById('upload-progress-modal');
     const progressBar = document.getElementById('upload-progress-bar');
     const progressText = document.getElementById('upload-progress-text');
+    const progressSize = document.getElementById('upload-progress-size');
     
-    if(progressModal) progressModal.classList.replace('hidden', 'flex');
-    if(progressBar) progressBar.style.width = '30%';
-    if(progressText) progressText.innerText = '폴더 확인 중...';
+    if (progressModal) progressModal.classList.replace('hidden', 'flex');
 
-    try {
-        let targetFolderId = await window.getOrCreateDriveFolder(projectName, TARGET_DRIVE_FOLDER);
-        if (subFolderName) {
-            targetFolderId = await window.getOrCreateDriveFolder(subFolderName, targetFolderId);
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', true);
+        xhr.setRequestHeader('Authorization', 'Bearer ' + window.googleAccessToken);
+        
+        xhr.upload.onprogress = function(e) {
+            if (e.lengthComputable && progressBar) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                const loadedMb = (e.loaded / (1024 * 1024)).toFixed(2);
+                const totalMb = (e.total / (1024 * 1024)).toFixed(2);
+                progressBar.style.width = percent + '%';
+                if(progressText) progressText.innerText = percent + '%';
+                if(progressSize) progressSize.innerText = `${loadedMb} MB / ${totalMb} MB`;
+            }
+        };
+
+        xhr.onload = function() {
+            if (progressModal) progressModal.classList.replace('flex', 'hidden');
+            if (xhr.status >= 200 && xhr.status < 300) { 
+                resolve(JSON.parse(xhr.responseText).id); 
+            } else { 
+                reject(new Error(`업로드 실패 (HTTP ${xhr.status})`)); 
+            }
+        };
+        xhr.onerror = () => {
+            if (progressModal) progressModal.classList.replace('flex', 'hidden');
+            reject(new Error("네트워크 오류"));
         }
-
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file); // Base64 변환
-            reader.onload = async () => {
-                try {
-                    if(progressBar) progressBar.style.width = '70%';
-                    if(progressText) progressText.innerText = '서버로 전송 중... (조금만 기다려주세요)';
-
-                    const base64Data = reader.result;
-                    const response = await fetch('https://us-central1-axms-e9655.cloudfunctions.net/uploadFileToDrive', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            fileName: file.name,
-                            mimeType: file.type || 'application/octet-stream',
-                            base64Data: base64Data,
-                            folderId: targetFolderId
-                        })
-                    });
-                    
-                    const data = await response.json();
-                    if (!response.ok) throw new Error(data.error || "업로드 실패");
-                    
-                    if(progressModal) progressModal.classList.replace('flex', 'hidden');
-                    resolve(`https://drive.google.com/file/d/${data.id}/view`);
-                } catch(err) {
-                    if(progressModal) progressModal.classList.replace('flex', 'hidden');
-                    reject(err);
-                }
-            };
-            reader.onerror = () => {
-                if(progressModal) progressModal.classList.replace('flex', 'hidden');
-                reject(new Error("파일 읽기 실패"));
-            };
-        });
-    } catch(err) {
-        if(progressModal) progressModal.classList.replace('flex', 'hidden');
-        throw err;
-    }
-}
+        xhr.send(form);
+    });
+};
 
 // ==========================================
 // 💡 이미지 렌더러 (엑스박스 방지)
@@ -686,9 +687,13 @@ window.saveProjStatus = async function(btn) {
             cleanPayload.createdAt = Date.now(); cleanPayload.currentMd = 0; cleanPayload.authorUid = (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system'; cleanPayload.authorName = (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system';
             await addDoc(collection(db, "projects_status"), cleanPayload); safeShowSuccess("성공적으로 등록되었습니다."); 
             
-            // 백엔드 연동을 통한 새 폴더 생성 시도 (에러 무시)
-            const folderName = cleanPayload.code ? cleanPayload.code : cleanPayload.name;
-            window.getOrCreateDriveFolder(folderName, TARGET_DRIVE_FOLDER).catch(e => console.warn("새 PJT 폴더 생성 실패 (무시됨)", e));
+            // 💡 새 프로젝트 등록 시 드라이브 폴더 자동 생성
+            try {
+                const folderName = cleanPayload.code ? cleanPayload.code : cleanPayload.name;
+                await getOrCreateSubfolder(TARGET_DRIVE_FOLDER, folderName);
+            } catch(e) {
+                console.warn("폴더 생성 지연(무시가능):", e);
+            }
         } 
         
         if(window.closeProjStatusWriteModal) window.closeProjStatusWriteModal(); 
@@ -952,15 +957,21 @@ window.savePurchaseItem = async function() {
         let filesData = [];
         if (fileInput.files.length > 0) {
             let total = fileInput.files.length;
+            let targetFolderId = await getOrCreateSubfolder(TARGET_DRIVE_FOLDER, folderName);
+            targetFolderId = await getOrCreateSubfolder(targetFolderId, '구매');
+            
             for(let i=0; i<total; i++) {
-                let url = await handleDriveUploadWithProgress(fileInput.files[i], folderName, '구매', i+1, total);
-                filesData.push({ name: fileInput.files[i].name, url: url });
+                let fileId = await window.uploadFileToDrive(fileInput.files[i], targetFolderId);
+                filesData.push({ name: fileInput.files[i].name, url: `https://drive.google.com/file/d/${fileId}/view` });
             }
         }
         const payload = { projectId: pId, content: content, files: filesData, authorUid: (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system', authorName: (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system', createdAt: Date.now() };
         const cleanPayload = JSON.parse(JSON.stringify(payload)); Object.keys(cleanPayload).forEach(k => { if(cleanPayload[k] === undefined) cleanPayload[k] = null; });
         await addDoc(collection(db, "project_purchases"), cleanPayload); safeShowSuccess("구매 내역이 등록되었습니다."); if(window.resetPurchaseForm) window.resetPurchaseForm(); 
-    } catch(e) { safeShowError("저장 실패", e); } finally { btn.innerHTML = '등록'; btn.disabled = false; }
+    } catch(e) {
+        if(e.message === "TOKEN_EXPIRED") { window.showToast("구글 인증이 만료되었습니다. 다시 연동해주세요.", "error"); }
+        else { safeShowError("저장 실패", e); }
+    } finally { btn.innerHTML = '등록'; btn.disabled = false; }
 };
 window.deletePurchase = async function(id) { if(confirm("삭제하시겠습니까?")) { try { await deleteDoc(doc(db, "project_purchases", id)); safeShowSuccess("삭제되었습니다."); } catch(e) { safeShowError("삭제 실패", e); } } };
 
@@ -1003,15 +1014,21 @@ window.saveDesignItem = async function() {
         let filesData = [];
         if (fileInput.files.length > 0) {
             let total = fileInput.files.length;
+            let targetFolderId = await getOrCreateSubfolder(TARGET_DRIVE_FOLDER, folderName);
+            targetFolderId = await getOrCreateSubfolder(targetFolderId, '설계');
+            
             for(let i=0; i<total; i++) {
-                let url = await handleDriveUploadWithProgress(fileInput.files[i], folderName, '설계', i+1, total);
-                filesData.push({ name: fileInput.files[i].name, url: url });
+                let fileId = await window.uploadFileToDrive(fileInput.files[i], targetFolderId);
+                filesData.push({ name: fileInput.files[i].name, url: `https://drive.google.com/file/d/${fileId}/view` });
             }
         }
         const payload = { projectId: pId, content: content, files: filesData, authorUid: (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system', authorName: (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system', createdAt: Date.now() };
         const cleanPayload = JSON.parse(JSON.stringify(payload)); Object.keys(cleanPayload).forEach(k => { if(cleanPayload[k] === undefined) cleanPayload[k] = null; });
         await addDoc(collection(db, "project_designs"), cleanPayload); safeShowSuccess("설계 내역이 등록되었습니다."); if(window.resetDesignForm) window.resetDesignForm(); 
-    } catch(e) { safeShowError("저장 실패", e); } finally { btn.innerHTML = '등록'; btn.disabled = false; }
+    } catch(e) {
+        if(e.message === "TOKEN_EXPIRED") { window.showToast("구글 인증이 만료되었습니다. 다시 연동해주세요.", "error"); }
+        else { safeShowError("저장 실패", e); }
+    } finally { btn.innerHTML = '등록'; btn.disabled = false; }
 };
 window.deleteDesign = async function(id) { if(confirm("삭제하시겠습니까?")) { try { await deleteDoc(doc(db, "project_designs", id)); safeShowSuccess("삭제되었습니다."); } catch(e) { safeShowError("삭제 실패", e); } } };
 
@@ -1054,49 +1071,27 @@ window.savePjtScheduleItem = async function() {
         let filesData = [];
         if (fileInput.files.length > 0) {
             let total = fileInput.files.length;
+            let targetFolderId = await getOrCreateSubfolder(TARGET_DRIVE_FOLDER, folderName);
+            targetFolderId = await getOrCreateSubfolder(targetFolderId, '일정');
+            
             for(let i=0; i<total; i++) {
-                let url = await handleDriveUploadWithProgress(fileInput.files[i], folderName, '일정', i+1, total);
-                filesData.push({ name: fileInput.files[i].name, url: url });
+                let fileId = await window.uploadFileToDrive(fileInput.files[i], targetFolderId);
+                filesData.push({ name: fileInput.files[i].name, url: `https://drive.google.com/file/d/${fileId}/view` });
             }
         }
         const payload = { projectId: pId, content: content, files: filesData, authorUid: (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system', authorName: (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system', createdAt: Date.now() };
         const cleanPayload = JSON.parse(JSON.stringify(payload)); Object.keys(cleanPayload).forEach(k => { if(cleanPayload[k] === undefined) cleanPayload[k] = null; });
         await addDoc(collection(db, "project_schedules"), cleanPayload); safeShowSuccess("PJT 일정 내역이 등록되었습니다."); if(window.resetPjtScheduleForm) window.resetPjtScheduleForm(); 
-    } catch(e) { safeShowError("저장 실패", e); } finally { btn.innerHTML = '등록'; btn.disabled = false; }
+    } catch(e) {
+        if(e.message === "TOKEN_EXPIRED") { window.showToast("구글 인증이 만료되었습니다. 다시 연동해주세요.", "error"); }
+        else { safeShowError("저장 실패", e); }
+    } finally { btn.innerHTML = '등록'; btn.disabled = false; }
 };
 window.deletePjtSchedule = async function(id) { if(confirm("삭제하시겠습니까?")) { try { await deleteDoc(doc(db, "project_schedules", id)); safeShowSuccess("삭제되었습니다."); } catch(e) { safeShowError("삭제 실패", e); } } };
 
 // ==========================================
 // 💡 생산일지 모달 (팀원추가 로직 포함 및 100% 원본 유지)
 // ==========================================
-window.addLogMember = function(name) {
-    if(!name) return;
-    window.currentLogMembers = window.currentLogMembers || [];
-    if(!window.currentLogMembers.includes(name)) {
-        window.currentLogMembers.push(name);
-        if(window.renderLogMembers) window.renderLogMembers();
-    }
-    const el = document.getElementById('log-member-add') || document.getElementById('md-member-add');
-    if(el) el.selectedIndex = 0;
-};
-
-window.removeLogMember = function(name) {
-    window.currentLogMembers = window.currentLogMembers || [];
-    window.currentLogMembers = window.currentLogMembers.filter(n => n !== name);
-    if(window.renderLogMembers) window.renderLogMembers();
-};
-
-window.renderLogMembers = function() {
-    const container = document.getElementById('log-selected-members');
-    const memInput = document.getElementById('log-members');
-    const membersList = window.currentLogMembers || [];
-    if(memInput) memInput.value = membersList.join(', ');
-    if(container) {
-        container.innerHTML = membersList.map(function(name) {
-            return `<span class="bg-sky-100 text-sky-700 px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1.5 shadow-sm">${name} <i class="fa-solid fa-xmark cursor-pointer hover:text-rose-500 bg-white/50 rounded-full px-1 py-0.5" onclick="window.removeLogMember('${name}')"></i></span>`;
-        }).join('');
-    }
-};
 
 window.openDailyLogModal = function(projectId) { 
     try {
@@ -1203,9 +1198,12 @@ window.saveDailyLogItem = async function() {
         
         if (fileInput && fileInput.files.length > 0) {
             let total = fileInput.files.length;
+            let targetFolderId = await getOrCreateSubfolder(TARGET_DRIVE_FOLDER, folderName);
+            targetFolderId = await getOrCreateSubfolder(targetFolderId, '생산일지');
+            
             for(let i=0; i<total; i++) {
-                let url = await handleDriveUploadWithProgress(fileInput.files[i], folderName, '생산일지', i+1, total);
-                filesData.push({ name: fileInput.files[i].name, url: url });
+                let fileId = await window.uploadFileToDrive(fileInput.files[i], targetFolderId);
+                filesData.push({ name: fileInput.files[i].name, url: `https://drive.google.com/file/d/${fileId}/view` });
             }
         }
 
@@ -1236,7 +1234,10 @@ window.saveDailyLogItem = async function() {
         
         await setDoc(doc(db, "projects_status", projectId), { progress: progressVal, purchaseRate: purchaseRateVal }, { merge: true }); 
         if(window.resetDailyLogForm) window.resetDailyLogForm(); 
-    } catch(e) { safeShowError("저장 실패", e); } 
+    } catch(e) {
+        if(e.message === "TOKEN_EXPIRED") { window.showToast("구글 인증이 만료되었습니다. 다시 연동해주세요.", "error"); }
+        else { safeShowError("저장 실패", e); }
+    } 
     finally { if(btnSave) { btnSave.innerHTML = '등록'; btnSave.disabled = false; } } 
 };
 
