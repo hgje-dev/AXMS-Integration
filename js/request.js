@@ -155,7 +155,7 @@ window.authenticateGoogle = async function() {
         const { GoogleAuthProvider, signInWithPopup } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
         
         const googleProvider = new GoogleAuthProvider();
-        googleProvider.addScope('https://www.googleapis.com/auth/drive'); // 전체 드라이브 접근으로 상향 권장
+        googleProvider.addScope('https://www.googleapis.com/auth/drive'); 
         googleProvider.addScope('https://www.googleapis.com/auth/gmail.send');
         googleProvider.addScope('https://www.googleapis.com/auth/spreadsheets.readonly');
         
@@ -174,7 +174,6 @@ window.authenticateGoogle = async function() {
     }
 };
 
-// 💡 [핵심 수정] 공유 드라이브 파라미터 적용 및 에러 방어
 window.uploadFileToDrive = async function(file, folderId) {
     const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
     if (!window.googleAccessToken || !storedExpiry || Date.now() > parseInt(storedExpiry)) {
@@ -197,7 +196,6 @@ window.uploadFileToDrive = async function(file, folderId) {
     return data.id; 
 };
 
-// 💡 [핵심 수정] 공유 드라이브 파라미터 적용 및 에러 방어
 async function getOrCreateSubfolder(parentFolderId, folderName) {
     const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
     if (!window.googleAccessToken || !storedExpiry || Date.now() > parseInt(storedExpiry)) {
@@ -227,7 +225,7 @@ async function getOrCreateSubfolder(parentFolderId, folderName) {
     }
 }
 
-// 💡 [핵심 수정] 토큰 만료 방어 및 Gmail 전송 안정화
+// 💡 [핵심 해결] 한글(유니코드) 완벽 지원 이메일 발송 함수
 window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
     const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
     if (!window.googleAccessToken || !storedExpiry || Date.now() > parseInt(storedExpiry)) {
@@ -269,8 +267,17 @@ window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
 
     bodyHtml += `<p style="font-size: 11px; color: #94a3b8; margin-top: 20px;">본 메일은 AXBIS 클라우드 포털에서 자동 발송되었습니다.</p></div>`;
 
-    const emailRaw = `To: ${recipientEmail}\r\nSubject: =?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=\r\nContent-Type: text/html; charset="UTF-8"\r\n\r\n${bodyHtml}`;
-    const encodedEmail = btoa(unescape(encodeURIComponent(emailRaw))).replace(/\+/g, '-').replace(/\//g, '_');
+    // 🔥 한글(유니코드) 완벽 지원 Base64 인코더
+    const encodeBase64 = (str) => {
+        const bytes = new TextEncoder().encode(str);
+        let bin = '';
+        for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+        return btoa(bin);
+    };
+
+    const subjectEncoded = encodeBase64(subject);
+    const emailRaw = `To: ${recipientEmail}\r\nSubject: =?utf-8?B?${subjectEncoded}?=\r\nContent-Type: text/html; charset="UTF-8"\r\n\r\n${bodyHtml}`;
+    const encodedEmail = encodeBase64(emailRaw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     
     const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
         method: 'POST',
@@ -741,7 +748,6 @@ window.continueRepairSave = function() {
     if(sm) { sm.classList.remove('hidden'); sm.classList.add('flex'); }
 };
 
-// 💡 [핵심 수정] 요청서 저장 및 발송 에러 처리 강화
 window.executeSaveRequest = async function() {
     const sm = document.getElementById('req-send-modal');
     if(sm) { sm.classList.add('hidden'); sm.classList.remove('flex'); }
