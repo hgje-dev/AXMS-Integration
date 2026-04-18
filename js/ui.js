@@ -1,5 +1,179 @@
+/* eslint-disable */
+import { db } from './firebase.js';
+import { collection, query, where, onSnapshot, doc, setDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
 // ==========================================
-// 💡 상단 퀵 메뉴(Quick Menu) 렌더링 및 관리
+// 💡 토스트 메시지 (알림 팝업) 시스템
+// ==========================================
+window.showToast = function(message, type = 'success') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    const bgColor = type === 'success' ? 'bg-emerald-500' : (type === 'error' ? 'bg-rose-500' : 'bg-amber-500');
+    const icon = type === 'success' ? 'fa-check-circle' : (type === 'error' ? 'fa-circle-exclamation' : 'fa-triangle-exclamation');
+
+    toast.className = `${bgColor} text-white px-6 py-3 rounded-2xl shadow-lg flex items-center gap-3 transform transition-all duration-300 -translate-y-full opacity-0 pointer-events-auto`;
+    toast.innerHTML = `<i class="fa-solid ${icon} text-lg"></i><span class="text-sm font-bold">${message}</span>`;
+
+    container.appendChild(toast);
+
+    // 나타나기 애니메이션
+    requestAnimationFrame(() => {
+        toast.classList.remove('-translate-y-full', 'opacity-0');
+    });
+
+    // 3초 후 사라지기 애니메이션
+    setTimeout(() => {
+        toast.classList.add('-translate-y-full', 'opacity-0');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+};
+
+// ==========================================
+// 💡 글로벌 이미지 뷰어 (사진 클릭 시 확대)
+// ==========================================
+window.openImageViewer = function(url) {
+    let viewer = document.getElementById('global-image-viewer');
+    if (!viewer) {
+        viewer = document.createElement('div');
+        viewer.id = 'global-image-viewer';
+        viewer.className = 'fixed inset-0 z-[9999] hidden items-center justify-center bg-slate-900/90 backdrop-blur-sm p-4';
+        viewer.innerHTML = `
+            <button onclick="window.closeImageViewer()" class="absolute top-6 right-6 text-white/70 hover:text-white text-4xl transition-colors outline-none"><i class="fa-solid fa-xmark"></i></button>
+            <img id="global-image-viewer-img" src="" class="max-w-full max-h-full object-contain rounded-lg shadow-2xl select-none">
+        `;
+        document.body.appendChild(viewer);
+    }
+    document.getElementById('global-image-viewer-img').src = url;
+    viewer.classList.remove('hidden');
+    viewer.classList.add('flex');
+};
+
+window.closeImageViewer = function() {
+    const viewer = document.getElementById('global-image-viewer');
+    if (viewer) {
+        viewer.classList.add('hidden');
+        viewer.classList.remove('flex');
+        document.getElementById('global-image-viewer-img').src = '';
+    }
+};
+
+// ==========================================
+// 💡 상단 우측 종 모양 (알림) 시스템
+// ==========================================
+let notificationUnsubscribe = null;
+
+window.loadNotifications = function() {
+    if (!window.currentUser) return;
+    if (notificationUnsubscribe) notificationUnsubscribe();
+
+    const q = query(collection(db, "notifications"), where("targetUid", "==", window.currentUser.uid));
+    
+    notificationUnsubscribe = onSnapshot(q, (snapshot) => {
+        let notifs = [];
+        let unreadCount = 0;
+        snapshot.forEach(docSnap => {
+            const data = docSnap.data();
+            data.id = docSnap.id;
+            notifs.push(data);
+            if (!data.isRead) unreadCount++;
+        });
+
+        // 최신순 정렬
+        notifs.sort((a, b) => b.createdAt - a.createdAt);
+        window.currentNotifications = notifs;
+
+        const badge = document.getElementById('notification-badge');
+        const countEl = document.getElementById('notification-count');
+        
+        if (unreadCount > 0) {
+            if (badge) badge.classList.remove('hidden');
+            if (countEl) countEl.innerText = unreadCount > 99 ? '99+' : unreadCount;
+        } else {
+            if (badge) badge.classList.add('hidden');
+        }
+
+        window.renderNotifications();
+    });
+};
+
+window.renderNotifications = function() {
+    const listEl = document.getElementById('notification-list');
+    if (!listEl) return;
+
+    if (!window.currentNotifications || window.currentNotifications.length === 0) {
+        listEl.innerHTML = '<div class="p-6 text-center text-slate-400 text-xs font-bold">새로운 알림이 없습니다.</div>';
+        return;
+    }
+
+    listEl.innerHTML = window.currentNotifications.map(n => {
+        const dateStr = n.createdAt ? new Date(n.createdAt).toLocaleString('ko-KR', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : '';
+        const bgClass = n.isRead ? 'bg-white opacity-60' : 'bg-indigo-50/50';
+        return `
+            <div class="p-4 ${bgClass} hover:bg-slate-50 transition-colors cursor-pointer flex flex-col gap-1" onclick="window.readNotification('${n.id}', '${n.projectId}')">
+                <div class="flex justify-between items-start">
+                    <span class="text-[10px] font-bold text-indigo-500">${n.type || '알림'}</span>
+                    <span class="text-[9px] text-slate-400">${dateStr}</span>
+                </div>
+                <div class="text-xs font-bold text-slate-700 leading-snug">${n.message.replace(/\n/g, '<br>')}</div>
+            </div>
+        `;
+    }).join('');
+};
+
+window.toggleNotifications = function(e) {
+    if (e) e.stopPropagation();
+    const drop = document.getElementById('notification-dropdown');
+    if (drop) drop.classList.toggle('hidden');
+    
+    // 퀵 메뉴 드롭다운 닫기 (충돌 방지)
+    const qmDrop = document.getElementById('qm-add-dropdown');
+    if (qmDrop) qmDrop.classList.add('hidden');
+};
+
+window.readNotification = async function(id, projectId) {
+    try {
+        await setDoc(doc(db, "notifications", id), { isRead: true }, { merge: true });
+        document.getElementById('notification-dropdown')?.classList.add('hidden');
+        
+        // PJT 현황판 관련 알림이면 해당 프로젝트 열기
+        if (projectId && window.editProjStatus) {
+            window.openApp('project-status', 'PJT 현황판', true);
+            setTimeout(() => window.editProjStatus(projectId), 500);
+        }
+    } catch(e) {}
+};
+
+window.markAllNotificationsRead = async function() {
+    if (!window.currentUser || !window.currentNotifications) return;
+    const unread = window.currentNotifications.filter(n => !n.isRead);
+    if (unread.length === 0) return;
+
+    try {
+        const batch = writeBatch(db);
+        unread.forEach(n => {
+            batch.update(doc(db, "notifications", n.id), { isRead: true });
+        });
+        await batch.commit();
+    } catch(e) {}
+};
+
+window.deleteAllNotifications = async function() {
+    if (!window.currentUser || !window.currentNotifications || window.currentNotifications.length === 0) return;
+    if (!confirm("모든 알림 내역을 삭제하시겠습니까?")) return;
+
+    try {
+        const batch = writeBatch(db);
+        window.currentNotifications.forEach(n => {
+            batch.delete(doc(db, "notifications", n.id));
+        });
+        await batch.commit();
+    } catch(e) {}
+};
+
+// ==========================================
+// 💡 상단 퀵 메뉴(Quick Menu) 시스템
 // ==========================================
 const defaultQuickMenu = [
     { id: 'project-status', name: 'PJT 현황판', icon: 'fa-table-list', color: 'text-indigo-500' },
@@ -40,7 +214,6 @@ window.renderQuickMenu = function() {
     if (!container) return;
 
     let currentMenu = window.getQuickMenu();
-    // 💡 퀵 메뉴 최대 6개 제한 적용
     if (currentMenu.length > 6) {
         currentMenu = currentMenu.slice(0, 6);
         window.saveQuickMenu(currentMenu);
@@ -74,9 +247,10 @@ window.renderQuickMenu = function() {
 window.toggleQuickMenuDropdown = function(e) {
     if(e) e.stopPropagation();
     const drop = document.getElementById('qm-add-dropdown');
-    if(drop) {
-        drop.classList.toggle('hidden');
-    }
+    if(drop) drop.classList.toggle('hidden');
+    // 알림창 닫기 (충돌 방지)
+    const notifDrop = document.getElementById('notification-dropdown');
+    if (notifDrop) notifDrop.classList.add('hidden');
 };
 
 window.renderQuickMenuDropdown = function() {
@@ -124,9 +298,15 @@ window.removeQuickMenu = function(index) {
     window.renderQuickMenu();
 };
 
+// 화면 바깥 클릭 시 열려있는 드롭다운 메뉴들 숨기기
 document.addEventListener('click', function(e) {
-    const drop = document.getElementById('qm-add-dropdown');
-    if (drop && !drop.classList.contains('hidden') && !e.target.closest('#quick-menu-container') && !e.target.closest('#qm-add-dropdown')) {
-        drop.classList.add('hidden');
+    const qmDrop = document.getElementById('qm-add-dropdown');
+    if (qmDrop && !qmDrop.classList.contains('hidden') && !e.target.closest('#quick-menu-container') && !e.target.closest('#qm-add-dropdown')) {
+        qmDrop.classList.add('hidden');
+    }
+
+    const notifDrop = document.getElementById('notification-dropdown');
+    if (notifDrop && !notifDrop.classList.contains('hidden') && !e.target.closest('#notification-dropdown') && !e.target.closest('.fa-bell')) {
+        notifDrop.classList.add('hidden');
     }
 });
