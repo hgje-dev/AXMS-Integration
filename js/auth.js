@@ -26,7 +26,8 @@ window.tempUserUid = "";
 
 const googleProvider = new GoogleAuthProvider();
 
-// 💡 로그인 시점에 공유 드라이브 접근을 위해 권한(Scope)을 'drive' 전체로 상향합니다!
+// 💡 [핵심 수정] 로그인 시점에 드라이브, 지메일, 시트 연동 권한(Scope)을 요청합니다.
+// 기존 'drive.file'에서 'drive'(전체)로 권한을 상향하여 공유 드라이브 접근이 가능해집니다.
 googleProvider.addScope('https://www.googleapis.com/auth/drive');
 googleProvider.addScope('https://www.googleapis.com/auth/gmail.send');
 googleProvider.addScope('https://www.googleapis.com/auth/spreadsheets.readonly');
@@ -379,4 +380,4 @@ window.updateUserPosition = async (uid, pos) => { try { await setDoc(doc(db, "us
 window.updateUserRole = async (uid, role) => { try { await setDoc(doc(db, "users", uid), { role: role }, { merge: true }); if(window.showToast) window.showToast("등급이 변경되었습니다."); } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } };
 window.updateUserPerm = async (uid, key, val) => { try { const uR = doc(db, "users", uid); const uD = await getDoc(uR); if (uD.exists()) { let p = uD.data().permissions || {}; p[key] = val; await setDoc(uR, { permissions: p }, { merge: true }); if(window.showToast) window.showToast("권한이 업데이트되었습니다."); } } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } };
 window.approveUser = async (uid) => { try { await setDoc(doc(db, "users", uid), { role: 'user' }, { merge: true }); if(window.showToast) window.showToast("계정이 정상적으로 승인되었습니다.", "success"); } catch(e) { window.showToast("승인 처리 실패", "error"); } };
-window.deleteUser = async (uid) => { if (!confirm("이 사용자를 정말 삭제하시겠습니까?\n\n삭제 시 해당 사용자의 시스템 접근이 즉시 영구 차단됩니다.")) return; try { await deleteDoc(doc(db, "users", uid)); if(window.showToast) window.showToast("계정 권한이 영구적으로 삭제(차단) 되었습니다."); } catch (e) { window.showToast("오류 발생", "error"); } };
+window.deleteUser = async (uid) => { if (!confirm("이 사용자를 정말 삭제하시겠습니까?\n\n삭제 시 해당 사용자의 시스템 접근이 즉시 영구 차단됩니다.\n(참고: 동일한 이메일로 다시 회원가입을 하려면 Firebase Authentication 콘솔에서도 계정을 삭제해주셔야 합니다.)")) return; try { await deleteDoc(doc(db, "users", uid)); if(window.showToast) window.showToast("계정 권한이 영구적으로 삭제(차단) 되었습니다."); } catch (e) { window.showToast("오류 발생", "error"); } };
