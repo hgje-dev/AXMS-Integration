@@ -1,21 +1,7 @@
 /* eslint-disable */
 import { auth, db } from './firebase.js';
-import { 
-    GoogleAuthProvider, 
-    signInWithPopup, 
-    signOut, 
-    onAuthStateChanged, 
-    updatePassword 
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { 
-    doc, 
-    getDoc, 
-    setDoc, 
-    collection, 
-    onSnapshot, 
-    deleteDoc,
-    writeBatch
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { doc, getDoc, setDoc, collection, onSnapshot, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 let allUsersUnsubscribe=null, teamMembersUnsubscribe=null;
 window.isSigningUp = false; 
@@ -24,17 +10,12 @@ window.tempUserEmail = "";
 window.tempUserUid = "";
 
 const googleProvider = new GoogleAuthProvider();
-
-// 💡 필수 권한 요청
 googleProvider.addScope('https://www.googleapis.com/auth/drive');
 googleProvider.addScope('https://www.googleapis.com/auth/gmail.send');
 googleProvider.addScope('https://www.googleapis.com/auth/spreadsheets.readonly');
 
-// 💡 [핵심] 권한 체크박스 화면을 무조건 다시 띄우도록 강제 설정
-googleProvider.setCustomParameters({
-    prompt: 'consent',
-    access_type: 'offline'
-});
+// 💡 [핵심] 이미 로그인했던 사람도 무조건 권한 체크박스 화면을 띄우도록 강제
+googleProvider.setCustomParameters({ prompt: 'consent', access_type: 'offline' });
 
 window.googleLogin = async () => {
     const err = document.getElementById('login-error');
@@ -48,10 +29,7 @@ window.googleLogin = async () => {
         if (!user.email || !user.email.endsWith('@axbis.ai')) {
             try { await user.delete(); } catch(e) { await signOut(auth); } 
             window.isSigningUp = false; 
-            if (err) {
-                err.innerHTML = "가입 불가능 합니다";
-                err.classList.remove('hidden');
-            }
+            if (err) { err.innerHTML = "가입 불가능 합니다"; err.classList.remove('hidden'); }
             return; 
         }
 
@@ -66,32 +44,24 @@ window.googleLogin = async () => {
         const userDoc = await getDoc(userDocRef);
 
         if (!userDoc.exists()) {
-            window.tempUserEmail = user.email;
-            window.tempUserUid = user.uid;
+            window.tempUserEmail = user.email; window.tempUserUid = user.uid;
             if(document.getElementById('signup-name')) document.getElementById('signup-name').value = user.displayName || '';
-            document.getElementById('login-view').classList.add('hidden');
-            document.getElementById('signup-view').classList.remove('hidden');
+            document.getElementById('login-view').classList.add('hidden'); document.getElementById('signup-view').classList.remove('hidden');
         } else {
             window.isSigningUp = false; 
-            if (user.email === 'mfg@axbis.ai' && userDoc.data().role !== 'admin') {
-                await setDoc(userDocRef, { role: 'admin' }, { merge: true });
-            }
+            if (user.email === 'mfg@axbis.ai' && userDoc.data().role !== 'admin') { await setDoc(userDocRef, { role: 'admin' }, { merge: true }); }
             location.reload();
         }
     } catch (er) {
-        window.isSigningUp = false;
-        console.error("❌ 로그인 실패:", er);
+        window.isSigningUp = false; console.error("❌ 로그인 실패:", er);
         if(err) { err.innerText = "로그인에 실패했습니다: " + er.message; err.classList.remove('hidden'); }
     }
 };
 
 window.completeGoogleSignup = async () => {
-    const n = document.getElementById('signup-name')?.value.trim();
-    const t = document.getElementById('signup-dept')?.value;
-    const pos = document.getElementById('signup-position')?.value || '매니저';
-    const err = document.getElementById('signup-error');
-    const finalEmail = window.tempUserEmail || auth.currentUser?.email;
-    const finalUid = window.tempUserUid || auth.currentUser?.uid;
+    const n = document.getElementById('signup-name')?.value.trim(); const t = document.getElementById('signup-dept')?.value;
+    const pos = document.getElementById('signup-position')?.value || '매니저'; const err = document.getElementById('signup-error');
+    const finalEmail = window.tempUserEmail || auth.currentUser?.email; const finalUid = window.tempUserUid || auth.currentUser?.uid;
 
     if(err) err.classList.add('hidden');
     if(!n) { if(err) err.innerHTML="이름을 입력해주세요."; return; }
@@ -111,9 +81,7 @@ window.completeGoogleSignup = async () => {
 
 window.logout = async () => { 
     if (window.currentUser) { try { await setDoc(doc(db, "users", window.currentUser.uid), { isOnline: false, lastActive: Date.now() }, { merge: true }); } catch(e) {} }
-    await signOut(auth); 
-    localStorage.removeItem('axmsGoogleTokenV2'); 
-    location.reload(); 
+    await signOut(auth); localStorage.removeItem('axmsGoogleTokenV2'); location.reload(); 
 };
 
 window.initAuthListeners = () => {
@@ -124,17 +92,13 @@ window.initAuthListeners = () => {
             if (uS.exists()) { 
                 window.userProfile = uS.data(); 
                 if(window.userProfile.role === 'pending') { await signOut(auth); return; }
-                window.currentUser = u;
-                document.getElementById('login-modal')?.classList.add('hidden'); 
+                window.currentUser = u; document.getElementById('login-modal')?.classList.add('hidden'); 
                 const pt = document.getElementById('portal-container'); if(pt) { pt.classList.remove('hidden'); pt.classList.add('flex'); }
                 if(document.getElementById('sidebar-user-name')) document.getElementById('sidebar-user-name').innerText = window.userProfile.name; 
                 if(document.getElementById('sidebar-team-badge')) document.getElementById('sidebar-team-badge').innerText = window.userProfile.team;
-                
                 if(allUsersUnsubscribe) allUsersUnsubscribe(); allUsersUnsubscribe=onSnapshot(collection(db,"users"), s=>{ window.allSystemUsers=[]; s.forEach(d=>window.allSystemUsers.push({uid:d.id,...d.data()})); });
                 if(teamMembersUnsubscribe) teamMembersUnsubscribe(); teamMembersUnsubscribe=onSnapshot(collection(db,"team_members"), s=>{ window.teamMembers=[]; s.forEach(d=>window.teamMembers.push({id:d.id,...d.data()})); });
-                
-                if(window.loadCounts) window.loadCounts(); 
-                if(window.loadNotifications) window.loadNotifications();
+                if(window.loadCounts) window.loadCounts(); if(window.loadNotifications) window.loadNotifications();
             } else { await signOut(auth); }
         } else { window.currentUser=null; document.getElementById('login-modal')?.classList.remove('hidden'); }
     });
