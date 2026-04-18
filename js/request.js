@@ -155,7 +155,7 @@ window.authenticateGoogle = async function() {
         const { GoogleAuthProvider, signInWithPopup } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
         
         const googleProvider = new GoogleAuthProvider();
-        googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
+        googleProvider.addScope('https://www.googleapis.com/auth/drive'); // 전체 드라이브 접근으로 상향 권장
         googleProvider.addScope('https://www.googleapis.com/auth/gmail.send');
         googleProvider.addScope('https://www.googleapis.com/auth/spreadsheets.readonly');
         
@@ -174,44 +174,65 @@ window.authenticateGoogle = async function() {
     }
 };
 
+// 💡 [핵심 수정] 공유 드라이브 파라미터 적용 및 에러 방어
 window.uploadFileToDrive = async function(file, folderId) {
-    if (!window.googleAccessToken) throw new Error("구글 인증이 필요합니다.");
+    const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
+    if (!window.googleAccessToken || !storedExpiry || Date.now() > parseInt(storedExpiry)) {
+        throw new Error("TOKEN_EXPIRED");
+    }
+
     const metadata = { name: file.name, parents: [folderId] };
     const form = new FormData();
     form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
     form.append('file', file);
     
-    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + window.googleAccessToken },
         body: form
     });
     
-    if (!res.ok) throw new Error("파일 업로드 실패");
     const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error?.message || "파일 업로드 실패");
     return data.id; 
 };
 
+// 💡 [핵심 수정] 공유 드라이브 파라미터 적용 및 에러 방어
 async function getOrCreateSubfolder(parentFolderId, folderName) {
-    if (!window.googleAccessToken) throw new Error("구글 인증이 필요합니다.");
-    const query = `name='${encodeURIComponent(folderName)}' and mimeType='application/vnd.google-apps.folder' and '${parentFolderId}' in parents and trashed=false`;
-    const findRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}`, { headers: { 'Authorization': 'Bearer ' + window.googleAccessToken } });
-    const folderData = await findRes.json();
+    const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
+    if (!window.googleAccessToken || !storedExpiry || Date.now() > parseInt(storedExpiry)) {
+        throw new Error("TOKEN_EXPIRED");
+    }
+
+    const safeFolderName = encodeURIComponent(folderName.replace(/['\/\\]/g, '_'));
+    const query = `name='${safeFolderName}' and mimeType='application/vnd.google-apps.folder' and '${parentFolderId}' in parents and trashed=false`;
     
-    if (folderData.files && folderData.files.length > 0) return folderData.files[0].id;
-    else {
-        const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+    const findRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&supportsAllDrives=true&includeItemsFromAllDrives=true`, { 
+        headers: { 'Authorization': 'Bearer ' + window.googleAccessToken } 
+    });
+    const folderData = await findRes.json();
+    if(folderData.error) throw new Error(folderData.error.message);
+
+    if (folderData.files && folderData.files.length > 0) {
+        return folderData.files[0].id;
+    } else {
+        const createRes = await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
             method: 'POST',
             headers: { 'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: folderName, mimeType: 'application/vnd.google-apps.folder', parents: [parentFolderId] })
+            body: JSON.stringify({ name: folderName.replace(/['\/\\]/g, '_'), mimeType: 'application/vnd.google-apps.folder', parents: [parentFolderId] })
         });
         const newData = await createRes.json();
+        if(newData.error) throw new Error(newData.error.message);
         return newData.id;
     }
 }
 
+// 💡 [핵심 수정] 토큰 만료 방어 및 Gmail 전송 안정화
 window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
-    if (!window.googleAccessToken) throw new Error("구글 인증이 필요합니다.");
+    const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
+    if (!window.googleAccessToken || !storedExpiry || Date.now() > parseInt(storedExpiry)) {
+        throw new Error("TOKEN_EXPIRED");
+    }
     if (!recipientEmail) return false;
 
     const logoUrl = "https://raw.githubusercontent.com/hgje-dev/AXMS-Integration/main/assets/%EC%97%91%EC%8A%A4%EB%B9%84%EC%8A%A4CI%20%EC%8A%AC%EB%A1%9C%EA%B1%B4_%ED%8F%AC%EC%A7%80%ED%8B%B0%EB%B8%8C.png";
@@ -257,7 +278,8 @@ window.sendNotificationEmail = async function(type, reqData, recipientEmail) {
         body: JSON.stringify({ raw: encodedEmail })
     });
     
-    if (!res.ok) throw new Error("메일 발송 실패");
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error?.message || "메일 발송 실패");
     return true;
 };
 
@@ -685,7 +707,13 @@ window.saveDraftRequest = async function() {
 
         window.showToast("임시 저장되었습니다."); 
         window.closeWriteModal(); 
-    } catch(e) { window.showToast("오류 발생: " + e.message, "error"); }
+    } catch(e) {
+        if(e.message === "TOKEN_EXPIRED") {
+             window.showToast("구글 인증이 만료되었습니다. 로그아웃 후 다시 로그인해주세요.", "error");
+        } else {
+             window.showToast("오류 발생: " + e.message, "error");
+        }
+    }
 };
 
 window.promptSaveRequest = function() {
@@ -713,6 +741,7 @@ window.continueRepairSave = function() {
     if(sm) { sm.classList.remove('hidden'); sm.classList.add('flex'); }
 };
 
+// 💡 [핵심 수정] 요청서 저장 및 발송 에러 처리 강화
 window.executeSaveRequest = async function() {
     const sm = document.getElementById('req-send-modal');
     if(sm) { sm.classList.add('hidden'); sm.classList.remove('flex'); }
@@ -846,7 +875,12 @@ window.executeSaveRequest = async function() {
 
         window.showToast("성공적으로 저장 및 메일 발송이 완료되었습니다."); 
         window.closeWriteModal(); 
-    } catch(e) { window.showToast("오류 발생: " + e.message, "error"); 
+    } catch(e) { 
+        if(e.message === "TOKEN_EXPIRED") {
+             window.showToast("구글 인증이 만료되었습니다. 로그아웃 후 다시 로그인해주세요.", "error");
+        } else {
+             window.showToast("오류 발생: " + e.message, "error");
+        }
     } finally { 
         if(btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane mr-1"></i> 발송하기'; }
     }
