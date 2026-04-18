@@ -20,25 +20,22 @@ import {
 let allUsersUnsubscribe=null, teamMembersUnsubscribe=null;
 window.isSigningUp = false; 
 
-// 💡 데이터 전달용 전역 변수
 window.tempUserEmail = "";
 window.tempUserUid = "";
 
 const googleProvider = new GoogleAuthProvider();
 
-// 💡 [필수 수정] 공유 드라이브 및 메일 발송을 위해 'drive' 전체 권한과 'gmail.send'를 요청합니다.
+// 💡 필수 권한 요청
 googleProvider.addScope('https://www.googleapis.com/auth/drive');
 googleProvider.addScope('https://www.googleapis.com/auth/gmail.send');
 googleProvider.addScope('https://www.googleapis.com/auth/spreadsheets.readonly');
 
-// 💡 [핵심 해결책] 로그인을 해도 권한 창이 안 뜨는 현상을 방지하기 위해 'consent' 프롬프트를 강제합니다.
-// 이 옵션이 있어야 구글이 "권한 허용 체크박스"를 다시 보여줍니다.
+// 💡 [핵심] 권한 체크박스 화면을 무조건 다시 띄우도록 강제 설정
 googleProvider.setCustomParameters({
-    prompt: 'select_account consent',
+    prompt: 'consent',
     access_type: 'offline'
 });
 
-// 💡 1. 구글 로그인 실행
 window.googleLogin = async () => {
     const err = document.getElementById('login-error');
     if(err) err.classList.add('hidden');
@@ -48,7 +45,6 @@ window.googleLogin = async () => {
         const result = await signInWithPopup(auth, googleProvider);
         const user = result.user;
 
-        // 사내 도메인 제한 (@axbis.ai)
         if (!user.email || !user.email.endsWith('@axbis.ai')) {
             try { await user.delete(); } catch(e) { await signOut(auth); } 
             window.isSigningUp = false; 
@@ -59,7 +55,6 @@ window.googleLogin = async () => {
             return; 
         }
 
-        // OAuth 토큰 추출 및 저장
         const credential = GoogleAuthProvider.credentialFromResult(result);
         if (credential && credential.accessToken) {
             window.googleAccessToken = credential.accessToken;
@@ -117,7 +112,7 @@ window.completeGoogleSignup = async () => {
 window.logout = async () => { 
     if (window.currentUser) { try { await setDoc(doc(db, "users", window.currentUser.uid), { isOnline: false, lastActive: Date.now() }, { merge: true }); } catch(e) {} }
     await signOut(auth); 
-    localStorage.removeItem('axmsGoogleTokenV2'); // 토큰 강제 삭제
+    localStorage.removeItem('axmsGoogleTokenV2'); 
     location.reload(); 
 };
 
