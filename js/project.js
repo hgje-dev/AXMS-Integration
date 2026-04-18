@@ -445,7 +445,7 @@ window.renderProjectStatusList = function() {
 };
 
 // ==========================================
-// 💡 [핵심] 클라이언트 단에서 직접 구글 드라이브 업로드 (Cloud Functions 에러 방지)
+// 💡 [핵심 수정] 클라이언트 단에서 직접 구글 드라이브 업로드 (백엔드 에러 원천 차단)
 // ==========================================
 
 window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
@@ -806,7 +806,7 @@ window.scrollToGanttToday = function() {
     const container = document.getElementById('proj-dash-gantt-content');
     const todayLine = document.getElementById('gantt-today-line');
     if(container && todayLine) {
-        const targetLeft = todayLine.offsetLeft;
+        const targetLeft = todayLine.getBoundingClientRect().left - container.getBoundingClientRect().left;
         container.scrollTo({ left: targetLeft - (container.clientWidth / 2), behavior: 'smooth' });
     }
 };
@@ -835,39 +835,32 @@ window.renderProjGantt = function() {
         const totalDays = Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24));
         if (totalDays <= 0) return;
 
-        let headerHtml = '<div class="flex relative h-8 border-b border-slate-200 mb-2 ml-[300px] min-w-max">';
-        let bgHtml = '<div class="absolute top-8 bottom-0 left-[300px] right-0 pointer-events-none flex z-0">';
-        
+        // Build Date Headers
+        let dateHeaders = '';
+        let bgLines = '';
         for(let i=0; i<=totalDays; i++) { 
             let d = new Date(minDate); d.setDate(d.getDate() + i);
             let pct = (i / totalDays) * 100;
             let isWknd = d.getDay() === 0 || d.getDay() === 6;
             let isHol = KR_HOLIDAYS.has(window.getLocalDateStr(d));
             let color = (isWknd || isHol) ? 'text-rose-400' : 'text-slate-400';
-            let bgClass = (isWknd || isHol) ? 'bg-rose-50/30' : 'border-r border-slate-100/50';
-            let widthPct = (1 / totalDays) * 100;
+            let bgClass = (isWknd || isHol) ? 'bg-rose-50/50 border-r border-rose-100' : 'border-r border-slate-100/50';
             
-            if (totalDays < 40 || i % 2 === 0) { 
-                headerHtml += `<div class="absolute text-[9px] ${color} font-bold -translate-x-1/2 bottom-1" style="left:${pct}%">${d.getMonth()+1}/${d.getDate()}</div>`;
+            if (totalDays < 45 || i % 2 === 0) { 
+                dateHeaders += `<div class="absolute text-[9px] ${color} font-bold -translate-x-1/2 bottom-1" style="left:${pct}%">${d.getMonth()+1}/${d.getDate()}</div>`;
             }
-            bgHtml += `<div class="${bgClass}" style="width:${widthPct}%;"></div>`;
+            bgLines += `<div class="absolute top-0 bottom-0 ${bgClass}" style="left:${pct}%; width:${100/totalDays}%;"></div>`;
         }
-        headerHtml += '</div>';
-        bgHtml += '</div>';
 
         let todayPct = ((new Date() - minDate) / (1000 * 60 * 60 * 24)) / totalDays * 100;
-
-        let html = `<div class="relative min-w-[1000px] p-4 bg-white rounded-lg">`;
-        html += headerHtml;
-        html += bgHtml;
-        html += `<div class="relative z-10">`;
-        
+        let todayLineHtml = '';
         if(todayPct >= 0 && todayPct <= 100) {
-            html += `<div id="gantt-today-line" class="absolute top-0 bottom-0 w-[2px] bg-rose-500/80 z-20 pointer-events-none" style="left: calc(300px + ${todayPct}% - 300px); margin-left: 300px;">
-                        <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-rose-500 text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm">오늘</div>
-                     </div>`;
+            todayLineHtml = `<div id="gantt-today-line" class="absolute top-0 bottom-0 w-[2px] bg-rose-500 z-20 pointer-events-none" style="left: ${todayPct}%;">
+                                <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-rose-500 text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm">오늘</div>
+                             </div>`;
         }
 
+        let rowsHtml = '';
         projects.forEach(p => {
             let startStr = p.d_asmSt || p.d_asmEst || p.d_shipEst;
             let endStr = p.d_shipEn || p.d_shipEst || p.d_asmEst;
@@ -884,24 +877,48 @@ window.renderProjGantt = function() {
                 if (leftPct < 0) { widthPct += leftPct; leftPct = 0; }
                 if (leftPct + widthPct > 100) { widthPct = 100 - leftPct; }
                 if (widthPct < 0.5) widthPct = 0.5;
-                barHtml = `<div class="absolute h-5 rounded-full bg-gradient-to-r from-indigo-400 to-indigo-600 shadow-sm" style="left:${leftPct}%; width:${widthPct}%;"></div>`;
+                barHtml = `<div class="absolute h-5 rounded-full bg-gradient-to-r from-indigo-400 to-indigo-600 shadow-sm hover:scale-y-110 transition-transform cursor-pointer" style="left:${leftPct}%; width:${widthPct}%;"></div>`;
             } else {
                 barHtml = `<div class="text-[10px] text-slate-400 italic px-4 w-full text-center">일정 미지정</div>`;
             }
             
-            html += `
-            <div class="flex items-center text-xs group w-full mb-3 hover:bg-white/80 p-1.5 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-indigo-100" onclick="window.editProjStatus('${p.id}')">
+            rowsHtml += `
+            <div class="flex items-center text-xs group w-full mb-3 hover:bg-slate-50 p-1.5 rounded-lg transition-colors cursor-pointer" onclick="window.editProjStatus('${p.id}')">
                 <div class="w-[280px] font-bold truncate pr-4 text-slate-700 shrink-0 bg-white shadow-sm px-2 py-1 rounded" title="${title}">${title}</div>
-                <div class="flex-1 relative h-8 flex items-center border-l border-slate-200 pl-4 bg-transparent rounded-r-lg">
+                <div class="flex-1 relative h-7 bg-transparent rounded-full border border-slate-200 mx-2">
                     ${barHtml}
                 </div>
                 <div class="w-16 text-right text-[11px] font-black text-emerald-600 shrink-0 pr-2">${p.progress||0}%</div>
             </div>`;
         });
+
+        let html = `
+        <div class="relative min-w-[1000px] p-4 bg-white rounded-lg h-full flex flex-col">
+            <div class="flex px-1.5">
+                <div class="w-[280px] shrink-0"></div>
+                <div class="flex-1 relative h-8 border-b border-slate-200 mx-2">${dateHeaders}</div>
+                <div class="w-16 shrink-0"></div>
+            </div>
+            <div class="flex flex-1 relative mt-2 px-1.5">
+                <div class="w-[280px] shrink-0"></div>
+                <div class="flex-1 relative mx-2">
+                    <div class="absolute inset-0 z-0 pointer-events-none">${bgLines}</div>
+                    ${todayLineHtml}
+                    <div class="relative z-10 w-full h-full">${rowsHtml}</div>
+                </div>
+                <div class="w-16 shrink-0"></div>
+            </div>
+        </div>`;
         
-        html += `</div></div>`;
         container.innerHTML = html;
-        setTimeout(window.scrollToGanttToday, 50);
+        
+        setTimeout(() => {
+            const todayLine = document.getElementById('gantt-today-line');
+            if(container && todayLine) {
+                const targetLeft = todayLine.getBoundingClientRect().left - container.getBoundingClientRect().left;
+                container.scrollTo({ left: targetLeft - (container.clientWidth / 2), behavior: 'smooth' });
+            }
+        }, 100);
         
     } catch(e) {
         console.error("Gantt Rendering Error:", e);
@@ -994,7 +1011,10 @@ window.savePurchaseItem = async function() {
         const payload = { projectId: pId, content: content, files: filesData, authorUid: (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system', authorName: (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system', createdAt: Date.now() };
         const cleanPayload = JSON.parse(JSON.stringify(payload)); Object.keys(cleanPayload).forEach(k => { if(cleanPayload[k] === undefined) cleanPayload[k] = null; });
         await addDoc(collection(db, "project_purchases"), cleanPayload); safeShowSuccess("구매 내역이 등록되었습니다."); if(window.resetPurchaseForm) window.resetPurchaseForm(); 
-    } catch(e) { safeShowError("저장 실패", e); } finally { btn.innerHTML = '등록'; btn.disabled = false; }
+    } catch(e) {
+        if(e.message === "TOKEN_EXPIRED") { window.showToast("구글 인증이 만료되었습니다. 다시 연동해주세요.", "error"); }
+        else { safeShowError("저장 실패", e); }
+    } finally { btn.innerHTML = '등록'; btn.disabled = false; }
 };
 window.deletePurchase = async function(id) { if(confirm("삭제하시겠습니까?")) { try { await deleteDoc(doc(db, "project_purchases", id)); safeShowSuccess("삭제되었습니다."); } catch(e) { safeShowError("삭제 실패", e); } } };
 
@@ -1045,7 +1065,10 @@ window.saveDesignItem = async function() {
         const payload = { projectId: pId, content: content, files: filesData, authorUid: (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system', authorName: (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system', createdAt: Date.now() };
         const cleanPayload = JSON.parse(JSON.stringify(payload)); Object.keys(cleanPayload).forEach(k => { if(cleanPayload[k] === undefined) cleanPayload[k] = null; });
         await addDoc(collection(db, "project_designs"), cleanPayload); safeShowSuccess("설계 내역이 등록되었습니다."); if(window.resetDesignForm) window.resetDesignForm(); 
-    } catch(e) { safeShowError("저장 실패", e); } finally { btn.innerHTML = '등록'; btn.disabled = false; }
+    } catch(e) {
+        if(e.message === "TOKEN_EXPIRED") { window.showToast("구글 인증이 만료되었습니다. 다시 연동해주세요.", "error"); }
+        else { safeShowError("저장 실패", e); }
+    } finally { btn.innerHTML = '등록'; btn.disabled = false; }
 };
 window.deleteDesign = async function(id) { if(confirm("삭제하시겠습니까?")) { try { await deleteDoc(doc(db, "project_designs", id)); safeShowSuccess("삭제되었습니다."); } catch(e) { safeShowError("삭제 실패", e); } } };
 
@@ -1096,14 +1119,16 @@ window.savePjtScheduleItem = async function() {
         const payload = { projectId: pId, content: content, files: filesData, authorUid: (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system', authorName: (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system', createdAt: Date.now() };
         const cleanPayload = JSON.parse(JSON.stringify(payload)); Object.keys(cleanPayload).forEach(k => { if(cleanPayload[k] === undefined) cleanPayload[k] = null; });
         await addDoc(collection(db, "project_schedules"), cleanPayload); safeShowSuccess("PJT 일정 내역이 등록되었습니다."); if(window.resetPjtScheduleForm) window.resetPjtScheduleForm(); 
-    } catch(e) { safeShowError("저장 실패", e); } finally { btn.innerHTML = '등록'; btn.disabled = false; }
+    } catch(e) {
+        if(e.message === "TOKEN_EXPIRED") { window.showToast("구글 인증이 만료되었습니다. 다시 연동해주세요.", "error"); }
+        else { safeShowError("저장 실패", e); }
+    } finally { btn.innerHTML = '등록'; btn.disabled = false; }
 };
 window.deletePjtSchedule = async function(id) { if(confirm("삭제하시겠습니까?")) { try { await deleteDoc(doc(db, "project_schedules", id)); safeShowSuccess("삭제되었습니다."); } catch(e) { safeShowError("삭제 실패", e); } } };
 
 // ==========================================
-// 💡 생산일지 모달 (팀원추가 로직 포함 및 100% 원본 유지)
+// 💡 생산일지 모달 (팀원추가 로직 동기화 완료)
 // ==========================================
-
 window.addLogMember = function(name) {
     if(!name) return;
     window.currentLogMembers = window.currentLogMembers || [];
@@ -1111,8 +1136,10 @@ window.addLogMember = function(name) {
         window.currentLogMembers.push(name);
         if(window.renderLogMembers) window.renderLogMembers();
     }
-    const el = document.getElementById('log-member-add') || document.getElementById('md-member-add');
-    if(el) el.selectedIndex = 0;
+    const el1 = document.getElementById('log-member-add');
+    if(el1) el1.selectedIndex = 0;
+    const el2 = document.getElementById('md-member-add');
+    if(el2) el2.selectedIndex = 0;
 };
 
 window.removeLogMember = function(name) {
@@ -1122,12 +1149,17 @@ window.removeLogMember = function(name) {
 };
 
 window.renderLogMembers = function() {
-    const container = document.getElementById('log-selected-members');
-    const memInput = document.getElementById('log-members');
+    const logContainer = document.getElementById('log-selected-members');
+    const logInput = document.getElementById('log-members');
+    const mdInput = document.getElementById('new-md-members');
+    
     const membersList = window.currentLogMembers || [];
-    if(memInput) memInput.value = membersList.join(', ');
-    if(container) {
-        container.innerHTML = membersList.map(function(name) {
+    
+    if(logInput) logInput.value = membersList.join(', ');
+    if(mdInput) mdInput.value = membersList.join(', ');
+    
+    if(logContainer) {
+        logContainer.innerHTML = membersList.map(function(name) {
             return `<span class="bg-sky-100 text-sky-700 px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1.5 shadow-sm">${name} <i class="fa-solid fa-xmark cursor-pointer hover:text-rose-500 bg-white/50 rounded-full px-1 py-0.5" onclick="window.removeLogMember('${name}')"></i></span>`;
         }).join('');
     }
@@ -1271,7 +1303,10 @@ window.saveDailyLogItem = async function() {
         
         await setDoc(doc(db, "projects_status", projectId), { progress: progressVal, purchaseRate: purchaseRateVal }, { merge: true }); 
         if(window.resetDailyLogForm) window.resetDailyLogForm(); 
-    } catch(e) { safeShowError("저장 실패", e); } 
+    } catch(e) {
+        if(e.message === "TOKEN_EXPIRED") { window.showToast("구글 인증이 만료되었습니다. 다시 연동해주세요.", "error"); }
+        else { safeShowError("저장 실패", e); }
+    } 
     finally { if(btnSave) { btnSave.innerHTML = '등록'; btnSave.disabled = false; } } 
 };
 
@@ -1335,7 +1370,7 @@ window.openMdLogModal = function(projectId, title, curMd) {
         
         const members = window.teamMembers || [];
         const mHtml = '<option value="">팀원 추가</option>' + members.map(t => `<option value="${t.name||''}">${t.name||''} (${t.part||''})</option>`).join('');
-        const logMemberSelect = document.getElementById('md-member-add') || document.getElementById('log-member-add');
+        const logMemberSelect = document.getElementById('md-member-add');
         if(logMemberSelect) logMemberSelect.innerHTML = mHtml;
 
         if(window.resetMdLogForm) window.resetMdLogForm(); 
@@ -1363,6 +1398,7 @@ window.openMdLogModal = function(projectId, title, curMd) {
 };
 
 window.closeMdLogModal = function() { const m = document.getElementById('md-log-modal'); if(m){m.classList.add('hidden'); m.classList.remove('flex');} if (currentMdLogUnsubscribe) currentMdLogUnsubscribe(); };
+
 window.resetMdLogForm = function() { 
     if(document.getElementById('editing-md-id')) document.getElementById('editing-md-id').value = ''; 
     if(document.getElementById('new-md-date')) document.getElementById('new-md-date').value = window.getLocalDateStr(new Date()); 
@@ -1375,7 +1411,13 @@ window.resetMdLogForm = function() {
 };
 
 window.saveMdLogItem = async function() { 
-    const projectId = document.getElementById('md-req-id').value, logId = document.getElementById('editing-md-id').value, date = document.getElementById('new-md-date').value, mdVal = document.getElementById('new-md-val').value, desc = document.getElementById('new-md-desc').value.trim(), members = document.getElementById('log-members') ? document.getElementById('log-members').value : '';
+    const projectId = document.getElementById('md-req-id').value;
+    const logId = document.getElementById('editing-md-id').value;
+    const date = document.getElementById('new-md-date').value;
+    const mdVal = document.getElementById('new-md-val').value;
+    const desc = document.getElementById('new-md-desc').value.trim();
+    const members = document.getElementById('new-md-members') ? document.getElementById('new-md-members').value : '';
+    
     if(!date || !mdVal) return safeShowError("날짜와 투입 MD를 입력하세요."); 
     const btnSave = document.getElementById('btn-md-save'); if(btnSave) { btnSave.innerHTML = '저장중..'; btnSave.disabled = true; }
     try { 
@@ -1564,24 +1606,12 @@ window.renderNcrList = function(pjtCode) {
     }).join('');
 };
 
-// 💡 PJT 마스터 코드 강제 로드
-window.openProjCodeMasterModal = function() {
-    if(window.toggleSidebar) window.toggleSidebar(false); 
-    
-    const modal = document.getElementById('proj-code-master-modal');
-    if(modal) {
-        document.getElementById('new-pjt-code').value = '';
-        document.getElementById('new-pjt-name').value = '';
-        document.getElementById('new-pjt-company').value = '';
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-        window.renderProjectCodeMaster();
-    } else {
-        window.showToast("이 화면에서는 마스터 코드 관리를 열 수 없습니다.", "error");
-    }
-};
-
+// 💡 스크립트 로드 시 마스터 데이터를 확실하게 불러옵니다.
 document.addEventListener('DOMContentLoaded', () => {
+    // "구글 연동 필요" 버튼 숨기기 (서버리스 방식에서는 불필요)
+    const btnGoogleAuth = document.getElementById('btn-pjt-google-auth');
+    if (btnGoogleAuth) btnGoogleAuth.style.display = 'none';
+
     if (window.loadProjectCodeMaster) {
         window.loadProjectCodeMaster();
     }
