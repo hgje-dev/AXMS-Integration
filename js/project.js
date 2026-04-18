@@ -46,9 +46,8 @@ if (!window.getDateTimeStr) {
 
 const safeShowError = (msg, err) => {
     console.error(msg, err);
-    const detail = err ? ` (${err.message || String(err)})` : '';
-    if(window.showToast) window.showToast(msg + detail, "error");
-    else alert(msg + detail);
+    if(window.showToast) window.showToast(msg + (err ? ': ' + err.message : ''), "error");
+    else alert(msg + (err ? '\n' + err.message : ''));
 };
 
 const safeShowSuccess = (msg) => {
@@ -111,6 +110,7 @@ window.updateMultiFileNames = function(inputEl, displayElId) {
 // ==========================================
 // 💡 알림 카운트 및 데이터 로드
 // ==========================================
+
 window.loadCounts = function() {
     try {
         onSnapshot(collection(db, "project_comments"), (snap) => { window.projectCommentCounts = {}; snap.forEach(doc => { let d = doc.data(); let pid = d.projectId || d.reqId; if(pid) window.projectCommentCounts[pid] = (window.projectCommentCounts[pid]||0)+1; }); window.renderProjectStatusList(); });
@@ -174,6 +174,7 @@ window.resetAllFilters = function() {
     if(document.getElementById('filter-year-select')) document.getElementById('filter-year-select').value = window.currentYearFilter;
     if(document.getElementById('filter-month-select')) document.getElementById('filter-month-select').value = '';
     if(document.getElementById('hide-completed-cb')) document.getElementById('hide-completed-cb').checked = true;
+    
     window.filterProjectStatus('all');
 };
 
@@ -495,18 +496,20 @@ window.generateMediaHtml = function(filesArray) {
 };
 
 // ==========================================
-// 💡 구글 드라이브 파일 업로드 (2-Step)
+// 💡 구글 드라이브 파일 업로드 (2-Step & 권한 우회)
 // ==========================================
 window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
     if (!window.googleAccessToken) return null;
     const safeFolderName = getSafeString(folderName).replace(/[\/\\]/g, '_') || '미분류 프로젝트';
-    const query = `name='${safeFolderName}' and mimeType='application/vnd.google-apps.folder' and '${parentFolderId}' in parents and trashed=false`;
     
-    try {
+    const tryCreateFolder = async (parentId) => {
+        const query = `name='${safeFolderName}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
         const findRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}`, {
             headers: { 'Authorization': 'Bearer ' + window.googleAccessToken }
         });
         const folderData = await findRes.json();
+        
+        if (folderData.error) throw new Error(folderData.error.message);
         
         if (folderData.files && folderData.files.length > 0) {
             return folderData.files[0].id;
@@ -517,14 +520,26 @@ window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
                     'Authorization': 'Bearer ' + window.googleAccessToken, 
                     'Content-Type': 'application/json' 
                 },
-                body: JSON.stringify({ name: safeFolderName, mimeType: 'application/vnd.google-apps.folder', parents: [parentFolderId] })
+                body: JSON.stringify({ name: safeFolderName, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] })
             });
             const newFolderData = await createRes.json();
+            if (newFolderData.error) throw new Error(newFolderData.error.message);
             return newFolderData.id;
         }
+    };
+
+    try {
+        // 1차 시도: 공유 지정 폴더
+        return await tryCreateFolder(parentFolderId);
     } catch(e) {
-        console.error("폴더 생성 에러:", e);
-        return null;
+        console.warn("⚠️ 지정된 메인 폴더 접근 실패, 내 드라이브(root)에 생성을 시도합니다:", e);
+        try {
+            // 2차 시도 (폴백): 사용자 개인 root
+            return await tryCreateFolder('root');
+        } catch(e2) {
+            console.error("❌ 내 드라이브(root) 생성도 실패했습니다:", e2);
+            return null;
+        }
     }
 };
 
@@ -535,7 +550,7 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
     if (!file) throw new Error("업로드할 파일이 없습니다.");
 
     let targetFolderId = await window.getOrCreateDriveFolder(projectName, TARGET_DRIVE_FOLDER);
-    if (!targetFolderId) throw new Error("메인 폴더를 생성/조회할 수 없습니다.");
+    if (!targetFolderId) throw new Error("메인 폴더를 생성/조회할 수 없습니다. (구글 드라이브 용량/권한 확인)");
 
     if (subFolderName) {
         const subFolderId = await window.getOrCreateDriveFolder(subFolderName, targetFolderId);
@@ -562,7 +577,6 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
     if(progressSize) progressSize.innerText = `0.00 MB / ${totalMb} MB`;
 
     try {
-        // 1단계: 메타데이터 빈 파일 생성
         const metaRes = await fetch('https://www.googleapis.com/drive/v3/files', {
             method: 'POST',
             headers: {
@@ -572,12 +586,14 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
             body: JSON.stringify({ name: file.name, parents: [targetFolderId] })
         });
         
-        if (!metaRes.ok) throw new Error("구글 드라이브 파일 생성에 실패했습니다. (권한 또는 용량 확인)");
+        if (!metaRes.ok) {
+            const errJson = await metaRes.json();
+            throw new Error(`파일 생성 실패: ${errJson.error ? errJson.error.message : '알 수 없는 오류'}`);
+        }
         
         const metaData = await metaRes.json();
         const fileId = metaData.id;
 
-        // 2단계: 생성된 파일에 바이너리 덮어쓰기 (PATCH)
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
             xhr.open('PATCH', `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, true);
@@ -595,11 +611,9 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
             };
 
             xhr.onload = function() {
-                if (fileIndex === totalFiles) {
-                    if(progressModal) {
-                        progressModal.classList.add('hidden');
-                        progressModal.classList.remove('flex');
-                    }
+                if (fileIndex === totalFiles && progressModal) {
+                    progressModal.classList.add('hidden');
+                    progressModal.classList.remove('flex');
                 }
                 if (xhr.status >= 200 && xhr.status < 300) {
                     resolve(`https://drive.google.com/file/d/${fileId}/view`);
@@ -608,7 +622,7 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
                         progressModal.classList.add('hidden');
                         progressModal.classList.remove('flex');
                     }
-                    reject(new Error("파일 내용 업로드 거절됨. (네트워크 불안정 또는 용량 초과)"));
+                    reject(new Error("파일 내용 업로드 거부됨. 상태코드: " + xhr.status));
                 }
             };
 
@@ -617,7 +631,7 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
                     progressModal.classList.add('hidden');
                     progressModal.classList.remove('flex');
                 }
-                reject(new Error("인터넷 연결이 끊어졌거나 네트워크 오류가 발생했습니다."));
+                reject(new Error("네트워크 오류 또는 인터넷 연결 끊김"));
             };
 
             xhr.send(file);
@@ -746,10 +760,7 @@ window.saveProjStatus = async function(btn) {
         const codeEl = document.getElementById('ps-code');
         const nameEl = document.getElementById('ps-name');
         
-        if(!codeEl || !nameEl) {
-            if(btn){ btn.disabled = false; btn.innerHTML = '저장하기'; }
-            return safeShowError("입력 폼 요소를 찾을 수 없습니다.");
-        }
+        if(!codeEl || !nameEl) throw new Error("입력 폼 요소를 찾을 수 없습니다.");
 
         const id = idEl.value; 
         let code = codeEl.value.trim(); 
@@ -839,7 +850,7 @@ window.calcFinalMd = function() {
     }
 };
 
-// 💡 [수정] 팀원 선택 후 선택 초기화 버그 해결 (selectedIndex 사용)
+// 💡 팀원 다중선택
 window.addProjectMember = function(name) { 
     if(!name) return; 
     window.currentSelectedMembers = window.currentSelectedMembers || [];
@@ -983,226 +994,6 @@ window.toggleProjDashView = function(view) {
     }
 };
 
-window.scrollToGanttToday = function() {
-    const scrollContainer = document.getElementById('proj-dash-gantt-content');
-    if(scrollContainer && window.ganttTodayOffset >= 0) {
-        scrollContainer.scrollTo({
-            left: window.ganttTodayOffset + 300 - (scrollContainer.clientWidth / 2),
-            behavior: 'smooth'
-        });
-    }
-};
-
-window.renderProjGantt = function() {
-    const container = document.getElementById('proj-dash-gantt-content');
-    if(!container) return;
-    try {
-        let displayList = window.getFilteredProjects();
-        if(displayList.length === 0) { 
-            container.innerHTML = '<div class="text-center p-10 text-slate-500 font-bold bg-white w-full h-full flex items-center justify-center rounded-xl">표시할 일정 데이터가 없습니다.</div>'; 
-            return; 
-        }
-
-        let minDate = new Date(); 
-        let maxDate = new Date(); 
-        let hasDates = false;
-        
-        displayList.forEach(function(p) {
-            const dates = [p.d_asmSt, p.d_asmEn, p.d_insSt, p.d_insEn, p.d_shipEn, p.d_setSt, p.d_setEn, p.d_asmEst, p.d_shipEst, p.d_asmEndEst].filter(d => d).map(d => new Date(d)).filter(d => !isNaN(d.getTime()));
-            dates.forEach(function(d) { 
-                if(!hasDates) { minDate = new Date(d); maxDate = new Date(d); hasDates = true; } 
-                if(d < minDate) minDate = new Date(d); 
-                if(d > maxDate) maxDate = new Date(d); 
-            });
-        });
-        
-        const today = new Date(); 
-        today.setHours(0,0,0,0);
-        
-        if(today < minDate) minDate = new Date(today);
-        if(today > maxDate) maxDate = new Date(today);
-
-        if(!hasDates) { 
-            container.innerHTML = '<div class="text-center p-10 text-slate-500 font-bold bg-white w-full h-full flex items-center justify-center rounded-xl">표시할 일정 데이터가 없습니다.</div>'; 
-            return; 
-        }
-        
-        minDate.setDate(minDate.getDate() - 5); 
-        maxDate.setDate(maxDate.getDate() + 10);
-        const totalDays = Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24)); 
-        const dayWidth = 24; 
-        
-        const todayStr = window.getLocalDateStr(new Date()); 
-        let todayOffset = -1;
-
-        let html = `<div class="relative min-w-max h-full min-h-[500px]" style="width: ${totalDays * dayWidth + 300}px">`;
-        
-        for(let i=0; i<totalDays; i++) {
-            let d = new Date(minDate); 
-            d.setDate(d.getDate() + i);
-            let dStr = window.getLocalDateStr(d);
-            if(dStr === todayStr) todayOffset = i * dayWidth; 
-        }
-        
-        window.ganttTodayOffset = todayOffset;
-
-        if(todayOffset >= 0) {
-            html += `<div class="absolute top-0 w-[2px] bg-rose-500 z-[100] pointer-events-none shadow-sm" style="left: ${300 + todayOffset + (dayWidth/2)}px; height:100%; bottom:0;"><div class="absolute top-10 -translate-x-1/2 bg-rose-500 text-white text-[10px] px-2 py-0.5 rounded-full shadow-md font-bold whitespace-nowrap border border-white">오늘</div></div>`;
-        }
-
-        html += `<div class="flex border-b border-slate-200 sticky top-0 bg-white z-50 shadow-sm"><div class="w-[300px] flex-shrink-0 p-3 font-bold text-xs text-slate-700 bg-slate-50 border-r border-slate-200 flex items-center sticky left-0 z-50"><div class="w-[100px] text-indigo-600">PJT 코드</div><div class="w-[200px]">프로젝트명</div></div>`;
-        
-        for(let i=0; i<totalDays; i++) {
-            let d = new Date(minDate); 
-            d.setDate(d.getDate() + i);
-            let dStr = window.getLocalDateStr(d);
-            let bgClass = (d.getDay() === 0 || d.getDay() === 6) ? 'bg-slate-50' : 'bg-white'; 
-            let textClass = d.getDay() === 0 ? 'text-rose-500' : (d.getDay() === 6 ? 'text-blue-500' : 'text-slate-500');
-            if (dStr === todayStr) { bgClass = 'bg-rose-50'; textClass = 'text-rose-600 font-black'; }
-            
-            let dateText = (d.getDate() === 1 || i === 0) ? `<div class="text-[8px] font-black bg-slate-200 text-slate-600">${d.getMonth()+1}월</div>` : `<div class="text-[8px] font-bold bg-slate-100 text-transparent select-none">-</div>`;
-            html += `<div class="w-[${dayWidth}px] flex-shrink-0 text-center border-r border-slate-100 ${bgClass} flex flex-col justify-center relative">${dateText}<div class="text-[10px] font-bold ${textClass} py-1">${d.getDate()}</div></div>`;
-        }
-        
-        html += `</div><div class="relative w-full h-full min-h-full" style="min-height: 400px;">`;
-
-        displayList.forEach(function(p) {
-            const safeNameHtml = String(p.name||'').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); 
-            const safeCodeStr = p.code || '-';
-            
-            html += `<div class="flex border-b border-slate-100 relative group cursor-pointer hover:bg-slate-50 transition-colors" onclick="window.editProjStatus('${p.id}')">`;
-            
-            html += `<div class="w-[300px] flex-shrink-0 p-2 text-[11px] font-bold text-slate-700 border-r border-slate-200 bg-white group-hover:bg-slate-50 z-40 sticky left-0 flex items-center transition-colors" title="${safeNameHtml}"><div class="w-[100px] text-indigo-600 truncate font-black pr-1">${safeCodeStr}</div><div class="w-[200px] truncate">${safeNameHtml}</div></div>`;
-            
-            html += `<div class="flex relative" style="width: ${totalDays * dayWidth}px">`;
-            
-            for(let i=0; i<totalDays; i++) { 
-                let d = new Date(minDate); 
-                d.setDate(d.getDate() + i); 
-                let bgStr = (d.getDay() === 0 || d.getDay() === 6) ? 'bg-slate-50/50' : '';
-                html += `<div class="w-[${dayWidth}px] flex-shrink-0 border-r border-slate-50 ${bgStr} h-12"></div>`; 
-            }
-            
-            const drawBar = function(start, end, colorClass, label, yOffset) {
-                if(!start) return ''; 
-                let sD = new Date(start); 
-                let eD = end ? new Date(end) : new Date(start);
-                if(isNaN(sD.getTime()) || isNaN(eD.getTime())) return '';
-                if(sD < minDate) sD = new Date(minDate); 
-                if(eD > maxDate) eD = new Date(maxDate); 
-                if(sD > eD) eD = new Date(sD);
-                
-                let leftOffset = Math.floor((sD - minDate) / (1000 * 60 * 60 * 24)) * dayWidth; 
-                let width = Math.ceil((eD - sD) / (1000 * 60 * 60 * 24) + 1) * dayWidth;
-                return `<div class="absolute ${yOffset} h-[14px] rounded-sm ${colorClass} text-[8px] flex items-center justify-center font-bold shadow-sm overflow-hidden whitespace-nowrap opacity-90 hover:opacity-100 hover:scale-y-110 transition-all cursor-pointer z-10" style="left: ${leftOffset}px; width: ${width}px;" title="${label}: ${start} ~ ${end||start}"></div>`;
-            };
-            
-            const drawPoint = function(dateStr, colorClass, label, yOffset) {
-                if(!dateStr) return ''; 
-                let d = new Date(dateStr); 
-                if(isNaN(d.getTime())) return '';
-                let leftOffset = Math.floor((d - minDate) / (1000 * 60 * 60 * 24)) * dayWidth;
-                return `<div class="absolute ${yOffset} w-3 h-3 rounded-sm transform rotate-45 shadow-sm border-2 z-20 ${colorClass}" style="left: ${leftOffset + dayWidth/2 - 6}px;" title="${label}: ${dateStr}"></div>`;
-            }
-            
-            html += drawBar(p.d_asmEst, p.d_asmEndEst, 'bg-white border-2 border-indigo-400 border-dashed text-indigo-700', '조립(예정)', 'top-1');
-            html += drawBar(p.d_asmSt, p.d_asmEn, 'bg-indigo-600 text-white', '조립(실제)', 'top-1/2 -translate-y-1/2'); 
-            html += drawBar(p.d_insSt, p.d_insEn, 'bg-teal-500 text-white', '검수', 'top-1/2 -translate-y-1/2'); 
-            html += drawBar(p.d_setSt, p.d_setEn, 'bg-slate-600 text-white', 'Setup', 'top-1/2 -translate-y-1/2');
-            html += drawPoint(p.d_shipEst, 'bg-white border-rose-400', '출하(예정)', 'top-1');
-            html += drawPoint(p.d_shipEn, 'bg-rose-500 border-white', '출하(실제)', 'top-1/2 -translate-y-1/2');
-            
-            html += `</div></div>`;
-        });
-        
-        html += `</div></div>`; 
-        container.innerHTML = html;
-        
-        setTimeout(function() { 
-            const scrollContainer = document.getElementById('proj-dash-gantt-content'); 
-            if(scrollContainer && todayOffset >= 0) {
-                scrollContainer.scrollLeft = todayOffset + 300 - (scrollContainer.clientWidth / 2);
-            }
-        }, 100);
-    } catch(e) { 
-        console.error("간트차트 오류:", e); 
-    }
-};
-
-window.changeCalendarMonth = function(offset) { 
-    window.calendarCurrentDate.setMonth(window.calendarCurrentDate.getMonth() + offset); 
-    if(window.renderProjCalendar) window.renderProjCalendar(); 
-};
-
-window.renderProjCalendar = function() {
-    const container = document.getElementById('proj-dash-calendar-content');
-    if(!container) return;
-    try {
-        let displayList = window.getFilteredProjects();
-        const year = window.calendarCurrentDate.getFullYear(); 
-        const month = window.calendarCurrentDate.getMonth();
-        const firstDay = new Date(year, month, 1).getDay(); 
-        const lastDate = new Date(year, month + 1, 0).getDate();
-        const today = new Date(); 
-        const isCurrentMonth = (today.getFullYear() === year && today.getMonth() === month);
-        
-        let html = `<div class="flex justify-between items-center mb-4">
-                        <div class="flex items-center gap-4">
-                            <button onclick="window.changeCalendarMonth(-1)" class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"><i class="fa-solid fa-chevron-left"></i></button>
-                            <h3 class="text-lg font-black text-indigo-800 w-32 text-center">${year}년 ${month + 1}월</h3>
-                            <button onclick="window.changeCalendarMonth(1)" class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"><i class="fa-solid fa-chevron-right"></i></button>
-                            <button onclick="window.calendarCurrentDate = new Date(); window.renderProjCalendar();" class="text-[10px] bg-indigo-50 text-indigo-600 px-3 py-1 rounded-lg font-bold hover:bg-indigo-100 transition-colors border border-indigo-200">이번 달</button>
-                        </div>
-                        <div class="flex gap-2 text-[10px] font-bold">
-                            <span class="bg-indigo-100 text-indigo-700 px-2 py-1 rounded border border-indigo-200">조립진행</span>
-                            <span class="bg-rose-100 text-rose-700 px-2 py-1 rounded border border-rose-200">출하예정</span>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-7 gap-1 text-center font-bold text-xs text-slate-500 mb-2">
-                        <div class="text-rose-500">일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div class="text-blue-500">토</div>
-                    </div>
-                    <div class="grid grid-cols-7 gap-1 auto-rows-fr">`;
-        
-        for(let i=0; i<firstDay; i++) { 
-            html += `<div class="min-h-[100px] bg-slate-50 rounded-lg border border-slate-100"></div>`; 
-        }
-        
-        for(let date=1; date<=lastDate; date++) {
-            const currentDateStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(date).padStart(2,'0'); 
-            let dayEvents = '';
-            
-            displayList.forEach(function(p) {
-                const safeNameHtml = getSafeString(p.name).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); 
-                const safeCodeStr = getSafeString(p.code) || '-';
-                let isAsm = false; 
-                
-                if(p.d_asmSt && p.d_asmEn) { 
-                    if(currentDateStr >= p.d_asmSt && currentDateStr <= p.d_asmEn) isAsm = true; 
-                } else if(p.d_asmEst && p.d_asmEndEst) { 
-                    if(currentDateStr >= p.d_asmEst && currentDateStr <= p.d_asmEndEst) isAsm = true; 
-                }
-                
-                if(isAsm) {
-                    dayEvents += `<div class="text-[9px] bg-indigo-500 text-white px-1.5 py-0.5 rounded mb-0.5 truncate cursor-pointer shadow-sm hover:scale-[1.02] transition-transform" onclick="window.editProjStatus('${p.id}')" title="${safeNameHtml}">${safeCodeStr} 조립</div>`;
-                }
-                
-                if(p.d_shipEn === currentDateStr || (!p.d_shipEn && p.d_shipEst === currentDateStr)) { 
-                    dayEvents += `<div class="text-[9px] bg-rose-500 text-white px-1.5 py-0.5 rounded mb-0.5 truncate cursor-pointer shadow-sm hover:scale-[1.02] transition-transform" onclick="window.editProjStatus('${p.id}')" title="${safeNameHtml}">${safeCodeStr} 출하</div>`; 
-                }
-            });
-            
-            const isToday = (isCurrentMonth && date === today.getDate());
-            const badge = isToday ? `<span class="bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center mx-auto shadow-md">${date}</span>` : date;
-            const borderClass = isToday ? 'border-indigo-400 bg-indigo-50/10' : 'border-slate-200';
-            
-            html += `<div class="min-h-[100px] bg-white rounded-lg border ${borderClass} p-1 hover:bg-slate-50 transition-colors"><div class="text-xs font-bold text-slate-700 mb-1 text-center">${badge}</div><div class="flex flex-col gap-0.5 overflow-hidden">${dayEvents}</div></div>`;
-        }
-        
-        html += `</div>`; 
-        container.innerHTML = html;
-    } catch(e) {}
-};
-
 // ==========================================
 // 💡 구매 관리 모달 (안전장치 적용)
 // ==========================================
@@ -1307,7 +1098,6 @@ window.savePurchaseItem = async function() {
             createdAt: Date.now() 
         };
         
-        // 💡 Firestore 에러 완벽 방지: undefined 값을 null로 변환
         const cleanPayload = JSON.parse(JSON.stringify(payload));
         Object.keys(cleanPayload).forEach(k => { if(cleanPayload[k] === undefined) cleanPayload[k] = null; });
         
@@ -1589,7 +1379,7 @@ window.deletePjtSchedule = async function(id) {
 };
 
 // ==========================================
-// 💡 생산일지 관리 모달 (팀원 다중선택/안전장치 적용)
+// 💡 생산일지 관리 모달 (안전장치 적용)
 // ==========================================
 window.openDailyLogModal = function(projectId) { 
     try {
@@ -1729,11 +1519,8 @@ window.saveDailyLogItem = async function() {
         
         await setDoc(doc(db, "projects_status", projectId), { progress: progressVal, purchaseRate: purchaseRateVal }, { merge: true }); 
         if(window.resetDailyLogForm) window.resetDailyLogForm(); 
-    } catch(e) { 
-        safeShowError("저장 실패", e); 
-    } finally { 
-        if(btnSave) { btnSave.innerHTML = '등록'; btnSave.disabled = false; } 
-    } 
+    } catch(e) { safeShowError("저장 실패", e); } 
+    finally { if(btnSave) { btnSave.innerHTML = '등록'; btnSave.disabled = false; } } 
 };
 
 window.editDailyLog = function(id) { 
@@ -1796,7 +1583,7 @@ window.openMdLogModal = function(projectId, title, curMd) {
         
         const members = window.teamMembers || [];
         const mHtml = '<option value="">팀원 추가</option>' + members.map(t => `<option value="${t.name||''}">${t.name||''} (${t.part||''})</option>`).join('');
-        const logMemberSelect = document.getElementById('md-member-add');
+        const logMemberSelect = document.getElementById('md-member-add') || document.getElementById('log-member-add');
         if(logMemberSelect) logMemberSelect.innerHTML = mHtml;
 
         if(window.resetMdLogForm) window.resetMdLogForm(); 
@@ -1831,21 +1618,14 @@ window.resetMdLogForm = function() {
     if(document.getElementById('new-md-desc')) document.getElementById('new-md-desc').value = ''; 
     window.currentLogMembers = (window.userProfile && window.userProfile.name) ? [window.userProfile.name] : []; 
     if(window.renderLogMembers) window.renderLogMembers(); 
-    const btnSave = document.getElementById('btn-md-save'); if(btnSave) btnSave.innerText = '등록'; 
-    const btnCancel = document.getElementById('btn-md-cancel'); if(btnCancel) btnCancel.classList.add('hidden'); 
+    if(document.getElementById('btn-md-save')) document.getElementById('btn-md-save').innerText = '등록'; 
+    if(document.getElementById('btn-md-cancel')) document.getElementById('btn-md-cancel').classList.add('hidden'); 
 };
 
 window.saveMdLogItem = async function() { 
-    const projectId = document.getElementById('md-req-id').value;
-    const logId = document.getElementById('editing-md-id').value;
-    const date = document.getElementById('new-md-date').value;
-    const mdVal = document.getElementById('new-md-val').value;
-    const desc = document.getElementById('new-md-desc').value.trim();
-    const members = document.getElementById('log-members') ? document.getElementById('log-members').value : '';
-    
+    const projectId = document.getElementById('md-req-id').value, logId = document.getElementById('editing-md-id').value, date = document.getElementById('new-md-date').value, mdVal = document.getElementById('new-md-val').value, desc = document.getElementById('new-md-desc').value.trim(), members = document.getElementById('log-members') ? document.getElementById('log-members').value : '';
     if(!date || !mdVal) return safeShowError("날짜와 투입 MD를 입력하세요."); 
     const btnSave = document.getElementById('btn-md-save'); if(btnSave) { btnSave.innerHTML = '저장중..'; btnSave.disabled = true; }
-    
     try { 
         const payload = { date: date, md: parseFloat(mdVal), desc: desc, members: members, updatedAt: Date.now() }; 
         const cleanPayload = JSON.parse(JSON.stringify(payload));
@@ -1856,22 +1636,24 @@ window.saveMdLogItem = async function() {
             safeShowSuccess("MD 내역이 수정되었습니다."); 
         } else { 
             cleanPayload.projectId = projectId; 
-            cleanPayload.authorUid = window.currentUser.uid; 
-            cleanPayload.authorName = window.userProfile.name; 
+            cleanPayload.authorUid = (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system'; 
+            cleanPayload.authorName = (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system'; 
             cleanPayload.createdAt = Date.now(); 
             await addDoc(collection(db, "project_md_logs"), cleanPayload); 
             safeShowSuccess("MD 내역이 등록되었습니다."); 
+            if(window.processMentions) await window.processMentions(desc, projectId, "투입MD기록");
         } 
         if(window.updateProjectTotalMd) await window.updateProjectTotalMd(projectId); 
         if(window.resetMdLogForm) window.resetMdLogForm(); 
     } catch(e) { safeShowError("저장 중 오류 발생", e); } finally { if(btnSave) { btnSave.innerHTML = '등록'; btnSave.disabled = false; } } 
 };
+
 window.deleteMdLog = async function(id, projectId) { if(!confirm("삭제하시겠습니까?")) return; try { await deleteDoc(doc(db, "project_md_logs", id)); if(window.updateProjectTotalMd) await window.updateProjectTotalMd(projectId); safeShowSuccess("삭제되었습니다."); if(window.resetMdLogForm) window.resetMdLogForm(); } catch(e) { safeShowError("삭제 실패", e); } };
 window.editMdLog = function(id) { const log = (window.currentMdLogs || []).find(l => l.id === id); if(!log) return; document.getElementById('editing-md-id').value = id; document.getElementById('new-md-date').value = log.date || window.getLocalDateStr(new Date()); document.getElementById('new-md-val').value = log.md || ''; document.getElementById('new-md-desc').value = log.desc || ''; window.currentLogMembers = (log.members && typeof log.members === 'string') ? log.members.split(',').map(s=>s.trim()).filter(Boolean) : []; if(window.renderLogMembers) window.renderLogMembers(); const btnSave = document.getElementById('btn-md-save'); if(btnSave) btnSave.innerText = '수정'; const btnCancel = document.getElementById('btn-md-cancel'); if(btnCancel) btnCancel.classList.remove('hidden'); };
 window.updateProjectTotalMd = async function(projectId) { const snap = await getDocs(query(collection(db, "project_md_logs"), where("projectId", "==", projectId))); let total = 0; snap.forEach(docSnap => total += parseFloat(docSnap.data().md) || 0); const projRef = doc(db, "projects_status", projectId); const projSnap = await getDoc(projRef); if(projSnap.exists()) { const outMd = parseFloat(projSnap.data().outMd) || 0; await setDoc(projRef, { currentMd: total, finalMd: total + outMd }, { merge: true }); } };
 
 // ==========================================
-// 💡 이슈, 코멘트, 링크 등 나머지 모달창
+// 💡 코멘트, 이슈, 링크 등 나머지 모달창
 // ==========================================
 window.openIssueModal = function(projectId, title) { 
     const modal = document.getElementById('issue-modal'); if(!modal) { safeShowError("이슈 모달 요소 없음"); return; }
@@ -1899,7 +1681,7 @@ window.saveIssueItem = async function() {
     if(!content) return safeShowError("이슈 내용을 입력하세요."); 
     try { 
         if (editId) { await setDoc(doc(db, "project_issues", editId), { content: content, updatedAt: Date.now() }, { merge: true }); safeShowSuccess("이슈 수정됨"); } 
-        else { await addDoc(collection(db, "project_issues"), { projectId: projectId, content: content, isResolved: false, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() }); safeShowSuccess("이슈 등록됨"); } 
+        else { await addDoc(collection(db, "project_issues"), { projectId: projectId, content: content, isResolved: false, authorUid: (window.currentUser&&window.currentUser.uid)?window.currentUser.uid:'system', authorName: (window.userProfile&&window.userProfile.name)?window.userProfile.name:'system', createdAt: Date.now() }); safeShowSuccess("이슈 등록됨"); } 
         document.getElementById('editing-issue-id').value = ''; document.getElementById('new-issue-text').value = ''; document.getElementById('btn-issue-save').innerText = '등록'; 
     } catch(e) { safeShowError("저장 오류", e); } 
 };
@@ -1936,7 +1718,7 @@ window.saveCommentItem = async function() {
     try { 
         const payload = { content: content, updatedAt: Date.now() }; 
         if (editId) { await setDoc(doc(db, "project_comments", editId), payload, { merge: true }); safeShowSuccess("수정됨"); } 
-        else { payload.projectId = projectId; payload.parentId = parentId; payload.authorUid = window.currentUser.uid; payload.authorName = window.userProfile.name; payload.createdAt = Date.now(); await addDoc(collection(db, "project_comments"), payload); safeShowSuccess("등록됨"); } 
+        else { payload.projectId = projectId; payload.parentId = parentId; payload.authorUid = (window.currentUser&&window.currentUser.uid)?window.currentUser.uid:'system'; payload.authorName = (window.userProfile&&window.userProfile.name)?window.userProfile.name:'system'; payload.createdAt = Date.now(); await addDoc(collection(db, "project_comments"), payload); safeShowSuccess("등록됨"); } 
         if(window.cancelCommentAction) window.cancelCommentAction(); 
     } catch(e) { safeShowError("저장 오류", e); } finally { if(btnSave) { btnSave.innerHTML = '작성'; btnSave.disabled = false; } } 
 };
@@ -1963,7 +1745,6 @@ window.saveLinkItem = async function() {
 };
 window.deleteLinkItem = async function(projectId, index) { if(!confirm("삭제하시겠습니까?")) return; const proj = window.currentProjectStatusList.find(p => p.id === projectId); if(!proj || !proj.links) return; let links = proj.links.slice(); links.splice(index, 1); try { await setDoc(doc(db, "projects_status", projectId), { links: links }, { merge: true }); safeShowSuccess("링크 삭제됨"); if(proj) proj.links = links; if(window.renderLinksList) window.renderLinksList(projectId); } catch(e) { safeShowError("삭제 실패", e); } };
 
-// NCR
 window.loadNcrData = async function() {
     try {
         if(window.showToast) window.showToast("부적합(RAWDATA) 데이터를 가져오는 중입니다...", "success");
