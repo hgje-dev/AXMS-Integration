@@ -11,6 +11,7 @@ let currentPurchaseUnsubscribe = null;
 let currentDesignUnsubscribe = null;
 let currentPjtScheduleUnsubscribe = null;
 
+// 공유 드라이브 (또는 공유 폴더) ID
 const TARGET_DRIVE_FOLDER = "1ae5JiICk9ZQEaPVNhR6H4TlPs_Np03kQ";
 
 // 💡 초기 기본값 설정
@@ -174,7 +175,6 @@ window.resetAllFilters = function() {
     if(document.getElementById('filter-year-select')) document.getElementById('filter-year-select').value = window.currentYearFilter;
     if(document.getElementById('filter-month-select')) document.getElementById('filter-month-select').value = '';
     if(document.getElementById('hide-completed-cb')) document.getElementById('hide-completed-cb').checked = true;
-    
     window.filterProjectStatus('all');
 };
 
@@ -378,7 +378,7 @@ window.renderProjectStatusList = function() {
 
             let crBtnHtml = '';
             if (item.status !== 'completed') {
-                crBtnHtml = `<span class="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded border border-slate-200 cursor-not-allowed">완료대기</span>`;
+                crBtnHtml = `<span class="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded border border-slate-200 cursor-not-allowed shadow-inner">완료대기</span>`;
             } else {
                 if (item.crSent) crBtnHtml = `<span class="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-1 rounded border border-blue-200 shadow-sm cursor-not-allowed">송부완료</span>`;
                 else crBtnHtml = `<button onclick="event.stopPropagation(); window.openCrReqModal('${item.id}', '${safeNameJs}')" class="text-[10px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-500 hover:text-white px-2 py-1 rounded border border-rose-200 transition-colors shadow-sm whitespace-nowrap">완료요청</button>`;
@@ -496,15 +496,18 @@ window.generateMediaHtml = function(filesArray) {
 };
 
 // ==========================================
-// 💡 구글 드라이브 파일 업로드 (2-Step & 권한 우회)
+// 💡 구글 드라이브 파일 업로드 (2-Step 공유 폴더 우회)
 // ==========================================
 window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
     if (!window.googleAccessToken) return null;
     const safeFolderName = getSafeString(folderName).replace(/[\/\\]/g, '_') || '미분류 프로젝트';
     
     const tryCreateFolder = async (parentId) => {
+        // 💡 공유 드라이브 접근 권한 파라미터 (supportsAllDrives=true)
         const query = `name='${safeFolderName}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
-        const findRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}`, {
+        const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&supportsAllDrives=true&includeItemsFromAllDrives=true`;
+        
+        const findRes = await fetch(url, {
             headers: { 'Authorization': 'Bearer ' + window.googleAccessToken }
         });
         const folderData = await findRes.json();
@@ -514,13 +517,17 @@ window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
         if (folderData.files && folderData.files.length > 0) {
             return folderData.files[0].id;
         } else {
-            const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+            const createRes = await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
                 method: 'POST',
                 headers: { 
                     'Authorization': 'Bearer ' + window.googleAccessToken, 
                     'Content-Type': 'application/json' 
                 },
-                body: JSON.stringify({ name: safeFolderName, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] })
+                body: JSON.stringify({ 
+                    name: safeFolderName, 
+                    mimeType: 'application/vnd.google-apps.folder', 
+                    parents: [parentId] 
+                })
             });
             const newFolderData = await createRes.json();
             if (newFolderData.error) throw new Error(newFolderData.error.message);
@@ -529,15 +536,15 @@ window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
     };
 
     try {
-        // 1차 시도: 공유 지정 폴더
+        // 1차 시도: 공유 드라이브 특정 폴더
         return await tryCreateFolder(parentFolderId);
     } catch(e) {
-        console.warn("⚠️ 지정된 메인 폴더 접근 실패, 내 드라이브(root)에 생성을 시도합니다:", e);
+        console.warn("⚠️ 지정된 공유 폴더 접근 권한이 없어 내 드라이브(root)에 생성을 시도합니다:", e);
         try {
-            // 2차 시도 (폴백): 사용자 개인 root
+            // 2차 시도 (폴백): 사용자 개인 드라이브 root
             return await tryCreateFolder('root');
         } catch(e2) {
-            console.error("❌ 내 드라이브(root) 생성도 실패했습니다:", e2);
+            console.error("❌ 폴더 생성 최종 실패:", e2);
             return null;
         }
     }
@@ -550,7 +557,7 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
     if (!file) throw new Error("업로드할 파일이 없습니다.");
 
     let targetFolderId = await window.getOrCreateDriveFolder(projectName, TARGET_DRIVE_FOLDER);
-    if (!targetFolderId) throw new Error("메인 폴더를 생성/조회할 수 없습니다. (구글 드라이브 용량/권한 확인)");
+    if (!targetFolderId) throw new Error("폴더 접근 또는 생성 권한이 부족합니다. 구글 드라이브 연동 상태를 확인하세요.");
 
     if (subFolderName) {
         const subFolderId = await window.getOrCreateDriveFolder(subFolderName, targetFolderId);
@@ -577,7 +584,8 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
     if(progressSize) progressSize.innerText = `0.00 MB / ${totalMb} MB`;
 
     try {
-        const metaRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+        // 1단계: 메타데이터 빈 파일 생성 (supportsAllDrives 옵션 추가)
+        const metaRes = await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
             method: 'POST',
             headers: {
                 'Authorization': 'Bearer ' + window.googleAccessToken,
@@ -587,16 +595,17 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
         });
         
         if (!metaRes.ok) {
-            const errJson = await metaRes.json();
-            throw new Error(`파일 생성 실패: ${errJson.error ? errJson.error.message : '알 수 없는 오류'}`);
+            const errBody = await metaRes.json();
+            throw new Error(errBody.error ? errBody.error.message : "구글 드라이브 파일 메타데이터 생성 실패");
         }
         
         const metaData = await metaRes.json();
         const fileId = metaData.id;
 
+        // 2단계: 생성된 파일에 바이너리 덮어쓰기 (PATCH)
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
-            xhr.open('PATCH', `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, true);
+            xhr.open('PATCH', `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media&supportsAllDrives=true`, true);
             xhr.setRequestHeader('Authorization', 'Bearer ' + window.googleAccessToken);
             xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
 
@@ -611,9 +620,11 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
             };
 
             xhr.onload = function() {
-                if (fileIndex === totalFiles && progressModal) {
-                    progressModal.classList.add('hidden');
-                    progressModal.classList.remove('flex');
+                if (fileIndex === totalFiles) {
+                    if(progressModal) {
+                        progressModal.classList.add('hidden');
+                        progressModal.classList.remove('flex');
+                    }
                 }
                 if (xhr.status >= 200 && xhr.status < 300) {
                     resolve(`https://drive.google.com/file/d/${fileId}/view`);
@@ -622,7 +633,7 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
                         progressModal.classList.add('hidden');
                         progressModal.classList.remove('flex');
                     }
-                    reject(new Error("파일 내용 업로드 거부됨. 상태코드: " + xhr.status));
+                    reject(new Error("파일 내용 업로드 거절됨. (네트워크 상태 또는 드라이브 용량 문제)"));
                 }
             };
 
@@ -631,7 +642,7 @@ async function handleDriveUploadWithProgress(file, projectName, subFolderName = 
                     progressModal.classList.add('hidden');
                     progressModal.classList.remove('flex');
                 }
-                reject(new Error("네트워크 오류 또는 인터넷 연결 끊김"));
+                reject(new Error("인터넷 연결이 끊어졌거나 네트워크 오류가 발생했습니다."));
             };
 
             xhr.send(file);
@@ -760,7 +771,10 @@ window.saveProjStatus = async function(btn) {
         const codeEl = document.getElementById('ps-code');
         const nameEl = document.getElementById('ps-name');
         
-        if(!codeEl || !nameEl) throw new Error("입력 폼 요소를 찾을 수 없습니다.");
+        if(!codeEl || !nameEl) {
+            if(btn){ btn.disabled = false; btn.innerHTML = '저장하기'; }
+            return safeShowError("입력 폼 요소를 찾을 수 없습니다.");
+        }
 
         const id = idEl.value; 
         let code = codeEl.value.trim(); 
@@ -822,7 +836,12 @@ window.saveProjStatus = async function(btn) {
             
             if (window.googleAccessToken) {
                 const folderName = cleanPayload.code ? cleanPayload.code : cleanPayload.name;
-                window.getOrCreateDriveFolder(folderName, TARGET_DRIVE_FOLDER).catch(e => console.warn("자동 폴더 생성 실패", e));
+                // 비동기로 폴더 자동생성 
+                window.getOrCreateDriveFolder(folderName, TARGET_DRIVE_FOLDER)
+                    .then(fid => {
+                        if(fid) console.log("드라이브 폴더 자동생성 완료:", folderName);
+                    })
+                    .catch(e => console.warn("드라이브 폴더 생성 실패", e));
             }
         } 
         
@@ -1098,6 +1117,7 @@ window.savePurchaseItem = async function() {
             createdAt: Date.now() 
         };
         
+        // 💡 Firestore 에러 완벽 방지: undefined 값을 null로 변환
         const cleanPayload = JSON.parse(JSON.stringify(payload));
         Object.keys(cleanPayload).forEach(k => { if(cleanPayload[k] === undefined) cleanPayload[k] = null; });
         
@@ -1641,13 +1661,11 @@ window.saveMdLogItem = async function() {
             cleanPayload.createdAt = Date.now(); 
             await addDoc(collection(db, "project_md_logs"), cleanPayload); 
             safeShowSuccess("MD 내역이 등록되었습니다."); 
-            if(window.processMentions) await window.processMentions(desc, projectId, "투입MD기록");
         } 
         if(window.updateProjectTotalMd) await window.updateProjectTotalMd(projectId); 
         if(window.resetMdLogForm) window.resetMdLogForm(); 
     } catch(e) { safeShowError("저장 중 오류 발생", e); } finally { if(btnSave) { btnSave.innerHTML = '등록'; btnSave.disabled = false; } } 
 };
-
 window.deleteMdLog = async function(id, projectId) { if(!confirm("삭제하시겠습니까?")) return; try { await deleteDoc(doc(db, "project_md_logs", id)); if(window.updateProjectTotalMd) await window.updateProjectTotalMd(projectId); safeShowSuccess("삭제되었습니다."); if(window.resetMdLogForm) window.resetMdLogForm(); } catch(e) { safeShowError("삭제 실패", e); } };
 window.editMdLog = function(id) { const log = (window.currentMdLogs || []).find(l => l.id === id); if(!log) return; document.getElementById('editing-md-id').value = id; document.getElementById('new-md-date').value = log.date || window.getLocalDateStr(new Date()); document.getElementById('new-md-val').value = log.md || ''; document.getElementById('new-md-desc').value = log.desc || ''; window.currentLogMembers = (log.members && typeof log.members === 'string') ? log.members.split(',').map(s=>s.trim()).filter(Boolean) : []; if(window.renderLogMembers) window.renderLogMembers(); const btnSave = document.getElementById('btn-md-save'); if(btnSave) btnSave.innerText = '수정'; const btnCancel = document.getElementById('btn-md-cancel'); if(btnCancel) btnCancel.classList.remove('hidden'); };
 window.updateProjectTotalMd = async function(projectId) { const snap = await getDocs(query(collection(db, "project_md_logs"), where("projectId", "==", projectId))); let total = 0; snap.forEach(docSnap => total += parseFloat(docSnap.data().md) || 0); const projRef = doc(db, "projects_status", projectId); const projSnap = await getDoc(projRef); if(projSnap.exists()) { const outMd = parseFloat(projSnap.data().outMd) || 0; await setDoc(projRef, { currentMd: total, finalMd: total + outMd }, { merge: true }); } };
