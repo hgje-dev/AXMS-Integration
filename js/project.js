@@ -37,7 +37,6 @@ if (!window.getLocalDateStr) {
         return (new Date(dateObj.getTime() - tzOffset)).toISOString().split('T')[0];
     };
 }
-
 if (!window.getDateTimeStr) {
     window.getDateTimeStr = function(dateObj) {
         const tzOffset = dateObj.getTimezoneOffset() * 60000;
@@ -47,45 +46,28 @@ if (!window.getDateTimeStr) {
 
 const safeShowError = (msg, err) => {
     console.error(msg, err);
-    if (window.showToast) {
-        window.showToast(msg, "error");
-    } else {
-        alert(msg + (err ? '\n' + err.message : ''));
-    }
+    const detail = err ? ` (${err.message || String(err)})` : '';
+    if(window.showToast) window.showToast(msg + detail, "error");
+    else alert(msg + detail);
 };
 
 const safeShowSuccess = (msg) => {
-    if (window.showToast) {
-        window.showToast(msg, "success");
-    } else {
-        alert(msg);
-    }
+    if(window.showToast) window.showToast(msg, "success");
+    else alert(msg);
 };
 
 window.resizeAndConvertToBase64 = function(file, callback, targetMaxSize) {
-    if (!file || !file.type.match(/image.*/)) { 
-        callback(null); 
-        return; 
-    }
+    if (!file || !file.type.match(/image.*/)) { callback(null); return; }
     const reader = new FileReader();
     reader.onload = function(readerEvent) {
         const image = new Image();
         image.onload = function() {
             const canvas = document.createElement('canvas');
             const maxSize = targetMaxSize || 1200;
-            let width = image.width;
-            let height = image.height;
-            
-            if (width > height && width > maxSize) { 
-                height *= maxSize / width; 
-                width = maxSize; 
-            } else if (height > maxSize) { 
-                width *= maxSize / height; 
-                height = maxSize; 
-            }
-            
-            canvas.width = width; 
-            canvas.height = height;
+            let width = image.width, height = image.height;
+            if (width > height && width > maxSize) { height *= maxSize / width; width = maxSize; } 
+            else if (height > maxSize) { width *= maxSize / height; height = maxSize; }
+            canvas.width = width; canvas.height = height;
             canvas.getContext('2d').drawImage(image, 0, 0, width, height);
             callback(canvas.toDataURL('image/jpeg', 0.8));
         };
@@ -103,187 +85,83 @@ const getSafeMillis = (val) => {
         if (typeof val === 'number') return val; 
         if (typeof val === 'string') return new Date(val).getTime() || 0; 
         return 0; 
-    } catch(e) { 
-        return 0; 
-    } 
+    } catch(e) { return 0; } 
 };
 
-// 데이터가 null일 때 에러 방지 필터
-const getSafeString = (val) => { 
-    return (val === null || val === undefined) ? '' : String(val); 
-};
+const getSafeString = (val) => { return (val === null || val === undefined) ? '' : String(val); };
 
 window.updateMultiFileNames = function(inputEl, displayElId) {
     try {
         const displayEl = document.getElementById(displayElId);
         if (!displayEl) return;
-        
         const wrap = document.getElementById(displayElId + '-wrap');
-        
         if (inputEl.files.length === 0) {
             displayEl.innerHTML = '';
-            if (wrap) wrap.classList.add('hidden');
+            if(wrap) wrap.classList.add('hidden');
         } else if (inputEl.files.length === 1) {
             displayEl.innerHTML = inputEl.files[0].name;
-            if (wrap) wrap.classList.remove('hidden');
+            if(wrap) wrap.classList.remove('hidden');
         } else {
             displayEl.innerHTML = `${inputEl.files[0].name} 외 ${inputEl.files.length - 1}개 파일 첨부됨`;
-            if (wrap) wrap.classList.remove('hidden');
+            if(wrap) wrap.classList.remove('hidden');
         }
-    } catch(e) { 
-        console.error("파일명 업데이트 에러:", e); 
-    }
+    } catch(e) { console.error("파일명 업데이트 에러:", e); }
 };
 
 // ==========================================
 // 💡 알림 카운트 및 데이터 로드
 // ==========================================
-
 window.loadCounts = function() {
     try {
-        onSnapshot(collection(db, "project_comments"), (snap) => { 
-            window.projectCommentCounts = {}; 
-            snap.forEach(doc => { 
-                let d = doc.data(); 
-                let pid = d.projectId || d.reqId; 
-                if (pid) window.projectCommentCounts[pid] = (window.projectCommentCounts[pid]||0)+1; 
-            }); 
-            window.renderProjectStatusList(); 
-        });
-
-        onSnapshot(collection(db, "project_issues"), (snap) => { 
-            window.projectIssueCounts = {}; 
-            snap.forEach(doc => { 
-                let d = doc.data(); 
-                let pid = d.projectId || d.reqId; 
-                if (pid && !d.isResolved) window.projectIssueCounts[pid] = (window.projectIssueCounts[pid]||0)+1; 
-            }); 
-            window.renderProjectStatusList(); 
-        });
-
-        onSnapshot(collection(db, "daily_logs"), (snap) => { 
-            window.projectLogCounts = {}; 
-            snap.forEach(doc => { 
-                let d = doc.data(); 
-                let pid = d.projectId || d.reqId; 
-                if (pid) window.projectLogCounts[pid] = (window.projectLogCounts[pid]||0)+1; 
-            }); 
-            window.renderProjectStatusList(); 
-        });
-
-        onSnapshot(collection(db, "project_purchases"), (snap) => { 
-            window.projectPurchaseCounts = {}; 
-            snap.forEach(doc => { 
-                let pid = doc.data().projectId; 
-                if (pid) window.projectPurchaseCounts[pid] = (window.projectPurchaseCounts[pid]||0)+1; 
-            }); 
-            window.renderProjectStatusList(); 
-        });
-
-        onSnapshot(collection(db, "project_designs"), (snap) => { 
-            window.projectDesignCounts = {}; 
-            snap.forEach(doc => { 
-                let pid = doc.data().projectId; 
-                if (pid) window.projectDesignCounts[pid] = (window.projectDesignCounts[pid]||0)+1; 
-            }); 
-            window.renderProjectStatusList(); 
-        });
-
-        onSnapshot(collection(db, "project_schedules"), (snap) => { 
-            window.projectScheduleCounts = {}; 
-            snap.forEach(doc => { 
-                let pid = doc.data().projectId; 
-                if (pid) window.projectScheduleCounts[pid] = (window.projectScheduleCounts[pid]||0)+1; 
-            }); 
-            window.renderProjectStatusList(); 
-        });
-        
+        onSnapshot(collection(db, "project_comments"), (snap) => { window.projectCommentCounts = {}; snap.forEach(doc => { let d = doc.data(); let pid = d.projectId || d.reqId; if(pid) window.projectCommentCounts[pid] = (window.projectCommentCounts[pid]||0)+1; }); window.renderProjectStatusList(); });
+        onSnapshot(collection(db, "project_issues"), (snap) => { window.projectIssueCounts = {}; snap.forEach(doc => { let d = doc.data(); let pid = d.projectId || d.reqId; if(pid && !d.isResolved) window.projectIssueCounts[pid] = (window.projectIssueCounts[pid]||0)+1; }); window.renderProjectStatusList(); });
+        onSnapshot(collection(db, "daily_logs"), (snap) => { window.projectLogCounts = {}; snap.forEach(doc => { let d = doc.data(); let pid = d.projectId || d.reqId; if(pid) window.projectLogCounts[pid] = (window.projectLogCounts[pid]||0)+1; }); window.renderProjectStatusList(); });
+        onSnapshot(collection(db, "project_purchases"), (snap) => { window.projectPurchaseCounts = {}; snap.forEach(doc => { let pid = doc.data().projectId; if(pid) window.projectPurchaseCounts[pid] = (window.projectPurchaseCounts[pid]||0)+1; }); window.renderProjectStatusList(); });
+        onSnapshot(collection(db, "project_designs"), (snap) => { window.projectDesignCounts = {}; snap.forEach(doc => { let pid = doc.data().projectId; if(pid) window.projectDesignCounts[pid] = (window.projectDesignCounts[pid]||0)+1; }); window.renderProjectStatusList(); });
+        onSnapshot(collection(db, "project_schedules"), (snap) => { window.projectScheduleCounts = {}; snap.forEach(doc => { let pid = doc.data().projectId; if(pid) window.projectScheduleCounts[pid] = (window.projectScheduleCounts[pid]||0)+1; }); window.renderProjectStatusList(); });
         window.loadNcrData();
-    } catch(e) { 
-        console.warn("카운트 로드 실패:", e); 
-    }
+    } catch(e) { console.warn("카운트 로드 실패:", e); }
 };
 
 window.switchProjPartTab = function(part) {
-    window.currentProjPartTab = part; 
-    window.resetAllFilters();
-    
-    let btnMfg = document.getElementById('btn-part-mfg');
-    let btnOpt = document.getElementById('btn-part-opt');
-    
-    if (btnMfg) {
-        btnMfg.className = part === '제조' ? "px-3 py-1 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
-    }
-    if (btnOpt) {
-        btnOpt.className = part === '광학' ? "px-3 py-1 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
-    }
-    
+    window.currentProjPartTab = part; window.resetAllFilters();
+    let btnMfg = document.getElementById('btn-part-mfg'), btnOpt = document.getElementById('btn-part-opt');
+    if (btnMfg) btnMfg.className = part === '제조' ? "px-3 py-1 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
+    if (btnOpt) btnOpt.className = part === '광학' ? "px-3 py-1 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
     window.loadProjectStatusData();
 };
 
 window.filterByStatusOnly = function(status) {
-    window.currentCategoryFilter = 'all'; 
-    window.currentYearFilter = ''; 
-    window.currentMonthFilter = ''; 
-    window.hideCompletedFilter = false;
-    
-    if (document.getElementById('filter-category-select')) document.getElementById('filter-category-select').value = 'all';
-    if (document.getElementById('filter-year-select')) document.getElementById('filter-year-select').value = '';
-    if (document.getElementById('filter-month-select')) document.getElementById('filter-month-select').value = '';
-    if (document.getElementById('hide-completed-cb')) document.getElementById('hide-completed-cb').checked = false;
-    
+    window.currentCategoryFilter = 'all'; window.currentYearFilter = ''; window.currentMonthFilter = ''; window.hideCompletedFilter = false;
+    if(document.getElementById('filter-category-select')) document.getElementById('filter-category-select').value = 'all';
+    if(document.getElementById('filter-year-select')) document.getElementById('filter-year-select').value = '';
+    if(document.getElementById('filter-month-select')) document.getElementById('filter-month-select').value = '';
+    if(document.getElementById('hide-completed-cb')) document.getElementById('hide-completed-cb').checked = false;
     window.filterProjectStatus(status);
 };
 
 window.filterByCompletedThisMonth = function() {
-    window.currentCategoryFilter = 'all'; 
-    window.currentYearFilter = ''; 
-    window.hideCompletedFilter = false;
-    
-    const now = new Date(); 
-    const currentMonthStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+    window.currentCategoryFilter = 'all'; window.currentYearFilter = ''; window.hideCompletedFilter = false;
+    const now = new Date(); const currentMonthStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
     window.currentMonthFilter = currentMonthStr;
-    
-    if (document.getElementById('filter-category-select')) document.getElementById('filter-category-select').value = 'all';
-    if (document.getElementById('filter-year-select')) document.getElementById('filter-year-select').value = '';
-    if (document.getElementById('filter-month-select')) document.getElementById('filter-month-select').value = currentMonthStr;
-    if (document.getElementById('hide-completed-cb')) document.getElementById('hide-completed-cb').checked = false;
-    
+    if(document.getElementById('filter-category-select')) document.getElementById('filter-category-select').value = 'all';
+    if(document.getElementById('filter-year-select')) document.getElementById('filter-year-select').value = '';
+    if(document.getElementById('filter-month-select')) document.getElementById('filter-month-select').value = currentMonthStr;
+    if(document.getElementById('hide-completed-cb')) document.getElementById('hide-completed-cb').checked = false;
     window.filterProjectStatus('completed');
 };
 
 window.filterProjectStatus = function(status) {
     window.currentStatusFilter = status;
-    if (window.currentProjDashView === 'gantt') {
-        window.renderProjGantt(); 
-    } else if (window.currentProjDashView === 'calendar') {
-        window.renderProjCalendar(); 
-    } else {
-        window.renderProjectStatusList();
-    }
+    if(window.currentProjDashView === 'gantt') window.renderProjGantt(); 
+    else if(window.currentProjDashView === 'calendar') window.renderProjCalendar(); 
+    else window.renderProjectStatusList();
 };
 
-window.filterByCategory = function(category) { 
-    window.currentCategoryFilter = category; 
-    window.filterProjectStatus(window.currentStatusFilter); 
-};
-
-window.filterByYear = function(yearStr) { 
-    window.currentYearFilter = yearStr; 
-    window.updateMiniDashboard(); 
-    window.filterProjectStatus(window.currentStatusFilter); 
-};
-
-window.filterByMonth = function(monthStr) { 
-    window.currentMonthFilter = monthStr; 
-    window.updateMiniDashboard(); 
-    window.filterProjectStatus(window.currentStatusFilter); 
-};
-
-window.toggleHideCompleted = function(checked) { 
-    window.hideCompletedFilter = checked; 
-    window.filterProjectStatus(window.currentStatusFilter); 
-};
+window.filterByCategory = function(category) { window.currentCategoryFilter = category; window.filterProjectStatus(window.currentStatusFilter); };
+window.filterByYear = function(yearStr) { window.currentYearFilter = yearStr; window.updateMiniDashboard(); window.filterProjectStatus(window.currentStatusFilter); };
+window.filterByMonth = function(monthStr) { window.currentMonthFilter = monthStr; window.updateMiniDashboard(); window.filterProjectStatus(window.currentStatusFilter); };
+window.toggleHideCompleted = function(checked) { window.hideCompletedFilter = checked; window.filterProjectStatus(window.currentStatusFilter); };
 
 window.resetAllFilters = function() {
     window.currentStatusFilter = 'all'; 
@@ -292,38 +170,31 @@ window.resetAllFilters = function() {
     window.currentMonthFilter = ''; 
     window.hideCompletedFilter = true;
     
-    if (document.getElementById('filter-category-select')) document.getElementById('filter-category-select').value = 'all';
-    if (document.getElementById('filter-year-select')) document.getElementById('filter-year-select').value = window.currentYearFilter;
-    if (document.getElementById('filter-month-select')) document.getElementById('filter-month-select').value = '';
-    if (document.getElementById('hide-completed-cb')) document.getElementById('hide-completed-cb').checked = true;
-    
+    if(document.getElementById('filter-category-select')) document.getElementById('filter-category-select').value = 'all';
+    if(document.getElementById('filter-year-select')) document.getElementById('filter-year-select').value = window.currentYearFilter;
+    if(document.getElementById('filter-month-select')) document.getElementById('filter-month-select').value = '';
+    if(document.getElementById('hide-completed-cb')) document.getElementById('hide-completed-cb').checked = true;
     window.filterProjectStatus('all');
 };
 
 // ==========================================
-// 💡 리스트 필터링 및 대시보드
+// 💡 필터링 및 대시보드
 // ==========================================
-
 window.getFilteredProjects = function() {
     let list = window.currentProjectStatusList || [];
     
     if (window.currentCategoryFilter && window.currentCategoryFilter !== 'all') {
         list = list.filter(item => getSafeString(item.category) === window.currentCategoryFilter);
     }
-    
     if (window.currentStatusFilter && window.currentStatusFilter !== 'all') { 
         list = list.filter(item => { 
-            if (window.currentStatusFilter === 'progress') {
-                return item.status === 'progress' || item.status === 'inspecting'; 
-            }
+            if (window.currentStatusFilter === 'progress') return item.status === 'progress' || item.status === 'inspecting'; 
             return item.status === window.currentStatusFilter; 
         }); 
     }
-    
     if (window.hideCompletedFilter) {
         list = list.filter(item => item.status !== 'completed');
     }
-    
     if (window.currentYearFilter) {
         const y = window.currentYearFilter;
         const shortY = y.slice(-2);
@@ -332,17 +203,13 @@ window.getFilteredProjects = function() {
             const code = getSafeString(item.code);
             const hasYearDate = ['d_shipEn', 'd_asmEst', 'd_asmEndEst', 'd_asmEn', 'd_shipEst', 'd_rcvEst', 'd_asmSt', 'd_insSt', 'd_insEn', 'd_setSt', 'd_setEn'].some(field => getSafeString(item[field]).startsWith(y));
             const codeHasYear = code.startsWith(shortY) || code.includes('-' + shortY + '-');
-            
             return hasYearDate || cY === y || codeHasYear || (!hasYearDate && !cY && item.status !== 'completed'); 
         });
     }
-    
     if (window.currentMonthFilter) {
         const m = window.currentMonthFilter;
         list = list.filter(item => {
-            return getSafeString(item.d_shipEn).startsWith(m) || 
-                   getSafeString(item.d_asmEst).startsWith(m) || 
-                   getSafeString(item.d_asmEn).startsWith(m);
+            return getSafeString(item.d_shipEn).startsWith(m) || getSafeString(item.d_asmEst).startsWith(m) || getSafeString(item.d_asmEn).startsWith(m);
         });
     }
     
@@ -370,23 +237,17 @@ window.updateMiniDashboard = function() {
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
         const completedLabel = document.getElementById('mini-dash-completed-label');
-        if (completedLabel) {
-            completedLabel.innerHTML = '<i class="fa-solid fa-truck-fast text-emerald-400"></i> 출하 완료 (' + (now.getMonth() + 1) + '월)';
-        }
+        if (completedLabel) completedLabel.innerHTML = '<i class="fa-solid fa-truck-fast text-emerald-400"></i> 출하 완료 (' + (now.getMonth() + 1) + '월)';
 
         (window.currentProjectStatusList || []).forEach(function(item) {
-            const status = getSafeString(item.status);
-            const shipEn = getSafeString(item.d_shipEn);
-            const shipEst = getSafeString(item.d_shipEst);
-            const code = getSafeString(item.code) || '미지정';
-            
+            const status = getSafeString(item.status), shipEn = getSafeString(item.d_shipEn), shipEst = getSafeString(item.d_shipEst), code = getSafeString(item.code) || '미지정';
             if (status === 'pending' || status === 'rejected') pending++;
             else if (status === 'progress' || status === 'inspecting') progress++;
             else if (status === 'completed' && shipEn.startsWith(currentMonthStr)) completedThisMonth++;
 
             if (status !== 'completed' && status !== 'rejected' && shipEst) {
                 const shipDate = new Date(shipEst);
-                if (!isNaN(shipDate.getTime())) {
+                if(!isNaN(shipDate.getTime())) {
                     const diffDays = Math.ceil((shipDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
                     if (diffDays >= 0 && diffDays <= 7) upcomingCodes7.push({ code: code, dDay: diffDays });
                     else if (diffDays < 0) upcomingCodes7.push({ code: code, dDay: diffDays });
@@ -395,36 +256,26 @@ window.updateMiniDashboard = function() {
             }
         });
 
-        if (document.getElementById('mini-dash-pending')) document.getElementById('mini-dash-pending').innerText = pending;
-        if (document.getElementById('mini-dash-progress')) document.getElementById('mini-dash-progress').innerText = progress;
-        if (document.getElementById('mini-dash-completed')) document.getElementById('mini-dash-completed').innerText = completedThisMonth;
+        if(document.getElementById('mini-dash-pending')) document.getElementById('mini-dash-pending').innerText = pending;
+        if(document.getElementById('mini-dash-progress')) document.getElementById('mini-dash-progress').innerText = progress;
+        if(document.getElementById('mini-dash-completed')) document.getElementById('mini-dash-completed').innerText = completedThisMonth;
 
         const elUpcoming7 = document.getElementById('mini-dash-upcoming');
-        if (elUpcoming7) { 
-            if (upcomingCodes7.length === 0) {
-                elUpcoming7.innerHTML = '<span class="text-[10px] text-rose-400 font-bold w-full text-center mt-1">임박한 프로젝트 없음</span>';
-            } else {
-                elUpcoming7.innerHTML = upcomingCodes7.map(u => {
-                    let dText = u.dDay === 0 ? 'D-Day' : (u.dDay < 0 ? '지연' : 'D-' + u.dDay); 
-                    let bgClass = u.dDay <= 3 ? 'bg-rose-500 text-white border-rose-600' : 'bg-white text-rose-600 border-rose-200'; 
-                    return `<span class="text-[10px] border px-1.5 py-0.5 rounded font-bold shadow-sm flex items-center gap-1 ${bgClass}">${u.code} <span class="opacity-80 text-[8px]">[${dText}]</span></span>`;
-                }).join('');
-            }
+        if(elUpcoming7) { 
+            if (upcomingCodes7.length === 0) elUpcoming7.innerHTML = '<span class="text-[10px] text-rose-400 font-bold w-full text-center mt-1">임박한 프로젝트 없음</span>';
+            else elUpcoming7.innerHTML = upcomingCodes7.map(u => {
+                let dText = u.dDay === 0 ? 'D-Day' : (u.dDay < 0 ? '지연' : 'D-' + u.dDay); 
+                let bgClass = u.dDay <= 3 ? 'bg-rose-500 text-white border-rose-600' : 'bg-white text-rose-600 border-rose-200'; 
+                return `<span class="text-[10px] border px-1.5 py-0.5 rounded font-bold shadow-sm flex items-center gap-1 ${bgClass}">${u.code} <span class="opacity-80 text-[8px]">[${dText}]</span></span>`;
+            }).join('');
         }
         
         const elUpcoming14 = document.getElementById('mini-dash-upcoming-14');
-        if (elUpcoming14) { 
-            if (upcomingCodes14.length === 0) {
-                elUpcoming14.innerHTML = '<span class="text-[10px] text-orange-400 font-bold w-full text-center mt-1">임박한 프로젝트 없음</span>';
-            } else {
-                elUpcoming14.innerHTML = upcomingCodes14.map(u => {
-                    return `<span class="text-[10px] border px-1.5 py-0.5 rounded font-bold shadow-sm flex items-center gap-1 bg-white text-orange-600 border-orange-200">${u.code} <span class="opacity-80 text-[8px]">[D-${u.dDay}]</span></span>`;
-                }).join('');
-            }
+        if(elUpcoming14) { 
+            if (upcomingCodes14.length === 0) elUpcoming14.innerHTML = '<span class="text-[10px] text-orange-400 font-bold w-full text-center mt-1">임박한 프로젝트 없음</span>';
+            else elUpcoming14.innerHTML = upcomingCodes14.map(u => `<span class="text-[10px] border px-1.5 py-0.5 rounded font-bold shadow-sm flex items-center gap-1 bg-white text-orange-600 border-orange-200">${u.code} <span class="opacity-80 text-[8px]">[D-${u.dDay}]</span></span>`).join('');
         }
-    } catch(e) {
-        console.error("미니 대시보드 에러:", e);
-    }
+    } catch(e) {}
 };
 
 let isPjtDashInit = false;
@@ -440,7 +291,7 @@ window.loadProjectStatusData = function() {
         isPjtDashInit = true;
     }
 
-    if (projectStatusSnapshotUnsubscribe) projectStatusSnapshotUnsubscribe();
+    if(projectStatusSnapshotUnsubscribe) projectStatusSnapshotUnsubscribe();
     
     projectStatusSnapshotUnsubscribe = onSnapshot(query(collection(db, "projects_status")), function(snapshot) {
         window.currentProjectStatusList = []; 
@@ -450,32 +301,23 @@ window.loadProjectStatusData = function() {
         snapshot.forEach(docSnap => { 
             const data = docSnap.data(); 
             let dataPart = getSafeString(data.part).trim() || '제조'; 
-            if ((targetPart === '광학' && dataPart === '광학') || (targetPart !== '광학' && dataPart !== '광학')) {
+            if((targetPart === '광학' && dataPart === '광학') || (targetPart !== '광학' && dataPart !== '광학')) {
                 data.id = docSnap.id; 
                 window.currentProjectStatusList.push(data); 
             }
-            if (getSafeMillis(data.updatedAt) > lastUpdated) {
-                lastUpdated = getSafeMillis(data.updatedAt);
-            }
+            if(getSafeMillis(data.updatedAt) > lastUpdated) lastUpdated = getSafeMillis(data.updatedAt);
         });
         
         if (lastUpdated > 0) { 
             const lDate = new Date(lastUpdated); 
             const el = document.getElementById('pjt-last-update');
-            if (el) {
-                el.innerText = lDate.getFullYear().toString().slice(2) + '-' + String(lDate.getMonth()+1).padStart(2,'0') + '-' + String(lDate.getDate()).padStart(2,'0') + ' ' + String(lDate.getHours()).padStart(2,'0') + ':' + String(lDate.getMinutes()).padStart(2,'0'); 
-            }
+            if(el) el.innerText = lDate.getFullYear().toString().slice(2) + '-' + String(lDate.getMonth()+1).padStart(2,'0') + '-' + String(lDate.getDate()).padStart(2,'0') + ' ' + String(lDate.getHours()).padStart(2,'0') + ':' + String(lDate.getMinutes()).padStart(2,'0'); 
         }
         
         window.updateMiniDashboard();
-        
-        if (window.currentProjDashView === 'gantt') {
-            window.renderProjGantt(); 
-        } else if (window.currentProjDashView === 'calendar') {
-            window.renderProjCalendar();
-        } else {
-            window.renderProjectStatusList();
-        }
+        if(window.currentProjDashView === 'gantt') window.renderProjGantt(); 
+        else if(window.currentProjDashView === 'calendar') window.renderProjCalendar();
+        else window.renderProjectStatusList();
     });
 };
 
@@ -484,50 +326,31 @@ window.loadProjectStatusData = function() {
 // ==========================================
 window.renderProjectStatusList = function() {
     const tbody = document.getElementById('proj-dash-tbody'); 
-    if (!tbody) return;
+    if(!tbody) return;
     
     let displayList = window.getFilteredProjects();
     
-    // 스마트 폴백 로직: 데이터가 없으면 자동 필터 해제
     if (displayList.length === 0 && window.currentProjectStatusList && window.currentProjectStatusList.length > 0) {
         if (window.currentYearFilter !== '' || window.hideCompletedFilter) {
-            window.currentYearFilter = ''; 
-            window.hideCompletedFilter = false;
-            
-            const ySelect = document.getElementById('filter-year-select'); 
-            if (ySelect) ySelect.value = '';
-            
-            const hCb = document.getElementById('hide-completed-cb'); 
-            if (hCb) hCb.checked = false;
-            
+            window.currentYearFilter = ''; window.hideCompletedFilter = false;
+            const ySelect = document.getElementById('filter-year-select'); if (ySelect) ySelect.value = '';
+            const hCb = document.getElementById('hide-completed-cb'); if (hCb) hCb.checked = false;
             displayList = window.getFilteredProjects();
-            
-            if (window.showToast) {
-                window.showToast("조건에 맞는 PJT가 없어 필터를 전체로 해제했습니다.", "warning");
-            }
+            if(window.showToast) window.showToast("조건에 맞는 PJT가 없어 필터를 전체로 해제했습니다.", "warning");
         }
     }
 
-    if (displayList.length === 0) { 
+    if(displayList.length === 0) { 
         tbody.innerHTML = '<tr><td colspan="33" class="text-center p-6 text-slate-400 font-bold border-b border-slate-100 bg-white">데이터가 없습니다.</td></tr>'; 
         return; 
     }
     
-    const statusMap = { 
-        'pending': '<span class="text-slate-500 bg-slate-100 px-2 py-0.5 rounded shadow-sm border border-slate-200 whitespace-nowrap">대기/보류</span>', 
-        'progress': '<span class="text-blue-600 bg-blue-50 px-2 py-0.5 rounded shadow-sm border border-blue-200 whitespace-nowrap">진행(제작)</span>', 
-        'inspecting': '<span class="text-amber-600 bg-amber-50 px-2 py-0.5 rounded shadow-sm border border-amber-200 whitespace-nowrap">진행(검수)</span>', 
-        'completed': '<span class="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded shadow-sm border border-emerald-200 whitespace-nowrap">완료(출하)</span>', 
-        'rejected': '<span class="text-rose-600 bg-rose-50 px-2 py-0.5 rounded shadow-sm border border-rose-200 whitespace-nowrap">보류/불가</span>' 
-    };
+    const statusMap = { 'pending': '<span class="text-slate-500 bg-slate-100 px-2 py-0.5 rounded shadow-sm border border-slate-200 whitespace-nowrap">대기/보류</span>', 'progress': '<span class="text-blue-600 bg-blue-50 px-2 py-0.5 rounded shadow-sm border border-blue-200 whitespace-nowrap">진행(제작)</span>', 'inspecting': '<span class="text-amber-600 bg-amber-50 px-2 py-0.5 rounded shadow-sm border border-amber-200 whitespace-nowrap">진행(검수)</span>', 'completed': '<span class="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded shadow-sm border border-emerald-200 whitespace-nowrap">완료(출하)</span>', 'rejected': '<span class="text-rose-600 bg-rose-50 px-2 py-0.5 rounded shadow-sm border border-rose-200 whitespace-nowrap">보류/불가</span>' };
     
     let htmlStr = '';
     displayList.forEach(item => {
         try {
-            const cMd = parseFloat(item.currentMd) || 0;
-            const oMd = parseFloat(item.outMd) || 0;
-            const fMd = parseFloat(item.finalMd) || (cMd + oMd);
-            
+            const cMd = parseFloat(item.currentMd) || 0, oMd = parseFloat(item.outMd) || 0, fMd = parseFloat(item.finalMd) || (cMd + oMd);
             const safeNameHtml = getSafeString(item.name).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const safeNameJs = getSafeString(item.name).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, ' ').replace(/\r/g, '');
             
@@ -548,30 +371,19 @@ window.renderProjectStatusList = function() {
             }).length;
 
             let ncrIconHtml = '';
-            if (totalNcrCnt === 0) {
-                ncrIconHtml = `<button onclick="event.stopPropagation(); window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-slate-300 hover:text-indigo-400 transition-colors p-1" title="부적합 내역 없음"><i class="fa-solid fa-file-circle-check text-lg"></i></button>`;
-            } else if (unresolvedNcrCnt === 0) {
-                ncrIconHtml = `<button onclick="event.stopPropagation(); window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-emerald-500 hover:text-emerald-600 transition-colors p-1" title="모두 조치 완료"><i class="fa-solid fa-file-circle-check text-lg"></i></button>`;
-            } else {
-                ncrIconHtml = `<button onclick="event.stopPropagation(); window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-rose-500 relative transition-transform hover:scale-110 p-1" title="미결 부적합 ${unresolvedNcrCnt}건">
-                    <i class="fa-solid fa-file-circle-exclamation text-lg"></i>
-                    <span class="absolute -top-1 -right-2 bg-rose-100 text-rose-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-rose-200">${unresolvedNcrCnt}</span>
-                </button>`;
-            }
+            if (totalNcrCnt === 0) ncrIconHtml = `<button onclick="event.stopPropagation(); window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-slate-300 hover:text-indigo-400 transition-colors p-1" title="부적합 내역 없음"><i class="fa-solid fa-file-circle-check text-lg"></i></button>`;
+            else if (unresolvedNcrCnt === 0) ncrIconHtml = `<button onclick="event.stopPropagation(); window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-emerald-500 hover:text-emerald-600 transition-colors p-1" title="모두 조치 완료"><i class="fa-solid fa-file-circle-check text-lg"></i></button>`;
+            else ncrIconHtml = `<button onclick="event.stopPropagation(); window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-rose-500 relative transition-transform hover:scale-110 p-1" title="미결 부적합 ${unresolvedNcrCnt}건"><i class="fa-solid fa-file-circle-exclamation text-lg"></i><span class="absolute -top-1 -right-2 bg-rose-100 text-rose-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-rose-200">${unresolvedNcrCnt}</span></button>`;
 
             let crBtnHtml = '';
             if (item.status !== 'completed') {
-                crBtnHtml = `<span class="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded border border-slate-200 cursor-not-allowed shadow-inner">완료대기</span>`;
+                crBtnHtml = `<span class="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded border border-slate-200 cursor-not-allowed">완료대기</span>`;
             } else {
-                if (item.crSent) {
-                    crBtnHtml = `<span class="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-1 rounded border border-blue-200 shadow-sm cursor-not-allowed">송부완료</span>`;
-                } else {
-                    crBtnHtml = `<button onclick="event.stopPropagation(); window.openCrReqModal('${item.id}', '${safeNameJs}')" class="text-[10px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-500 hover:text-white px-2 py-1 rounded border border-rose-200 transition-colors shadow-sm whitespace-nowrap">완료요청</button>`;
-                }
+                if (item.crSent) crBtnHtml = `<span class="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-1 rounded border border-blue-200 shadow-sm cursor-not-allowed">송부완료</span>`;
+                else crBtnHtml = `<button onclick="event.stopPropagation(); window.openCrReqModal('${item.id}', '${safeNameJs}')" class="text-[10px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-500 hover:text-white px-2 py-1 rounded border border-rose-200 transition-colors shadow-sm whitespace-nowrap">완료요청</button>`;
             }
 
             htmlStr += `<tr class="group hover:bg-indigo-50/50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.editProjStatus('${item.id}')">`;
-            
             htmlStr += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 0px; min-width: 40px; max-width: 40px;" onclick="event.stopPropagation()"><button onclick="window.deleteProjStatus('${item.id}')" class="text-slate-300 hover:text-rose-500 p-1.5 rounded"><i class="fa-solid fa-trash-can"></i></button></td>`;
             htmlStr += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 40px; min-width: 80px; max-width: 80px;">${getSafeString(item.category)}</td>`;
             htmlStr += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 120px; min-width: 50px; max-width: 50px;" onclick="event.stopPropagation()"><button onclick="window.openCommentModal('${item.id}', '${safeNameJs}')" class="text-amber-400 relative"><i class="fa-regular fa-comment-dots text-lg"></i>${cCnt ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-amber-200">${cCnt}</span>` : ''}</button></td>`;
@@ -583,7 +395,6 @@ window.renderProjectStatusList = function() {
             htmlStr += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20 shadow-[3px_0_5px_-1px_rgba(0,0,0,0.3)] border-r-slate-300" style="left: 720px; min-width: 80px; max-width: 80px;">${statusMap[item.status] || ''}</td>`;
             
             htmlStr += `<td class="border border-slate-200 px-2 py-1 text-center font-bold text-slate-600">${getSafeString(item.manager)}</td>`;
-            
             htmlStr += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openPurchaseModal('${item.id}', '${safeNameJs}')" class="text-amber-500 relative"><i class="fa-solid fa-cart-shopping text-lg"></i>${purCnt ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-amber-200">${purCnt}</span>` : ''}</button></td>`;
             htmlStr += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openDesignModal('${item.id}', '${safeNameJs}')" class="text-teal-400 relative"><i class="fa-solid fa-pen-ruler text-lg"></i>${desCnt ? `<span class="absolute -top-1 -right-2 bg-teal-100 text-teal-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-teal-200">${desCnt}</span>` : ''}</button></td>`;
             htmlStr += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openPjtScheduleModal('${item.id}', '${safeNameJs}')" class="text-fuchsia-400 relative"><i class="fa-regular fa-calendar-check text-lg"></i>${schCnt ? `<span class="absolute -top-1 -right-2 bg-fuchsia-100 text-fuchsia-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-fuchsia-200">${schCnt}</span>` : ''}</button></td>`;
@@ -609,7 +420,7 @@ window.renderProjectStatusList = function() {
             htmlStr += `<td class="border border-slate-200 px-2 py-1 text-center">${getSafeString(item.d_setEn)}</td>`;
             
             let linksHtml = '';
-            if (item.links && Array.isArray(item.links)) { 
+            if(item.links && Array.isArray(item.links)) { 
                 linksHtml = item.links.map(lnk => `<a href="${getSafeString(lnk?.url)}" target="_blank" title="${getSafeString(lnk?.name)}" class="text-teal-500 hover:text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded transition-colors"><i class="fa-solid fa-link text-[10px]"></i></a>`).join(''); 
             }
             htmlStr += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><div class="flex items-center justify-center gap-1 flex-wrap"><button onclick="window.openLinkModal('${item.id}', '${safeNameJs}')" class="text-slate-400 hover:text-teal-500 transition-colors bg-slate-50 px-1.5 py-0.5 rounded shadow-sm border border-slate-200"><i class="fa-solid fa-link"></i></button>${linksHtml}</div></td>`;
@@ -623,225 +434,6 @@ window.renderProjectStatusList = function() {
     });
     
     tbody.innerHTML = htmlStr;
-};
-
-// ==========================================
-// 💡 간트(Gantt) 렌더링 추가
-// ==========================================
-window.renderProjGantt = function() {
-    const container = document.getElementById('proj-dash-gantt-content');
-    if(!container) return;
-    
-    let displayList = window.getFilteredProjects();
-    if(displayList.length === 0) {
-        container.innerHTML = '<div class="p-10 text-center text-slate-400 font-bold">표시할 데이터가 없습니다.</div>';
-        return;
-    }
-
-    let minDate = new Date(); minDate.setDate(minDate.getDate() - 14);
-    let maxDate = new Date(); maxDate.setDate(maxDate.getDate() + 30);
-    
-    displayList.forEach(p => {
-        ['d_asmEst', 'd_asmSt', 'd_asmEndEst', 'd_asmEn', 'd_insSt', 'd_insEn', 'd_setSt', 'd_setEn', 'd_shipEst', 'd_shipEn'].forEach(k => {
-            if(p[k]) {
-                let d = new Date(p[k]);
-                if(!isNaN(d.getTime())) {
-                    if(d < minDate) minDate = new Date(d);
-                    if(d > maxDate) maxDate = new Date(d);
-                }
-            }
-        });
-    });
-    
-    minDate.setDate(minDate.getDate() - 7);
-    maxDate.setDate(maxDate.getDate() + 14);
-    
-    const totalDays = Math.ceil((maxDate.getTime() - minDate.getTime()) / 86400000);
-    
-    let html = '<div class="relative min-w-max pb-10 pt-6">';
-    
-    // Header
-    let headerHtml = '<div class="flex border-b border-slate-200 sticky top-0 bg-white z-20" style="margin-left: 200px;">';
-    for(let i=0; i<=totalDays; i++) {
-        let curr = new Date(minDate.getTime() + i * 86400000);
-        let isWeekend = curr.getDay() === 0 || curr.getDay() === 6;
-        let bg = isWeekend ? 'bg-slate-50' : '';
-        let textCol = curr.getDay() === 0 ? 'text-rose-400' : (curr.getDay() === 6 ? 'text-blue-400' : 'text-slate-500');
-        headerHtml += `<div class="shrink-0 w-8 flex flex-col items-center justify-end pb-1 border-r border-slate-100 ${bg}"><span class="text-[9px] ${textCol} font-bold">${curr.getMonth()+1}/${curr.getDate()}</span></div>`;
-    }
-    headerHtml += '</div>';
-    html += headerHtml;
-    
-    // Today Line
-    const todayOffset = Math.ceil((new Date().getTime() - minDate.getTime()) / 86400000);
-    if(todayOffset >= 0 && todayOffset <= totalDays) {
-        html += `<div id="gantt-today-line" class="absolute top-0 bottom-0 w-[2px] bg-rose-500 z-10" style="left: ${200 + todayOffset * 32}px;"><div class="absolute -top-3 -left-3 bg-rose-500 text-white text-[9px] px-1.5 py-0.5 rounded shadow-md whitespace-nowrap font-bold">오늘</div></div>`;
-    }
-
-    // Rows
-    displayList.forEach(p => {
-        html += `<div class="flex border-b border-slate-100 hover:bg-slate-50 relative h-10 group">`;
-        html += `<div class="w-[200px] shrink-0 bg-white sticky left-0 z-30 border-r border-slate-200 px-3 py-2 flex flex-col justify-center shadow-[2px_0_4px_rgba(0,0,0,0.02)]">
-                    <div class="text-[10px] font-bold text-indigo-600 truncate">${p.code||'-'}</div>
-                    <div class="text-[11px] font-bold text-slate-700 truncate" title="${p.name}">${p.name}</div>
-                 </div>`;
-        
-        html += `<div class="flex-1 relative flex items-center">`;
-        for(let i=0; i<=totalDays; i++) {
-            let curr = new Date(minDate.getTime() + i * 86400000);
-            let isWeekend = curr.getDay() === 0 || curr.getDay() === 6;
-            let bg = isWeekend ? 'bg-slate-50/50' : '';
-            html += `<div class="shrink-0 w-8 h-full border-r border-slate-100 ${bg}"></div>`;
-        }
-        
-        const drawBar = (start, end, colorClass, title, topOffset) => {
-            if(!start) return '';
-            let s = new Date(start); let e = end ? new Date(end) : new Date(start);
-            if(isNaN(s.getTime())) return '';
-            if(isNaN(e.getTime())) e = new Date(s);
-            if(e < s) e = new Date(s);
-            
-            let leftOffset = Math.ceil((s.getTime() - minDate.getTime()) / 86400000);
-            let widthDays = Math.ceil((e.getTime() - s.getTime()) / 86400000) + 1;
-            
-            if(leftOffset < 0) { widthDays += leftOffset; leftOffset = 0; }
-            if(leftOffset + widthDays > totalDays) { widthDays = totalDays - leftOffset + 1; }
-            if(widthDays <= 0) return '';
-            
-            let isMilestone = (widthDays === 1 && s.getTime() === e.getTime() && title.includes('출하'));
-            if (isMilestone) {
-                return `<div class="absolute ${colorClass} w-3 h-3 transform rotate-45 shadow-sm border border-white cursor-help z-10" style="left: ${leftOffset * 32 + 16 - 6}px; top: 14px;" title="${title}: ${start}"></div>`;
-            } else {
-                return `<div class="absolute ${colorClass} h-3.5 rounded shadow-sm opacity-80 hover:opacity-100 transition-opacity cursor-help z-10 flex items-center px-1 overflow-hidden" style="left: ${leftOffset * 32}px; width: ${widthDays * 32}px; top: ${topOffset}px;" title="${title}: ${start} ~ ${end||start}"></div>`;
-            }
-        };
-
-        html += drawBar(p.d_asmEst, p.d_asmEndEst, 'bg-indigo-300', '조립예정', 6);
-        html += drawBar(p.d_asmSt, p.d_asmEn, 'bg-indigo-500', '조립(실)', 20);
-        html += drawBar(p.d_insSt, p.d_insEn, 'bg-teal-500', '검수', 13);
-        html += drawBar(p.d_setSt, p.d_setEn, 'bg-slate-600', 'Setup', 13);
-        html += drawBar(p.d_shipEst, null, 'bg-rose-300', '출하예정', 13);
-        html += drawBar(p.d_shipEn, null, 'bg-rose-500', '출하(실)', 13);
-        
-        html += `</div></div>`;
-    });
-    
-    html += '</div>';
-    container.innerHTML = html;
-};
-
-window.scrollToGanttToday = function() {
-    const container = document.getElementById('proj-dash-gantt-content');
-    const line = document.getElementById('gantt-today-line');
-    if(container && line) {
-        container.scrollTo({ left: line.offsetLeft - container.clientWidth / 2, behavior: 'smooth' });
-    }
-};
-
-// ==========================================
-// 💡 달력(Calendar) 렌더링 추가
-// ==========================================
-window.renderProjCalendar = function() {
-    const container = document.getElementById('proj-dash-calendar-content');
-    if(!container) return;
-    
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    
-    const firstDay = new Date(year, month, 1).getDay();
-    const lastDate = new Date(year, month + 1, 0).getDate();
-    
-    let html = `
-        <div class="flex justify-between items-center mb-4 px-2">
-            <h3 class="text-base font-black text-slate-800">${year}년 ${month + 1}월 프로젝트 일정</h3>
-            <div class="flex gap-3 text-[10px] font-bold text-slate-600">
-                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-indigo-500 shadow-sm"></span>조립</span>
-                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-teal-500 shadow-sm"></span>검수</span>
-                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-slate-600 shadow-sm"></span>Setup</span>
-                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-rose-500 shadow-sm"></span>출하</span>
-            </div>
-        </div>
-        <div class="grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-xl overflow-hidden">
-            <div class="p-2 text-center text-xs font-black text-rose-500 bg-slate-50">일</div>
-            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">월</div>
-            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">화</div>
-            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">수</div>
-            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">목</div>
-            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">금</div>
-            <div class="p-2 text-center text-xs font-black text-blue-500 bg-slate-50">토</div>
-    `;
-    
-    for(let i=0; i<firstDay; i++) html += `<div class="bg-white min-h-[120px]"></div>`;
-    
-    let displayList = window.getFilteredProjects();
-    
-    for(let date = 1; date <= lastDate; date++) {
-        const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(date).padStart(2,'0')}`;
-        const isToday = dateStr === window.getLocalDateStr(new Date());
-        let dayEventsHtml = '';
-        
-        displayList.forEach(p => {
-            let addEvent = (startStr, endStr, type, color, suffix) => {
-                if(!startStr) return;
-                let s = window.getLocalDateStr(new Date(startStr));
-                let e = endStr ? window.getLocalDateStr(new Date(endStr)) : s;
-                if (dateStr >= s && dateStr <= e) {
-                    dayEventsHtml += `<div class="text-[9px] ${color} text-white px-1.5 py-0.5 rounded mb-0.5 truncate shadow-sm cursor-help font-bold" title="${p.name} [${type} ${suffix}]">${p.code} ${type}</div>`;
-                }
-            };
-            addEvent(p.d_asmSt, p.d_asmEn, '조립', 'bg-indigo-500', '(실)');
-            addEvent(p.d_insSt, p.d_insEn, '검수', 'bg-teal-500', '(실)');
-            addEvent(p.d_setSt, p.d_setEn, 'Set', 'bg-slate-600', '(실)');
-            addEvent(p.d_shipEn, null, '출하', 'bg-rose-500', '(실)');
-        });
-        
-        const numClass = isToday ? 'bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center mx-auto shadow-md' : 'text-slate-700';
-        
-        html += `<div class="bg-white p-1.5 min-h-[120px] border-t-2 ${isToday?'border-indigo-500':'border-transparent'} hover:bg-slate-50 transition-colors flex flex-col gap-1">
-                    <div class="text-[11px] font-bold text-center ${numClass} shrink-0">${date}</div>
-                    <div class="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-0.5">${dayEventsHtml}</div>
-                 </div>`;
-    }
-    
-    html += `</div>`;
-    container.innerHTML = html;
-};
-
-// ==========================================
-// 💡 생산일지 팀원 추가 기능(Bug Fix 추가)
-// ==========================================
-window.addLogMember = function(name) {
-    if(!name) return;
-    window.currentLogMembers = window.currentLogMembers || [];
-    if(!window.currentLogMembers.includes(name)) {
-        window.currentLogMembers.push(name);
-        if(window.renderLogMembers) window.renderLogMembers();
-    }
-    const el = document.getElementById('log-member-add') || document.getElementById('md-member-add');
-    if(el) el.selectedIndex = 0;
-};
-
-window.removeLogMember = function(name) {
-    window.currentLogMembers = window.currentLogMembers || [];
-    window.currentLogMembers = window.currentLogMembers.filter(n => n !== name);
-    if(window.renderLogMembers) window.renderLogMembers();
-};
-
-window.renderLogMembers = function() {
-    const container = document.getElementById('log-selected-members'); 
-    const containerMd = document.getElementById('md-selected-members'); 
-    const memInput = document.getElementById('log-members'); 
-    const membersList = window.currentLogMembers || [];
-    
-    if(memInput) memInput.value = membersList.join(', ');
-    
-    const htmlStr = membersList.map(function(name) {
-        return `<span class="bg-sky-100 text-sky-700 px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1.5 shadow-sm">${name} <i class="fa-solid fa-xmark cursor-pointer hover:text-rose-500 bg-white/50 rounded-full px-1 py-0.5" onclick="window.removeLogMember('${name}')"></i></span>`;
-    }).join('');
-
-    if(container) container.innerHTML = htmlStr;
-    if(containerMd) containerMd.innerHTML = htmlStr;
 };
 
 // ==========================================
@@ -1175,7 +767,7 @@ window.saveProjStatus = async function(btn) {
         
         const getVal = (eid) => { const el = document.getElementById(eid); return el ? el.value : ''; };
 
-        const data = { 
+        const payload = { 
             code: code, name: name, 
             company: getVal('ps-company'), part: getVal('ps-part') || '제조', category: getVal('ps-category'), 
             status: getVal('ps-status') || 'pending', progress: parseInt(getVal('ps-progress-pct')) || 0, 
@@ -1187,12 +779,13 @@ window.saveProjStatus = async function(btn) {
         
         const dateMappings = { 'd_rcvEst': 'ps-d-rcv-est', 'd_asmEst': 'ps-d-asm-est', 'd_asmEndEst': 'ps-d-asm-end-est', 'd_shipEst': 'ps-d-ship-est', 'd_asmSt': 'ps-d-asm-st', 'd_asmEn': 'ps-d-asm-en', 'd_insSt': 'ps-d-ins-st', 'd_insEn': 'ps-d-ins-en', 'd_shipEn': 'ps-d-ship-en', 'd_setSt': 'ps-d-set-st', 'd_setEn': 'ps-d-set-en' };
         for (const [key, elementId] of Object.entries(dateMappings)) { 
-            data[key] = getVal(elementId); 
+            payload[key] = getVal(elementId); 
         }
 
-        // 💡 Firestore 에러 방지: 모든 undefined 값을 null로 변환
-        Object.keys(data).forEach(key => {
-            if (data[key] === undefined) data[key] = null;
+        // 💡 Firestore 에러 방지: 모든 undefined 값을 null로 강제 변환
+        const cleanPayload = JSON.parse(JSON.stringify(payload));
+        Object.keys(cleanPayload).forEach(key => {
+            if (cleanPayload[key] === undefined) cleanPayload[key] = null;
         });
 
         if(id) { 
@@ -1205,19 +798,19 @@ window.saveProjStatus = async function(btn) {
                     changedAt: Date.now() 
                 });
             }
-            await setDoc(doc(db, "projects_status", id), data, { merge: true }); 
+            await setDoc(doc(db, "projects_status", id), cleanPayload, { merge: true }); 
             safeShowSuccess("성공적으로 수정되었습니다."); 
         } else { 
-            data.createdAt = Date.now(); 
-            data.currentMd = 0; 
-            data.authorUid = (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system';
-            data.authorName = (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system';
+            cleanPayload.createdAt = Date.now(); 
+            cleanPayload.currentMd = 0; 
+            cleanPayload.authorUid = (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system';
+            cleanPayload.authorName = (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system';
             
-            await addDoc(collection(db, "projects_status"), data); 
+            await addDoc(collection(db, "projects_status"), cleanPayload); 
             safeShowSuccess("성공적으로 등록되었습니다."); 
             
             if (window.googleAccessToken) {
-                const folderName = data.code ? data.code : data.name;
+                const folderName = cleanPayload.code ? cleanPayload.code : cleanPayload.name;
                 window.getOrCreateDriveFolder(folderName, TARGET_DRIVE_FOLDER).catch(e => console.warn("자동 폴더 생성 실패", e));
             }
         } 
@@ -1390,6 +983,226 @@ window.toggleProjDashView = function(view) {
     }
 };
 
+window.scrollToGanttToday = function() {
+    const scrollContainer = document.getElementById('proj-dash-gantt-content');
+    if(scrollContainer && window.ganttTodayOffset >= 0) {
+        scrollContainer.scrollTo({
+            left: window.ganttTodayOffset + 300 - (scrollContainer.clientWidth / 2),
+            behavior: 'smooth'
+        });
+    }
+};
+
+window.renderProjGantt = function() {
+    const container = document.getElementById('proj-dash-gantt-content');
+    if(!container) return;
+    try {
+        let displayList = window.getFilteredProjects();
+        if(displayList.length === 0) { 
+            container.innerHTML = '<div class="text-center p-10 text-slate-500 font-bold bg-white w-full h-full flex items-center justify-center rounded-xl">표시할 일정 데이터가 없습니다.</div>'; 
+            return; 
+        }
+
+        let minDate = new Date(); 
+        let maxDate = new Date(); 
+        let hasDates = false;
+        
+        displayList.forEach(function(p) {
+            const dates = [p.d_asmSt, p.d_asmEn, p.d_insSt, p.d_insEn, p.d_shipEn, p.d_setSt, p.d_setEn, p.d_asmEst, p.d_shipEst, p.d_asmEndEst].filter(d => d).map(d => new Date(d)).filter(d => !isNaN(d.getTime()));
+            dates.forEach(function(d) { 
+                if(!hasDates) { minDate = new Date(d); maxDate = new Date(d); hasDates = true; } 
+                if(d < minDate) minDate = new Date(d); 
+                if(d > maxDate) maxDate = new Date(d); 
+            });
+        });
+        
+        const today = new Date(); 
+        today.setHours(0,0,0,0);
+        
+        if(today < minDate) minDate = new Date(today);
+        if(today > maxDate) maxDate = new Date(today);
+
+        if(!hasDates) { 
+            container.innerHTML = '<div class="text-center p-10 text-slate-500 font-bold bg-white w-full h-full flex items-center justify-center rounded-xl">표시할 일정 데이터가 없습니다.</div>'; 
+            return; 
+        }
+        
+        minDate.setDate(minDate.getDate() - 5); 
+        maxDate.setDate(maxDate.getDate() + 10);
+        const totalDays = Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24)); 
+        const dayWidth = 24; 
+        
+        const todayStr = window.getLocalDateStr(new Date()); 
+        let todayOffset = -1;
+
+        let html = `<div class="relative min-w-max h-full min-h-[500px]" style="width: ${totalDays * dayWidth + 300}px">`;
+        
+        for(let i=0; i<totalDays; i++) {
+            let d = new Date(minDate); 
+            d.setDate(d.getDate() + i);
+            let dStr = window.getLocalDateStr(d);
+            if(dStr === todayStr) todayOffset = i * dayWidth; 
+        }
+        
+        window.ganttTodayOffset = todayOffset;
+
+        if(todayOffset >= 0) {
+            html += `<div class="absolute top-0 w-[2px] bg-rose-500 z-[100] pointer-events-none shadow-sm" style="left: ${300 + todayOffset + (dayWidth/2)}px; height:100%; bottom:0;"><div class="absolute top-10 -translate-x-1/2 bg-rose-500 text-white text-[10px] px-2 py-0.5 rounded-full shadow-md font-bold whitespace-nowrap border border-white">오늘</div></div>`;
+        }
+
+        html += `<div class="flex border-b border-slate-200 sticky top-0 bg-white z-50 shadow-sm"><div class="w-[300px] flex-shrink-0 p-3 font-bold text-xs text-slate-700 bg-slate-50 border-r border-slate-200 flex items-center sticky left-0 z-50"><div class="w-[100px] text-indigo-600">PJT 코드</div><div class="w-[200px]">프로젝트명</div></div>`;
+        
+        for(let i=0; i<totalDays; i++) {
+            let d = new Date(minDate); 
+            d.setDate(d.getDate() + i);
+            let dStr = window.getLocalDateStr(d);
+            let bgClass = (d.getDay() === 0 || d.getDay() === 6) ? 'bg-slate-50' : 'bg-white'; 
+            let textClass = d.getDay() === 0 ? 'text-rose-500' : (d.getDay() === 6 ? 'text-blue-500' : 'text-slate-500');
+            if (dStr === todayStr) { bgClass = 'bg-rose-50'; textClass = 'text-rose-600 font-black'; }
+            
+            let dateText = (d.getDate() === 1 || i === 0) ? `<div class="text-[8px] font-black bg-slate-200 text-slate-600">${d.getMonth()+1}월</div>` : `<div class="text-[8px] font-bold bg-slate-100 text-transparent select-none">-</div>`;
+            html += `<div class="w-[${dayWidth}px] flex-shrink-0 text-center border-r border-slate-100 ${bgClass} flex flex-col justify-center relative">${dateText}<div class="text-[10px] font-bold ${textClass} py-1">${d.getDate()}</div></div>`;
+        }
+        
+        html += `</div><div class="relative w-full h-full min-h-full" style="min-height: 400px;">`;
+
+        displayList.forEach(function(p) {
+            const safeNameHtml = String(p.name||'').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); 
+            const safeCodeStr = p.code || '-';
+            
+            html += `<div class="flex border-b border-slate-100 relative group cursor-pointer hover:bg-slate-50 transition-colors" onclick="window.editProjStatus('${p.id}')">`;
+            
+            html += `<div class="w-[300px] flex-shrink-0 p-2 text-[11px] font-bold text-slate-700 border-r border-slate-200 bg-white group-hover:bg-slate-50 z-40 sticky left-0 flex items-center transition-colors" title="${safeNameHtml}"><div class="w-[100px] text-indigo-600 truncate font-black pr-1">${safeCodeStr}</div><div class="w-[200px] truncate">${safeNameHtml}</div></div>`;
+            
+            html += `<div class="flex relative" style="width: ${totalDays * dayWidth}px">`;
+            
+            for(let i=0; i<totalDays; i++) { 
+                let d = new Date(minDate); 
+                d.setDate(d.getDate() + i); 
+                let bgStr = (d.getDay() === 0 || d.getDay() === 6) ? 'bg-slate-50/50' : '';
+                html += `<div class="w-[${dayWidth}px] flex-shrink-0 border-r border-slate-50 ${bgStr} h-12"></div>`; 
+            }
+            
+            const drawBar = function(start, end, colorClass, label, yOffset) {
+                if(!start) return ''; 
+                let sD = new Date(start); 
+                let eD = end ? new Date(end) : new Date(start);
+                if(isNaN(sD.getTime()) || isNaN(eD.getTime())) return '';
+                if(sD < minDate) sD = new Date(minDate); 
+                if(eD > maxDate) eD = new Date(maxDate); 
+                if(sD > eD) eD = new Date(sD);
+                
+                let leftOffset = Math.floor((sD - minDate) / (1000 * 60 * 60 * 24)) * dayWidth; 
+                let width = Math.ceil((eD - sD) / (1000 * 60 * 60 * 24) + 1) * dayWidth;
+                return `<div class="absolute ${yOffset} h-[14px] rounded-sm ${colorClass} text-[8px] flex items-center justify-center font-bold shadow-sm overflow-hidden whitespace-nowrap opacity-90 hover:opacity-100 hover:scale-y-110 transition-all cursor-pointer z-10" style="left: ${leftOffset}px; width: ${width}px;" title="${label}: ${start} ~ ${end||start}"></div>`;
+            };
+            
+            const drawPoint = function(dateStr, colorClass, label, yOffset) {
+                if(!dateStr) return ''; 
+                let d = new Date(dateStr); 
+                if(isNaN(d.getTime())) return '';
+                let leftOffset = Math.floor((d - minDate) / (1000 * 60 * 60 * 24)) * dayWidth;
+                return `<div class="absolute ${yOffset} w-3 h-3 rounded-sm transform rotate-45 shadow-sm border-2 z-20 ${colorClass}" style="left: ${leftOffset + dayWidth/2 - 6}px;" title="${label}: ${dateStr}"></div>`;
+            }
+            
+            html += drawBar(p.d_asmEst, p.d_asmEndEst, 'bg-white border-2 border-indigo-400 border-dashed text-indigo-700', '조립(예정)', 'top-1');
+            html += drawBar(p.d_asmSt, p.d_asmEn, 'bg-indigo-600 text-white', '조립(실제)', 'top-1/2 -translate-y-1/2'); 
+            html += drawBar(p.d_insSt, p.d_insEn, 'bg-teal-500 text-white', '검수', 'top-1/2 -translate-y-1/2'); 
+            html += drawBar(p.d_setSt, p.d_setEn, 'bg-slate-600 text-white', 'Setup', 'top-1/2 -translate-y-1/2');
+            html += drawPoint(p.d_shipEst, 'bg-white border-rose-400', '출하(예정)', 'top-1');
+            html += drawPoint(p.d_shipEn, 'bg-rose-500 border-white', '출하(실제)', 'top-1/2 -translate-y-1/2');
+            
+            html += `</div></div>`;
+        });
+        
+        html += `</div></div>`; 
+        container.innerHTML = html;
+        
+        setTimeout(function() { 
+            const scrollContainer = document.getElementById('proj-dash-gantt-content'); 
+            if(scrollContainer && todayOffset >= 0) {
+                scrollContainer.scrollLeft = todayOffset + 300 - (scrollContainer.clientWidth / 2);
+            }
+        }, 100);
+    } catch(e) { 
+        console.error("간트차트 오류:", e); 
+    }
+};
+
+window.changeCalendarMonth = function(offset) { 
+    window.calendarCurrentDate.setMonth(window.calendarCurrentDate.getMonth() + offset); 
+    if(window.renderProjCalendar) window.renderProjCalendar(); 
+};
+
+window.renderProjCalendar = function() {
+    const container = document.getElementById('proj-dash-calendar-content');
+    if(!container) return;
+    try {
+        let displayList = window.getFilteredProjects();
+        const year = window.calendarCurrentDate.getFullYear(); 
+        const month = window.calendarCurrentDate.getMonth();
+        const firstDay = new Date(year, month, 1).getDay(); 
+        const lastDate = new Date(year, month + 1, 0).getDate();
+        const today = new Date(); 
+        const isCurrentMonth = (today.getFullYear() === year && today.getMonth() === month);
+        
+        let html = `<div class="flex justify-between items-center mb-4">
+                        <div class="flex items-center gap-4">
+                            <button onclick="window.changeCalendarMonth(-1)" class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"><i class="fa-solid fa-chevron-left"></i></button>
+                            <h3 class="text-lg font-black text-indigo-800 w-32 text-center">${year}년 ${month + 1}월</h3>
+                            <button onclick="window.changeCalendarMonth(1)" class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"><i class="fa-solid fa-chevron-right"></i></button>
+                            <button onclick="window.calendarCurrentDate = new Date(); window.renderProjCalendar();" class="text-[10px] bg-indigo-50 text-indigo-600 px-3 py-1 rounded-lg font-bold hover:bg-indigo-100 transition-colors border border-indigo-200">이번 달</button>
+                        </div>
+                        <div class="flex gap-2 text-[10px] font-bold">
+                            <span class="bg-indigo-100 text-indigo-700 px-2 py-1 rounded border border-indigo-200">조립진행</span>
+                            <span class="bg-rose-100 text-rose-700 px-2 py-1 rounded border border-rose-200">출하예정</span>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-7 gap-1 text-center font-bold text-xs text-slate-500 mb-2">
+                        <div class="text-rose-500">일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div class="text-blue-500">토</div>
+                    </div>
+                    <div class="grid grid-cols-7 gap-1 auto-rows-fr">`;
+        
+        for(let i=0; i<firstDay; i++) { 
+            html += `<div class="min-h-[100px] bg-slate-50 rounded-lg border border-slate-100"></div>`; 
+        }
+        
+        for(let date=1; date<=lastDate; date++) {
+            const currentDateStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(date).padStart(2,'0'); 
+            let dayEvents = '';
+            
+            displayList.forEach(function(p) {
+                const safeNameHtml = getSafeString(p.name).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); 
+                const safeCodeStr = getSafeString(p.code) || '-';
+                let isAsm = false; 
+                
+                if(p.d_asmSt && p.d_asmEn) { 
+                    if(currentDateStr >= p.d_asmSt && currentDateStr <= p.d_asmEn) isAsm = true; 
+                } else if(p.d_asmEst && p.d_asmEndEst) { 
+                    if(currentDateStr >= p.d_asmEst && currentDateStr <= p.d_asmEndEst) isAsm = true; 
+                }
+                
+                if(isAsm) {
+                    dayEvents += `<div class="text-[9px] bg-indigo-500 text-white px-1.5 py-0.5 rounded mb-0.5 truncate cursor-pointer shadow-sm hover:scale-[1.02] transition-transform" onclick="window.editProjStatus('${p.id}')" title="${safeNameHtml}">${safeCodeStr} 조립</div>`;
+                }
+                
+                if(p.d_shipEn === currentDateStr || (!p.d_shipEn && p.d_shipEst === currentDateStr)) { 
+                    dayEvents += `<div class="text-[9px] bg-rose-500 text-white px-1.5 py-0.5 rounded mb-0.5 truncate cursor-pointer shadow-sm hover:scale-[1.02] transition-transform" onclick="window.editProjStatus('${p.id}')" title="${safeNameHtml}">${safeCodeStr} 출하</div>`; 
+                }
+            });
+            
+            const isToday = (isCurrentMonth && date === today.getDate());
+            const badge = isToday ? `<span class="bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center mx-auto shadow-md">${date}</span>` : date;
+            const borderClass = isToday ? 'border-indigo-400 bg-indigo-50/10' : 'border-slate-200';
+            
+            html += `<div class="min-h-[100px] bg-white rounded-lg border ${borderClass} p-1 hover:bg-slate-50 transition-colors"><div class="text-xs font-bold text-slate-700 mb-1 text-center">${badge}</div><div class="flex flex-col gap-0.5 overflow-hidden">${dayEvents}</div></div>`;
+        }
+        
+        html += `</div>`; 
+        container.innerHTML = html;
+    } catch(e) {}
+};
+
 // ==========================================
 // 💡 구매 관리 모달 (안전장치 적용)
 // ==========================================
@@ -1453,6 +1266,7 @@ window.resetPurchaseForm = function() {
     setVal('editing-pur-id', ''); setVal('new-pur-text', ''); setVal('new-pur-file', ''); 
     const fname = document.getElementById('pur-file-name'); if(fname) fname.innerText = ''; 
 };
+
 window.savePurchaseItem = async function() { 
     const pIdEl = document.getElementById('pur-req-id');
     const titleEl = document.getElementById('pur-project-title');
@@ -1484,19 +1298,42 @@ window.savePurchaseItem = async function() {
             }
         }
         
-        const payload = { projectId: pId, content: content, files: filesData, authorUid: (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system', authorName: (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system', createdAt: Date.now() };
-        Object.keys(payload).forEach(k => { if(payload[k] === undefined) payload[k] = null; });
+        const payload = { 
+            projectId: pId, 
+            content: content, 
+            files: filesData, 
+            authorUid: (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system', 
+            authorName: (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system', 
+            createdAt: Date.now() 
+        };
         
-        await addDoc(collection(db, "project_purchases"), payload);
+        // 💡 Firestore 에러 완벽 방지: undefined 값을 null로 변환
+        const cleanPayload = JSON.parse(JSON.stringify(payload));
+        Object.keys(cleanPayload).forEach(k => { if(cleanPayload[k] === undefined) cleanPayload[k] = null; });
+        
+        await addDoc(collection(db, "project_purchases"), cleanPayload);
         safeShowSuccess("구매 내역이 등록되었습니다."); 
         if(window.resetPurchaseForm) window.resetPurchaseForm(); 
-    } catch(e) { safeShowError("저장 실패", e); } 
-    finally { btn.innerHTML = '등록'; btn.disabled = false; }
+    } catch(e) { 
+        safeShowError("저장 실패", e); 
+    } finally { 
+        btn.innerHTML = '등록'; btn.disabled = false; 
+    }
 };
-window.deletePurchase = async function(id) { if(confirm("삭제하시겠습니까?")) { try { await deleteDoc(doc(db, "project_purchases", id)); safeShowSuccess("삭제되었습니다."); } catch(e) { safeShowError("삭제 실패", e); } } };
+
+window.deletePurchase = async function(id) { 
+    if(confirm("삭제하시겠습니까?")) { 
+        try { 
+            await deleteDoc(doc(db, "project_purchases", id)); 
+            safeShowSuccess("삭제되었습니다."); 
+        } catch(e) { 
+            safeShowError("삭제 실패", e); 
+        } 
+    } 
+};
 
 // ==========================================
-// 💡 설계 관리 모달 (안전장치 적용)
+// 💡 설계 파일 관리 모달 (안전장치 적용)
 // ==========================================
 window.openDesignModal = function(projectId, title) { 
     try {
@@ -1558,6 +1395,7 @@ window.resetDesignForm = function() {
     setVal('editing-des-id', ''); setVal('new-des-text', ''); setVal('new-des-file', ''); 
     const fname = document.getElementById('des-file-name'); if(fname) fname.innerText = ''; 
 };
+
 window.saveDesignItem = async function() { 
     const pIdEl = document.getElementById('des-req-id');
     const titleEl = document.getElementById('des-project-title');
@@ -1589,16 +1427,38 @@ window.saveDesignItem = async function() {
             }
         }
         
-        const payload = { projectId: pId, content: content, files: filesData, authorUid: (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system', authorName: (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system', createdAt: Date.now() };
-        Object.keys(payload).forEach(k => { if(payload[k] === undefined) payload[k] = null; });
+        const payload = { 
+            projectId: pId, 
+            content: content, 
+            files: filesData, 
+            authorUid: (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system', 
+            authorName: (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system', 
+            createdAt: Date.now() 
+        };
+        
+        const cleanPayload = JSON.parse(JSON.stringify(payload));
+        Object.keys(cleanPayload).forEach(k => { if(cleanPayload[k] === undefined) cleanPayload[k] = null; });
 
-        await addDoc(collection(db, "project_designs"), payload);
+        await addDoc(collection(db, "project_designs"), cleanPayload);
         safeShowSuccess("설계 내역이 등록되었습니다."); 
         if(window.resetDesignForm) window.resetDesignForm(); 
-    } catch(e) { safeShowError("저장 실패", e); } 
-    finally { btn.innerHTML = '등록'; btn.disabled = false; }
+    } catch(e) { 
+        safeShowError("저장 실패", e); 
+    } finally { 
+        btn.innerHTML = '등록'; btn.disabled = false; 
+    }
 };
-window.deleteDesign = async function(id) { if(confirm("삭제하시겠습니까?")) { try { await deleteDoc(doc(db, "project_designs", id)); safeShowSuccess("삭제되었습니다."); } catch(e) { safeShowError("삭제 실패", e); } } };
+
+window.deleteDesign = async function(id) { 
+    if(confirm("삭제하시겠습니까?")) { 
+        try { 
+            await deleteDoc(doc(db, "project_designs", id)); 
+            safeShowSuccess("삭제되었습니다."); 
+        } catch(e) { 
+            safeShowError("삭제 실패", e); 
+        } 
+    } 
+};
 
 // ==========================================
 // 💡 일정표 관리 모달 (안전장치 적용)
@@ -1663,6 +1523,7 @@ window.resetPjtScheduleForm = function() {
     setVal('editing-sch-id', ''); setVal('new-sch-text', ''); setVal('new-sch-file', ''); 
     const fname = document.getElementById('sch-file-name'); if(fname) fname.innerText = ''; 
 };
+
 window.savePjtScheduleItem = async function() { 
     const pIdEl = document.getElementById('sch-req-id');
     const titleEl = document.getElementById('sch-project-title');
@@ -1694,19 +1555,41 @@ window.savePjtScheduleItem = async function() {
             }
         }
         
-        const payload = { projectId: pId, content: content, files: filesData, authorUid: (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system', authorName: (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system', createdAt: Date.now() };
-        Object.keys(payload).forEach(k => { if(payload[k] === undefined) payload[k] = null; });
+        const payload = { 
+            projectId: pId, 
+            content: content, 
+            files: filesData, 
+            authorUid: (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system', 
+            authorName: (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system', 
+            createdAt: Date.now() 
+        };
+        
+        const cleanPayload = JSON.parse(JSON.stringify(payload));
+        Object.keys(cleanPayload).forEach(k => { if(cleanPayload[k] === undefined) cleanPayload[k] = null; });
 
-        await addDoc(collection(db, "project_schedules"), payload);
+        await addDoc(collection(db, "project_schedules"), cleanPayload);
         safeShowSuccess("PJT 일정 내역이 등록되었습니다."); 
         if(window.resetPjtScheduleForm) window.resetPjtScheduleForm(); 
-    } catch(e) { safeShowError("저장 실패", e); } 
-    finally { btn.innerHTML = '등록'; btn.disabled = false; }
+    } catch(e) { 
+        safeShowError("저장 실패", e); 
+    } finally { 
+        btn.innerHTML = '등록'; btn.disabled = false; 
+    }
 };
-window.deletePjtSchedule = async function(id) { if(confirm("삭제하시겠습니까?")) { try { await deleteDoc(doc(db, "project_schedules", id)); safeShowSuccess("삭제되었습니다."); } catch(e) { safeShowError("삭제 실패", e); } } };
+
+window.deletePjtSchedule = async function(id) { 
+    if(confirm("삭제하시겠습니까?")) { 
+        try { 
+            await deleteDoc(doc(db, "project_schedules", id)); 
+            safeShowSuccess("삭제되었습니다."); 
+        } catch(e) { 
+            safeShowError("삭제 실패", e); 
+        } 
+    } 
+};
 
 // ==========================================
-// 💡 생산일지 관리 모달 (안전장치 적용)
+// 💡 생산일지 관리 모달 (팀원 다중선택/안전장치 적용)
 // ==========================================
 window.openDailyLogModal = function(projectId) { 
     try {
@@ -1819,15 +1702,26 @@ window.saveDailyLogItem = async function() {
             }
         }
 
-        const payload = { date: date, content: content, members: members, files: filesData, updatedAt: Date.now() }; 
-        Object.keys(payload).forEach(k => { if(payload[k] === undefined) payload[k] = null; });
+        const payload = { 
+            date: date, 
+            content: content, 
+            members: members, 
+            files: filesData, 
+            updatedAt: Date.now() 
+        }; 
+        
+        const cleanPayload = JSON.parse(JSON.stringify(payload));
+        Object.keys(cleanPayload).forEach(k => { if(cleanPayload[k] === undefined) cleanPayload[k] = null; });
 
         if (logId) {
-            await setDoc(doc(db, "daily_logs", logId), payload, { merge: true });
+            await setDoc(doc(db, "daily_logs", logId), cleanPayload, { merge: true });
             safeShowSuccess("일지가 수정되었습니다.");
         } else {
-            payload.projectId = projectId; payload.authorUid = (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system'; payload.authorName = (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system'; payload.createdAt = Date.now();
-            await addDoc(collection(db, "daily_logs"), payload);
+            cleanPayload.projectId = projectId; 
+            cleanPayload.authorUid = (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system'; 
+            cleanPayload.authorName = (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system'; 
+            cleanPayload.createdAt = Date.now();
+            await addDoc(collection(db, "daily_logs"), cleanPayload);
             safeShowSuccess("일지가 등록되었습니다.");
             
             if(window.processMentions) await window.processMentions(content, projectId, "생산일지");
@@ -1835,31 +1729,11 @@ window.saveDailyLogItem = async function() {
         
         await setDoc(doc(db, "projects_status", projectId), { progress: progressVal, purchaseRate: purchaseRateVal }, { merge: true }); 
         if(window.resetDailyLogForm) window.resetDailyLogForm(); 
-    } catch(e) { safeShowError("저장 실패", e); } 
-    finally { if(btnSave) { btnSave.innerHTML = '등록'; btnSave.disabled = false; } } 
-};
-
-window.resetDailyLogForm = function() { 
-    if(document.getElementById('editing-log-id')) document.getElementById('editing-log-id').value = ''; 
-    if(document.getElementById('new-log-date')) document.getElementById('new-log-date').value = window.getLocalDateStr(new Date()); 
-    if(document.getElementById('new-log-text')) document.getElementById('new-log-text').value = ''; 
-    if(document.getElementById('new-log-image')) document.getElementById('new-log-image').value = ''; 
-    window.currentLogMembers = (window.userProfile && window.userProfile.name) ? [window.userProfile.name] : []; 
-    if(window.renderLogMembers) window.renderLogMembers();
-    if(document.getElementById('btn-log-save')) document.getElementById('btn-log-save').innerText = '등록'; 
-    if(document.getElementById('btn-log-cancel')) document.getElementById('btn-log-cancel').classList.add('hidden'); 
-};
-
-window.closeDailyLogModal = function() { 
-    const m = document.getElementById('daily-log-modal'); 
-    if(m) { m.classList.add('hidden'); m.classList.remove('flex'); } 
-    if (currentLogUnsubscribe) currentLogUnsubscribe(); 
-};
-
-window.clearDailyLogFile = function(e) {
-    if(e && typeof e.stopPropagation === 'function') e.stopPropagation();
-    const input = document.getElementById('new-log-image'), wrap = document.getElementById('new-log-filename-wrap');
-    if(input) input.value = ''; if(wrap) wrap.classList.add('hidden');
+    } catch(e) { 
+        safeShowError("저장 실패", e); 
+    } finally { 
+        if(btnSave) { btnSave.innerHTML = '등록'; btnSave.disabled = false; } 
+    } 
 };
 
 window.editDailyLog = function(id) { 
@@ -1881,6 +1755,31 @@ window.deleteDailyLog = async function(id) {
     catch(e) { safeShowError("삭제 실패", e); } 
 };
 
+window.resetDailyLogForm = function() { 
+    if(document.getElementById('editing-log-id')) document.getElementById('editing-log-id').value = ''; 
+    if(document.getElementById('new-log-date')) document.getElementById('new-log-date').value = window.getLocalDateStr(new Date()); 
+    if(document.getElementById('new-log-text')) document.getElementById('new-log-text').value = ''; 
+    if(document.getElementById('new-log-image')) document.getElementById('new-log-image').value = ''; 
+    if(window.clearDailyLogFile) window.clearDailyLogFile();
+    
+    window.currentLogMembers = (window.userProfile && window.userProfile.name) ? [window.userProfile.name] : []; 
+    if(window.renderLogMembers) window.renderLogMembers();
+    
+    const btnSave = document.getElementById('btn-log-save'); if(btnSave) btnSave.innerText = '등록'; 
+    const btnCancel = document.getElementById('btn-log-cancel'); if(btnCancel) btnCancel.classList.add('hidden'); 
+};
+
+window.closeDailyLogModal = function() { 
+    const m = document.getElementById('daily-log-modal'); 
+    if(m) { m.classList.add('hidden'); m.classList.remove('flex'); } 
+    if (currentLogUnsubscribe) currentLogUnsubscribe(); 
+};
+
+window.clearDailyLogFile = function(e) {
+    if(e && typeof e.stopPropagation === 'function') e.stopPropagation();
+    const input = document.getElementById('new-log-image'), wrap = document.getElementById('new-log-filename-wrap');
+    if(input) input.value = ''; if(wrap) wrap.classList.add('hidden');
+};
 
 // ==========================================
 // 💡 투입 MD 기록 관리 모달 (안전장치 적용)
@@ -1897,7 +1796,7 @@ window.openMdLogModal = function(projectId, title, curMd) {
         
         const members = window.teamMembers || [];
         const mHtml = '<option value="">팀원 추가</option>' + members.map(t => `<option value="${t.name||''}">${t.name||''} (${t.part||''})</option>`).join('');
-        const logMemberSelect = document.getElementById('md-member-add') || document.getElementById('log-member-add');
+        const logMemberSelect = document.getElementById('md-member-add');
         if(logMemberSelect) logMemberSelect.innerHTML = mHtml;
 
         if(window.resetMdLogForm) window.resetMdLogForm(); 
@@ -1932,19 +1831,37 @@ window.resetMdLogForm = function() {
     if(document.getElementById('new-md-desc')) document.getElementById('new-md-desc').value = ''; 
     window.currentLogMembers = (window.userProfile && window.userProfile.name) ? [window.userProfile.name] : []; 
     if(window.renderLogMembers) window.renderLogMembers(); 
-    if(document.getElementById('btn-md-save')) document.getElementById('btn-md-save').innerText = '등록'; 
-    if(document.getElementById('btn-md-cancel')) document.getElementById('btn-md-cancel').classList.add('hidden'); 
+    const btnSave = document.getElementById('btn-md-save'); if(btnSave) btnSave.innerText = '등록'; 
+    const btnCancel = document.getElementById('btn-md-cancel'); if(btnCancel) btnCancel.classList.add('hidden'); 
 };
 
 window.saveMdLogItem = async function() { 
-    const projectId = document.getElementById('md-req-id').value, logId = document.getElementById('editing-md-id').value, date = document.getElementById('new-md-date').value, mdVal = document.getElementById('new-md-val').value, desc = document.getElementById('new-md-desc').value.trim(), members = document.getElementById('log-members') ? document.getElementById('log-members').value : '';
+    const projectId = document.getElementById('md-req-id').value;
+    const logId = document.getElementById('editing-md-id').value;
+    const date = document.getElementById('new-md-date').value;
+    const mdVal = document.getElementById('new-md-val').value;
+    const desc = document.getElementById('new-md-desc').value.trim();
+    const members = document.getElementById('log-members') ? document.getElementById('log-members').value : '';
+    
     if(!date || !mdVal) return safeShowError("날짜와 투입 MD를 입력하세요."); 
     const btnSave = document.getElementById('btn-md-save'); if(btnSave) { btnSave.innerHTML = '저장중..'; btnSave.disabled = true; }
+    
     try { 
         const payload = { date: date, md: parseFloat(mdVal), desc: desc, members: members, updatedAt: Date.now() }; 
-        Object.keys(payload).forEach(k => { if(payload[k] === undefined) payload[k] = null; });
-        if (logId) { await setDoc(doc(db, "project_md_logs", logId), payload, { merge: true }); safeShowSuccess("MD 내역이 수정되었습니다."); } 
-        else { payload.projectId = projectId; payload.authorUid = (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system'; payload.authorName = (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system'; payload.createdAt = Date.now(); await addDoc(collection(db, "project_md_logs"), payload); safeShowSuccess("MD 내역이 등록되었습니다."); } 
+        const cleanPayload = JSON.parse(JSON.stringify(payload));
+        Object.keys(cleanPayload).forEach(k => { if(cleanPayload[k] === undefined) cleanPayload[k] = null; });
+        
+        if (logId) { 
+            await setDoc(doc(db, "project_md_logs", logId), cleanPayload, { merge: true }); 
+            safeShowSuccess("MD 내역이 수정되었습니다."); 
+        } else { 
+            cleanPayload.projectId = projectId; 
+            cleanPayload.authorUid = window.currentUser.uid; 
+            cleanPayload.authorName = window.userProfile.name; 
+            cleanPayload.createdAt = Date.now(); 
+            await addDoc(collection(db, "project_md_logs"), cleanPayload); 
+            safeShowSuccess("MD 내역이 등록되었습니다."); 
+        } 
         if(window.updateProjectTotalMd) await window.updateProjectTotalMd(projectId); 
         if(window.resetMdLogForm) window.resetMdLogForm(); 
     } catch(e) { safeShowError("저장 중 오류 발생", e); } finally { if(btnSave) { btnSave.innerHTML = '등록'; btnSave.disabled = false; } } 
@@ -1954,8 +1871,42 @@ window.editMdLog = function(id) { const log = (window.currentMdLogs || []).find(
 window.updateProjectTotalMd = async function(projectId) { const snap = await getDocs(query(collection(db, "project_md_logs"), where("projectId", "==", projectId))); let total = 0; snap.forEach(docSnap => total += parseFloat(docSnap.data().md) || 0); const projRef = doc(db, "projects_status", projectId); const projSnap = await getDoc(projRef); if(projSnap.exists()) { const outMd = parseFloat(projSnap.data().outMd) || 0; await setDoc(projRef, { currentMd: total, finalMd: total + outMd }, { merge: true }); } };
 
 // ==========================================
-// 💡 코멘트, 이슈, 링크 등 나머지 모달창
+// 💡 이슈, 코멘트, 링크 등 나머지 모달창
 // ==========================================
+window.openIssueModal = function(projectId, title) { 
+    const modal = document.getElementById('issue-modal'); if(!modal) { safeShowError("이슈 모달 요소 없음"); return; }
+    modal.classList.remove('hidden'); modal.classList.add('flex'); 
+    try {
+        document.getElementById('issue-req-id').value = projectId; document.getElementById('editing-issue-id').value = ''; document.getElementById('new-issue-text').value = ''; 
+        const btn = document.getElementById('btn-issue-save'); if(btn) btn.innerText = '등록'; 
+        if (currentIssueUnsubscribe) currentIssueUnsubscribe(); 
+        currentIssueUnsubscribe = onSnapshot(collection(db, "project_issues"), function(snapshot) { 
+            window.currentIssues = []; snapshot.forEach(docSnap => { const d = docSnap.data(); if(d.projectId === projectId) { d.id = docSnap.id; window.currentIssues.push(d); } }); 
+            window.currentIssues.sort((a,b) => getSafeMillis(a.createdAt) - getSafeMillis(b.createdAt)); 
+            const list = document.getElementById('issue-list'); if(!list) return;
+            if (window.currentIssues.length === 0) { list.innerHTML = '<div class="text-center p-10 text-slate-400 font-bold">등록된 이슈가 없습니다.</div>'; return; } 
+            list.innerHTML = window.currentIssues.map(iss => {
+                let safeText = getSafeString(iss.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+                let btnHtml = (iss.authorUid === (window.currentUser && window.currentUser.uid) || (window.userProfile && window.userProfile.role === 'admin')) ? `<button onclick="window.editIssue('${iss.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteIssue('${iss.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button>` : '';
+                return `<div class="bg-white p-4 rounded-xl border ${iss.isResolved ? 'border-slate-200 bg-slate-50' : 'border-rose-200 shadow-sm'} flex items-start gap-3 transition-all"><div class="mt-0.5"><input type="checkbox" ${iss.isResolved?'checked':''} onchange="window.toggleIssueStatus('${iss.id}', this.checked)" class="w-5 h-5 text-rose-500 rounded border-gray-300 cursor-pointer"></div><div class="flex-1 flex flex-col gap-1"><div class="flex justify-between items-center"><span class="font-bold text-sm ${iss.isResolved?'text-slate-400':'text-rose-600'}">${getSafeString(iss.authorName)}</span><div class="flex gap-2">${btnHtml}</div></div><div class="text-[13px] font-medium mt-1 leading-relaxed ${iss.isResolved?'text-slate-400 line-through':'text-slate-700'} break-words">${safeText}</div></div></div>`;
+            }).join('');
+        }); 
+    } catch(e) { safeShowError('이슈 모달 에러', e); }
+};
+window.closeIssueModal = function() { const m = document.getElementById('issue-modal'); if(m){m.classList.add('hidden'); m.classList.remove('flex');} if (currentIssueUnsubscribe) currentIssueUnsubscribe(); };
+window.saveIssueItem = async function() { 
+    const projectId = document.getElementById('issue-req-id').value, editId = document.getElementById('editing-issue-id').value, content = document.getElementById('new-issue-text').value.trim(); 
+    if(!content) return safeShowError("이슈 내용을 입력하세요."); 
+    try { 
+        if (editId) { await setDoc(doc(db, "project_issues", editId), { content: content, updatedAt: Date.now() }, { merge: true }); safeShowSuccess("이슈 수정됨"); } 
+        else { await addDoc(collection(db, "project_issues"), { projectId: projectId, content: content, isResolved: false, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() }); safeShowSuccess("이슈 등록됨"); } 
+        document.getElementById('editing-issue-id').value = ''; document.getElementById('new-issue-text').value = ''; document.getElementById('btn-issue-save').innerText = '등록'; 
+    } catch(e) { safeShowError("저장 오류", e); } 
+};
+window.toggleIssueStatus = async function(id, isResolved) { try { await setDoc(doc(db, "project_issues", id), { isResolved: isResolved }, { merge: true }); } catch(e) {} };
+window.editIssue = function(id) { const iss = window.currentIssues.find(i => i.id === id); if(!iss) return; document.getElementById('editing-issue-id').value = id; document.getElementById('new-issue-text').value = iss.content || ''; document.getElementById('btn-issue-save').innerText = '수정'; document.getElementById('new-issue-text').focus(); };
+window.deleteIssue = async function(id) { if(!confirm("이 이슈를 삭제하시겠습니까?")) return; try { await deleteDoc(doc(db, "project_issues", id)); safeShowSuccess("삭제됨"); } catch(e) { safeShowError("삭제 실패", e); } };
+
 window.openCommentModal = function(projectId, title) { 
     const modal = document.getElementById('comment-modal'); if(!modal) { safeShowError("코멘트 모달 요소 없음"); return; }
     modal.classList.remove('hidden'); modal.classList.add('flex'); 
@@ -1993,40 +1944,6 @@ window.editComment = function(id) { const c = window.currentComments.find(x => x
 window.setReplyTo = function(cid, name) { if(window.cancelCommentAction) window.cancelCommentAction(); document.getElementById('reply-to-id').value = cid; document.getElementById('reply-indicator-name').innerHTML = `${name} 님에게 답글 작성 중`; document.getElementById('reply-indicator').classList.remove('hidden'); };
 window.cancelCommentAction = function() { document.getElementById('reply-to-id').value = ''; document.getElementById('editing-cmt-id').value = ''; document.getElementById('new-cmt-text').value = ''; document.getElementById('btn-cmt-save').innerText = '작성'; document.getElementById('reply-indicator').classList.add('hidden'); };
 window.deleteComment = async function(id) { if(!confirm("삭제하시겠습니까?")) return; try { await deleteDoc(doc(db, "project_comments", id)); const q = query(collection(db, "project_comments"), where("parentId", "==", id)); const snapshot = await getDocs(q); if(!snapshot.empty) { const batch = writeBatch(db); snapshot.forEach(d => batch.delete(d.ref)); await batch.commit(); } safeShowSuccess("삭제됨"); if(window.cancelCommentAction) window.cancelCommentAction(); } catch(e) { safeShowError("삭제 실패", e); } };
-
-window.openIssueModal = function(projectId, title) { 
-    const modal = document.getElementById('issue-modal'); if(!modal) { safeShowError("이슈 모달 요소 없음"); return; }
-    modal.classList.remove('hidden'); modal.classList.add('flex'); 
-    try {
-        document.getElementById('issue-req-id').value = projectId; document.getElementById('editing-issue-id').value = ''; document.getElementById('new-issue-text').value = ''; 
-        const btn = document.getElementById('btn-issue-save'); if(btn) btn.innerText = '등록'; 
-        if (currentIssueUnsubscribe) currentIssueUnsubscribe(); 
-        currentIssueUnsubscribe = onSnapshot(collection(db, "project_issues"), function(snapshot) { 
-            window.currentIssues = []; snapshot.forEach(docSnap => { const d = docSnap.data(); if(d.projectId === projectId) { d.id = docSnap.id; window.currentIssues.push(d); } }); 
-            window.currentIssues.sort((a,b) => getSafeMillis(a.createdAt) - getSafeMillis(b.createdAt)); 
-            const list = document.getElementById('issue-list'); if(!list) return;
-            if (window.currentIssues.length === 0) { list.innerHTML = '<div class="text-center p-10 text-slate-400 font-bold">등록된 이슈가 없습니다.</div>'; return; } 
-            list.innerHTML = window.currentIssues.map(iss => {
-                let safeText = getSafeString(iss.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
-                let btnHtml = (iss.authorUid === (window.currentUser && window.currentUser.uid) || (window.userProfile && window.userProfile.role === 'admin')) ? `<button onclick="window.editIssue('${iss.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteIssue('${iss.id}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button>` : '';
-                return `<div class="bg-white p-4 rounded-xl border ${iss.isResolved ? 'border-slate-200 bg-slate-50' : 'border-rose-200 shadow-sm'} flex items-start gap-3 transition-all"><div class="mt-0.5"><input type="checkbox" ${iss.isResolved?'checked':''} onchange="window.toggleIssueStatus('${iss.id}', this.checked)" class="w-5 h-5 text-rose-500 rounded border-gray-300 cursor-pointer"></div><div class="flex-1 flex flex-col gap-1"><div class="flex justify-between items-center"><span class="font-bold text-sm ${iss.isResolved?'text-slate-400':'text-rose-600'}">${getSafeString(iss.authorName)}</span><div class="flex gap-2">${btnHtml}</div></div><div class="text-[13px] font-medium mt-1 leading-relaxed ${iss.isResolved?'text-slate-400 line-through':'text-slate-700'} break-words">${safeText}</div></div></div>`;
-            }).join('');
-        }); 
-    } catch(e) { safeShowError('이슈 모달 에러', e); }
-};
-window.closeIssueModal = function() { const m = document.getElementById('issue-modal'); if(m){m.classList.add('hidden'); m.classList.remove('flex');} if (currentIssueUnsubscribe) currentIssueUnsubscribe(); };
-window.saveIssueItem = async function() { 
-    const projectId = document.getElementById('issue-req-id').value, editId = document.getElementById('editing-issue-id').value, content = document.getElementById('new-issue-text').value.trim(); 
-    if(!content) return safeShowError("이슈 내용을 입력하세요."); 
-    try { 
-        if (editId) { await setDoc(doc(db, "project_issues", editId), { content: content, updatedAt: Date.now() }, { merge: true }); safeShowSuccess("이슈 수정됨"); } 
-        else { await addDoc(collection(db, "project_issues"), { projectId: projectId, content: content, isResolved: false, authorUid: window.currentUser.uid, authorName: window.userProfile.name, createdAt: Date.now() }); safeShowSuccess("이슈 등록됨"); } 
-        document.getElementById('editing-issue-id').value = ''; document.getElementById('new-issue-text').value = ''; document.getElementById('btn-issue-save').innerText = '등록'; 
-    } catch(e) { safeShowError("저장 오류", e); } 
-};
-window.toggleIssueStatus = async function(id, isResolved) { try { await setDoc(doc(db, "project_issues", id), { isResolved: isResolved }, { merge: true }); } catch(e) {} };
-window.editIssue = function(id) { const iss = window.currentIssues.find(i => i.id === id); if(!iss) return; document.getElementById('editing-issue-id').value = id; document.getElementById('new-issue-text').value = iss.content || ''; document.getElementById('btn-issue-save').innerText = '수정'; document.getElementById('new-issue-text').focus(); };
-window.deleteIssue = async function(id) { if(!confirm("이 이슈를 삭제하시겠습니까?")) return; try { await deleteDoc(doc(db, "project_issues", id)); safeShowSuccess("삭제됨"); } catch(e) { safeShowError("삭제 실패", e); } };
 
 window.openLinkModal = function(projectId, title) { 
     const modal = document.getElementById('link-modal'); if(!modal) return safeShowError("링크 모달 요소 없음");
