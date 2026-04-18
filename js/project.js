@@ -500,7 +500,7 @@ window.generateMediaHtml = function(filesArray) {
 // ==========================================
 window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
     if (!window.googleAccessToken) return null;
-    const safeFolderName = getSafeString(folderName).replace(/[\/\\]/g, '_') || '미분류 프로젝트';
+    const safeFolderName = getSafeString(folderName).replace(/[\/\\]/g, '_').replace(/'/g, "\\'") || '미분류 프로젝트';
     
     const tryCreateFolder = async (parentId) => {
         // 💡 공유 드라이브 접근 권한 파라미터 (supportsAllDrives=true)
@@ -512,7 +512,11 @@ window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
         });
         const folderData = await findRes.json();
         
-        if (folderData.error) throw new Error(folderData.error.message);
+        // 💡 만료 에러 캐치 추가
+        if (folderData.error) {
+            if (folderData.error.code === 401) throw new Error("TOKEN_EXPIRED");
+            throw new Error(folderData.error.message);
+        }
         
         if (folderData.files && folderData.files.length > 0) {
             return folderData.files[0].id;
@@ -530,7 +534,10 @@ window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
                 })
             });
             const newFolderData = await createRes.json();
-            if (newFolderData.error) throw new Error(newFolderData.error.message);
+            if (newFolderData.error) {
+                if (newFolderData.error.code === 401) throw new Error("TOKEN_EXPIRED");
+                throw new Error(newFolderData.error.message);
+            }
             return newFolderData.id;
         }
     };
@@ -539,11 +546,13 @@ window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
         // 1차 시도: 공유 드라이브 특정 폴더
         return await tryCreateFolder(parentFolderId);
     } catch(e) {
+        if (e.message === "TOKEN_EXPIRED") throw new Error("구글 보안 토큰이 만료되었습니다. 창을 닫고 상단의 버튼을 눌러 다시 로그인해주세요.");
         console.warn("⚠️ 지정된 공유 폴더 접근 권한이 없어 내 드라이브(root)에 생성을 시도합니다:", e);
         try {
             // 2차 시도 (폴백): 사용자 개인 드라이브 root
             return await tryCreateFolder('root');
         } catch(e2) {
+            if (e2.message === "TOKEN_EXPIRED") throw new Error("구글 보안 토큰이 만료되었습니다. 창을 닫고 다시 연동해주세요.");
             console.error("❌ 폴더 생성 최종 실패:", e2);
             return null;
         }
@@ -551,9 +560,14 @@ window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
 };
 
 async function handleDriveUploadWithProgress(file, projectName, subFolderName = null, fileIndex = 1, totalFiles = 1) {
-    if(!window.googleAccessToken) {
-        throw new Error("구글 계정 연동이 필요합니다. 상단의 [구글 연동 필요] 버튼을 눌러주세요.");
+    // 💡 1시간 만료 엄격하게 사전 차단
+    const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
+    if (!window.googleAccessToken || !storedExpiry || Date.now() > parseInt(storedExpiry)) {
+        window.googleAccessToken = null;
+        if(window.initGoogleAPI) window.initGoogleAPI();
+        throw new Error("구글 보안 토큰이 만료되었습니다. 창을 닫고 상단의 [구글 연동 필요] 버튼을 눌러 다시 로그인해주세요.");
     }
+    
     if (!file) throw new Error("업로드할 파일이 없습니다.");
 
     let targetFolderId = await window.getOrCreateDriveFolder(projectName, TARGET_DRIVE_FOLDER);
@@ -981,6 +995,7 @@ window.restoreProjectHistory = async function(histId, projectId) {
     }
 };
 
+// 💡 현황판 내 뷰 토글 
 window.toggleProjDashView = function(view) {
     window.currentProjDashView = view;
     
@@ -1011,6 +1026,101 @@ window.toggleProjDashView = function(view) {
         calC.classList.remove('hidden'); 
         if(window.renderProjCalendar) window.renderProjCalendar(); 
     }
+};
+
+// 💡 뷰어 렌더링 - 간트
+window.scrollToGanttToday = function() {
+    const todayLine = document.getElementById('gantt-today-line');
+    if(todayLine) {
+        todayLine.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
+};
+
+window.renderProjGantt = function() {
+    const container = document.getElementById('proj-dash-gantt-content');
+    if(!container) return;
+    const projects = window.getFilteredProjects();
+    
+    if(projects.length === 0) {
+        container.innerHTML = '<div class="text-center p-10 text-slate-500 font-bold">조건에 맞는 프로젝트가 없습니다.</div>';
+        return;
+    }
+
+    let html = '<div class="p-4 space-y-2 min-w-[800px]">';
+    projects.forEach(p => {
+        let start = p.d_asmSt || p.d_asmEst;
+        let end = p.d_shipEn || p.d_shipEst;
+        let title = `[${p.code}] ${p.name}`;
+        
+        let barHtml = '';
+        if(start && end) {
+            barHtml = `<div class="absolute left-0 top-0 h-full bg-gradient-to-r from-indigo-400 to-rose-400 w-full rounded-full"></div>`;
+        }
+        
+        html += `
+        <div class="bg-white border border-slate-200 rounded-lg p-3 shadow-sm flex items-center justify-between hover:border-indigo-300 transition-colors cursor-pointer" onclick="window.editProjStatus('${p.id}')">
+            <div class="w-1/3 truncate font-bold text-slate-700 text-xs" title="${title}">${title}</div>
+            <div class="flex-1 flex items-center gap-2 px-4">
+                <div class="text-[10px] font-bold text-indigo-500 w-20 text-right">${start || '미정'}</div>
+                <div class="flex-1 h-3 bg-slate-100 rounded-full relative overflow-hidden">
+                    ${barHtml}
+                </div>
+                <div class="text-[10px] font-bold text-rose-500 w-20">${end || '미정'}</div>
+            </div>
+            <div class="w-24 text-right text-[11px] font-black text-emerald-600">${p.progress||0}%</div>
+        </div>`;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+};
+
+// 💡 뷰어 렌더링 - 캘린더
+window.renderProjCalendar = function() {
+    const container = document.getElementById('proj-dash-calendar-content');
+    if(!container) return;
+    
+    const projects = window.getFilteredProjects();
+    const now = window.calendarCurrentDate || new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    
+    let html = `
+    <div class="flex justify-between items-center mb-4">
+        <button onclick="window.calendarCurrentDate.setMonth(window.calendarCurrentDate.getMonth()-1); window.renderProjCalendar()" class="p-2 text-slate-400 hover:text-indigo-600"><i class="fa-solid fa-chevron-left"></i></button>
+        <h3 class="text-sm font-black text-slate-800">${year}년 ${month}월 출하/조립 일정</h3>
+        <button onclick="window.calendarCurrentDate.setMonth(window.calendarCurrentDate.getMonth()+1); window.renderProjCalendar()" class="p-2 text-slate-400 hover:text-indigo-600"><i class="fa-solid fa-chevron-right"></i></button>
+    </div>
+    `;
+    
+    html += `<div class="grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-lg overflow-hidden">`;
+    const days = ['일','월','화','수','목','금','토'];
+    days.forEach(d => html += `<div class="bg-slate-50 text-center py-2 text-[10px] font-bold ${d==='일'?'text-rose-500':(d==='토'?'text-blue-500':'text-slate-600')}">${d}</div>`);
+    
+    const firstDay = new Date(year, month - 1, 1).getDay();
+    const lastDate = new Date(year, month, 0).getDate();
+    
+    for(let i=0; i<firstDay; i++) html += `<div class="bg-white min-h-[100px] p-1 opacity-50"></div>`;
+    
+    for(let d=1; d<=lastDate; d++) {
+        let dStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        let isToday = dStr === window.getLocalDateStr(new Date());
+        
+        let dayPjts = projects.filter(p => p.d_shipEst === dStr || p.d_shipEn === dStr || p.d_asmSt === dStr || p.d_asmEst === dStr);
+        
+        let pjtHtml = dayPjts.map(p => {
+            let isShip = (p.d_shipEst === dStr || p.d_shipEn === dStr);
+            let badgeClass = isShip ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-indigo-50 text-indigo-600 border-indigo-200';
+            let icon = isShip ? 'fa-truck-fast' : 'fa-wrench';
+            return `<div class="text-[9px] font-bold border px-1 py-0.5 rounded mb-0.5 truncate cursor-pointer ${badgeClass}" onclick="window.editProjStatus('${p.id}')" title="[${p.code}] ${p.name}"><i class="fa-solid ${icon} mr-1"></i>${p.code||p.name}</div>`;
+        }).join('');
+        
+        html += `<div class="bg-white min-h-[100px] p-1 border-t-2 ${isToday?'border-indigo-500':'border-transparent'} flex flex-col">
+            <span class="text-[10px] font-bold text-slate-500 text-center mb-1 ${isToday?'bg-indigo-600 text-white rounded-full w-5 h-5 mx-auto leading-5':''}">${d}</span>
+            <div class="flex-1 overflow-y-auto custom-scrollbar">${pjtHtml}</div>
+        </div>`;
+    }
+    html += `</div>`;
+    container.innerHTML = html;
 };
 
 // ==========================================
@@ -1399,10 +1509,45 @@ window.deletePjtSchedule = async function(id) {
 };
 
 // ==========================================
-// 💡 생산일지 관리 모달 (안전장치 적용)
+// 💡 생산일지 관리 모달 (안전장치 적용 및 팀원 추가 기능 복구)
 // ==========================================
+
+// 💡 1. 팀원 목록 관리를 위한 함수 새로 작성
+window.addLogMember = function(name) {
+    if(!name) return;
+    window.currentLogMembers = window.currentLogMembers || [];
+    if(!window.currentLogMembers.includes(name)) {
+        window.currentLogMembers.push(name);
+        if(window.renderLogMembers) window.renderLogMembers();
+    }
+    const el = document.getElementById('log-member-add') || document.getElementById('md-member-add');
+    if(el) el.selectedIndex = 0;
+};
+
+window.removeLogMember = function(name) {
+    window.currentLogMembers = window.currentLogMembers || [];
+    window.currentLogMembers = window.currentLogMembers.filter(n => n !== name);
+    if(window.renderLogMembers) window.renderLogMembers();
+};
+
+window.renderLogMembers = function() {
+    const container = document.getElementById('log-selected-members');
+    const memInput = document.getElementById('log-members');
+    const membersList = window.currentLogMembers || [];
+    
+    if(memInput) memInput.value = membersList.join(', ');
+    
+    if(container) {
+        container.innerHTML = membersList.map(function(name) {
+            return `<span class="bg-sky-100 text-sky-700 px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1.5 shadow-sm">${name} <i class="fa-solid fa-xmark cursor-pointer hover:text-rose-500 bg-white/50 rounded-full px-1 py-0.5" onclick="window.removeLogMember('${name}')"></i></span>`;
+        }).join('');
+    }
+};
+
 window.openDailyLogModal = function(projectId) { 
     try {
+        if(window.initGoogleAPI) window.initGoogleAPI(); // 💡 매번 열 때 구글 연동 체크 새로고침
+        
         const modal = document.getElementById('daily-log-modal');
         if(!modal) { safeShowError('생산일지 모달창 요소를 찾을 수 없습니다.'); return; }
         
