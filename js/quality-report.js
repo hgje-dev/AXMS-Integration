@@ -182,7 +182,6 @@ window.renderQrList = function(list) {
     tbody.innerHTML = list.map(r => {
         const dateStr = r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '-';
         const compDateStr = (r.qualityStatus === '완료' && r.qualityUpdatedAt) ? new Date(r.qualityUpdatedAt).toLocaleDateString() : '-';
-        const safeName = r.pjtName.replace(/"/g, '&quot;').replace(/'/g, "\\'");
         
         let qStatus = r.qualityStatus || '대기중';
         let iStatus = (r.internalSch && r.internalSch.status) ? r.internalSch.status : '미진행';
@@ -259,7 +258,7 @@ window.openQrModal = function(docId) {
     }
     if(!hasGoodBad) window.addQrGoodBadRow(); 
 
-    // 💡 테이블 2: 실적 관리 (성과 및 진행내용) - 중복 폼 없이 단일 Row
+    // 테이블 2: 실적 관리 (성과 및 진행내용)
     document.getElementById('qr-performances-tbody').innerHTML = '';
     let hasPerf = false;
     
@@ -270,11 +269,9 @@ window.openQrModal = function(docId) {
         });
     }
 
-    // 예전 데이터 호환성 체크
     if (report.qualityLessons && report.qualityLessons.length > 0) {
         report.qualityLessons.forEach(l => {
             if (l.content || l.details || l.oldVal !== undefined || (l.item && !l.highlight && !l.lowlight)) {
-                // 이전의 details 데이터가 있다면 메인으로 병합
                 if (l.details) {
                     l.oldVal = l.details.oldVal !== undefined ? l.details.oldVal : l.oldVal;
                     l.newVal = l.details.newVal !== undefined ? l.details.newVal : l.newVal;
@@ -364,7 +361,6 @@ window.addQrGoodBadRow = function(data = null) {
     tbody.appendChild(tr);
 };
 
-// 💡 3. 업체/진행현황 등 중복 요소를 제거한 깔끔한 실적 1줄 관리 테이블
 window.addQrPerformanceRow = function(data = null) {
     const tbody = document.getElementById('qr-performances-tbody');
     
@@ -414,7 +410,6 @@ window.addQrPerformanceRow = function(data = null) {
     tbody.appendChild(tr);
 };
 
-// 💡 4. 실적 한 줄에서 즉시 Amount(수치) / CR(비율)을 계산합니다.
 window.calcQrPerformanceRow = function(inputEl) {
     const tr = inputEl.closest('tr');
     const oldVal = parseFloat(tr.querySelector('.qr-pf-old').value) || 0;
@@ -432,7 +427,6 @@ window.calcQrPerformanceRow = function(inputEl) {
     rateEl.innerText = rate.toFixed(1);
 };
 
-
 window.updateQrFileNames = function() {
     const inputEl = document.getElementById('qr-files');
     const displayEl = document.getElementById('qr-file-names');
@@ -446,88 +440,94 @@ window.updateQrFileNames = function() {
     }
 };
 
+// 💡 [핵심 수정] 구글 드라이브 파일 업로드 에러 캐치 강화 및 supportsAllDrives 적용
 async function qrUploadToDrive(file, folderName) {
-    if(!window.googleAccessToken) throw new Error("구글 인증이 필요합니다.");
+    const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
+    if (!window.googleAccessToken || !storedExpiry || Date.now() > parseInt(storedExpiry)) {
+        throw new Error("구글 인증 토큰이 만료되었습니다. 로그아웃 후 다시 연동해주세요.");
+    }
     
-    const query1 = `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and '${QR_DRIVE_PARENT_FOLDER}' in parents and trashed=false`;
-    const res1 = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query1)}`, { headers: { 'Authorization': 'Bearer ' + window.googleAccessToken } });
+    const query1 = `name='${encodeURIComponent(folderName.replace(/['\/\\]/g, '_'))}' and mimeType='application/vnd.google-apps.folder' and '${QR_DRIVE_PARENT_FOLDER}' in parents and trashed=false`;
+    const res1 = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query1}&supportsAllDrives=true&includeItemsFromAllDrives=true`, { 
+        headers: { 'Authorization': 'Bearer ' + window.googleAccessToken } 
+    });
     const data1 = await res1.json();
+    if(data1.error) {
+        if (data1.error.code === 401) throw new Error("TOKEN_EXPIRED");
+        throw new Error(`[API 조회 에러] ${data1.error.message}`);
+    }
     
     let pjtFolderId = '';
     if (data1.files && data1.files.length > 0) pjtFolderId = data1.files[0].id;
     else {
-        const cRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+        const cRes = await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
             method: 'POST', headers: { 'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: folderName, mimeType: 'application/vnd.google-apps.folder', parents: [QR_DRIVE_PARENT_FOLDER] })
+            body: JSON.stringify({ name: folderName.replace(/['\/\\]/g, '_'), mimeType: 'application/vnd.google-apps.folder', parents: [QR_DRIVE_PARENT_FOLDER] })
         });
         const cData = await cRes.json();
+        if(cData.error) throw new Error(`[API 생성 에러] ${cData.error.message}`);
         pjtFolderId = cData.id;
     }
 
     const query2 = `name='품질성적서' and mimeType='application/vnd.google-apps.folder' and '${pjtFolderId}' in parents and trashed=false`;
-    const res2 = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query2)}`, { headers: { 'Authorization': 'Bearer ' + window.googleAccessToken } });
+    const res2 = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query2)}&supportsAllDrives=true&includeItemsFromAllDrives=true`, { headers: { 'Authorization': 'Bearer ' + window.googleAccessToken } });
     const data2 = await res2.json();
+    if(data2.error) throw new Error(data2.error.message);
     
     let qFolderId = '';
     if (data2.files && data2.files.length > 0) qFolderId = data2.files[0].id;
     else {
-        const cRes2 = await fetch('https://www.googleapis.com/drive/v3/files', {
+        const cRes2 = await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
             method: 'POST', headers: { 'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: '품질성적서', mimeType: 'application/vnd.google-apps.folder', parents: [pjtFolderId] })
         });
         const cData2 = await cRes2.json();
+        if(cData2.error) throw new Error(cData2.error.message);
         qFolderId = cData2.id;
     }
 
-    const progressModal = document.getElementById('upload-progress-modal');
-    const progressBar = document.getElementById('upload-progress-bar');
-    const progressText = document.getElementById('upload-progress-text');
-    const progressSize = document.getElementById('upload-progress-size');
-    const progressFilename = document.getElementById('upload-progress-filename');
-    
-    if(progressModal) progressModal.classList.replace('hidden', 'flex');
-    if(progressBar) progressBar.style.width = '0%';
-    if(progressText) progressText.innerText = '0%';
-    if(progressFilename) progressFilename.innerText = file.name;
-    const totalMb = (file.size / (1024 * 1024)).toFixed(2);
-    if(progressSize) progressSize.innerText = `0.00 MB / ${totalMb} MB`;
+    const metadata = { name: file.name, parents: [qFolderId] };
+    const form = new FormData(); form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' })); form.append('file', file);
 
+    const xhr = new XMLHttpRequest();
     return new Promise((resolve, reject) => {
-        const metadata = { name: file.name, parents: [qFolderId] };
-        const form = new FormData();
-        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-        form.append('file', file);
-
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', true);
+        xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', true);
         xhr.setRequestHeader('Authorization', 'Bearer ' + window.googleAccessToken);
-
+        
+        const progressModal = document.getElementById('upload-progress-modal');
+        const progressBar = document.getElementById('upload-progress-bar');
+        const progressText = document.getElementById('upload-progress-text');
+        const progressSize = document.getElementById('upload-progress-size');
+        
+        if (progressModal) progressModal.classList.replace('hidden', 'flex');
+        
         xhr.upload.onprogress = function(e) {
-            if (e.lengthComputable) {
+            if (e.lengthComputable && progressBar) {
                 const percent = Math.round((e.loaded / e.total) * 100);
                 const loadedMb = (e.loaded / (1024 * 1024)).toFixed(2);
-                if(progressBar) progressBar.style.width = percent + '%';
+                const totalMb = (e.total / (1024 * 1024)).toFixed(2);
+                progressBar.style.width = percent + '%';
                 if(progressText) progressText.innerText = percent + '%';
                 if(progressSize) progressSize.innerText = `${loadedMb} MB / ${totalMb} MB`;
             }
         };
 
         xhr.onload = function() {
-            if(progressModal) progressModal.classList.replace('flex', 'hidden');
-            if (xhr.status >= 200 && xhr.status < 300) {
-                const data = JSON.parse(xhr.responseText);
-                resolve(`https://drive.google.com/file/d/${data.id}/view`);
-            } else { reject(new Error("업로드 실패")); }
+            if (progressModal) progressModal.classList.replace('flex', 'hidden');
+            if (xhr.status >= 200 && xhr.status < 300) { 
+                resolve(`https://drive.google.com/file/d/${JSON.parse(xhr.responseText).id}/view`); 
+            } else { 
+                reject(new Error(`업로드 실패 (HTTP ${xhr.status})`)); 
+            }
         };
-        xhr.onerror = function() {
-            if(progressModal) progressModal.classList.replace('flex', 'hidden');
+        xhr.onerror = () => {
+            if (progressModal) progressModal.classList.replace('flex', 'hidden');
             reject(new Error("네트워크 오류"));
-        };
+        }
         xhr.send(form);
     });
 }
 
-// 💡 5. 저장 로직 반영: 1줄로 통합된 .qr-perf-row 데이터만 가져오게 됨
 window.saveQualityReport = async function() {
     const docId = document.getElementById('qr-doc-id').value;
     const report = window.qrReports.find(r => r.id === docId);
