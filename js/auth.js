@@ -1,7 +1,7 @@
 /* eslint-disable */
 import { auth, db } from './firebase.js';
 import { GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { doc, getDoc, setDoc, collection, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { doc, getDoc, setDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 let allUsersUnsubscribe=null, teamMembersUnsubscribe=null;
 window.isSigningUp = false; 
@@ -15,8 +15,11 @@ googleProvider.addScope('https://www.googleapis.com/auth/drive');
 googleProvider.addScope('https://www.googleapis.com/auth/gmail.send');
 googleProvider.addScope('https://www.googleapis.com/auth/spreadsheets.readonly');
 
-// 팝업 차단 방지를 위해 consent 옵션 조정
-googleProvider.setCustomParameters({ prompt: 'select_account' });
+// 💡 [원인 해결] 체크박스(권한) 동의 창을 무조건 강제로 띄우는 필수 옵션입니다!
+googleProvider.setCustomParameters({ 
+    prompt: 'consent',
+    access_type: 'offline'
+});
 
 window.googleLogin = async () => {
     const err = document.getElementById('login-error');
@@ -147,10 +150,7 @@ window.initAuthListeners = () => {
     });
 };
 
-// 💡 [초강력 방어 코드] HTML의 onclick 속성이 모듈 스코프 때문에 무시될 경우를 대비해, 
-// 직접 로그인 버튼을 찾아 클릭 이벤트를 묶어버립니다.
 document.addEventListener('DOMContentLoaded', () => {
-    // 'Google 계정으로 시작하기' 버튼을 찾습니다.
     const loginBtn = document.querySelector('button[onclick="window.googleLogin()"]');
     if (loginBtn) {
         loginBtn.addEventListener('click', (e) => {
