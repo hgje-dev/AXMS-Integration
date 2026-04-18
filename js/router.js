@@ -1,7 +1,6 @@
 /* eslint-disable */
 
 export function initRouter() {
-    // 뒤로가기/앞으로가기 브라우저 버튼 처리
     window.addEventListener('popstate', (event) => {
         if (event.state && event.state.appId) {
             loadView(event.state.appId, event.state.title, false);
@@ -10,29 +9,32 @@ export function initRouter() {
         }
     });
 
-    // 최초 로드 시 무조건 홈 화면(대시보드)으로 세팅
     window.navigateHome(true);
 }
 
-// 💡 홈으로 가기 함수
 window.navigateHome = (pushState = true) => {
     window.openApp('dashboard-home', '통합 대시보드', pushState);
 };
 
-// 💡 메뉴 클릭 시 앱(화면) 열기 함수
 window.openApp = (appId, title, pushState = true) => {
     loadView(appId, title, pushState);
     if (window.toggleSidebar) {
-        window.toggleSidebar(false); // 모바일에서 메뉴 누르면 사이드바 닫기
+        window.toggleSidebar(false); 
     }
 };
 
-// 💡 실제 HTML을 불러와서 화면에 꽂아주는 핵심 로직
 async function loadView(appId, title, pushState) {
     try {
+        // 💡 [핵심 해결] 메뉴 ID와 실제 파일명을 연결해주는 연결고리!
+        let fileName = appId;
+        if (appId === 'dashboard-home') fileName = 'dashboard';
+        else if (appId === 'project-status') fileName = 'project';
+        else if (appId === 'weekly-log') fileName = 'weekly';
+        else if (appId === 'collab' || appId === 'purchase' || appId === 'repair') fileName = 'request';
+
         // html 파일 가져오기
-        const response = await fetch(`./views/${appId}.html`);
-        if (!response.ok) throw new Error(`화면 파일을 찾을 수 없습니다: ${appId}.html`);
+        const response = await fetch(`./views/${fileName}.html`);
+        if (!response.ok) throw new Error(`화면 파일을 찾을 수 없습니다: ${fileName}.html`);
         const html = await response.text();
 
         // 화면에 삽입
@@ -42,16 +44,15 @@ async function loadView(appId, title, pushState) {
         const navTitle = document.getElementById('nav-title');
         if (navTitle) navTitle.innerText = title;
 
-        // 주소창 URL 변경 (새로고침 없이)
+        // 주소창 URL 변경
         if (pushState) {
             window.history.pushState({ appId, title }, title, `?app=${appId}`);
         }
 
-        // 전역 상태 업데이트 (어느 앱에 있는지 기록)
         window.currentAppId = appId; 
 
-        // 🔥 각 메뉴별 전용 스크립트(데이터 불러오기) 실행 트리거
-        if (appId === 'dashboard-home' && window.initDashboard) window.initDashboard();
+        // 💡 각 메뉴별 데이터 불러오기 함수 실행
+        if (appId === 'dashboard-home' && window.loadHomeDashboards) window.loadHomeDashboards();
         else if (appId === 'project-status' && window.loadProjectStatusData) window.loadProjectStatusData();
         else if (appId === 'weekly-log' && window.loadWeeklyLogsData) window.loadWeeklyLogsData();
         else if (appId === 'workhours' && window.loadWorkhoursData) window.loadWorkhoursData();
@@ -62,10 +63,9 @@ async function loadView(appId, title, pushState) {
         else if (appId === 'completion-report' && window.initCompletionReport) window.initCompletionReport();
         else if (appId === 'simulation' && window.initSimulation) window.initSimulation();
         else if (['collab', 'purchase', 'repair'].includes(appId) && window.loadRequestsData) {
-            window.loadRequestsData(appId); // 요청서 공통 함수 호출
+            window.loadRequestsData(appId);
         }
 
-        // 사이드바 버튼 활성화 색상 변경
         updateSidebarActive(appId);
 
     } catch (error) {
@@ -80,25 +80,20 @@ async function loadView(appId, title, pushState) {
     }
 }
 
-// 💡 사이드바 메뉴 색상 하이라이트 함수
 function updateSidebarActive(appId) {
     const navButtons = document.querySelectorAll('#sidebar nav button');
     navButtons.forEach(btn => {
-        // 초기화
         btn.classList.remove('bg-slate-100');
         const iconContainer = btn.querySelector('div');
         
-        // 아이콘 텍스트 색상 원래대로 복구
         if(iconContainer) {
             iconContainer.className = 'w-6 text-center text-slate-400 transition-colors group-hover:text-indigo-500';
             btn.className = btn.className.replace(/text-[a-z]+-600/g, 'text-slate-600');
         }
 
-        // 현재 클릭한 메뉴 하이라이트 적용
         if (btn.getAttribute('onclick')?.includes(`'${appId}'`)) {
             btn.classList.add('bg-slate-100');
             
-            // 메뉴별 색상 매핑
             if (appId === 'product-cost' || appId === 'purchase') {
                 btn.classList.replace('text-slate-600', 'text-emerald-600');
                 if(iconContainer) iconContainer.className = 'w-6 text-center text-emerald-500';
@@ -116,7 +111,6 @@ function updateSidebarActive(appId) {
     });
 }
 
-// 💡 모바일 사이드바 열고 닫기 함수
 window.toggleSidebar = (show) => {
     const sidebar = document.getElementById('sidebar');
     const backdrop = document.getElementById('sidebar-backdrop');
