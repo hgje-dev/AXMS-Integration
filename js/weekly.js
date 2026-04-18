@@ -1,6 +1,6 @@
 /* eslint-disable */
 import { db } from './firebase.js';
-import { collection, doc, setDoc, addDoc, deleteDoc, query, onSnapshot, where, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { collection, doc, setDoc, addDoc, deleteDoc, query, onSnapshot, where, getDocs, writeBatch } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 let currentWeeklyLogUnsubscribe = null;
 let currentScheduleUnsubscribe = null;
@@ -15,7 +15,7 @@ window.currentScheduleList = [];
 window.draftTasks = []; 
 window.wlInvolvedProjects = []; 
 window.activeWeeklyTab = 'team'; 
-window.weeklyStatFilter = 'all'; // 통계 필터 변수 추가
+window.weeklyStatFilter = 'all'; 
 
 window.schCalDate = new Date();
 window.schViewMode = 'kanban'; 
@@ -23,14 +23,51 @@ window.schViewMode = 'kanban';
 window.mySchCalDate = new Date();
 window.mySchViewMode = 'kanban'; 
 window.myMonthlySchedules = [];
-window.missingMembersList = []; // 미작성자 배열 추가
+window.missingMembersList = []; 
 
-// 💡 한국 공휴일 데이터 세팅 (2024년 ~ 2027년)
 const WEEKLY_KR_HOLIDAYS = {
     '2024-01-01': '신정', '2024-02-09': '설연휴', '2024-02-12': '대체공휴일', '2024-03-01': '삼일절', '2024-04-10': '국회의원선거', '2024-05-06': '대체공휴일', '2024-05-15': '부처님오신날', '2024-06-06': '현충일', '2024-08-15': '광복절', '2024-09-16': '추석연휴', '2024-09-17': '추석', '2024-09-18': '추석연휴', '2024-10-03': '개천절', '2024-10-09': '한글날', '2024-12-25': '성탄절',
     '2025-01-01': '신정', '2025-01-28': '설연휴', '2025-01-29': '설날', '2025-01-30': '설연휴', '2025-03-01': '삼일절', '2025-03-03': '대체공휴일', '2025-05-05': '어린이날', '2025-05-06': '부처님오신날', '2025-06-06': '현충일', '2025-08-15': '광복절', '2025-10-03': '개천절', '2025-10-06': '추석연휴', '2025-10-07': '추석', '2025-10-09': '한글날', '2025-12-25': '성탄절',
     '2026-01-01': '신정', '2026-02-16': '설연휴', '2026-02-17': '설날', '2026-02-18': '설연휴', '2026-03-01': '삼일절', '2026-03-02': '대체공휴일', '2026-05-05': '어린이날', '2026-05-24': '부처님오신날', '2026-05-25': '대체공휴일', '2026-06-06': '현충일', '2026-08-15': '광복절', '2026-09-24': '추석연휴', '2026-09-25': '추석', '2026-09-26': '추석연휴', '2026-10-03': '개천절', '2026-10-05': '대체공휴일', '2026-10-09': '한글날', '2026-12-25': '성탄절',
     '2027-01-01': '신정', '2027-02-06': '설연휴', '2027-02-07': '설날', '2027-02-08': '설연휴', '2027-02-09': '대체공휴일', '2027-03-01': '삼일절', '2027-05-05': '어린이날', '2027-05-13': '부처님오신날', '2027-06-06': '현충일', '2027-08-15': '광복절', '2027-08-16': '대체공휴일', '2027-09-14': '추석연휴', '2027-09-15': '추석', '2027-09-16': '추석연휴', '2027-10-03': '개천절', '2027-10-09': '한글날', '2027-10-11': '대체공휴일', '2027-12-25': '성탄절'
+};
+
+// 💡 1. 공통 메일 발송 함수 (토큰 만료 안전 처리)
+window.notifyUser = async function(targetName, content, projectId, typeDesc) {
+    if (!targetName) return false;
+    const users = window.allSystemUsers || [];
+    let targetUser = users.find(u => u.name === targetName);
+    
+    if (!targetUser || targetUser.uid === window.currentUser?.uid) return false;
+
+    try {
+        let sysName = window.userProfile ? window.userProfile.name : '시스템';
+        let msgTitle = `📢 ${sysName}님이 [${typeDesc}] 을(를) 남겼습니다.`;
+        
+        await addDoc(collection(db, "notifications"), {
+            targetUid: targetUser.uid, senderName: sysName, type: typeDesc,
+            message: `${msgTitle}\n내용: ${content}`, projectId: projectId || null,
+            isRead: false, createdAt: Date.now()
+        });
+
+        if (targetUser.email) {
+            const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
+            if (window.googleAccessToken && storedExpiry && Date.now() < parseInt(storedExpiry)) {
+                const subject = `[AXBIS 알림] ${msgTitle}`;
+                const bodyHtml = `<div style="font-family: sans-serif; padding: 20px;"><h3>${msgTitle}</h3><p>${String(content).replace(/\n/g, '<br>')}</p></div>`;
+                const emailRaw = `To: ${targetUser.email}\r\nSubject: =?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=\r\nContent-Type: text/html; charset="UTF-8"\r\n\r\n${bodyHtml}`;
+                const encodedEmail = btoa(unescape(encodeURIComponent(emailRaw))).replace(/\+/g, '-').replace(/\//g, '_');
+                
+                fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+                    method: 'POST', headers: { 'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ raw: encodedEmail })
+                }).catch(e => console.log("메일 발송 에러(무시가능):", e));
+            } else {
+                if (window.showToast) window.showToast("구글 계정 연동이 만료되어 메일 알림이 발송되지 않았습니다.", "warning");
+            }
+        }
+        return true;
+    } catch(e) { return false; }
 };
 
 window.switchWeeklyTab = function(tabName) {
@@ -68,7 +105,6 @@ window.switchWeeklyTab = function(tabName) {
     }
 };
 
-// 💡 PJT 초성 검색을 위한 자동완성 (ui.js 기반)
 window.showAutocomplete = function(inputEl, targetId1, targetId2, isNameSearch) {
     const val = inputEl.value.trim().toLowerCase();
     let dropdown = document.getElementById('pjt-autocomplete-dropdown');
@@ -157,7 +193,6 @@ window.updateWeekLabels = function(weekStr) {
     if(dLineEl) dLineEl.innerText = window.getLocalDateStr(deadline);
 };
 
-// 💡 관리자용 마감일 수정 기능
 window.editWeeklyPeriod = async function() {
     const weekInput = document.getElementById('weekly-log-filter-week');
     if (!weekInput || !weekInput.value) return;
@@ -208,10 +243,7 @@ window.changeWeeklyWeek = function(offset) {
 
 window.openTeamModal = function() {
     const m = document.getElementById('team-modal');
-    if (m) { 
-        m.classList.remove('hidden'); 
-        m.classList.add('flex'); 
-    }
+    if (m) { m.classList.remove('hidden'); m.classList.add('flex'); }
     
     if (typeof window.populateUserDropdowns === 'function') {
         window.populateUserDropdowns();
@@ -245,16 +277,12 @@ window.openTeamModal = function() {
 
 window.closeTeamModal = function() {
     const m = document.getElementById('team-modal');
-    if (m) { 
-        m.classList.add('hidden'); 
-        m.classList.remove('flex'); 
-    }
+    if (m) { m.classList.add('hidden'); m.classList.remove('flex'); }
 };
 
 window.editNotice = function() {
     const rawEl = document.getElementById('weekly-notice-raw-text');
     let currentText = rawEl ? rawEl.value : ''; 
-    
     document.getElementById('notice-text-input').value = currentText;
     const modal = document.getElementById('notice-modal');
     if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
@@ -265,15 +293,19 @@ window.closeNoticeModal = function() {
     if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
 };
 
+// 💡 2. 공지사항 메일 발송 시 토큰 만료 사전 차단
 window.saveNotice = async function() {
     const newText = document.getElementById('notice-text-input').value.trim();
     const sendEmail = document.getElementById('notice-email-send').checked;
     
-    // 💡 구글 연동 체크 (메일 발송 시 필수)
-    if (sendEmail && newText && !window.googleAccessToken) {
-        window.showToast("공지사항 메일 발송을 위해 구글 연동이 필요합니다.", "warning");
-        if (window.authenticateGoogle) window.authenticateGoogle();
-        return;
+    if (sendEmail && newText) {
+        const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
+        if (!window.googleAccessToken || !storedExpiry || Date.now() > parseInt(storedExpiry)) {
+            window.googleAccessToken = null;
+            if (window.initGoogleAPI) window.initGoogleAPI();
+            if (window.showToast) window.showToast("구글 보안 토큰이 만료되었습니다. 로그아웃 후 다시 로그인해주세요.", "error");
+            return;
+        }
     }
     
     try {
@@ -281,7 +313,7 @@ window.saveNotice = async function() {
         window.closeNoticeModal();
         
         if (sendEmail && newText) {
-            window.showToast("공지사항 메일을 발송하는 중입니다...");
+            if(window.showToast) window.showToast("공지사항 메일을 발송하는 중입니다...");
             let recipients = window.teamMembers || window.allSystemUsers || [];
             let count = 0;
             for (let i = 0; i < recipients.length; i++) {
@@ -292,16 +324,15 @@ window.saveNotice = async function() {
                     }
                 }
             }
-            if(window.showToast && count > 0) window.showToast(`팀원 ${count}명에게 공지 알림이 발송되었습니다.`);
+            if(window.showToast && count > 0) window.showToast(`팀원 ${count}명에게 공지 알림이 발송되었습니다.`, "success");
         } else {
-            if(window.showToast) window.showToast("공지사항이 정상적으로 수정되었습니다.");
+            if(window.showToast) window.showToast("공지사항이 정상적으로 수정되었습니다.", "success");
         }
     } catch (e) {
         if(window.showToast) window.showToast("공지사항 수정 실패", "error");
     }
 };
 
-// 💡 대시보드 통계 클릭 필터
 window.filterWeeklyLogsByStat = function(stat) {
     window.weeklyStatFilter = stat;
     
@@ -335,7 +366,6 @@ window.loadWeeklyLogsData = function() {
 
     if (periodUnsubscribe) periodUnsubscribe();
     periodUnsubscribe = onSnapshot(doc(db, "settings", "weekly_period_" + w), (docSnap) => {
-        // 무조건 기본값으로 라벨(몇년 몇월 몇주, 보고기간, 마감일) 1차 세팅
         window.updateWeekLabels(w);
 
         if (docSnap.exists()) {
@@ -472,12 +502,15 @@ window.checkMissingMembers = function() {
     }
 };
 
+// 💡 3. 작성 독려 메일 발송 시 토큰 만료 처리
 window.urgeMissingMembers = async function() {
     if(!window.missingMembersList || window.missingMembersList.length === 0) return;
     
-    if (!window.googleAccessToken) {
-        window.showToast("알림 메일 발송을 위해 구글 연동이 필요합니다.", "warning");
-        if (window.authenticateGoogle) window.authenticateGoogle();
+    const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
+    if (!window.googleAccessToken || !storedExpiry || Date.now() > parseInt(storedExpiry)) {
+        window.googleAccessToken = null;
+        if (window.initGoogleAPI) window.initGoogleAPI();
+        if (window.showToast) window.showToast("구글 보안 토큰이 만료되었습니다. 로그아웃 후 다시 로그인해주세요.", "error");
         return;
     }
 
@@ -491,9 +524,7 @@ window.urgeMissingMembers = async function() {
     if(window.showToast) window.showToast(`미작성자 ${count}명에게 작성 독려 알림 및 메일을 발송했습니다.`, "success");
 };
 
-window.filterWeeklyLogs = function() {
-    window.renderWeeklyLogs();
-};
+window.filterWeeklyLogs = function() { window.renderWeeklyLogs(); };
 
 window.renderWeeklyLogs = function() { 
     const feed = document.getElementById('weekly-log-feed'); 
@@ -505,9 +536,7 @@ window.renderWeeklyLogs = function() {
     const searchName = searchNameEl ? searchNameEl.value.toLowerCase() : '';
     const searchContent = searchContentEl ? searchContentEl.value.toLowerCase() : '';
 
-    let displayList = window.currentWeeklyLogList.filter(function(l) { 
-        return l.isSubmitted; 
-    });
+    let displayList = window.currentWeeklyLogList.filter(function(l) { return l.isSubmitted; });
 
     if (window.weeklyStatFilter === 'completed') {
         displayList = displayList.filter(l => l.tasks && l.tasks.some(t => t.status === '완료'));
@@ -518,9 +547,7 @@ window.renderWeeklyLogs = function() {
     }
 
     if (searchName) {
-        displayList = displayList.filter(function(l) { 
-            return (l.authorName || '').toLowerCase().includes(searchName); 
-        });
+        displayList = displayList.filter(function(l) { return (l.authorName || '').toLowerCase().includes(searchName); });
     }
     
     if (searchContent) {
@@ -531,7 +558,6 @@ window.renderWeeklyLogs = function() {
             } else {
                 fullText += String(l.projectName || '');
             }
-
             if (l.tasks && Array.isArray(l.tasks)) {
                 l.tasks.forEach(function(t) { fullText += ' ' + String(t.content || ''); });
             }
@@ -539,9 +565,7 @@ window.renderWeeklyLogs = function() {
         });
     }
 
-    displayList.sort(function(a, b) { 
-        return (b.updatedAt || 0) - (a.updatedAt || 0); 
-    });
+    displayList.sort(function(a, b) { return (b.updatedAt || 0) - (a.updatedAt || 0); });
 
     if (displayList.length === 0) {
         feed.innerHTML = '<div class="text-center p-10 bg-white rounded-2xl border border-slate-200 text-slate-400 font-bold shadow-sm">제출된 일지가 없거나 검색 결과가 없습니다.</div>';
@@ -549,13 +573,10 @@ window.renderWeeklyLogs = function() {
     }
 
     const orderMap = { "월요일": 1, "화요일": 2, "수요일": 3, "목요일": 4, "금요일": 5, "토요일": 6, "일요일": 7, "주간 공통": 99 };
-
     let htmlArray = [];
 
     displayList.forEach(function(log) {
         let tasksByDay = {};
-        
-        // 💡 선택된 통계 카드에 따라 task 배열 필터링
         let filteredTasks = [];
         if (log.tasks && Array.isArray(log.tasks)) {
             filteredTasks = log.tasks;
@@ -572,9 +593,7 @@ window.renderWeeklyLogs = function() {
             });
         }
         
-        const sortedDays = Object.keys(tasksByDay).sort(function(a, b) { 
-            return (orderMap[a] || 0) - (orderMap[b] || 0); 
-        });
+        const sortedDays = Object.keys(tasksByDay).sort(function(a, b) { return (orderMap[a] || 0) - (orderMap[b] || 0); });
 
         const tasksHtml = sortedDays.map(function(day) {
             let dayHtml = '<div class="bg-slate-50 px-4 py-1.5 rounded-lg text-xs font-bold text-slate-500 mb-2 mt-4 flex items-center gap-1.5"><i class="fa-regular fa-clock"></i> ' + day + '</div><ul class="space-y-2 ml-2 border-l-2 border-slate-100 pl-4">';
@@ -589,7 +608,6 @@ window.renderWeeklyLogs = function() {
                 
                 const locBadge = '<span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded ml-1"><i class="fa-solid fa-location-dot text-[9px]"></i> ' + (t.loc || '사내') + '</span>';
                 const safeContent = window.formatMentions ? window.formatMentions(String(t.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')) : String(t.content || '').replace(/\n/g, '<br>');
-                
                 const timeBadge = t.createdAtTime ? '<span class="text-[9px] text-slate-400 ml-2 font-mono tracking-tighter">' + t.createdAtTime.split(' ')[1] + '</span>' : '';
 
                 dayHtml += '<li class="flex justify-between items-start gap-4 hover:bg-slate-50 p-1.5 rounded-lg transition-colors group"><div class="flex items-start gap-2 text-sm text-slate-700 font-medium"><span class="text-slate-300 mt-1 text-[8px]"><i class="fa-solid fa-circle"></i></span><div>' + safeContent + ' ' + locBadge + timeBadge + '</div></div><div class="shrink-0 pt-0.5">' + statusBadge + '</div></li>';
@@ -605,18 +623,13 @@ window.renderWeeklyLogs = function() {
             issuesHtml = '<div class="mt-5 bg-[#fffbf0] border border-orange-100 rounded-xl p-4 shadow-sm"><div class="text-[11px] font-bold text-orange-600 mb-2 flex items-center gap-1.5"><i class="fa-regular fa-comment-dots"></i> 요청사항 및 이슈</div><div class="text-sm font-medium text-slate-700 leading-relaxed">' + formattedIssue + '</div></div>';
         }
 
-        // 💡 필터 적용 시 남은 내역이 없으면 (빈 카드 방지) 출력하지 않음
-        if (filteredTasks.length === 0 && safeIssuesStr === '' && window.weeklyStatFilter !== 'all') {
-            return;
-        }
+        if (filteredTasks.length === 0 && safeIssuesStr === '' && window.weeklyStatFilter !== 'all') return;
 
         let bottomMetaHtml = '<div class="mt-4 pt-3 border-t border-slate-100 flex gap-2 flex-wrap text-[11px] font-bold text-slate-500 items-center">';
         
         let pjtTags = '';
         if (log.involvedProjects && Array.isArray(log.involvedProjects)) {
-            pjtTags = log.involvedProjects.map(function(p) { 
-                return '<span class="bg-indigo-50 text-indigo-600 border border-indigo-100 px-2 py-1 rounded-lg shadow-sm"><i class="fa-solid fa-folder-open"></i> ' + (p.name || '') + '</span>'; 
-            }).join('');
+            pjtTags = log.involvedProjects.map(function(p) { return '<span class="bg-indigo-50 text-indigo-600 border border-indigo-100 px-2 py-1 rounded-lg shadow-sm"><i class="fa-solid fa-folder-open"></i> ' + (p.name || '') + '</span>'; }).join('');
         } else if (log.projectName) { 
             pjtTags = '<span class="bg-indigo-50 text-indigo-600 border border-indigo-100 px-2 py-1 rounded-lg shadow-sm"><i class="fa-solid fa-folder-open"></i> ' + log.projectName + '</span>';
         }
@@ -668,19 +681,13 @@ window.renderWlProjects = function() {
 
 window.openWeeklyLogWriteModal = async function(editId) { 
     const weekInput = document.getElementById('weekly-log-filter-week');
-    if (!weekInput) {
-        if (window.showToast) window.showToast("오류: HTML 파일이 최신버전이 아닙니다.", "error");
-        return;
-    }
+    if (!weekInput) return;
     
     const w = weekInput.value;
     let existingLog = null;
     
-    if (editId && typeof editId === 'string') {
-        existingLog = window.currentWeeklyLogList.find(function(l) { return l.id === editId; });
-    } else {
-        existingLog = window.currentWeeklyLogList.find(function(l) { return l.authorUid === (window.currentUser ? window.currentUser.uid : null) && l.week === w; });
-    }
+    if (editId && typeof editId === 'string') existingLog = window.currentWeeklyLogList.find(l => l.id === editId);
+    else existingLog = window.currentWeeklyLogList.find(l => l.authorUid === (window.currentUser ? window.currentUser.uid : null) && l.week === w);
 
     const draftIdEl = document.getElementById('weekly-draft-id');
     if (draftIdEl) draftIdEl.value = existingLog ? existingLog.id : '';
@@ -691,18 +698,10 @@ window.openWeeklyLogWriteModal = async function(editId) {
     if (issuesEl) issuesEl.value = '';
 
     if (existingLog) {
-        if (existingLog.tasks) {
-            window.draftTasks = existingLog.tasks.map(function(t, i) { 
-                return Object.assign({}, t, { id: t.id || Date.now() + i }); 
-            });
-        }
+        if (existingLog.tasks) window.draftTasks = existingLog.tasks.map((t, i) => Object.assign({}, t, { id: t.id || Date.now() + i }));
         if (issuesEl) issuesEl.value = existingLog.issues || '';
-        
-        if (existingLog.involvedProjects && Array.isArray(existingLog.involvedProjects)) {
-            window.wlInvolvedProjects = existingLog.involvedProjects.slice();
-        } else if (existingLog.projectName) {
-            window.wlInvolvedProjects = [{ name: existingLog.projectName, code: existingLog.projectCode || '' }];
-        }
+        if (existingLog.involvedProjects && Array.isArray(existingLog.involvedProjects)) window.wlInvolvedProjects = existingLog.involvedProjects.slice();
+        else if (existingLog.projectName) window.wlInvolvedProjects = [{ name: existingLog.projectName, code: existingLog.projectCode || '' }];
     } else if (window.currentUser) {
         try {
             const d = window.getDatesFromWeek(w).start;
@@ -714,25 +713,17 @@ window.openWeeklyLogWriteModal = async function(editId) {
             
             if (!snap.empty) {
                 const prevLog = snap.docs[0].data();
-                
                 let carryOverCount = 0;
                 if (prevLog.tasks && Array.isArray(prevLog.tasks)) {
-                    prevLog.tasks.forEach(function(t, i) {
+                    prevLog.tasks.forEach((t, i) => {
                         if (t.status === '진행 중') {
-                            window.draftTasks.push(Object.assign({}, t, { 
-                                id: Date.now() + i, 
-                                isCarryOver: true,
-                                createdAtTime: window.getDateTimeStr ? window.getDateTimeStr(new Date()) : new Date().toLocaleString()
-                            }));
+                            window.draftTasks.push(Object.assign({}, t, { id: Date.now() + i, isCarryOver: true, createdAtTime: window.getDateTimeStr ? window.getDateTimeStr(new Date()) : new Date().toLocaleString() }));
                             carryOverCount++;
                         }
                     });
                 }
-                
                 if (carryOverCount > 0) {
-                    if (prevLog.involvedProjects && Array.isArray(prevLog.involvedProjects)) {
-                        window.wlInvolvedProjects = prevLog.involvedProjects.slice();
-                    }
+                    if (prevLog.involvedProjects && Array.isArray(prevLog.involvedProjects)) window.wlInvolvedProjects = prevLog.involvedProjects.slice();
                     if (window.showToast) window.showToast("지난주 '진행 중' 업무 " + carryOverCount + "건이 자동 이월되었습니다.", "success");
                 }
             }
@@ -761,36 +752,26 @@ window.openWeeklyLogWriteModal = async function(editId) {
 
     const contentEl = document.getElementById('wl-new-content');
     if (contentEl) contentEl.value = '';
-    
     window.renderDraftTasks();
 
     const modal = document.getElementById('weekly-log-write-modal');
-    if (modal) {
-        modal.classList.remove('hidden'); 
-        modal.classList.add('flex'); 
-    }
+    if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
 };
 
 window.closeWeeklyLogWriteModal = function() { 
     const modal = document.getElementById('weekly-log-write-modal');
-    if (modal) {
-        modal.classList.add('hidden'); 
-        modal.classList.remove('flex'); 
-    }
+    if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
 };
 
 window.editWeeklyLog = function(id) {
-    const log = window.currentWeeklyLogList.find(function(l) { return l.id === id; });
+    const log = window.currentWeeklyLogList.find(l => l.id === id);
     if (!log) return;
     window.openWeeklyLogWriteModal(id);
 };
 
 window.addWeeklyTaskRow = function() {
     const contentEl = document.getElementById('wl-new-content');
-    if (!contentEl) {
-        if (window.showToast) window.showToast("입력창을 찾을 수 없습니다.", "error");
-        return;
-    }
+    if (!contentEl) return;
 
     const dayEl = document.getElementById('wl-new-day');
     const statusEl = document.getElementById('wl-new-status');
@@ -807,23 +788,19 @@ window.addWeeklyTaskRow = function() {
     }
     
     const nowStr = window.getDateTimeStr ? window.getDateTimeStr(new Date()) : new Date().toLocaleString();
-
     window.draftTasks.push({ day: day, status: status, loc: loc, content: content, id: Date.now(), createdAtTime: nowStr });
     contentEl.value = '';
     window.renderDraftTasks();
 };
 
 window.removeWeeklyTaskRow = function(taskId) {
-    window.draftTasks = window.draftTasks.filter(function(t) { return String(t.id) !== String(taskId); });
+    window.draftTasks = window.draftTasks.filter(t => String(t.id) !== String(taskId));
     window.renderDraftTasks();
 };
 
 window.updateWeeklyTaskStatus = function(taskId, newStatus) {
     let task = window.draftTasks.find(t => String(t.id) === String(taskId));
-    if (task) {
-        task.status = newStatus;
-        window.renderDraftTasks(); 
-    }
+    if (task) { task.status = newStatus; window.renderDraftTasks(); }
 };
 
 window.renderDraftTasks = function() {
@@ -836,26 +813,16 @@ window.renderDraftTasks = function() {
     }
 
     const orderMap = { "월요일": 1, "화요일": 2, "수요일": 3, "목요일": 4, "금요일": 5, "토요일": 6, "일요일": 7, "주간 공통": 99 };
-    const sorted = window.draftTasks.slice().sort(function(a, b) { 
-        return (orderMap[a.day] || 0) - (orderMap[b.day] || 0); 
-    });
+    const sorted = window.draftTasks.slice().sort((a, b) => (orderMap[a.day] || 0) - (orderMap[b.day] || 0));
 
-    listEl.innerHTML = sorted.map(function(t) {
+    listEl.innerHTML = sorted.map(t => {
         let statusClass = t.status === '완료' ? 'text-emerald-600 bg-emerald-50 border-emerald-200' : (t.status === '진행 중' ? 'text-blue-600 bg-blue-50 border-blue-200' : 'text-slate-500 bg-slate-50 border-slate-200');
         const safeContent = window.formatMentions ? window.formatMentions(String(t.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')) : String(t.content || '').replace(/\n/g, '<br>');
-        
         let timeBadge = '';
-        if (t.isCarryOver) {
-            timeBadge = '<span class="text-[9px] bg-amber-100 text-amber-600 ml-2 font-bold px-1.5 py-0.5 rounded shadow-sm tracking-tighter">자동 이월됨</span>';
-        } else if (t.createdAtTime) {
-            timeBadge = '<span class="text-[9px] text-slate-400 ml-2 font-mono tracking-tighter">' + t.createdAtTime.split(' ')[1] + '</span>';
-        }
+        if (t.isCarryOver) timeBadge = '<span class="text-[9px] bg-amber-100 text-amber-600 ml-2 font-bold px-1.5 py-0.5 rounded shadow-sm tracking-tighter">자동 이월됨</span>';
+        else if (t.createdAtTime) timeBadge = '<span class="text-[9px] text-slate-400 ml-2 font-mono tracking-tighter">' + t.createdAtTime.split(' ')[1] + '</span>';
 
-        let statusSelect = `<select onchange="window.updateWeeklyTaskStatus('${t.id}', this.value)" class="text-[10px] font-bold border px-1.5 py-0.5 rounded shrink-0 w-[64px] text-center ${statusClass} outline-none cursor-pointer">
-            <option value="완료" ${t.status === '완료' ? 'selected' : ''}>✅ 완료</option>
-            <option value="진행 중" ${t.status === '진행 중' ? 'selected' : ''} class="text-blue-600">▶ 진행</option>
-            <option value="보류" ${t.status === '보류' ? 'selected' : ''} class="text-slate-500">⏸ 보류</option>
-        </select>`;
+        let statusSelect = `<select onchange="window.updateWeeklyTaskStatus('${t.id}', this.value)" class="text-[10px] font-bold border px-1.5 py-0.5 rounded shrink-0 w-[64px] text-center ${statusClass} outline-none cursor-pointer"><option value="완료" ${t.status === '완료' ? 'selected' : ''}>✅ 완료</option><option value="진행 중" ${t.status === '진행 중' ? 'selected' : ''} class="text-blue-600">▶ 진행</option><option value="보류" ${t.status === '보류' ? 'selected' : ''} class="text-slate-500">⏸ 보류</option></select>`;
 
         return '<div class="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm group"><span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded w-16 text-center shrink-0">' + t.day + '</span>' + statusSelect + '<div class="text-sm font-medium text-slate-700 flex-1 truncate" title="' + String(t.content).replace(/"/g, '&quot;') + '">' + safeContent + ' <span class="text-[9px] bg-slate-100 text-slate-500 px-1 py-0.5 rounded ml-1">' + t.loc + '</span>' + timeBadge + '</div><button onclick="window.removeWeeklyTaskRow(\'' + t.id + '\')" class="text-slate-300 hover:text-rose-500 w-6 h-6 rounded flex items-center justify-center transition-colors"><i class="fa-solid fa-xmark"></i></button></div>';
     }).join('');
@@ -864,11 +831,7 @@ window.renderDraftTasks = function() {
 window.saveWeeklyLog = async function(isFinalSubmit) { 
     const draftIdEl = document.getElementById('weekly-draft-id');
     const weekEl = document.getElementById('weekly-log-filter-week');
-    
-    if (!draftIdEl || !weekEl) {
-        if (window.showToast) window.showToast("오류: HTML 로딩이 완료되지 않았습니다.", "error");
-        return;
-    }
+    if (!draftIdEl || !weekEl) return;
 
     const id = draftIdEl.value; 
     const week = weekEl.value; 
@@ -884,38 +847,23 @@ window.saveWeeklyLog = async function(isFinalSubmit) {
     let existingLog = null;
 
     if (id) {
-        existingLog = window.currentWeeklyLogList.find(function(l) { return l.id === id; });
-        if (existingLog) {
-            authorUid = existingLog.authorUid || authorUid;
-            authorName = existingLog.authorName || authorName;
-            authorTeam = existingLog.authorTeam || authorTeam;
-        }
+        existingLog = window.currentWeeklyLogList.find(l => l.id === id);
+        if (existingLog) { authorUid = existingLog.authorUid || authorUid; authorName = existingLog.authorName || authorName; authorTeam = existingLog.authorTeam || authorTeam; }
     }
 
     const issuesEl = document.getElementById('wl-issues');
-
     let fullTextToScan = (issuesEl ? issuesEl.value.trim() : '') + ' ';
-    window.draftTasks.forEach(function(t) { fullTextToScan += t.content + ' '; });
+    window.draftTasks.forEach(t => fullTextToScan += t.content + ' ');
 
     const payload = {
-        week: week,
-        authorUid: authorUid,
-        authorName: authorName,
-        authorTeam: authorTeam,
-        tasks: window.draftTasks,
-        issues: issuesEl ? issuesEl.value.trim() : '',
-        involvedProjects: window.wlInvolvedProjects, 
-        isSubmitted: isFinalSubmit,
-        updatedAt: Date.now()
+        week: week, authorUid: authorUid, authorName: authorName, authorTeam: authorTeam,
+        tasks: window.draftTasks, issues: issuesEl ? issuesEl.value.trim() : '',
+        involvedProjects: window.wlInvolvedProjects, isSubmitted: isFinalSubmit, updatedAt: Date.now()
     };
 
     try { 
-        if (id) {
-            await setDoc(doc(db, "weekly_logs_v2", id), payload, { merge: true }); 
-        } else {
-            payload.createdAt = Date.now();
-            await addDoc(collection(db, "weekly_logs_v2"), payload); 
-        }
+        if (id) { await setDoc(doc(db, "weekly_logs_v2", id), payload, { merge: true }); } 
+        else { payload.createdAt = Date.now(); await addDoc(collection(db, "weekly_logs_v2"), payload); }
         
         if (isFinalSubmit && window.processMentions && fullTextToScan.trim() !== '') {
             await window.processMentions(fullTextToScan, null, "주간업무일지");
@@ -923,25 +871,17 @@ window.saveWeeklyLog = async function(isFinalSubmit) {
 
         if (window.showToast) {
             let toastMsg = isFinalSubmit ? "최종 제출되었습니다." : "임시 저장되었습니다.";
-            if (isFinalSubmit && id && existingLog && existingLog.isSubmitted) {
-                toastMsg = "주간 일지가 수정(편집) 완료되었습니다.";
-            }
+            if (isFinalSubmit && id && existingLog && existingLog.isSubmitted) toastMsg = "주간 일지가 수정(편집) 완료되었습니다.";
             window.showToast(toastMsg, "success");
         } 
         window.closeWeeklyLogWriteModal(); 
-    } catch (e) {
-        if (window.showToast) window.showToast("저장 실패", "error");
-    } 
+    } catch (e) { if (window.showToast) window.showToast("저장 실패", "error"); } 
 };
 
 window.deleteWeeklyLog = async function(id) { 
     if (confirm("이 주간 업무 일지를 정말 삭제하시겠습니까?")) { 
-        try {
-            await deleteDoc(doc(db, "weekly_logs_v2", id)); 
-            if (window.showToast) window.showToast("삭제되었습니다."); 
-        } catch (e) { 
-            if (window.showToast) window.showToast("삭제 실패", "error"); 
-        }
+        try { await deleteDoc(doc(db, "weekly_logs_v2", id)); if (window.showToast) window.showToast("삭제되었습니다."); } 
+        catch (e) { if (window.showToast) window.showToast("삭제 실패", "error"); }
     } 
 };
 
@@ -951,52 +891,28 @@ window.exportWeeklyLogsExcel = async function() {
     try {
         window.showToast("주간 업무 일지 종합 엑셀을 생성 중입니다...", "success");
         const wb = new window.ExcelJS.Workbook();
-        
         const weekInput = document.getElementById('weekly-log-filter-week');
         let wStr = weekInput ? weekInput.value : '';
         
-        let submittedCount = 0;
-        let completedCount = 0;
-        let progressCount = 0;
-        let issueCount = 0;
-        
+        let submittedCount = 0; let completedCount = 0; let progressCount = 0; let issueCount = 0;
         let submittedLogs = window.currentWeeklyLogList.filter(l => l.isSubmitted);
         submittedCount = submittedLogs.length;
-        
-        let compTasks = [];
-        let progTasks = [];
-        let issueList = [];
+        let compTasks = []; let progTasks = []; let issueList = [];
 
         submittedLogs.forEach(log => {
             let author = log.authorName || '알수없음';
-            
-            if (String(log.issues || '').trim() !== '') {
-                issueCount++;
-                issueList.push(`[${author}] ${log.issues.trim()}`);
-            }
-            
+            if (String(log.issues || '').trim() !== '') { issueCount++; issueList.push(`[${author}] ${log.issues.trim()}`); }
             if (log.tasks && Array.isArray(log.tasks)) {
                 log.tasks.forEach(t => {
-                    if (t.status === '완료') {
-                        completedCount++;
-                        compTasks.push(`[${author}] ${t.content}`);
-                    }
-                    if (t.status === '진행 중') {
-                        progressCount++;
-                        progTasks.push(`[${author}] ${t.content}`);
-                    }
+                    if (t.status === '완료') { completedCount++; compTasks.push(`[${author}] ${t.content}`); }
+                    if (t.status === '진행 중') { progressCount++; progTasks.push(`[${author}] ${t.content}`); }
                 });
             }
         });
 
         let totalTeamCount = window.teamMembers ? window.teamMembers.length : 0;
-
         const ws1 = wb.addWorksheet('주간_업무_요약', { views: [{ showGridLines: false }] });
-        ws1.columns = [
-            { width: 2 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 2 },
-            { width: 15 }, { width: 15 }, { width: 15 }, { width: 2 },
-            { width: 15 }, { width: 15 }, { width: 15 }
-        ];
+        ws1.columns = [{ width: 2 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 2 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 2 }, { width: 15 }, { width: 15 }, { width: 15 }];
 
         ws1.mergeCells('B2:L3');
         const titleCell = ws1.getCell('B2');
@@ -1023,29 +939,12 @@ window.exportWeeklyLogsExcel = async function() {
                 for(let c=ws1.getColumn(startCol).number; c<=ws1.getColumn(endCol).number; c++) {
                     let cell = ws1.getCell(r, c);
                     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
-                    cell.border = {
-                        top: {style: r===startRow?'medium':'none', color: {argb: titleColor}},
-                        bottom: {style: r===endRow?'medium':'none', color: {argb: titleColor}},
-                        left: {style: c===ws1.getColumn(startCol).number?'medium':'none', color: {argb: titleColor}},
-                        right: {style: c===ws1.getColumn(endCol).number?'medium':'none', color: {argb: titleColor}}
-                    };
+                    cell.border = { top: {style: r===startRow?'medium':'none', color: {argb: titleColor}}, bottom: {style: r===endRow?'medium':'none', color: {argb: titleColor}}, left: {style: c===ws1.getColumn(startCol).number?'medium':'none', color: {argb: titleColor}}, right: {style: c===ws1.getColumn(endCol).number?'medium':'none', color: {argb: titleColor}} };
                 }
             }
-
-            let tCell = ws1.getCell(`${startCol}${startRow}`);
-            tCell.value = title;
-            tCell.font = { bold: true, size: 11, color: { argb: titleColor } };
-            tCell.alignment = { vertical: 'middle', horizontal: 'center', indent: 1 };
-
-            let vCell = ws1.getCell(`${startCol}${startRow+1}`);
-            vCell.value = value;
-            vCell.font = { bold: true, size: 24, color: { argb: valColor } };
-            vCell.alignment = { vertical: 'middle', horizontal: 'center' };
-
-            let sCell = ws1.getCell(`${startCol}${endRow}`);
-            sCell.value = subtext;
-            sCell.font = { size: 9, color: { argb: 'FF64748B' } };
-            sCell.alignment = { vertical: 'middle', horizontal: 'center' };
+            let tCell = ws1.getCell(`${startCol}${startRow}`); tCell.value = title; tCell.font = { bold: true, size: 11, color: { argb: titleColor } }; tCell.alignment = { vertical: 'middle', horizontal: 'center', indent: 1 };
+            let vCell = ws1.getCell(`${startCol}${startRow+1}`); vCell.value = value; vCell.font = { bold: true, size: 24, color: { argb: valColor } }; vCell.alignment = { vertical: 'middle', horizontal: 'center' };
+            let sCell = ws1.getCell(`${startCol}${endRow}`); sCell.value = subtext; sCell.font = { size: 9, color: { argb: 'FF64748B' } }; sCell.alignment = { vertical: 'middle', horizontal: 'center' };
         };
 
         createKPICard(6, 'B', 9, 'D', '제출된 일지', `${submittedCount} 명`, `전체 팀원: ${totalTeamCount}명`, 'FFF1F5F9', 'FF475569', 'FF334155'); 
@@ -1063,8 +962,7 @@ window.exportWeeklyLogsExcel = async function() {
         const addSummaryBlock = (title, items, titleColor, bgColor) => {
             ws1.mergeCells(`B${currentRow}:L${currentRow}`);
             let tCell = ws1.getCell(`B${currentRow}`);
-            tCell.value = title;
-            tCell.font = { bold: true, color: { argb: titleColor } };
+            tCell.value = title; tCell.font = { bold: true, color: { argb: titleColor } };
             tCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
             tCell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
             currentRow++;
@@ -1072,8 +970,7 @@ window.exportWeeklyLogsExcel = async function() {
             if (items.length === 0) {
                 ws1.mergeCells(`B${currentRow}:L${currentRow}`);
                 let cCell = ws1.getCell(`B${currentRow}`);
-                cCell.value = '해당 내역이 없습니다.';
-                cCell.font = { color: { argb: 'FF94A3B8' } };
+                cCell.value = '해당 내역이 없습니다.'; cCell.font = { color: { argb: 'FF94A3B8' } };
                 cCell.alignment = { vertical: 'middle', horizontal: 'center' };
                 cCell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
                 currentRow++;
@@ -1096,54 +993,31 @@ window.exportWeeklyLogsExcel = async function() {
 
         const ws2 = wb.addWorksheet('주간_상세_내역', { views: [{ showGridLines: false }] });
         ws2.columns = [
-            { header: '소속 팀', key: 'team', width: 15 },
-            { header: '작성자', key: 'name', width: 12 },
-            { header: '작성일시', key: 'updated', width: 20 },
-            { header: '일자', key: 'day', width: 12 },
-            { header: '상태', key: 'status', width: 12 },
-            { header: '장소', key: 'loc', width: 12 },
-            { header: '업무 내용', key: 'content', width: 60 },
-            { header: '관여 프로젝트', key: 'pjts', width: 35 },
-            { header: '이슈 및 요청사항', key: 'issues', width: 45 }
+            { header: '소속 팀', key: 'team', width: 15 }, { header: '작성자', key: 'name', width: 12 }, { header: '작성일시', key: 'updated', width: 20 },
+            { header: '일자', key: 'day', width: 12 }, { header: '상태', key: 'status', width: 12 }, { header: '장소', key: 'loc', width: 12 },
+            { header: '업무 내용', key: 'content', width: 60 }, { header: '관여 프로젝트', key: 'pjts', width: 35 }, { header: '이슈 및 요청사항', key: 'issues', width: 45 }
         ];
 
         let hr = ws2.getRow(1);
-        hr.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        hr.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } };
-        hr.height = 25;
-        hr.eachCell(function(cell) {
-            cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
-            cell.alignment = { vertical: 'middle', horizontal: 'center' };
-        });
+        hr.font = { bold: true, color: { argb: 'FFFFFFFF' } }; hr.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } }; hr.height = 25;
+        hr.eachCell(cell => { cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; cell.alignment = { vertical: 'middle', horizontal: 'center' }; });
 
         const orderMap = { "월요일": 1, "화요일": 2, "수요일": 3, "목요일": 4, "금요일": 5, "토요일": 6, "일요일": 7, "주간 공통": 99 };
-
         submittedLogs.sort((a,b) => (a.authorTeam||'').localeCompare(b.authorTeam||'') || (a.authorName||'').localeCompare(b.authorName||''));
 
         submittedLogs.forEach(log => {
-            let team = log.authorTeam || '-';
-            let name = log.authorName || '-';
-            let updated = log.updatedAt ? window.getDateTimeStr(new Date(log.updatedAt)) : '-';
-            
-            let pjtStr = (log.involvedProjects || []).map(p => p.name).join(', ');
-            if(!pjtStr && log.projectName) pjtStr = log.projectName;
-            
+            let team = log.authorTeam || '-'; let name = log.authorName || '-'; let updated = log.updatedAt ? window.getDateTimeStr(new Date(log.updatedAt)) : '-';
+            let pjtStr = (log.involvedProjects || []).map(p => p.name).join(', '); if(!pjtStr && log.projectName) pjtStr = log.projectName;
             let issues = log.issues || '';
 
             if(log.tasks && log.tasks.length > 0) {
                 let sortedTasks = log.tasks.slice().sort((a,b) => (orderMap[a.day]||0) - (orderMap[b.day]||0));
                 sortedTasks.forEach((t, i) => {
-                    let row = ws2.addRow({
-                        team: team, name: name, updated: updated,
-                        day: t.day || '-', status: t.status || '-', loc: t.loc || '-', content: t.content || '-',
-                        pjts: i === 0 ? pjtStr : '', 
-                        issues: i === 0 ? issues : ''
-                    });
+                    let row = ws2.addRow({ team: team, name: name, updated: updated, day: t.day || '-', status: t.status || '-', loc: t.loc || '-', content: t.content || '-', pjts: i === 0 ? pjtStr : '', issues: i === 0 ? issues : '' });
                     row.eachCell({ includeEmpty: true }, function(cell, colNumber) {
                         cell.border = { top: {style:'thin', color:{argb:'FFE2E8F0'}}, left: {style:'thin', color:{argb:'FFE2E8F0'}}, bottom: {style:'thin', color:{argb:'FFE2E8F0'}}, right: {style:'thin', color:{argb:'FFE2E8F0'}} };
                         cell.alignment = { vertical: 'top', wrapText: true };
                         if (colNumber <= 6) cell.alignment.horizontal = 'center';
-                        
                         if (colNumber === 5) {
                             if (t.status === '완료') cell.font = { color: { argb: 'FF059669' }, bold: true };
                             else if (t.status === '진행 중') cell.font = { color: { argb: 'FF2563EB' }, bold: true };
@@ -1152,9 +1026,7 @@ window.exportWeeklyLogsExcel = async function() {
                     });
                 });
             } else {
-                let row = ws2.addRow({
-                    team: team, name: name, updated: updated, day: '-', status: '-', loc: '-', content: '내역 없음', pjts: pjtStr, issues: issues
-                });
+                let row = ws2.addRow({ team: team, name: name, updated: updated, day: '-', status: '-', loc: '-', content: '내역 없음', pjts: pjtStr, issues: issues });
                 row.eachCell({ includeEmpty: true }, function(cell) {
                     cell.border = { top: {style:'thin', color:{argb:'FFE2E8F0'}}, left: {style:'thin', color:{argb:'FFE2E8F0'}}, bottom: {style:'thin', color:{argb:'FFE2E8F0'}}, right: {style:'thin', color:{argb:'FFE2E8F0'}} };
                     cell.alignment = { vertical: 'top', wrapText: true, horizontal: 'center' };
@@ -1165,19 +1037,12 @@ window.exportWeeklyLogsExcel = async function() {
         const buffer = await wb.xlsx.writeBuffer();
         let todayStr = new Date().toISOString().split('T')[0];
         window.saveAs(new Blob([buffer]), `주간업무종합보고서_${wStr}_${todayStr}.xlsx`);
-
-    } catch(e) {
-        console.error(e);
-        if (window.showToast) window.showToast("엑셀 저장 실패", "error");
-    }
+    } catch(e) { console.error(e); if (window.showToast) window.showToast("엑셀 저장 실패", "error"); }
 };
 
 window.toggleScheduleComplete = async function(id, isCompleted) {
-    try {
-        await setDoc(doc(db, "weekly_schedules", id), { isCompleted: isCompleted, updatedAt: Date.now() }, { merge: true });
-    } catch (e) {
-        if (window.showToast) window.showToast("상태 변경 실패", "error");
-    }
+    try { await setDoc(doc(db, "weekly_schedules", id), { isCompleted: isCompleted, updatedAt: Date.now() }, { merge: true }); } 
+    catch (e) { if (window.showToast) window.showToast("상태 변경 실패", "error"); }
 };
 
 window.renderKanbanBoard = function() {
@@ -1198,12 +1063,11 @@ window.renderKanbanBoard = function() {
     };
 
     board.innerHTML = days.map(function(day) {
-        const events = window.currentScheduleList.filter(function(s) { return s.day === day; });
-        const eventsHtml = events.map(function(s) {
+        const events = window.currentScheduleList.filter(s => s.day === day);
+        const eventsHtml = events.map(s => {
             const style = catMap[s.category] || catMap["기타"];
             const safeTitle = String(s.title || s.content || '제목 없음').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const safeTime = String(s.time || '시간 미지정');
-            
             const completedCardClass = s.isCompleted ? 'opacity-60 bg-slate-100 border-slate-200 grayscale' : style.bg;
             const completedTextClass = s.isCompleted ? 'line-through text-slate-400' : style.text;
             const checkedAttr = s.isCompleted ? 'checked' : '';
@@ -1236,14 +1100,12 @@ window.renderTeamKanbanBoard = function() {
     };
 
     board.innerHTML = days.map(function(day) {
-        const events = window.allSchedules.filter(function(s) { return s.day === day && s.isShared !== false; });
-        
-        const eventsHtml = events.map(function(s) {
+        const events = window.allSchedules.filter(s => s.day === day && s.isShared !== false);
+        const eventsHtml = events.map(s => {
             const style = catMap[s.category] || catMap["기타"];
             const safeTitle = String(s.title || s.content || '제목 없음').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const authorName = String(s.authorName || '팀원');
             const completedTextClass = s.isCompleted ? 'line-through text-slate-400' : 'text-slate-700';
-
             return '<div class="cursor-pointer hover:bg-slate-100 p-2 border-b border-slate-100 transition-colors" onclick="window.viewSchedule(\'' + s.id + '\')"><div class="flex items-center gap-1.5 mb-1"><span class="text-[9px] font-bold text-white bg-indigo-500 w-fit px-1.5 rounded">' + authorName + '</span><span class="text-[9px] font-bold ' + style.text + '"><i class="fa-solid ' + style.icon + ' mr-0.5"></i>' + s.category + '</span></div><div class="text-xs font-bold truncate ' + completedTextClass + '">' + safeTitle + '</div></div>';
         }).join('');
 
@@ -1255,39 +1117,24 @@ window.renderTeamKanbanBoard = function() {
     }).join('');
 };
 
-// ==========================================
-// 💡 팀 일정 달력 뷰 관련 로직
-// ==========================================
 window.setSchViewMode = function(mode) {
     window.schViewMode = mode;
-    const btnK = document.getElementById('btn-sch-kanban');
-    const btnC = document.getElementById('btn-sch-calendar');
-    const viewK = document.getElementById('weekly-team-kanban-board');
-    const viewC = document.getElementById('weekly-team-calendar-board');
-    
-    const calPrev = document.getElementById('btn-cal-prev');
-    const calNext = document.getElementById('btn-cal-next');
-    const calMonth = document.getElementById('sch-cal-month-display');
+    const btnK = document.getElementById('btn-sch-kanban'); const btnC = document.getElementById('btn-sch-calendar');
+    const viewK = document.getElementById('weekly-team-kanban-board'); const viewC = document.getElementById('weekly-team-calendar-board');
+    const calPrev = document.getElementById('btn-cal-prev'); const calNext = document.getElementById('btn-cal-next'); const calMonth = document.getElementById('sch-cal-month-display');
 
     if (mode === 'kanban') {
         if(btnK) btnK.className = 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap';
         if(btnC) btnC.className = 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-1.5 bg-transparent whitespace-nowrap';
         if(viewK) viewK.classList.remove('hidden');
         if(viewC) { viewC.classList.add('hidden'); viewC.classList.remove('flex'); }
-        
-        if(calPrev) calPrev.classList.add('hidden');
-        if(calNext) calNext.classList.add('hidden');
-        if(calMonth) calMonth.classList.add('hidden');
+        if(calPrev) calPrev.classList.add('hidden'); if(calNext) calNext.classList.add('hidden'); if(calMonth) calMonth.classList.add('hidden');
     } else {
         if(btnC) btnC.className = 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap';
         if(btnK) btnK.className = 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-1.5 bg-transparent whitespace-nowrap';
         if(viewK) viewK.classList.add('hidden');
         if(viewC) { viewC.classList.remove('hidden'); viewC.classList.add('flex'); }
-        
-        if(calPrev) calPrev.classList.remove('hidden');
-        if(calNext) calNext.classList.remove('hidden');
-        if(calMonth) calMonth.classList.remove('hidden');
-        
+        if(calPrev) calPrev.classList.remove('hidden'); if(calNext) calNext.classList.remove('hidden'); if(calMonth) calMonth.classList.remove('hidden');
         window.loadMonthlySchedules();
     }
 };
@@ -1307,13 +1154,10 @@ window.loadMonthlySchedules = async function() {
     if(weeks.length === 0) return;
 
     if (monthlySchUnsubscribe) monthlySchUnsubscribe();
-    
     const q = query(collection(db, "weekly_schedules"), where("week", "in", weeks));
     monthlySchUnsubscribe = onSnapshot(q, function(s) {
         window.monthlySchedules = [];
-        s.forEach(d => {
-            window.monthlySchedules.push(Object.assign({ id: d.id }, d.data()));
-        });
+        s.forEach(d => window.monthlySchedules.push(Object.assign({ id: d.id }, d.data())));
         window.renderTeamCalendarBoard(year, month);
     });
 };
@@ -1323,9 +1167,7 @@ function getWeeksInMonth(year, month) {
     let d = new Date(year, month - 1, 1);
     let lastDate = new Date(year, month, 0);
     while(d <= lastDate) {
-        if(window.getWeekString) {
-            weeks.add(window.getWeekString(d));
-        }
+        if(window.getWeekString) weeks.add(window.getWeekString(d));
         d.setDate(d.getDate() + 1);
     }
     return Array.from(weeks);
@@ -1337,8 +1179,7 @@ function getActualDateFromWeekDay(weekStr, dayStr) {
     const dayMap = {"월요일":0, "화요일":1, "수요일":2, "목요일":3, "금요일":4, "토요일":5, "일요일":6};
     let offset = dayMap[dayStr];
     if (offset === undefined) return null;
-    let d = new Date(start);
-    d.setDate(d.getDate() + offset);
+    let d = new Date(start); d.setDate(d.getDate() + offset);
     return window.getLocalDateStr(d);
 }
 
@@ -1349,125 +1190,68 @@ window.renderTeamCalendarBoard = function(year, month) {
     const firstDay = new Date(year, month - 1, 1).getDay();
     const lastDate = new Date(year, month, 0).getDate();
 
-    let html = `
-        <div class="grid grid-cols-7 gap-px bg-slate-200 border-b border-slate-200">
-            <div class="p-2 text-center text-xs font-black text-rose-500 bg-slate-50">일</div>
-            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">월</div>
-            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">화</div>
-            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">수</div>
-            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">목</div>
-            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">금</div>
-            <div class="p-2 text-center text-xs font-black text-blue-500 bg-slate-50">토</div>
-        </div>
-        <div class="grid grid-cols-7 gap-px bg-slate-200 flex-1">
-    `;
+    let html = `<div class="grid grid-cols-7 gap-px bg-slate-200 border-b border-slate-200"><div class="p-2 text-center text-xs font-black text-rose-500 bg-slate-50">일</div><div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">월</div><div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">화</div><div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">수</div><div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">목</div><div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">금</div><div class="p-2 text-center text-xs font-black text-blue-500 bg-slate-50">토</div></div><div class="grid grid-cols-7 gap-px bg-slate-200 flex-1">`;
 
-    for (let i = 0; i < firstDay; i++) {
-        html += `<div class="bg-slate-50 min-h-[120px]"></div>`;
-    }
+    for (let i = 0; i < firstDay; i++) html += `<div class="bg-slate-50 min-h-[120px]"></div>`;
 
     const catMap = {
-        "휴가/연차": { icon: "fa-mug-hot", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-        "휴가/오전": { icon: "fa-sun", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-        "휴가/오후": { icon: "fa-moon", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-        "회의": { icon: "fa-users", bg: "bg-purple-50 text-purple-700 border-purple-200" },
-        "사내(작업)": { icon: "fa-headphones", bg: "bg-blue-50 text-blue-700 border-blue-200" },
-        "사내(공통)": { icon: "fa-building", bg: "bg-blue-50 text-blue-700 border-blue-200" },
-        "출장(국내)": { icon: "fa-car", bg: "bg-orange-50 text-orange-700 border-orange-200" },
-        "출장(국외)": { icon: "fa-plane", bg: "bg-orange-50 text-orange-700 border-orange-200" },
-        "기타": { icon: "fa-thumbtack", bg: "bg-slate-100 text-slate-700 border-slate-300" }
+        "휴가/연차": { bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+        "휴가/오전": { bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+        "휴가/오후": { bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+        "회의": { bg: "bg-purple-50 text-purple-700 border-purple-200" },
+        "사내(작업)": { bg: "bg-blue-50 text-blue-700 border-blue-200" },
+        "사내(공통)": { bg: "bg-blue-50 text-blue-700 border-blue-200" },
+        "출장(국내)": { bg: "bg-orange-50 text-orange-700 border-orange-200" },
+        "출장(국외)": { bg: "bg-orange-50 text-orange-700 border-orange-200" },
+        "기타": { bg: "bg-slate-100 text-slate-700 border-slate-300" }
     };
 
     for (let date = 1; date <= lastDate; date++) {
         const dStr = `${year}-${String(month).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
         let isToday = dStr === window.getLocalDateStr(new Date());
-        
         let dObj = new Date(year, month - 1, date);
-        let isSunday = dObj.getDay() === 0;
-        let isSaturday = dObj.getDay() === 6;
+        let isSunday = dObj.getDay() === 0; let isSaturday = dObj.getDay() === 6;
         let holidayName = WEEKLY_KR_HOLIDAYS[dStr];
         
         let txtClass = 'text-slate-700';
-        if (isSunday || holidayName) {
-            txtClass = 'text-rose-500';
-        } else if (isSaturday) {
-            txtClass = 'text-blue-500';
-        }
-        
+        if (isSunday || holidayName) txtClass = 'text-rose-500';
+        else if (isSaturday) txtClass = 'text-blue-500';
         let dateClass = isToday ? 'bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center mx-auto shadow-md' : txtClass;
 
-        let dayEvents = (window.monthlySchedules || []).filter(s => {
-            if (s.isShared === false) return false;
-            let sDate = getActualDateFromWeekDay(s.week, s.day);
-            return sDate === dStr;
-        });
-
+        let dayEvents = (window.monthlySchedules || []).filter(s => s.isShared !== false && getActualDateFromWeekDay(s.week, s.day) === dStr);
         let eventsHtml = dayEvents.map(s => {
             const style = catMap[s.category] || catMap["기타"];
             const safeTitle = String(s.title || s.content || '제목 없음').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            const authorName = String(s.authorName || '팀원');
             const completedClass = s.isCompleted ? 'line-through opacity-50 grayscale' : '';
-            return `
-                <div class="text-[10px] font-bold border px-1.5 py-0.5 rounded mb-0.5 truncate cursor-pointer hover:shadow-sm transition-all ${style.bg} ${completedClass}" onclick="window.viewSchedule('${s.id}')" title="${safeTitle}">
-                    <span class="bg-white/70 px-1 rounded mr-1">${authorName}</span>${safeTitle}
-                </div>
-            `;
+            return `<div class="text-[10px] font-bold border px-1.5 py-0.5 rounded mb-0.5 truncate cursor-pointer hover:shadow-sm transition-all ${style.bg} ${completedClass}" onclick="window.viewSchedule('${s.id}')" title="${safeTitle}"><span class="bg-white/70 px-1 rounded mr-1">${s.authorName || '팀원'}</span>${safeTitle}</div>`;
         }).join('');
 
-        html += `
-            <div class="bg-white p-1.5 min-h-[120px] hover:bg-slate-50 transition-colors relative flex flex-col border-t-2 ${isToday ? 'border-t-indigo-500' : 'border-t-transparent'}">
-                <div class="text-[11px] font-black text-center mb-1 ${dateClass} shrink-0">${date}</div>
-                ${holidayName ? `<div class="text-[9px] font-bold text-rose-500 bg-rose-50 rounded text-center mb-1 leading-tight py-0.5 shrink-0 border border-rose-100">${holidayName}</div>` : ''}
-                <div class="flex-1 flex flex-col gap-0.5 overflow-hidden">${eventsHtml}</div>
-            </div>
-        `;
+        html += `<div class="bg-white p-1.5 min-h-[120px] hover:bg-slate-50 transition-colors relative flex flex-col border-t-2 ${isToday ? 'border-t-indigo-500' : 'border-t-transparent'}"><div class="text-[11px] font-black text-center mb-1 ${dateClass} shrink-0">${date}</div>${holidayName ? `<div class="text-[9px] font-bold text-rose-500 bg-rose-50 rounded text-center mb-1 leading-tight py-0.5 shrink-0 border border-rose-100">${holidayName}</div>` : ''}<div class="flex-1 flex flex-col gap-0.5 overflow-hidden">${eventsHtml}</div></div>`;
     }
-
-    html += `</div>`;
-    grid.innerHTML = html;
+    html += `</div>`; grid.innerHTML = html;
 };
 
-// ==========================================
-// 💡 개인 일정 달력 뷰 관련 로직
-// ==========================================
 window.setMySchViewMode = function(mode) {
     window.mySchViewMode = mode;
-    const btnK = document.getElementById('btn-my-sch-kanban');
-    const btnC = document.getElementById('btn-my-sch-calendar');
-    const viewK = document.getElementById('weekly-kanban-board');
-    const viewC = document.getElementById('weekly-my-calendar-board');
-    
-    const calPrev = document.getElementById('btn-my-cal-prev');
-    const calNext = document.getElementById('btn-my-cal-next');
-    const calMonth = document.getElementById('my-sch-cal-month-display');
+    const btnK = document.getElementById('btn-my-sch-kanban'); const btnC = document.getElementById('btn-my-sch-calendar');
+    const viewK = document.getElementById('weekly-kanban-board'); const viewC = document.getElementById('weekly-my-calendar-board');
+    const calPrev = document.getElementById('btn-my-cal-prev'); const calNext = document.getElementById('btn-my-cal-next'); const calMonth = document.getElementById('my-sch-cal-month-display');
 
     if (mode === 'kanban') {
         if(btnK) btnK.className = 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap';
         if(btnC) btnC.className = 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-1.5 bg-transparent whitespace-nowrap';
-        if(viewK) viewK.classList.remove('hidden');
-        if(viewC) { viewC.classList.add('hidden'); viewC.classList.remove('flex'); }
-        
-        if(calPrev) calPrev.classList.add('hidden');
-        if(calNext) calNext.classList.add('hidden');
-        if(calMonth) calMonth.classList.add('hidden');
+        if(viewK) viewK.classList.remove('hidden'); if(viewC) { viewC.classList.add('hidden'); viewC.classList.remove('flex'); }
+        if(calPrev) calPrev.classList.add('hidden'); if(calNext) calNext.classList.add('hidden'); if(calMonth) calMonth.classList.add('hidden');
     } else {
         if(btnC) btnC.className = 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap';
         if(btnK) btnK.className = 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-1.5 bg-transparent whitespace-nowrap';
-        if(viewK) viewK.classList.add('hidden');
-        if(viewC) { viewC.classList.remove('hidden'); viewC.classList.add('flex'); }
-        
-        if(calPrev) calPrev.classList.remove('hidden');
-        if(calNext) calNext.classList.remove('hidden');
-        if(calMonth) calMonth.classList.remove('hidden');
-        
+        if(viewK) viewK.classList.add('hidden'); if(viewC) { viewC.classList.remove('hidden'); viewC.classList.add('flex'); }
+        if(calPrev) calPrev.classList.remove('hidden'); if(calNext) calNext.classList.remove('hidden'); if(calMonth) calMonth.classList.remove('hidden');
         window.loadMyMonthlySchedules();
     }
 };
 
-window.changeMyCalMonth = function(offset) {
-    window.mySchCalDate.setMonth(window.mySchCalDate.getMonth() + offset);
-    window.loadMyMonthlySchedules();
-};
+window.changeMyCalMonth = function(offset) { window.mySchCalDate.setMonth(window.mySchCalDate.getMonth() + offset); window.loadMyMonthlySchedules(); };
 
 window.loadMyMonthlySchedules = async function() {
     const year = window.mySchCalDate.getFullYear();
@@ -1479,13 +1263,9 @@ window.loadMyMonthlySchedules = async function() {
     if(weeks.length === 0) return;
 
     if (myMonthlySchUnsubscribe) myMonthlySchUnsubscribe();
-    
     const q = query(collection(db, "weekly_schedules"), where("week", "in", weeks), where("authorUid", "==", window.currentUser.uid));
     myMonthlySchUnsubscribe = onSnapshot(q, function(s) {
-        window.myMonthlySchedules = [];
-        s.forEach(d => {
-            window.myMonthlySchedules.push(Object.assign({ id: d.id }, d.data()));
-        });
+        window.myMonthlySchedules = []; s.forEach(d => window.myMonthlySchedules.push(Object.assign({ id: d.id }, d.data())));
         window.renderMyCalendarBoard(year, month);
     });
 };
@@ -1494,88 +1274,36 @@ window.renderMyCalendarBoard = function(year, month) {
     const grid = document.getElementById('weekly-my-calendar-board');
     if (!grid) return;
 
-    const firstDay = new Date(year, month - 1, 1).getDay();
-    const lastDate = new Date(year, month, 0).getDate();
-
-    let html = `
-        <div class="grid grid-cols-7 gap-px bg-slate-200 border-b border-slate-200">
-            <div class="p-2 text-center text-xs font-black text-rose-500 bg-slate-50">일</div>
-            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">월</div>
-            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">화</div>
-            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">수</div>
-            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">목</div>
-            <div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">금</div>
-            <div class="p-2 text-center text-xs font-black text-blue-500 bg-slate-50">토</div>
-        </div>
-        <div class="grid grid-cols-7 gap-px bg-slate-200 flex-1">
-    `;
-
-    for (let i = 0; i < firstDay; i++) {
-        html += `<div class="bg-slate-50 min-h-[120px]"></div>`;
-    }
+    const firstDay = new Date(year, month - 1, 1).getDay(); const lastDate = new Date(year, month, 0).getDate();
+    let html = `<div class="grid grid-cols-7 gap-px bg-slate-200 border-b border-slate-200"><div class="p-2 text-center text-xs font-black text-rose-500 bg-slate-50">일</div><div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">월</div><div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">화</div><div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">수</div><div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">목</div><div class="p-2 text-center text-xs font-black text-slate-700 bg-slate-50">금</div><div class="p-2 text-center text-xs font-black text-blue-500 bg-slate-50">토</div></div><div class="grid grid-cols-7 gap-px bg-slate-200 flex-1">`;
+    for (let i = 0; i < firstDay; i++) html += `<div class="bg-slate-50 min-h-[120px]"></div>`;
 
     const catMap = {
-        "휴가/연차": { icon: "fa-mug-hot", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-        "휴가/오전": { icon: "fa-sun", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-        "휴가/오후": { icon: "fa-moon", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-        "회의": { icon: "fa-users", bg: "bg-purple-50 text-purple-700 border-purple-200" },
-        "사내(작업)": { icon: "fa-headphones", bg: "bg-blue-50 text-blue-700 border-blue-200" },
-        "사내(공통)": { icon: "fa-building", bg: "bg-blue-50 text-blue-700 border-blue-200" },
-        "출장(국내)": { icon: "fa-car", bg: "bg-orange-50 text-orange-700 border-orange-200" },
-        "출장(국외)": { icon: "fa-plane", bg: "bg-orange-50 text-orange-700 border-orange-200" },
-        "기타": { icon: "fa-thumbtack", bg: "bg-slate-100 text-slate-700 border-slate-300" }
+        "휴가/연차": { bg: "bg-emerald-50 text-emerald-700 border-emerald-200" }, "휴가/오전": { bg: "bg-emerald-50 text-emerald-700 border-emerald-200" }, "휴가/오후": { bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+        "회의": { bg: "bg-purple-50 text-purple-700 border-purple-200" }, "사내(작업)": { bg: "bg-blue-50 text-blue-700 border-blue-200" }, "사내(공통)": { bg: "bg-blue-50 text-blue-700 border-blue-200" },
+        "출장(국내)": { bg: "bg-orange-50 text-orange-700 border-orange-200" }, "출장(국외)": { bg: "bg-orange-50 text-orange-700 border-orange-200" }, "기타": { bg: "bg-slate-100 text-slate-700 border-slate-300" }
     };
 
     for (let date = 1; date <= lastDate; date++) {
         const dStr = `${year}-${String(month).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
-        let isToday = dStr === window.getLocalDateStr(new Date());
-        
-        let dObj = new Date(year, month - 1, date);
-        let isSunday = dObj.getDay() === 0;
-        let isSaturday = dObj.getDay() === 6;
-        let holidayName = WEEKLY_KR_HOLIDAYS[dStr];
-        
-        let txtClass = 'text-slate-700';
-        if (isSunday || holidayName) {
-            txtClass = 'text-rose-500';
-        } else if (isSaturday) {
-            txtClass = 'text-blue-500';
-        }
-        
+        let isToday = dStr === window.getLocalDateStr(new Date()); let dObj = new Date(year, month - 1, date);
+        let isSunday = dObj.getDay() === 0; let isSaturday = dObj.getDay() === 6; let holidayName = WEEKLY_KR_HOLIDAYS[dStr];
+        let txtClass = (isSunday || holidayName) ? 'text-rose-500' : (isSaturday ? 'text-blue-500' : 'text-slate-700');
         let dateClass = isToday ? 'bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center mx-auto shadow-md' : txtClass;
 
-        let dayEvents = (window.myMonthlySchedules || []).filter(s => {
-            let sDate = getActualDateFromWeekDay(s.week, s.day);
-            return sDate === dStr;
-        });
-
+        let dayEvents = (window.myMonthlySchedules || []).filter(s => getActualDateFromWeekDay(s.week, s.day) === dStr);
         let eventsHtml = dayEvents.map(s => {
             const style = catMap[s.category] || catMap["기타"];
             const safeTitle = String(s.title || s.content || '제목 없음').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const completedClass = s.isCompleted ? 'line-through opacity-50 grayscale' : '';
-            return `
-                <div class="text-[10px] font-bold border px-1.5 py-0.5 rounded mb-0.5 truncate cursor-pointer hover:shadow-sm transition-all ${style.bg} ${completedClass}" onclick="window.editSchedule('${s.id}')" title="${safeTitle}">
-                    ${safeTitle}
-                </div>
-            `;
+            return `<div class="text-[10px] font-bold border px-1.5 py-0.5 rounded mb-0.5 truncate cursor-pointer hover:shadow-sm transition-all ${style.bg} ${completedClass}" onclick="window.editSchedule('${s.id}')" title="${safeTitle}">${safeTitle}</div>`;
         }).join('');
 
-        html += `
-            <div class="bg-white p-1.5 min-h-[120px] hover:bg-slate-50 transition-colors relative flex flex-col border-t-2 ${isToday ? 'border-t-indigo-500' : 'border-t-transparent'}">
-                <div class="text-[11px] font-black text-center mb-1 ${dateClass} shrink-0">${date}</div>
-                ${holidayName ? `<div class="text-[9px] font-bold text-rose-500 bg-rose-50 rounded text-center mb-1 leading-tight py-0.5 shrink-0 border border-rose-100">${holidayName}</div>` : ''}
-                <div class="flex-1 flex flex-col gap-0.5 overflow-hidden">${eventsHtml}</div>
-            </div>
-        `;
+        html += `<div class="bg-white p-1.5 min-h-[120px] hover:bg-slate-50 transition-colors relative flex flex-col border-t-2 ${isToday ? 'border-t-indigo-500' : 'border-t-transparent'}"><div class="text-[11px] font-black text-center mb-1 ${dateClass} shrink-0">${date}</div>${holidayName ? `<div class="text-[9px] font-bold text-rose-500 bg-rose-50 rounded text-center mb-1 leading-tight py-0.5 shrink-0 border border-rose-100">${holidayName}</div>` : ''}<div class="flex-1 flex flex-col gap-0.5 overflow-hidden">${eventsHtml}</div></div>`;
     }
-
-    html += `</div>`;
-    grid.innerHTML = html;
+    html += `</div>`; grid.innerHTML = html;
 };
 
-// ==========================================
-// 💡 개인 일정 추가/편집 관련 로직
-// ==========================================
 window.openScheduleModal = function(day) {
     if (!day) day = '월요일';
     const idEl = document.getElementById('sch-id'); if (idEl) idEl.value = '';
@@ -1588,152 +1316,89 @@ window.openScheduleModal = function(day) {
     const titleEl = document.getElementById('sch-modal-title'); if (titleEl) titleEl.innerText = '추가';
     
     const modal = document.getElementById('schedule-modal');
-    if (modal) {
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-    }
+    if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
 };
 
 window.closeScheduleModal = function() {
     const modal = document.getElementById('schedule-modal');
-    if (modal) {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-    }
+    if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
 };
 
 window.editSchedule = function(id) {
-    const s = window.currentScheduleList.find(function(x) { return x.id === id; });
+    const s = window.currentScheduleList.find(x => x.id === id);
     if (!s) return;
     
     const idEl = document.getElementById('sch-id'); if (idEl) idEl.value = id;
     const dayEl = document.getElementById('sch-day'); if (dayEl) dayEl.value = s.day;
     const catEl = document.getElementById('sch-category'); if (catEl) catEl.value = s.category;
     const timeEl = document.getElementById('sch-time'); if (timeEl) timeEl.value = s.time || '';
-    
-    const titleElInput = document.getElementById('sch-title'); 
-    if (titleElInput) titleElInput.value = s.title || (s.content ? s.content.substring(0,20) : '');
-    
+    const titleElInput = document.getElementById('sch-title'); if (titleElInput) titleElInput.value = s.title || (s.content ? s.content.substring(0,20) : '');
     const contEl = document.getElementById('sch-content'); if (contEl) contEl.value = s.content || '';
     const sharedEl = document.getElementById('sch-is-shared'); if (sharedEl) sharedEl.checked = s.isShared !== false;
     const titleEl = document.getElementById('sch-modal-title'); if (titleEl) titleEl.innerText = '수정';
     
     const modal = document.getElementById('schedule-modal');
-    if (modal) {
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-    }
+    if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
 };
 
 window.viewSchedule = function(id) {
-    const s = window.allSchedules.find(function(x) { return x.id === id; });
+    const s = window.allSchedules.find(x => x.id === id);
     if (!s) return;
     
     const catMap = {
-        "휴가/연차": { icon: "fa-mug-hot", badge: "bg-emerald-100 text-emerald-600" },
-        "휴가/오전": { icon: "fa-sun", badge: "bg-emerald-100 text-emerald-600" },
-        "휴가/오후": { icon: "fa-moon", badge: "bg-emerald-100 text-emerald-600" },
-        "회의": { icon: "fa-users", badge: "bg-purple-100 text-purple-600" },
-        "사내(작업)": { icon: "fa-headphones", badge: "bg-blue-100 text-blue-600" },
-        "사내(공통)": { icon: "fa-building", badge: "bg-blue-100 text-blue-600" },
-        "출장(국내)": { icon: "fa-car", badge: "bg-orange-100 text-orange-600" },
-        "출장(국외)": { icon: "fa-plane", badge: "bg-orange-100 text-orange-600" },
-        "기타": { icon: "fa-thumbtack", badge: "bg-slate-200 text-slate-600" }
+        "휴가/연차": { icon: "fa-mug-hot", badge: "bg-emerald-100 text-emerald-600" }, "휴가/오전": { icon: "fa-sun", badge: "bg-emerald-100 text-emerald-600" }, "휴가/오후": { icon: "fa-moon", badge: "bg-emerald-100 text-emerald-600" },
+        "회의": { icon: "fa-users", badge: "bg-purple-100 text-purple-600" }, "사내(작업)": { icon: "fa-headphones", badge: "bg-blue-100 text-blue-600" }, "사내(공통)": { icon: "fa-building", badge: "bg-blue-100 text-blue-600" },
+        "출장(국내)": { icon: "fa-car", badge: "bg-orange-100 text-orange-600" }, "출장(국외)": { icon: "fa-plane", badge: "bg-orange-100 text-orange-600" }, "기타": { icon: "fa-thumbtack", badge: "bg-slate-200 text-slate-600" }
     };
     
     const style = catMap[s.category] || catMap["기타"];
-    
     document.getElementById('sv-author').innerText = s.authorName || '팀원';
     const catBadge = document.getElementById('sv-category');
-    if(catBadge) {
-        catBadge.className = 'text-[10px] font-black px-2 py-0.5 rounded shadow-sm ' + style.badge;
-        catBadge.innerHTML = '<i class="fa-solid ' + style.icon + '"></i> ' + s.category;
-    }
+    if(catBadge) { catBadge.className = 'text-[10px] font-black px-2 py-0.5 rounded shadow-sm ' + style.badge; catBadge.innerHTML = '<i class="fa-solid ' + style.icon + '"></i> ' + s.category; }
     
-    const titleEl = document.getElementById('sv-title');
-    if(titleEl) titleEl.innerText = s.title || s.content || '제목 없음';
-    
-    const timeEl = document.getElementById('sv-time');
-    if(timeEl) timeEl.innerText = s.time || '시간 미지정';
+    const titleEl = document.getElementById('sv-title'); if(titleEl) titleEl.innerText = s.title || s.content || '제목 없음';
+    const timeEl = document.getElementById('sv-time'); if(timeEl) timeEl.innerText = s.time || '시간 미지정';
     
     let c = s.content || '';
-    if (!s.title && s.content) {
-        c = '상세 내용 없음';
-    }
-    
+    if (!s.title && s.content) c = '상세 내용 없음';
     if (c && c !== '상세 내용 없음') {
         c = String(c).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
         if(window.formatMentions) c = window.formatMentions(c);
     }
     
-    const contentEl = document.getElementById('sv-content');
-    if(contentEl) contentEl.innerHTML = c || '<span class="text-slate-400">상세 내용 없음</span>';
+    const contentEl = document.getElementById('sv-content'); if(contentEl) contentEl.innerHTML = c || '<span class="text-slate-400">상세 내용 없음</span>';
     
     const modal = document.getElementById('schedule-view-modal');
-    if(modal) {
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-    }
+    if(modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
 };
 
 window.closeScheduleViewModal = function() {
     const modal = document.getElementById('schedule-view-modal');
-    if(modal) {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-    }
+    if(modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
 };
 
 window.saveSchedule = async function() {
-    const idEl = document.getElementById('sch-id');
-    const weekEl = document.getElementById('weekly-log-filter-week');
-    const dayEl = document.getElementById('sch-day');
-    const categoryEl = document.getElementById('sch-category');
-    const timeEl = document.getElementById('sch-time');
-    const titleEl = document.getElementById('sch-title');
-    const contentEl = document.getElementById('sch-content');
-    const sharedEl = document.getElementById('sch-is-shared');
+    const idEl = document.getElementById('sch-id'); const weekEl = document.getElementById('weekly-log-filter-week'); const dayEl = document.getElementById('sch-day');
+    const categoryEl = document.getElementById('sch-category'); const timeEl = document.getElementById('sch-time'); const titleEl = document.getElementById('sch-title');
+    const contentEl = document.getElementById('sch-content'); const sharedEl = document.getElementById('sch-is-shared');
 
     if (!idEl || !weekEl || !dayEl || !categoryEl || !titleEl) return;
 
-    const id = idEl.value;
-    const week = weekEl.value;
-    const day = dayEl.value;
-    const category = categoryEl.value;
-    const time = timeEl ? timeEl.value.trim() : '';
-    const title = titleEl.value.trim();
-    const content = contentEl ? contentEl.value.trim() : '';
+    const id = idEl.value; const week = weekEl.value; const day = dayEl.value; const category = categoryEl.value;
+    const time = timeEl ? timeEl.value.trim() : ''; const title = titleEl.value.trim(); const content = contentEl ? contentEl.value.trim() : '';
     const isShared = sharedEl ? sharedEl.checked : true;
 
-    if (!title) {
-        if (window.showToast) window.showToast("일정 제목을 필수로 입력하세요.", "error");
-        return;
-    }
+    if (!title) { if (window.showToast) window.showToast("일정 제목을 필수로 입력하세요.", "error"); return; }
 
     const payload = { 
-        week: week, 
-        day: day, 
-        category: category, 
-        time: time, 
-        title: title,
-        content: content, 
-        isShared: isShared,
-        authorUid: window.currentUser.uid, 
-        authorName: window.userProfile.name,
-        updatedAt: Date.now() 
+        week: week, day: day, category: category, time: time, title: title, content: content, isShared: isShared,
+        authorUid: window.currentUser.uid, authorName: window.userProfile.name, updatedAt: Date.now() 
     };
 
     try {
-        if (id) {
-            await setDoc(doc(db, "weekly_schedules", id), payload, { merge: true });
-        } else {
-            payload.createdAt = Date.now();
-            payload.isCompleted = false;
-            await addDoc(collection(db, "weekly_schedules"), payload);
-        }
+        if (id) { await setDoc(doc(db, "weekly_schedules", id), payload, { merge: true }); } 
+        else { payload.createdAt = Date.now(); payload.isCompleted = false; await addDoc(collection(db, "weekly_schedules"), payload); }
         if (window.showToast) window.showToast("일정이 저장되었습니다.");
         window.closeScheduleModal();
-    } catch (e) {
-        if (window.showToast) window.showToast("저장 실패", "error");
-    }
+    } catch (e) { if (window.showToast) window.showToast("저장 실패", "error"); }
 };
