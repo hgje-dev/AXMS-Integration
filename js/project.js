@@ -299,6 +299,9 @@ window.loadProjectStatusData = function() {
         isPjtDashInit = true;
     }
 
+    // 💡 [수정 후 추가된 부분] 화면이 로드될 때 구글 연동 상태 UI를 확인하고 갱신합니다.
+    if (window.initGoogleAPI) window.initGoogleAPI();
+
     if(projectStatusSnapshotUnsubscribe) projectStatusSnapshotUnsubscribe();
     
     projectStatusSnapshotUnsubscribe = onSnapshot(query(collection(db, "projects_status")), function(snapshot) {
