@@ -22,21 +22,23 @@ googleProvider.setCustomParameters({
 window.googleLogin = async () => {
     const err = document.getElementById('login-error');
     if (err) err.classList.add('hidden');
+    
     window.isSigningUp = true; 
 
     try {
         const result = await signInWithPopup(auth, googleProvider);
         const user = result.user;
+        const email = user.email ? user.email.toLowerCase() : '';
 
-        // 1. 사내 이메일 도메인 검증
-        if (!user.email || !user.email.endsWith('@axbis.ai')) {
-            try { await user.delete(); } catch(e) { await signOut(auth); } 
-            window.isSigningUp = false; 
-            if (err) { err.innerHTML = "사내 이메일(@axbis.ai)만 가입 가능합니다."; err.classList.remove('hidden'); }
-            return; 
+        // 1. 도메인 체크
+        if (!email.endsWith('@axbis.ai')) {
+            if (window.showToast) window.showToast("사내 계정(@axbis.ai)만 가입 가능합니다.", "error");
+            await signOut(auth);
+            window.isSigningUp = false;
+            return;
         }
 
-        // 2. 구글 드라이브 및 지메일 토큰 저장
+        // 2. 토큰 갱신
         const credential = GoogleAuthProvider.credentialFromResult(result);
         if (credential && credential.accessToken) {
             window.googleAccessToken = credential.accessToken;
@@ -47,33 +49,31 @@ window.googleLogin = async () => {
         const userDocRef = doc(db, "users", user.uid);
         const userDoc = await getDoc(userDocRef);
 
-        // 3. 첫 로그인인 경우 회원가입 폼 표시
         if (!userDoc.exists()) {
-            window.tempUserEmail = user.email; 
+            // [신규 가입자]
+            window.tempUserEmail = email; 
             window.tempUserUid = user.uid;
             const nameInput = document.getElementById('signup-name');
             if (nameInput) nameInput.value = user.displayName || '';
             
             document.getElementById('login-view').classList.add('hidden'); 
             document.getElementById('signup-view').classList.remove('hidden');
-        } 
-        // 4. 이미 가입된 경우
-        else {
-            window.isSigningUp = false; 
-            const userEmail = user.email.toLowerCase();
-            const isSuperAdmin = (userEmail === 'mfg@axbis.ai' || userEmail === 'hgje@axbis.ai');
-            
-            // 최고 관리자 계정은 로그인 시 무조건 Admin 권한 강제 업데이트
-            if (isSuperAdmin && userDoc.data().role !== 'admin') { 
-                await setDoc(userDocRef, { role: 'admin' }, { merge: true }); 
+        } else {
+            // [기존 가입자]
+            const isSuperAdmin = (email === 'mfg@axbis.ai' || email === 'hgje@axbis.ai');
+            if (isSuperAdmin && userDoc.data().role !== 'admin') {
+                await setDoc(userDocRef, { role: 'admin' }, { merge: true });
             }
-            location.reload();
+            
+            // 💡 [핵심] 로그인 성공 후 방아쇠 당기기 (대시보드로 진입)
+            window.isSigningUp = false; 
+            location.reload(); 
         }
     } catch (er) {
         window.isSigningUp = false; 
-        console.error("❌ 로그인 실패:", er);
+        console.error("❌ Login Error:", er);
         if (err) { 
-            err.innerHTML = `로그인 실패: ${er.message}<br><span class="text-[10px] text-slate-500 mt-1 block">💡 브라우저 팝업 차단을 해제하거나, 권한을 확인해주세요.</span>`; 
+            err.innerHTML = `로그인 실패: ${er.message}`; 
             err.classList.remove('hidden'); 
         }
     }
@@ -84,34 +84,33 @@ window.completeGoogleSignup = async () => {
     const t = document.getElementById('signup-dept')?.value;
     const pos = document.getElementById('signup-position')?.value || '매니저'; 
     const err = document.getElementById('signup-error');
-    const finalEmail = window.tempUserEmail || auth.currentUser?.email; 
-    const finalUid = window.tempUserUid || auth.currentUser?.uid;
-
-    if (err) err.classList.add('hidden');
-    if (!n) { 
-        if (err) { err.innerHTML = "이름을 입력해주세요."; err.classList.remove('hidden'); }
-        return; 
-    }
     
+    if (!n) { alert("성함을 입력해주세요."); return; }
+
+    const finalEmail = window.tempUserEmail || (auth.currentUser ? auth.currentUser.email : '');
+    const finalUid = window.tempUserUid || (auth.currentUser ? auth.currentUser.uid : '');
+
     try {
-        const safeEmail = finalEmail ? finalEmail.toLowerCase() : '';
+        const safeEmail = finalEmail.toLowerCase();
         const isSuperAdmin = (safeEmail === 'mfg@axbis.ai' || safeEmail === 'hgje@axbis.ai');
         let initialRole = isSuperAdmin ? 'admin' : 'pending';
         
         await setDoc(doc(db, "users", finalUid), {
-            email: finalEmail, name: n, team: t, department: t, position: pos, role: initialRole,
-            permissions: { collab:true, purchase:true, assembly:true, repair:true, 'project-status':true, 'weekly-log':true }
+            email: safeEmail, name: n, team: t, department: t, position: pos, role: initialRole,
+            permissions: { collab:true, purchase:true, assembly:true, repair:true, 'project-status':true, 'weekly-log':true },
+            createdAt: Date.now()
         });
         
         if (initialRole === 'pending') {
-            if (err) { err.innerHTML = "가입 완료! 승인 대기 중입니다."; err.classList.remove('hidden'); }
-            setTimeout(() => { window.isSigningUp = false; window.logout(); }, 3000);
+            alert("가입 신청 완료! 관리자 승인 후 이용 가능합니다.");
+            window.isSigningUp = false;
+            window.logout();
         } else { 
-            window.isSigningUp = false; 
+            window.isSigningUp = false;
             location.reload(); 
         }
-    } catch(er) { 
-        if (err) { err.innerHTML = "가입 오류: " + er.message; err.classList.remove('hidden'); } 
+    } catch(er) {
+        alert("저장 오류: " + er.message);
     }
 };
 
@@ -119,12 +118,13 @@ window.logout = async () => {
     if (window.currentUser) { 
         try { await setDoc(doc(db, "users", window.currentUser.uid), { isOnline: false, lastActive: Date.now() }, { merge: true }); } catch(e) {} 
     }
-    await signOut(auth); 
+    window.isSigningUp = false;
     localStorage.removeItem('axmsGoogleTokenV2'); 
+    await signOut(auth);
     location.reload(); 
 };
 
-// 💡 [핵심 해결] 새로고침 시 무한 루프 및 강제 로그아웃 방지 로직
+// 💡 3. 인증 감시자 (자동 로그인 및 UI 전환 담당)
 window.initAuthListeners = () => {
     onAuthStateChanged(auth, async (u) => {
         if (window.isSigningUp) return; 
@@ -132,87 +132,63 @@ window.initAuthListeners = () => {
         if (u) {
             try {
                 const uS = await getDoc(doc(db, "users", u.uid));
-                
+                const safeEmail = u.email ? u.email.toLowerCase() : '';
+                const isSuperAdmin = (safeEmail === 'mfg@axbis.ai' || safeEmail === 'hgje@axbis.ai');
+
                 if (uS.exists()) { 
                     window.userProfile = uS.data(); 
-                    const safeEmail = u.email ? u.email.toLowerCase() : '';
-                    const isSuperAdmin = (safeEmail === 'mfg@axbis.ai' || safeEmail === 'hgje@axbis.ai');
                     
-                    // 🔥 프리패스: 대표/관리자 계정은 DB 상태와 무관하게 무조건 Admin 통과
                     if (isSuperAdmin) {
                         window.userProfile.role = 'admin';
                         setDoc(doc(db, "users", u.uid), { role: 'admin' }, { merge: true }).catch(()=>{});
                     }
 
-                    // 일반 계정 승인 대기 처리
                     if (window.userProfile.role === 'pending') { 
-                        const err = document.getElementById('login-error');
-                        if (err) { err.innerHTML = "관리자 승인 대기 중입니다."; err.classList.remove('hidden'); }
+                        alert("관리자 승인 대기 중입니다. 승인 완료 후 다시 로그인해주세요.");
                         await signOut(auth); 
                         return; 
                     }
                     
                     window.currentUser = u; 
                     
-                    // UI 정상 표시
-                    const loginModal = document.getElementById('login-modal'); if (loginModal) loginModal.classList.add('hidden'); 
-                    const pt = document.getElementById('portal-container'); if (pt) { pt.classList.remove('hidden'); pt.classList.add('flex'); }
-                    if (document.getElementById('sidebar-user-name')) document.getElementById('sidebar-user-name').innerText = window.userProfile.name || '이름 없음'; 
-                    if (document.getElementById('sidebar-team-badge')) document.getElementById('sidebar-team-badge').innerText = window.userProfile.team || '소속 없음';
+                    document.getElementById('login-modal')?.classList.add('hidden'); 
+                    document.getElementById('portal-container')?.classList.remove('hidden');
+                    document.getElementById('portal-container')?.classList.add('flex');
                     
-                    if (allUsersUnsubscribe) allUsersUnsubscribe(); allUsersUnsubscribe = onSnapshot(collection(db,"users"), s=>{ window.allSystemUsers=[]; s.forEach(d=>window.allSystemUsers.push({uid:d.id,...d.data()})); });
-                    if (teamMembersUnsubscribe) teamMembersUnsubscribe(); teamMembersUnsubscribe = onSnapshot(collection(db,"team_members"), s=>{ window.teamMembers=[]; s.forEach(d=>window.teamMembers.push({id:d.id,...d.data()})); });
+                    if (document.getElementById('sidebar-user-name')) document.getElementById('sidebar-user-name').innerText = window.userProfile.name; 
+                    if (document.getElementById('sidebar-team-badge')) document.getElementById('sidebar-team-badge').innerText = window.userProfile.team;
+                    
+                    if (allUsersUnsubscribe) allUsersUnsubscribe(); 
+                    allUsersUnsubscribe = onSnapshot(collection(db,"users"), s=>{ 
+                        window.allSystemUsers=[]; s.forEach(d=>window.allSystemUsers.push({uid:d.id,...d.data()})); 
+                    });
+                    
+                    if (teamMembersUnsubscribe) teamMembersUnsubscribe(); 
+                    teamMembersUnsubscribe = onSnapshot(collection(db,"team_members"), s=>{ 
+                        window.teamMembers=[]; s.forEach(d=>window.teamMembers.push({id:d.id,...d.data()})); 
+                    });
                     
                     if (window.loadCounts) window.loadCounts(); 
                     if (window.loadNotifications) window.loadNotifications();
                 } 
-                else { 
-                    // DB에 정보가 없는데 로그인 상태인 경우 (가입 도중 새로고침 등) -> 로그아웃 시키지 않고 폼 띄우기
-                    window.tempUserEmail = u.email; 
-                    window.tempUserUid = u.uid;
-                    const nameInput = document.getElementById('signup-name');
-                    if (nameInput) nameInput.value = u.displayName || '';
-                    
-                    const loginModal = document.getElementById('login-modal'); if (loginModal) loginModal.classList.remove('hidden');
-                    const loginView = document.getElementById('login-view'); if (loginView) loginView.classList.add('hidden');
-                    const signupView = document.getElementById('signup-view'); if (signupView) signupView.classList.remove('hidden');
+                else {
+                    document.getElementById('login-view')?.classList.add('hidden');
+                    document.getElementById('signup-view')?.classList.remove('hidden');
                 }
             } catch (firestoreErr) {
-                console.error("DB 로드 에러:", firestoreErr);
-                const err = document.getElementById('login-error');
-                if (err) { err.innerHTML = "데이터베이스 연결 오류: " + firestoreErr.message; err.classList.remove('hidden'); }
+                console.error("Firestore Error:", firestoreErr);
                 await signOut(auth);
             }
         } 
         else { 
-            // 로그아웃 상태일 때 초기화
             window.currentUser = null; 
-            const loginModal = document.getElementById('login-modal'); if (loginModal) loginModal.classList.remove('hidden'); 
-            const loginView = document.getElementById('login-view'); if (loginView) loginView.classList.remove('hidden');
-            const signupView = document.getElementById('signup-view'); if (signupView) signupView.classList.add('hidden');
-            const pt = document.getElementById('portal-container'); if (pt) { pt.classList.add('hidden'); pt.classList.remove('flex'); }
+            document.getElementById('login-modal')?.classList.remove('hidden'); 
+            document.getElementById('portal-container')?.classList.add('hidden');
+            document.getElementById('login-view')?.classList.remove('hidden');
+            document.getElementById('signup-view')?.classList.add('hidden');
         }
     });
 };
-
-document.addEventListener('DOMContentLoaded', () => {
-    const loginBtn = document.querySelector('button[onclick="window.googleLogin()"]');
-    if (loginBtn) {
-        loginBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            if (typeof window.googleLogin === 'function') {
-                window.googleLogin();
-            } else {
-                console.error("❌ googleLogin 함수를 찾을 수 없습니다.");
-                const err = document.getElementById('login-error');
-                if(err) {
-                    err.innerHTML = "스크립트 로드 오류입니다. 새로고침 후 다시 시도해주세요.";
-                    err.classList.remove('hidden');
-                }
-            }
-        });
-    }
-});
 
 // 관리자 및 설정 모달 관련 함수들
 window.openSettingsModal = () => {
