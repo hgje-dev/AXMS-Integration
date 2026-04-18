@@ -36,9 +36,80 @@ window.currentLogMembers = [];
 window.currentSelectedMembers = [];
 
 // ==========================================
+// 💡 동적 스크롤 락(틀고정) 모듈 추가
+// ==========================================
+window.currentLockIndex = -1;
+
+window.setTableLock = function(colIndex) {
+    if (window.currentLockIndex === colIndex) {
+        window.currentLockIndex = -1;
+    } else {
+        window.currentLockIndex = colIndex;
+    }
+    window.applyTableLock();
+    if (window.showToast) {
+        window.showToast(window.currentLockIndex === -1 ? "스크롤 고정이 해제되었습니다." : "선택한 열까지 스크롤이 고정되었습니다.", "success");
+    }
+};
+
+window.applyTableLock = function() {
+    const table = document.querySelector('#proj-dash-list-container table');
+    if (!table) return;
+
+    const theadThs = table.querySelectorAll('thead th');
+    const tbodyTrs = table.querySelectorAll('tbody tr');
+    let accumulatedWidth = 0;
+
+    // 헤더 처리 (index.html 하드코딩 무력화 포함)
+    theadThs.forEach((th, index) => {
+        th.onclick = () => window.setTableLock(index);
+        th.style.cursor = 'pointer';
+        th.title = '💡 클릭하여 여기까지 틀고정/해제';
+
+        th.style.position = 'sticky';
+        th.style.top = '0px'; 
+        th.style.left = 'auto';
+        th.style.zIndex = '40';
+        th.classList.remove('shadow-[3px_0_5px_-1px_rgba(0,0,0,0.3)]');
+
+        if (window.currentLockIndex !== -1 && index <= window.currentLockIndex) {
+            th.style.left = accumulatedWidth + 'px';
+            th.style.zIndex = '50';
+            if (index === window.currentLockIndex) {
+                th.classList.add('shadow-[3px_0_5px_-1px_rgba(0,0,0,0.3)]');
+            }
+            accumulatedWidth += th.getBoundingClientRect().width;
+        }
+    });
+
+    // 데이터 행 처리
+    tbodyTrs.forEach(tr => {
+        let tds = tr.querySelectorAll('td');
+        let currentWidth = 0;
+        tds.forEach((td, index) => {
+            td.style.position = 'static';
+            td.style.left = 'auto';
+            td.style.zIndex = 'auto';
+            td.classList.remove('sticky', 'z-20', 'bg-white', 'group-hover:bg-indigo-50/50', 'shadow-[3px_0_5px_-1px_rgba(0,0,0,0.3)]');
+
+            if (window.currentLockIndex !== -1 && index <= window.currentLockIndex) {
+                td.style.position = 'sticky';
+                td.style.left = currentWidth + 'px';
+                td.style.zIndex = '20';
+                td.classList.add('bg-white', 'group-hover:bg-indigo-50/50');
+                if (index === window.currentLockIndex) {
+                    td.classList.add('shadow-[3px_0_5px_-1px_rgba(0,0,0,0.3)]');
+                }
+                currentWidth += td.getBoundingClientRect().width;
+            }
+        });
+    });
+};
+
+
+// ==========================================
 // 💡 안전망(Safe Guard) 및 공통 유틸리티
 // ==========================================
-
 if (!window.getLocalDateStr) {
     window.getLocalDateStr = function(dateObj) {
         const tzOffset = dateObj.getTimezoneOffset() * 60000;
@@ -118,7 +189,6 @@ window.updateMultiFileNames = function(inputEl, displayElId) {
 // ==========================================
 // 💡 알림 카운트 및 데이터 로드
 // ==========================================
-
 window.loadCounts = function() {
     try {
         onSnapshot(collection(db, "project_comments"), (snap) => { window.projectCommentCounts = {}; snap.forEach(doc => { let d = doc.data(); let pid = d.projectId || d.reqId; if(pid) window.projectCommentCounts[pid] = (window.projectCommentCounts[pid]||0)+1; }); window.renderProjectStatusList(); });
@@ -185,9 +255,6 @@ window.resetAllFilters = function() {
     window.filterProjectStatus('all');
 };
 
-// ==========================================
-// 💡 필터링 및 대시보드
-// ==========================================
 window.getFilteredProjects = function() {
     let list = window.currentProjectStatusList || [];
     
@@ -299,7 +366,6 @@ window.loadProjectStatusData = function() {
         isPjtDashInit = true;
     }
 
-    // 💡 [수정 후 추가된 부분] 화면이 로드될 때 구글 연동 상태 UI를 확인하고 갱신합니다.
     if (window.initGoogleAPI) window.initGoogleAPI();
 
     if(projectStatusSnapshotUnsubscribe) projectStatusSnapshotUnsubscribe();
@@ -333,7 +399,7 @@ window.loadProjectStatusData = function() {
 };
 
 // ==========================================
-// 💡 리스트 화면 렌더링
+// 💡 리스트 화면 렌더링 (동적 스크롤락 반영)
 // ==========================================
 window.renderProjectStatusList = function() {
     const tbody = document.getElementById('proj-dash-tbody'); 
@@ -395,15 +461,17 @@ window.renderProjectStatusList = function() {
             }
 
             htmlStr += `<tr class="group hover:bg-indigo-50/50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.editProjStatus('${item.id}')">`;
-            htmlStr += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 0px; min-width: 40px; max-width: 40px;" onclick="event.stopPropagation()"><button onclick="window.deleteProjStatus('${item.id}')" class="text-slate-300 hover:text-rose-500 p-1.5 rounded"><i class="fa-solid fa-trash-can"></i></button></td>`;
-            htmlStr += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 40px; min-width: 80px; max-width: 80px;">${getSafeString(item.category)}</td>`;
-            htmlStr += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 120px; min-width: 50px; max-width: 50px;" onclick="event.stopPropagation()"><button onclick="window.openCommentModal('${item.id}', '${safeNameJs}')" class="text-amber-400 relative"><i class="fa-regular fa-comment-dots text-lg"></i>${cCnt ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-amber-200">${cCnt}</span>` : ''}</button></td>`;
-            htmlStr += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 170px; min-width: 50px; max-width: 50px;" onclick="event.stopPropagation()"><button onclick="window.openIssueModal('${item.id}', '${safeNameJs}')" class="text-rose-400 relative"><i class="fa-solid fa-triangle-exclamation text-lg"></i>${iCnt ? `<span class="absolute -top-1 -right-2 bg-rose-100 text-rose-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-rose-200">${iCnt}</span>` : ''}</button></td>`;
-            htmlStr += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center font-bold text-indigo-700 bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 220px; min-width: 110px; max-width: 110px;">${getSafeString(item.code)}</td>`;
-            htmlStr += `<td class="border-b border-r border-slate-200 px-2 py-1 truncate max-w-[220px] bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 330px; min-width: 220px;">${safeNameHtml}</td>`;
-            htmlStr += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center truncate max-w-[110px] bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 550px; min-width: 110px;">${getSafeString(item.company)}</td>`;
-            htmlStr += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center font-black text-emerald-600 bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 660px; min-width: 60px; max-width: 60px;">${parseFloat(item.progress) || 0}%</td>`;
-            htmlStr += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20 shadow-[3px_0_5px_-1px_rgba(0,0,0,0.3)] border-r-slate-300" style="left: 720px; min-width: 80px; max-width: 80px;">${statusMap[item.status] || ''}</td>`;
+            
+            // 기존 하드코딩된 sticky, z-index, left 등을 모두 걷어내고 min/max width만 유지합니다. (applyTableLock이 동적 제어)
+            htmlStr += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center" style="min-width: 40px; max-width: 40px;" onclick="event.stopPropagation()"><button onclick="window.deleteProjStatus('${item.id}')" class="text-slate-300 hover:text-rose-500 p-1.5 rounded"><i class="fa-solid fa-trash-can"></i></button></td>`;
+            htmlStr += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center" style="min-width: 80px; max-width: 80px;">${getSafeString(item.category)}</td>`;
+            htmlStr += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center" style="min-width: 50px; max-width: 50px;" onclick="event.stopPropagation()"><button onclick="window.openCommentModal('${item.id}', '${safeNameJs}')" class="text-amber-400 relative"><i class="fa-regular fa-comment-dots text-lg"></i>${cCnt ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-amber-200">${cCnt}</span>` : ''}</button></td>`;
+            htmlStr += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center" style="min-width: 50px; max-width: 50px;" onclick="event.stopPropagation()"><button onclick="window.openIssueModal('${item.id}', '${safeNameJs}')" class="text-rose-400 relative"><i class="fa-solid fa-triangle-exclamation text-lg"></i>${iCnt ? `<span class="absolute -top-1 -right-2 bg-rose-100 text-rose-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-rose-200">${iCnt}</span>` : ''}</button></td>`;
+            htmlStr += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center font-bold text-indigo-700" style="min-width: 110px; max-width: 110px;">${getSafeString(item.code)}</td>`;
+            htmlStr += `<td class="border-b border-r border-slate-200 px-2 py-1 truncate max-w-[220px]" style="min-width: 220px;">${safeNameHtml}</td>`;
+            htmlStr += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center truncate max-w-[110px]" style="min-width: 110px;">${getSafeString(item.company)}</td>`;
+            htmlStr += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center font-black text-emerald-600" style="min-width: 60px; max-width: 60px;">${parseFloat(item.progress) || 0}%</td>`;
+            htmlStr += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center border-r-slate-300" style="min-width: 80px; max-width: 80px;">${statusMap[item.status] || ''}</td>`;
             
             htmlStr += `<td class="border border-slate-200 px-2 py-1 text-center font-bold text-slate-600">${getSafeString(item.manager)}</td>`;
             htmlStr += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openPurchaseModal('${item.id}', '${safeNameJs}')" class="text-amber-500 relative"><i class="fa-solid fa-cart-shopping text-lg"></i>${purCnt ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-amber-200">${purCnt}</span>` : ''}</button></td>`;
@@ -445,19 +513,22 @@ window.renderProjectStatusList = function() {
     });
     
     tbody.innerHTML = htmlStr;
+
+    // 💡 렌더링 직후 스크롤 락 레이아웃 재정렬
+    setTimeout(() => {
+        window.applyTableLock();
+    }, 50);
 };
 
 // ==========================================
-// 💡 [핵심 수정] 클라이언트 단에서 직접 구글 드라이브 업로드 (백엔드 에러 원천 차단)
+// 💡 프로젝트 직접 연동 드라이브 파일 업로드 로직
 // ==========================================
-
 window.getOrCreateDriveFolder = async function(folderName, parentFolderId) {
     const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
     if (!window.googleAccessToken || !storedExpiry || Date.now() > parseInt(storedExpiry)) {
         throw new Error("TOKEN_EXPIRED");
     }
     
-    // 💡 [버그 픽스] 공백, 한글, 특수문자 완벽 인코딩 지원
     const safeFolderName = getSafeString(folderName).replace(/['\/\\]/g, '_').trim() || '미분류 프로젝트';
     const queryStr = `name='${safeFolderName.replace(/'/g, "\\'")}' and mimeType='application/vnd.google-apps.folder' and '${parentFolderId}' in parents and trashed=false`;
     
@@ -489,7 +560,6 @@ window.uploadFileWithProgress = async function(file, folderName, subFolderName =
         throw new Error("TOKEN_EXPIRED");
     }
 
-    // 💡 [버그 픽스] z-index 99999로 무조건 최상단에 뜨는 프로그레스 바 강제 생성
     let progressModal = document.getElementById('global-upload-progress-modal');
     if (!progressModal) {
         progressModal = document.createElement('div');
@@ -584,9 +654,6 @@ window.uploadFileWithProgress = async function(file, folderName, subFolderName =
     }
 };
 
-// ==========================================
-// 💡 이미지 렌더러 (엑스박스 방지)
-// ==========================================
 window.generateMediaHtml = function(filesArray) {
     if (!filesArray || !Array.isArray(filesArray) || filesArray.length === 0) return '';
     
@@ -607,7 +674,6 @@ window.generateMediaHtml = function(filesArray) {
             let fileIdMatch = f.url ? f.url.match(/\/d\/(.+?)\/view/) : null;
             
             if (fileIdMatch) {
-                // 구글 드라이브 파일일 경우 고품질 썸네일과 원본 뷰어 매핑
                 viewUrl = `https://drive.google.com/file/d/${fileIdMatch[1]}/view`;
                 thumbUrl = `https://drive.google.com/thumbnail?id=${fileIdMatch[1]}&sz=w600`;
             }
@@ -753,7 +819,6 @@ window.saveProjStatus = async function(btn) {
             cleanPayload.createdAt = Date.now(); cleanPayload.currentMd = 0; cleanPayload.authorUid = (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system'; cleanPayload.authorName = (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system';
             await addDoc(collection(db, "projects_status"), cleanPayload); safeShowSuccess("성공적으로 등록되었습니다."); 
             
-            // 새 프로젝트 등록 시 드라이브 폴더 자동 생성 시도
             try {
                 const folderName = cleanPayload.code ? cleanPayload.code : cleanPayload.name;
                 await window.getOrCreateDriveFolder(folderName, TARGET_DRIVE_FOLDER);
@@ -849,7 +914,7 @@ window.toggleProjDashView = function(view) {
 };
 
 // ==========================================
-// 💡 [간트 차트 렌더링 수정] 여백 및 공휴일 표시 추가
+// 💡 간트 차트 렌더링 (높이 정렬 개선)
 // ==========================================
 window.scrollToGanttToday = function() {
     const container = document.getElementById('proj-dash-gantt-content');
@@ -930,8 +995,9 @@ window.renderProjGantt = function() {
                 barHtml = `<div class="text-[10px] text-slate-400 italic px-4 w-full text-center">일정 미지정</div>`;
             }
             
+            // 기존 mb-3 마진을 없애고 h-10의 명시적 높이와 하단 테두리를 주어 정렬을 고정합니다.
             rowsHtml += `
-            <div class="flex items-center text-xs group w-full mb-3 hover:bg-slate-50 p-1.5 rounded-lg transition-colors cursor-pointer" onclick="window.editProjStatus('${p.id}')">
+            <div class="flex items-center text-xs group w-full h-10 border-b border-slate-50 hover:bg-slate-50 p-1.5 rounded-lg transition-colors cursor-pointer" onclick="window.editProjStatus('${p.id}')">
                 <div class="w-[280px] font-bold truncate pr-4 text-slate-700 shrink-0 bg-white shadow-sm px-2 py-1 rounded" title="${title}">${title}</div>
                 <div class="flex-1 relative h-7 bg-transparent rounded-full border border-slate-200 mx-2">
                     ${barHtml}
@@ -1175,7 +1241,7 @@ window.savePjtScheduleItem = async function() {
 window.deletePjtSchedule = async function(id) { if(confirm("삭제하시겠습니까?")) { try { await deleteDoc(doc(db, "project_schedules", id)); safeShowSuccess("삭제되었습니다."); } catch(e) { safeShowError("삭제 실패", e); } } };
 
 // ==========================================
-// 💡 생산일지 모달 (팀원추가 로직 동기화 완료)
+// 💡 생산일지 모달
 // ==========================================
 window.addLogMember = function(name) {
     if(!name) return;
@@ -1621,8 +1687,6 @@ window.openNcrModal = function(pjtCode, pjtName) {
     try {
         const titleEl = document.getElementById('ncr-project-title');
         if (titleEl) { titleEl.innerText = `[${getSafeString(pjtCode)}] ${getSafeString(pjtName)}`; titleEl.dataset.code = getSafeString(pjtCode); }
-        
-        // 💡 닫기 시 사이드바 뒤에 가려지지 않도록 강제로 모달 최상단 띄우기
         if(window.toggleSidebar) window.toggleSidebar(false); 
         
         const modal = document.getElementById('ncr-modal');
@@ -1646,16 +1710,3 @@ window.renderNcrList = function(pjtCode) {
         return `<tr class="hover:bg-slate-50 transition-colors bg-white border-b border-slate-100"><td class="p-3 text-center font-bold text-slate-500 whitespace-nowrap">${getSafeString(n.ncrNo) || '-'}</td><td class="p-3 text-center text-slate-500 whitespace-nowrap">${getSafeString(n.date) || '-'}</td><td class="p-3 text-center text-slate-500 whitespace-nowrap">${getSafeString(n.drawingNo) || '-'}</td><td class="p-3 text-center text-slate-500 whitespace-nowrap">${getSafeString(n.partName) || '-'}</td><td class="p-3 text-center whitespace-nowrap"><span class="bg-slate-100 px-2 py-1 border border-slate-200 rounded font-bold">${getSafeString(n.type) || '-'}</span></td><td class="p-3 font-medium ${isComp ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-700'} break-all">${getSafeString(n.content).replace(/</g, '&lt;').replace(/>/g, '&gt;') || '-'}</td><td class="p-3 text-center whitespace-nowrap">${isComp ? `<span class="bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">완료</span>` : `<span class="bg-rose-50 text-rose-600 border border-rose-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">진행중</span>`}</td></tr>`;
     }).join('');
 };
-
-// 💡 스크립트 로드 시 마스터 데이터를 확실하게 불러옵니다.
-document.addEventListener('DOMContentLoaded', () => {
-    const btnGoogleAuth = document.getElementById('btn-pjt-google-auth');
-    if (btnGoogleAuth) btnGoogleAuth.style.display = 'none';
-
-    if (window.loadProjectCodeMaster) {
-        window.loadProjectCodeMaster();
-    }
-});
-if (window.loadProjectCodeMaster) {
-    window.loadProjectCodeMaster();
-}
