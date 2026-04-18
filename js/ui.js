@@ -31,7 +31,7 @@ window.showToast = function(message, type = 'success') {
 };
 
 // ==========================================
-// 💡 글로벌 이미지 뷰어 (사진 클릭 시 확대)
+// 💡 글로벌 이미지 뷰어 (사진 클릭 시 확대) - 수정본 (iframe 지원)
 // ==========================================
 window.openImageViewer = function(url) {
     let viewer = document.getElementById('global-image-viewer');
@@ -40,12 +40,31 @@ window.openImageViewer = function(url) {
         viewer.id = 'global-image-viewer';
         viewer.className = 'fixed inset-0 z-[9999] hidden items-center justify-center bg-slate-900/90 backdrop-blur-sm p-4';
         viewer.innerHTML = `
-            <button onclick="window.closeImageViewer()" class="absolute top-6 right-6 text-white/70 hover:text-white text-4xl transition-colors outline-none"><i class="fa-solid fa-xmark"></i></button>
-            <img id="global-image-viewer-img" src="" class="max-w-full max-h-full object-contain rounded-lg shadow-2xl select-none">
+            <button onclick="window.closeImageViewer()" class="absolute top-6 right-6 text-white/70 hover:text-white text-4xl transition-colors outline-none z-50"><i class="fa-solid fa-xmark"></i></button>
+            <div id="global-image-viewer-content" class="w-full h-full flex items-center justify-center"></div>
         `;
         document.body.appendChild(viewer);
     }
-    document.getElementById('global-image-viewer-img').src = url;
+
+    const content = document.getElementById('global-image-viewer-content');
+    
+    // 구글 드라이브 링크인지 확인하여 분기 처리
+    if (url.includes('drive.google.com')) {
+        let embedUrl = url;
+        if (embedUrl.includes('/view')) {
+            embedUrl = embedUrl.replace('/view', '/preview'); 
+        } else if (embedUrl.includes('uc?export=view&id=')) {
+            const fileIdMatch = embedUrl.match(/id=([^&]+)/);
+            if (fileIdMatch) {
+                embedUrl = `https://drive.google.com/file/d/${fileIdMatch[1]}/preview`;
+            }
+        }
+        
+        content.innerHTML = `<iframe src="${embedUrl}" class="w-full max-w-5xl h-[80vh] rounded-xl shadow-2xl bg-white border-0"></iframe>`;
+    } else {
+        content.innerHTML = `<img src="${url}" class="max-w-full max-h-full object-contain rounded-lg shadow-2xl select-none">`;
+    }
+    
     viewer.classList.remove('hidden');
     viewer.classList.add('flex');
 };
@@ -55,7 +74,8 @@ window.closeImageViewer = function() {
     if (viewer) {
         viewer.classList.add('hidden');
         viewer.classList.remove('flex');
-        document.getElementById('global-image-viewer-img').src = '';
+        const content = document.getElementById('global-image-viewer-content');
+        if (content) content.innerHTML = ''; // 메모리 누수 방지 및 초기화
     }
 };
 
