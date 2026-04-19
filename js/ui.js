@@ -1,6 +1,7 @@
 /* eslint-disable */
 import { db } from './firebase.js';
-import { collection, addDoc, query, where, onSnapshot, doc, setDoc, getDocs, writeBatch, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+// 💡 getDoc 가 누락되어 있던 문제를 해결했습니다!
+import { collection, addDoc, query, where, onSnapshot, doc, setDoc, getDoc, getDocs, writeBatch, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 // 전역 상태 변수
 window.currentUser = null; 
@@ -611,7 +612,7 @@ window.updateUserTeam = async (uid, team) => { try { await setDoc(doc(db, "users
 window.updateUserPosition = async (uid, pos) => { try { await setDoc(doc(db, "users", uid), { position: pos }, { merge: true }); if(window.showToast) window.showToast("직책이 변경되었습니다."); } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } };
 window.updateUserRole = async (uid, role) => { try { await setDoc(doc(db, "users", uid), { role: role }, { merge: true }); if(window.showToast) window.showToast("등급이 변경되었습니다."); } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } };
 
-// 💡 권한 업데이트 저장 시 빈 객체 증발 방지를 위한 방어 코드 추가
+// 💡 권한 업데이트 저장 시 빈 객체 증발을 확실히 방어하는 코드로 업데이트 되었습니다!
 window.updateUserPerm = async (uid, key, val) => { 
     try { 
         const uR = doc(db, "users", uid); 
