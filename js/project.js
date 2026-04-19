@@ -210,7 +210,7 @@ window.updateMultiFileNames = function(inputEl, displayElId) {
 };
 
 // ==========================================
-// 💡 구글 드라이브 연동 (PJT 공통)
+// 💡 구글 드라이브 연동 (PJT 공통) 및 진행률 모달 연결
 // ==========================================
 window.pjtUploadToDrive = async function(file, folderName) {
     const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
@@ -218,7 +218,7 @@ window.pjtUploadToDrive = async function(file, folderName) {
         throw new Error("구글 인증 토큰이 만료되었습니다. 로그아웃 후 다시 연동해주세요.");
     }
     
-    // 1. 프로젝트 현황 부모 폴더 검색 (axbis.ai 내)
+    // 1. 프로젝트 현황 부모 폴더 검색
     const q1 = `name='${encodeURIComponent(folderName.replace(/['\/\\]/g, '_'))}' and mimeType='application/vnd.google-apps.folder' and '${TARGET_DRIVE_FOLDER}' in parents and trashed=false`;
     const r1 = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q1}&supportsAllDrives=true&includeItemsFromAllDrives=true`, { headers: {'Authorization': 'Bearer ' + window.googleAccessToken}});
     const d1 = await r1.json();
@@ -235,7 +235,7 @@ window.pjtUploadToDrive = async function(file, folderName) {
         pjtFid = data.id;
     }
 
-    // 2. 하위 폴더 자동 생성 분기 처리 (생산일지, 도면 등)
+    // 2. 하위 폴더 자동 생성 분기 처리 (생산일지)
     const q2 = `name='생산일지' and mimeType='application/vnd.google-apps.folder' and '${pjtFid}' in parents and trashed=false`;
     const r2 = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q2)}&supportsAllDrives=true&includeItemsFromAllDrives=true`, { headers: {'Authorization': 'Bearer ' + window.googleAccessToken}});
     const d2 = await r2.json();
@@ -252,23 +252,49 @@ window.pjtUploadToDrive = async function(file, folderName) {
         logFid = data.id;
     }
 
-    // 3. 파일 업로드 실행
+    // 3. 파일 업로드 실행 (진행률 UI 연결)
     const metadata = { name: file.name, parents: [logFid] };
-    const form = new FormData(); form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' })); form.append('file', file);
+    const form = new FormData(); 
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' })); 
+    form.append('file', file);
+
+    const progressModal = document.getElementById('upload-progress-modal');
+    const progressBar = document.getElementById('upload-progress-bar');
+    const progressText = document.getElementById('upload-progress-text');
+    const progressSize = document.getElementById('upload-progress-size');
+    const progressFilename = document.getElementById('upload-progress-filename');
+
+    if (progressModal) progressModal.classList.replace('hidden', 'flex');
+    if (progressFilename) progressFilename.innerText = file.name;
 
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', true);
         xhr.setRequestHeader('Authorization', 'Bearer ' + window.googleAccessToken);
         
+        xhr.upload.onprogress = function(e) {
+            if (e.lengthComputable && progressBar) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                const loadedMb = (e.loaded / (1024 * 1024)).toFixed(2);
+                const totalMb = (e.total / (1024 * 1024)).toFixed(2);
+                progressBar.style.width = percent + '%';
+                if(progressText) progressText.innerText = percent + '%';
+                if(progressSize) progressSize.innerText = `${loadedMb} MB / ${totalMb} MB`;
+            }
+        };
+
         xhr.onload = function() {
+            if (progressModal) progressModal.classList.replace('flex', 'hidden');
             if (xhr.status >= 200 && xhr.status < 300) { 
                 resolve(`https://drive.google.com/file/d/${JSON.parse(xhr.responseText).id}/view`); 
             } else { 
                 reject(new Error(`업로드 실패 (HTTP ${xhr.status})`)); 
             }
         };
-        xhr.onerror = () => reject(new Error("네트워크 오류"));
+        xhr.onerror = () => {
+            if (progressModal) progressModal.classList.replace('flex', 'hidden');
+            reject(new Error("네트워크 오류"));
+        };
         xhr.send(form);
     });
 };
@@ -604,6 +630,7 @@ window.renderProjectStatusList = function() {
     setTimeout(() => { window.applyTableLock(); }, 50);
 };
 
+
 // ==========================================
 // 💡 모달창 & 공통 함수들
 // ==========================================
@@ -715,13 +742,6 @@ window.saveProjStatus = async function(btn) {
         } else { 
             cleanPayload.createdAt = Date.now(); cleanPayload.currentMd = 0; cleanPayload.authorUid = (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system'; cleanPayload.authorName = (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system';
             await addDoc(collection(db, "projects_status"), cleanPayload); safeShowSuccess("성공적으로 등록되었습니다."); 
-            
-            try {
-                const folderName = cleanPayload.code ? cleanPayload.code : cleanPayload.name;
-                await window.pjtUploadToDrive({name: "init.txt", type: "text/plain", size: 4}, folderName);
-            } catch(e) {
-                console.warn("폴더 생성 지연(무시가능):", e);
-            }
         } 
         
         if(window.closeProjStatusWriteModal) window.closeProjStatusWriteModal(); 
@@ -989,7 +1009,7 @@ window.renderProjCalendar = function() {
 };
 
 // ==========================================
-// 💡 코멘트 모달
+// 💡 코멘트 모달 (이미지 썸네일 경로 수정 포함)
 // ==========================================
 window.openCommentModal = function(projectId, title) { 
     try {
@@ -1031,9 +1051,14 @@ window.openCommentModal = function(projectId, title) {
                     attachmentsHtml = '<div class="mt-3 flex flex-wrap gap-2">';
                     files.forEach(f => {
                         let url = f.url || f.thumbBase64;
-                        attachmentsHtml += `<div class="relative border border-slate-200 rounded-lg p-1 bg-slate-50 hover:border-amber-300 hover:shadow-sm transition-all cursor-pointer" onclick="event.stopPropagation(); window.openImageViewer('${url}')">
+                        let rawUrl = url;
+                        if (url.includes('drive.google.com')) {
+                            let fileIdMatch = url.match(/\/d\/(.+?)\/view/);
+                            if (fileIdMatch) rawUrl = `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}`;
+                        }
+                        attachmentsHtml += `<div class="relative border border-slate-200 rounded-lg p-1 bg-slate-50 hover:border-amber-300 hover:shadow-sm transition-all cursor-pointer" onclick="event.stopPropagation(); window.openImageViewer('${rawUrl}')">
                             <div class="w-14 h-14 flex items-center justify-center overflow-hidden rounded bg-white">
-                                <img src="${url}" class="max-w-full max-h-full object-contain">
+                                <img src="${rawUrl}" class="max-w-full max-h-full object-contain">
                             </div>
                         </div>`;
                     });
@@ -1052,9 +1077,14 @@ window.openCommentModal = function(projectId, title) {
                             rAttachmentsHtml = '<div class="mt-2 flex flex-wrap gap-2">';
                             rFiles.forEach(f => {
                                 let url = f.url || f.thumbBase64;
-                                rAttachmentsHtml += `<div class="relative border border-slate-200 rounded-lg p-1 bg-slate-50 hover:border-amber-300 hover:shadow-sm transition-all cursor-pointer" onclick="event.stopPropagation(); window.openImageViewer('${url}')">
+                                let rawUrl = url;
+                                if (url.includes('drive.google.com')) {
+                                    let fileIdMatch = url.match(/\/d\/(.+?)\/view/);
+                                    if (fileIdMatch) rawUrl = `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}`;
+                                }
+                                rAttachmentsHtml += `<div class="relative border border-slate-200 rounded-lg p-1 bg-slate-50 hover:border-amber-300 hover:shadow-sm transition-all cursor-pointer" onclick="event.stopPropagation(); window.openImageViewer('${rawUrl}')">
                                     <div class="w-12 h-12 flex items-center justify-center overflow-hidden rounded bg-white">
-                                        <img src="${url}" class="max-w-full max-h-full object-contain">
+                                        <img src="${rawUrl}" class="max-w-full max-h-full object-contain">
                                     </div>
                                 </div>`;
                             });
@@ -1285,7 +1315,7 @@ window.editMdLog = function(id) { const log = (window.currentMdLogs || []).find(
 window.updateProjectTotalMd = async function(projectId) { const snap = await getDocs(query(collection(db, "project_md_logs"), where("projectId", "==", projectId))); let total = 0; snap.forEach(docSnap => total += parseFloat(docSnap.data().md) || 0); const projRef = doc(db, "projects_status", projectId); const projSnap = await getDoc(projRef); if(projSnap.exists()) { const outMd = parseFloat(projSnap.data().outMd) || 0; await setDoc(projRef, { currentMd: total, finalMd: total + outMd }, { merge: true }); } };
 
 // ==========================================
-// 💡 생산일지 모달 (팀원 전용 쓰기 권한 및 드라이브 연동)
+// 💡 생산일지 모달 (팀원 전용 쓰기 권한 및 드라이브 연동, 이미지 URL 파싱)
 // ==========================================
 window.openDailyLogModal = function(projectId) { 
     try {
@@ -1340,7 +1370,7 @@ window.openDailyLogModal = function(projectId) {
             list.innerHTML = window.currentDailyLogs.map(log => {
                 let safeContent = getSafeString(log.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
                 
-                // 💡 다중 이미지 렌더링 HTML
+                // 💡 다중 이미지 렌더링 HTML (구글 드라이브 썸네일 지원)
                 let legacyFiles = [];
                 if(log.imageUrl) legacyFiles.push({ name: '첨부사진.jpg', url: log.imageUrl, thumbBase64: log.imageUrl });
                 let allFiles = log.files && log.files.length > 0 ? [...legacyFiles, ...log.files] : legacyFiles;
@@ -1350,11 +1380,25 @@ window.openDailyLogModal = function(projectId) {
                     attachmentsHtml = '<div class="mt-3 flex flex-wrap gap-2">';
                     allFiles.forEach(f => {
                         let url = f.url || f.thumbBase64;
-                        attachmentsHtml += `<div class="relative border border-slate-200 rounded-lg p-1 bg-slate-50 hover:border-sky-300 hover:shadow-sm transition-all cursor-pointer" onclick="event.stopPropagation(); window.openImageViewer('${url}')">
-                            <div class="w-14 h-14 flex items-center justify-center overflow-hidden rounded bg-white">
-                                <img src="${url}" class="max-w-full max-h-full object-contain">
-                            </div>
-                        </div>`;
+                        let isImg = f.name && f.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i) || url.startsWith('data:image');
+                        
+                        let rawUrl = url;
+                        if (url.includes('drive.google.com')) {
+                            let fileIdMatch = url.match(/\/d\/(.+?)\/view/);
+                            if (fileIdMatch) {
+                                rawUrl = `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}`;
+                            }
+                        }
+
+                        if (isImg || url.startsWith('data:image')) {
+                            attachmentsHtml += `<div class="relative border border-slate-200 rounded-lg p-1 bg-slate-50 hover:border-sky-300 hover:shadow-sm transition-all cursor-pointer" onclick="event.stopPropagation(); window.openImageViewer('${rawUrl}')">
+                                <div class="w-14 h-14 flex items-center justify-center overflow-hidden rounded bg-white">
+                                    <img src="${rawUrl}" class="max-w-full max-h-full object-contain">
+                                </div>
+                            </div>`;
+                        } else {
+                            attachmentsHtml += `<a href="${url}" target="_blank" class="text-xs text-sky-600 font-bold underline flex items-center gap-1 bg-slate-50 border border-slate-200 p-2 rounded-lg hover:bg-slate-100 w-fit" onclick="event.stopPropagation()"><i class="fa-solid fa-file-arrow-down"></i> ${f.name}</a>`;
+                        }
                     });
                     attachmentsHtml += '</div>';
                 }
@@ -1454,7 +1498,7 @@ window.clearDailyLogFile = function(e) { if(e && typeof e.stopPropagation === 'f
 
 
 // ==========================================
-// 💡 구매, 설계, 일정 모달창 (접근자 Fix)
+// 💡 구매, 설계, 일정 모달창 (접근자 Fix 및 이미지 파싱 보완)
 // ==========================================
 const setupModalLogic = (modalTitle, domPrefix, collectionName) => {
     window[`open${modalTitle}Modal`] = function(projectId, title) {
@@ -1485,11 +1529,23 @@ const setupModalLogic = (modalTitle, domPrefix, collectionName) => {
                 if(item.files && item.files.length > 0) {
                     filesHtml = '<div class="mt-2 flex flex-wrap gap-2">' + item.files.map(f => {
                         let url = f.url || f.thumbBase64;
-                        return `<div class="relative border border-slate-200 rounded-lg p-1 bg-slate-50 hover:border-${colorClass}-300 hover:shadow-sm transition-all cursor-pointer" onclick="event.stopPropagation(); window.openImageViewer('${url}')">
-                            <div class="w-14 h-14 flex items-center justify-center overflow-hidden rounded bg-white">
-                                <img src="${url}" class="max-w-full max-h-full object-contain">
-                            </div>
-                        </div>`;
+                        let isImg = f.name && f.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i) || url.startsWith('data:image');
+                        
+                        let rawUrl = url;
+                        if (url.includes('drive.google.com')) {
+                            let fileIdMatch = url.match(/\/d\/(.+?)\/view/);
+                            if (fileIdMatch) rawUrl = `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}`;
+                        }
+
+                        if(isImg || url.startsWith('data:image')) {
+                            return `<div class="relative border border-slate-200 rounded-lg p-1 bg-slate-50 hover:border-${colorClass}-300 hover:shadow-sm transition-all cursor-pointer" onclick="event.stopPropagation(); window.openImageViewer('${rawUrl}')">
+                                <div class="w-14 h-14 flex items-center justify-center overflow-hidden rounded bg-white">
+                                    <img src="${rawUrl}" class="max-w-full max-h-full object-contain">
+                                </div>
+                            </div>`;
+                        } else {
+                            return `<a href="${url}" target="_blank" class="text-xs text-${colorClass}-600 font-bold underline flex items-center gap-1 bg-slate-50 border border-slate-200 p-2 rounded-lg hover:bg-slate-100 w-fit" onclick="event.stopPropagation()"><i class="fa-solid fa-file-arrow-down"></i> ${f.name}</a>`;
+                        }
                     }).join('') + '</div>';
                 }
                 
@@ -1533,10 +1589,27 @@ const setupModalLogic = (modalTitle, domPrefix, collectionName) => {
         
         try {
             let filesData = [];
+            const proj = (window.currentProjectStatusList || []).find(p => p.id === pid) || {};
+            const folderName = proj.code || proj.name || '미지정';
+
             if (fileInput.files.length > 0) {
+                const processFile = async (file) => {
+                    if(window.googleAccessToken) {
+                        try {
+                            let url = await window.pjtUploadToDrive(file, folderName);
+                            return { name: file.name, url: url };
+                        } catch(e) {
+                            console.warn("드라이브 업로드 실패, Base64 변환 시도", e);
+                            return await new Promise(res => window.resizeAndConvertToBase64(file, b64 => res({name: file.name, url: b64, thumbBase64: b64}), 1200));
+                        }
+                    } else {
+                         return await new Promise(res => window.resizeAndConvertToBase64(file, b64 => res({name: file.name, url: b64, thumbBase64: b64}), 1200));
+                    }
+                };
+
                 for(let i=0; i<fileInput.files.length; i++) {
-                    let fData = await new Promise(res => window.resizeAndConvertToBase64(fileInput.files[i], b64 => res({name: fileInput.files[i].name, url: b64}), 1200));
-                    if(fData.url) filesData.push(fData);
+                    let fData = await processFile(fileInput.files[i]);
+                    if(fData && fData.url) filesData.push(fData);
                 }
             }
             
