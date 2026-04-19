@@ -258,25 +258,58 @@ window.loadNotifications = function() {
 
 window.readNotification = async function(id, projectId, type) { 
     try { 
+        // 1. 알림 읽음 처리
         await setDoc(doc(db, "notifications", id), { isRead: true }, { merge: true }); 
+        
         if (projectId) {
+            // 2. 알림 드롭다운 닫기
             const n = document.getElementById('notification-dropdown'); 
             if (n) n.classList.add('hidden');
+            
             const safeType = type || '';
             let title = "상세 보기"; 
+            
+            // 3. 페이지 이동 및 모달 띄우기 함수
+            const openModalSafe = (modalId, targetPage, openCallback) => {
+                if (!document.getElementById(modalId)) {
+                    // 현재 뷰에 모달 요소가 없으면 해당 페이지로 먼저 이동
+                    window.openApp(targetPage).then(() => {
+                        // 페이지 로딩 시간 대기 후 모달 오픈
+                        setTimeout(() => openCallback(), 500);
+                    });
+                } else {
+                    // 현재 뷰에 모달이 있으면 바로 오픈
+                    openCallback();
+                }
+            };
+
+            // 4. 알림 타입별 분기 처리
             if (safeType.includes('코멘트')) {
-                if(window.openCommentModal) window.openCommentModal(projectId, title);
+                openModalSafe('comment-modal', 'project-status', () => {
+                    if(window.openCommentModal) window.openCommentModal(projectId, title);
+                });
             } else if (safeType.includes('이슈')) {
-                if(window.openIssueModal) window.openIssueModal(projectId, title);
+                openModalSafe('issue-modal', 'project-status', () => {
+                    if(window.openIssueModal) window.openIssueModal(projectId, title);
+                });
             } else if (safeType.includes('생산일지')) {
-                if(window.openDailyLogModal) window.openDailyLogModal(projectId);
+                openModalSafe('daily-log-modal', 'project-status', () => {
+                    if(window.openDailyLogModal) window.openDailyLogModal(projectId);
+                });
             } else if (safeType.includes('투입MD')) {
-                if(window.openMdLogModal) window.openMdLogModal(projectId, title, 0);
+                openModalSafe('md-log-modal', 'project-status', () => {
+                    if(window.openMdLogModal) window.openMdLogModal(projectId, title, 0);
+                });
             } else if (safeType.includes('요청서') || safeType.includes('의뢰서')) {
-                 if(window.openWriteModal) window.openWriteModal(projectId);
+                // 요청서/의뢰서 관련 모달
+                openModalSafe('write-modal', 'collab', () => {
+                    if(window.openWriteModal) window.openWriteModal(projectId);
+                });
             }
         }
-    } catch(e) { console.error(e); } 
+    } catch(e) { 
+        console.error(e); 
+    } 
 };
 
 window.deleteNotification = async function(e, id) {
