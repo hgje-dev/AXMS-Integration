@@ -131,10 +131,13 @@ window.addEventListener('beforeunload', (e) => {
 
 // 💡 [버그 픽스] 라우터에서 호출하는 초기화 함수 
 window.initSimulation = function() {
-    window.loadMasterPresets();
-    window.updateLockUI();
-    window.setupAutoSaveTriggers();
-    if(window.currentProcessData.length > 0) window.debouncedRunSimulation();
+    console.log("✅ 시뮬레이션 Pro 초기화 완료");
+    // 💡 프리셋 로딩이 완전히 끝난 후(then) UI를 그리도록 동기화
+    window.loadMasterPresets().then(() => {
+        window.updateLockUI();
+        window.setupAutoSaveTriggers();
+        if(window.currentProcessData.length > 0) window.debouncedRunSimulation();
+    });
 };
 
 // 💡 [버그 픽스] 누락되었던 날짜 계산 로직 복구
