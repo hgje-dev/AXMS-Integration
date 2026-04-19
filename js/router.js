@@ -189,14 +189,14 @@ window.navigateHome = function() {
     } else if (perms['weekly-log']) {
         window.openApp('weekly-log', '주간 업무 일지');
     } else {
-        // 권한이 모두 막혀있어도 첫 페이지를 띄우기 위해 권한이 있는 메뉴를 찾음 (13개 페이지 중에서만 찾음)
+        // 권한이 모두 막혀있어도 첫 페이지를 띄우기 위해 권한이 있는 메뉴를 찾음 (13개 페이지 접근 권한 중에서만 검색)
         const pageKeys = ['dashboard-home', 'completion-report', 'project-status', 'workhours', 'weekly-log', 'product-cost', 'mfg-cost', 'ncr-dashboard', 'quality-report', 'collab', 'purchase', 'repair', 'simulation'];
         let fallbackKey = pageKeys.find(k => perms[k] === true);
         
         if(fallbackKey) {
             window.openApp(fallbackKey, window.availableApps[fallbackKey]?.title || '페이지');
         } else {
-            // 모든 페이지 접근 권한이 없는 경우 (예: 승인 대기 또는 모든 권한 박탈)
+            // 모든 페이지 권한이 없는 경우 (예: 신규가입 직후, 권한 완전 박탈자)
             window.openApp('weekly-log', '주간 업무 일지'); 
         }
     }
