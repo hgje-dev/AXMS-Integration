@@ -212,7 +212,7 @@ window.updateMultiFileNames = function(inputEl, displayElId) {
 // ==========================================
 // 💡 구글 드라이브 연동 (PJT 공통) 및 진행률 모달 연결
 // ==========================================
-window.pjtUploadToDrive = async function(file, folderName) {
+window.pjtUploadToDrive = async function(file, folderName, subFolderName = '생산일지') {
     const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
     if (!window.googleAccessToken || !storedExpiry || Date.now() > parseInt(storedExpiry)) {
         throw new Error("구글 인증 토큰이 만료되었습니다. 로그아웃 후 다시 연동해주세요.");
@@ -235,8 +235,8 @@ window.pjtUploadToDrive = async function(file, folderName) {
         pjtFid = data.id;
     }
 
-    // 2. 하위 폴더 자동 생성 분기 처리 (생산일지)
-    const q2 = `name='생산일지' and mimeType='application/vnd.google-apps.folder' and '${pjtFid}' in parents and trashed=false`;
+    // 2. 하위 폴더 자동 생성 분기 처리 (동적 폴더명 적용)
+    const q2 = `name='${subFolderName}' and mimeType='application/vnd.google-apps.folder' and '${pjtFid}' in parents and trashed=false`;
     const r2 = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q2)}&supportsAllDrives=true&includeItemsFromAllDrives=true`, { headers: {'Authorization': 'Bearer ' + window.googleAccessToken}});
     const d2 = await r2.json();
     if(d2.error) throw new Error(d2.error.message);
@@ -245,7 +245,7 @@ window.pjtUploadToDrive = async function(file, folderName) {
     if(!logFid) {
         const res = await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
             method: 'POST', headers: {'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json'},
-            body: JSON.stringify({name: '생산일지', mimeType: 'application/vnd.google-apps.folder', parents: [pjtFid]})
+            body: JSON.stringify({name: subFolderName, mimeType: 'application/vnd.google-apps.folder', parents: [pjtFid]})
         });
         const data = await res.json(); 
         if(data.error) throw new Error(data.error.message);
