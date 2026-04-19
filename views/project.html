@@ -39,6 +39,7 @@
     </div>
 
     <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[80vh]">
+        
         <div class="px-5 py-3 border-b border-slate-100 flex flex-wrap gap-y-3 gap-x-4 justify-between items-center bg-slate-50 flex-shrink-0">
             <div class="flex items-center gap-3">
                 <h3 class="font-extrabold text-slate-800 text-base md:text-lg whitespace-nowrap">
@@ -58,13 +59,13 @@
                     <option value="">전체 연도</option>
                     <option value="2024">2024년</option>
                     <option value="2025">2025년</option>
-                    <option value="2026" selected>2026년</option>
+                    <option value="2026">2026년</option>
                     <option value="2027">2027년</option>
                 </select>
                 <input type="month" id="filter-month-select" onchange="window.filterByMonth(this.value)" class="px-2 py-1.5 text-[11px] border border-slate-300 rounded-lg outline-none font-bold text-slate-600 cursor-pointer w-28 bg-white" title="월별 필터">
                 <button onclick="window.resetAllFilters()" class="px-2 py-1.5 text-[10px] font-bold bg-slate-700 hover:bg-slate-600 text-white rounded-lg shadow-sm transition-colors whitespace-nowrap">초기화</button>
                 <label class="flex items-center gap-1 text-[10px] font-bold text-slate-600 bg-white border border-slate-300 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors whitespace-nowrap">
-                    <input type="checkbox" id="hide-completed-cb" onchange="window.toggleHideCompleted(this.checked)" checked class="accent-indigo-600 w-3 h-3"> 완료숨김
+                    <input type="checkbox" id="hide-completed-cb" onchange="window.toggleHideCompleted(this.checked)" class="accent-indigo-600 w-3 h-3"> 완료숨김
                 </label>
                 <div class="relative">
                     <i class="fa-solid fa-search absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]"></i>
@@ -93,7 +94,7 @@
                         <i class="fa-regular fa-calendar"></i> 달력
                     </button>
                 </div>
-                <button onclick="window.openProjStatusWriteModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold shadow-md transition-colors whitespace-nowrap ml-1">
+                <button id="btn-create-proj" onclick="window.openProjStatusWriteModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold shadow-md transition-colors whitespace-nowrap ml-1">
                     <i class="fa-solid fa-plus"></i> 등록
                 </button>
             </div>
@@ -178,186 +179,6 @@
         
         <div id="proj-dash-calendar-container" class="hidden flex-1 overflow-auto bg-slate-50 border-t p-6 flex flex-col">
             <div id="proj-dash-calendar-content" class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 p-4"></div>
-        </div>
-    </div>
-</div>
-
-<div id="purchase-modal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
-    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col h-[600px] md:h-[85vh] overflow-hidden">
-        <div class="px-6 py-4 border-b flex justify-between items-center bg-amber-50">
-            <h2 class="text-base font-extrabold text-amber-800 flex items-center gap-2">
-                <i class="fa-solid fa-cart-shopping text-amber-500"></i> 구매 내역 및 일정표 관리
-            </h2>
-            <button onclick="window.closePurchaseModal()" class="text-amber-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
-        </div>
-        <div class="p-6 bg-slate-50/50 flex-1 flex flex-col gap-4 min-h-0">
-            <input type="hidden" id="pur-req-id">
-            <input type="hidden" id="editing-pur-id">
-            <div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm"><span id="pur-project-title" class="text-sm font-bold text-amber-600"></span></div>
-            <div class="flex gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative flex-col md:flex-row md:items-center">
-                <div class="relative flex-1 w-full">
-                    <textarea id="new-pur-text" placeholder="구매 내역 및 특이사항 입력... (@멘션, Enter 저장, Shift+Enter 줄바꿈)" class="w-full h-24 border px-4 py-3 rounded-lg text-sm outline-amber-500 resize-none custom-scrollbar" oninput="window.handleMention(this)" onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); document.getElementById('btn-pur-save').click(); }"></textarea>
-                </div>
-                
-                <div class="w-full md:w-48 border-2 border-dashed border-amber-200 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-amber-50 hover:border-amber-400 transition-colors relative"
-                     onclick="document.getElementById('new-pur-file').click()"
-                     ondragover="event.preventDefault(); this.classList.add('bg-amber-50', 'border-amber-400');"
-                     ondragleave="event.preventDefault(); this.classList.remove('bg-amber-50', 'border-amber-400');"
-                     ondrop="event.preventDefault(); this.classList.remove('bg-amber-50', 'border-amber-400'); document.getElementById('new-pur-file').files = event.dataTransfer.files; window.updateMultiFileNames(document.getElementById('new-pur-file'), 'pur-file-name');">
-                    <i class="fa-solid fa-file-arrow-up text-2xl text-amber-300 mb-2 pointer-events-none"></i>
-                    <p class="text-[11px] font-bold text-slate-500 text-center pointer-events-none">다중 파일/사진 드래그 첨부</p>
-                    <input type="file" id="new-pur-file" class="hidden" multiple onchange="window.updateMultiFileNames(this, 'pur-file-name')">
-                    <div id="pur-file-name" class="text-[10px] text-amber-600 font-bold truncate mt-2 w-full text-center pointer-events-none"></div>
-                </div>
-
-                <div class="flex flex-col gap-2 w-full md:w-auto h-full justify-end">
-                    <button id="btn-pur-save" onclick="window.savePurchaseItem()" class="bg-amber-500 hover:bg-amber-600 text-white px-6 py-2.5 rounded-lg text-sm font-bold transition-colors shadow-sm w-full md:w-20">등록</button>
-                    <button id="btn-pur-cancel" onclick="window.resetPurchaseForm()" class="hidden bg-slate-100 text-slate-600 px-6 py-2.5 rounded-lg text-sm font-bold transition-colors w-full md:w-20">취소</button>
-                </div>
-            </div>
-            <div id="purchase-list" class="space-y-3 flex-1 overflow-y-auto p-1 custom-scrollbar min-h-0"></div>
-        </div>
-    </div>
-</div>
-
-<div id="design-modal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
-    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col h-[600px] md:h-[85vh] overflow-hidden">
-        <div class="px-6 py-4 border-b flex justify-between items-center bg-teal-50">
-            <h2 class="text-base font-extrabold text-teal-800 flex items-center gap-2">
-                <i class="fa-solid fa-pen-ruler text-teal-500"></i> 설계 파일 관리
-            </h2>
-            <button onclick="window.closeDesignModal()" class="text-teal-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
-        </div>
-        <div class="p-6 bg-slate-50/50 flex-1 flex flex-col gap-4 min-h-0">
-            <input type="hidden" id="des-req-id">
-            <input type="hidden" id="editing-des-id">
-            <div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm"><span id="des-project-title" class="text-sm font-bold text-teal-600"></span></div>
-            <div class="flex gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative flex-col md:flex-row md:items-center">
-                <div class="relative flex-1 w-full">
-                    <textarea id="new-des-text" placeholder="설계 관련 내용 입력... (@멘션, Enter 저장, Shift+Enter 줄바꿈)" class="w-full h-24 border px-4 py-3 rounded-lg text-sm outline-teal-500 resize-none custom-scrollbar" oninput="window.handleMention(this)" onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); document.getElementById('btn-des-save').click(); }"></textarea>
-                </div>
-                
-                <div class="w-full md:w-48 border-2 border-dashed border-teal-200 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-teal-50 hover:border-teal-400 transition-colors relative"
-                     onclick="document.getElementById('new-des-file').click()"
-                     ondragover="event.preventDefault(); this.classList.add('bg-teal-50', 'border-teal-400');"
-                     ondragleave="event.preventDefault(); this.classList.remove('bg-teal-50', 'border-teal-400');"
-                     ondrop="event.preventDefault(); this.classList.remove('bg-teal-50', 'border-teal-400'); document.getElementById('new-des-file').files = event.dataTransfer.files; window.updateMultiFileNames(document.getElementById('new-des-file'), 'des-file-name');">
-                    <i class="fa-solid fa-file-arrow-up text-2xl text-teal-300 mb-2 pointer-events-none"></i>
-                    <p class="text-[11px] font-bold text-slate-500 text-center pointer-events-none">다중 도면/사진 드래그 첨부</p>
-                    <input type="file" id="new-des-file" class="hidden" multiple onchange="window.updateMultiFileNames(this, 'des-file-name')">
-                    <div id="des-file-name" class="text-[10px] text-teal-600 font-bold truncate mt-2 w-full text-center pointer-events-none"></div>
-                </div>
-
-                <div class="flex flex-col gap-2 w-full md:w-auto h-full justify-end">
-                    <button id="btn-des-save" onclick="window.saveDesignItem()" class="bg-teal-500 hover:bg-teal-600 text-white px-6 py-2.5 rounded-lg text-sm font-bold transition-colors shadow-sm w-full md:w-20">등록</button>
-                    <button id="btn-des-cancel" onclick="window.resetDesignForm()" class="hidden bg-slate-100 text-slate-600 px-6 py-2.5 rounded-lg text-sm font-bold transition-colors w-full md:w-20">취소</button>
-                </div>
-            </div>
-            <div id="design-list" class="space-y-3 flex-1 overflow-y-auto p-1 custom-scrollbar min-h-0"></div>
-        </div>
-    </div>
-</div>
-
-<div id="pjt-schedule-modal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
-    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col h-[600px] md:h-[85vh] overflow-hidden">
-        <div class="px-6 py-4 border-b flex justify-between items-center bg-fuchsia-50">
-            <h2 class="text-base font-extrabold text-fuchsia-800 flex items-center gap-2">
-                <i class="fa-regular fa-calendar-check text-fuchsia-500"></i> PJT 일정표 관리
-            </h2>
-            <button onclick="window.closePjtScheduleModal()" class="text-fuchsia-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
-        </div>
-        <div class="p-6 bg-slate-50/50 flex-1 flex flex-col gap-4 min-h-0">
-            <input type="hidden" id="sch-req-id">
-            <input type="hidden" id="editing-sch-id">
-            <div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm"><span id="sch-project-title" class="text-sm font-bold text-fuchsia-600"></span></div>
-            <div class="flex gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative flex-col md:flex-row md:items-center">
-                <div class="relative flex-1 w-full">
-                    <textarea id="new-sch-text" placeholder="프로젝트 일정 내역 및 수정사항 입력... (@멘션, Enter 저장, Shift+Enter 줄바꿈)" class="w-full h-24 border px-4 py-3 rounded-lg text-sm outline-fuchsia-500 resize-none custom-scrollbar" oninput="window.handleMention(this)" onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); document.getElementById('btn-sch-save').click(); }"></textarea>
-                </div>
-                
-                <div class="w-full md:w-48 border-2 border-dashed border-fuchsia-200 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-fuchsia-50 hover:border-fuchsia-400 transition-colors relative"
-                     onclick="document.getElementById('new-sch-file').click()"
-                     ondragover="event.preventDefault(); this.classList.add('bg-fuchsia-50', 'border-fuchsia-400');"
-                     ondragleave="event.preventDefault(); this.classList.remove('bg-fuchsia-50', 'border-fuchsia-400');"
-                     ondrop="event.preventDefault(); this.classList.remove('bg-fuchsia-50', 'border-fuchsia-400'); document.getElementById('new-sch-file').files = event.dataTransfer.files; window.updateMultiFileNames(document.getElementById('new-sch-file'), 'sch-file-name');">
-                    <i class="fa-solid fa-file-lines text-2xl text-fuchsia-300 mb-2 pointer-events-none"></i>
-                    <p class="text-[11px] font-bold text-slate-500 text-center pointer-events-none">다중 일정표/사진 드래그 첨부</p>
-                    <input type="file" id="new-sch-file" class="hidden" multiple onchange="window.updateMultiFileNames(this, 'sch-file-name')">
-                    <div id="sch-file-name" class="text-[10px] text-fuchsia-600 font-bold truncate mt-2 w-full text-center pointer-events-none"></div>
-                </div>
-
-                <div class="flex flex-col gap-2 w-full md:w-auto h-full justify-end">
-                    <button id="btn-sch-save" onclick="window.savePjtScheduleItem()" class="bg-fuchsia-500 hover:bg-fuchsia-600 text-white px-6 py-2.5 rounded-lg text-sm font-bold transition-colors shadow-sm w-full md:w-20">등록</button>
-                    <button id="btn-sch-cancel" onclick="window.resetPjtScheduleForm()" class="hidden bg-slate-100 text-slate-600 px-6 py-2.5 rounded-lg text-sm font-bold transition-colors w-full md:w-20">취소</button>
-                </div>
-            </div>
-            <div id="pjt-schedule-list" class="space-y-3 flex-1 overflow-y-auto p-1 custom-scrollbar min-h-0"></div>
-        </div>
-    </div>
-</div>
-
-<div id="daily-log-modal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
-    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl flex flex-col h-[600px] md:h-[85vh] overflow-hidden">
-        <div class="px-6 py-4 border-b flex justify-between items-center bg-sky-50">
-            <h2 class="text-base font-extrabold text-sky-800 flex items-center gap-2">
-                <i class="fa-solid fa-book text-sky-500"></i> 생산일지 관리 (일별)
-            </h2>
-            <button onclick="window.closeDailyLogModal()" class="text-sky-400 hover:text-rose-500 transition-colors">
-                <i class="fa-solid fa-xmark text-xl"></i>
-            </button>
-        </div>
-        <div class="p-6 bg-slate-50/50 flex-1 flex flex-col gap-4 min-h-0">
-            <input type="hidden" id="log-req-id">
-            <input type="hidden" id="editing-log-id">
-            <div class="flex justify-between items-center bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
-                <span id="log-project-title" class="text-sm font-bold text-sky-600"></span>
-                <div class="flex gap-4">
-                    <div class="flex items-center">
-                        <label class="text-[11px] font-bold text-slate-500 mr-2">전장 진행률(%):</label>
-                        <input type="number" id="log-project-purchase-rate" class="w-16 border rounded-lg px-2 py-1 text-sm font-bold text-center">
-                    </div>
-                    <div class="flex items-center">
-                        <label class="text-[11px] font-bold text-slate-500 mr-2">진행률(%):</label>
-                        <input type="number" id="log-project-progress" class="w-16 border rounded-lg px-2 py-1 text-sm font-bold text-center">
-                    </div>
-                </div>
-            </div>
-            
-            <div class="flex gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative flex-col md:flex-row md:items-start">
-                <div class="relative flex-1 w-full flex flex-col gap-2">
-                    <div class="flex gap-2 items-center">
-                        <input type="date" id="new-log-date" class="border px-3 py-2 rounded-lg text-sm font-bold text-slate-600 w-36 h-10 shrink-0 outline-sky-500">
-                        <select id="log-member-add" class="border px-2 py-2 rounded-lg text-sm h-10 outline-sky-500 text-slate-600 cursor-pointer" onchange="window.addLogMember(this.value)"></select>
-                    </div>
-                    <div id="log-selected-members" class="flex flex-wrap gap-1 min-h-[24px]"></div>
-                    <input type="hidden" id="log-members">
-                    <div class="relative w-full">
-                        <textarea id="new-log-text" placeholder="작업 내용 입력... (@멘션, Enter 저장, Shift+Enter 줄바꿈)" class="w-full h-20 border px-4 py-3 rounded-lg text-sm outline-sky-500 resize-none custom-scrollbar" oninput="window.handleMention(this)" onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); document.getElementById('btn-log-save').click(); }"></textarea>
-                    </div>
-                </div>
-                
-                <div class="w-full md:w-48 h-[170px] border-2 border-dashed border-sky-200 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-sky-50 hover:border-sky-400 transition-colors relative"
-                     onclick="document.getElementById('new-log-image').click()"
-                     ondragover="event.preventDefault(); this.classList.add('bg-sky-50', 'border-sky-400');"
-                     ondragleave="event.preventDefault(); this.classList.remove('bg-sky-50', 'border-sky-400');"
-                     ondrop="event.preventDefault(); this.classList.remove('bg-sky-50', 'border-sky-400'); if(event.dataTransfer.files.length > 0) { document.getElementById('new-log-image').files = event.dataTransfer.files; window.updateMultiFileNames(document.getElementById('new-log-image'), 'new-log-filename'); }">
-                    <i class="fa-solid fa-image text-2xl text-sky-300 mb-2 pointer-events-none"></i>
-                    <p class="text-[11px] font-bold text-slate-500 text-center pointer-events-none">다중 사진/파일 드래그 첨부</p>
-                    <input type="file" id="new-log-image" class="hidden" multiple onchange="window.updateMultiFileNames(this, 'new-log-filename')">
-                    
-                    <div id="new-log-filename-wrap" class="hidden absolute bottom-2 left-2 right-2 bg-sky-100 text-sky-700 text-[10px] font-bold px-2 py-1 rounded shadow-sm flex items-center justify-between z-10">
-                        <span id="new-log-filename" class="truncate pr-2">파일명</span>
-                        <button onclick="window.clearDailyLogFile(event)" class="text-sky-500 hover:text-rose-500"><i class="fa-solid fa-xmark"></i></button>
-                    </div>
-                </div>
-
-                <div class="flex flex-col gap-2 w-full md:w-auto h-full justify-end">
-                    <button id="btn-log-save" onclick="window.saveDailyLogItem()" class="bg-sky-500 hover:bg-sky-600 text-white px-6 py-2.5 rounded-lg text-sm font-bold transition-colors shadow-sm w-full md:w-20 h-11">등록</button>
-                    <button id="btn-log-cancel" onclick="window.resetDailyLogForm()" class="hidden bg-slate-100 text-slate-600 px-6 py-2.5 rounded-lg text-sm font-bold transition-colors w-full md:w-20 h-11">취소</button>
-                </div>
-            </div>
-
-            <div id="daily-log-list" class="space-y-3 flex-1 overflow-y-auto p-1 custom-scrollbar min-h-0"></div>
         </div>
     </div>
 </div>
@@ -449,6 +270,7 @@
                         </div>
                     </div>
                 </div>
+                
                 <div class="bg-white p-5 rounded-2xl shadow-sm space-y-4">
                     <div class="grid grid-cols-2 gap-2">
                         <div>
@@ -481,6 +303,7 @@
                         </div>
                     </div>
                 </div>
+                
                 <div class="bg-white p-5 rounded-2xl shadow-sm space-y-4">
                     <div class="grid grid-cols-2 gap-2 bg-indigo-50/50 p-3 rounded-xl border border-indigo-100">
                         <div>
@@ -540,257 +363,400 @@
             </div>
         </div>
         <div class="px-6 py-4 border-t flex justify-end gap-3 bg-white">
-            <button onclick="window.closeProjStatusWriteModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 py-2.5 rounded-xl font-bold transition-colors">취소</button>
+            <span id="ps-readonly-banner" class="hidden mr-auto text-rose-500 font-bold text-[11px] self-center bg-rose-50 px-3 py-1.5 rounded-lg border border-rose-200">
+                <i class="fa-solid fa-lock"></i> 읽기 전용 (PJT 기본현황 등록 권한이 없습니다)
+            </span>
+            <button onclick="window.closeProjStatusWriteModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-5 py-2.5 rounded-xl font-bold transition-colors">취소 / 닫기</button>
             <button id="btn-proj-save" onclick="window.saveProjStatus(this)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-2.5 rounded-xl font-bold shadow-md transition-colors">저장하기</button>
         </div>
     </div>
 </div>
 
-<div id="cr-req-modal" class="fixed inset-0 z-[300] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10 transition-opacity">
-    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col h-auto max-h-[90vh] overflow-hidden transform transition-all">
-        <div class="px-6 py-4 border-b flex justify-between items-center bg-rose-50 shrink-0">
-            <h2 class="text-base font-extrabold text-rose-800 flex items-center gap-2">
-                <i class="fa-solid fa-flag-checkered text-rose-500"></i> PJT 완료 보고 (제조)
+<div id="purchase-modal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col h-[600px] md:h-[85vh] overflow-hidden">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-amber-50">
+            <h2 class="text-base font-extrabold text-amber-800 flex items-center gap-2">
+                <i class="fa-solid fa-cart-shopping text-amber-500"></i> 구매 내역 및 일정표 관리
             </h2>
-            <button onclick="window.closeCrReqModal()" class="text-rose-400 hover:text-rose-600 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
+            <button onclick="window.closePurchaseModal()" class="text-amber-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
         </div>
-        <div class="p-6 bg-slate-50/50 flex flex-col gap-4 overflow-y-auto custom-scrollbar">
-            <input type="hidden" id="cr-req-pjt-id">
-            <div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm shrink-0">
-                <span id="cr-req-project-title" class="text-sm font-black text-rose-600"></span>
+        <div class="p-6 bg-slate-50/50 flex-1 flex flex-col gap-4 min-h-0">
+            <input type="hidden" id="pur-req-id">
+            <input type="hidden" id="editing-pur-id">
+            <div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm"><span id="pur-project-title" class="text-sm font-bold text-amber-600"></span></div>
+            
+            <div id="pur-readonly-banner" class="hidden bg-rose-50 text-rose-600 p-3 rounded-xl text-xs font-bold text-center border border-rose-200 shadow-sm">
+                <i class="fa-solid fa-lock"></i> 읽기 전용 (구매 내역 작성 권한이 필요합니다)
+            </div>
+
+            <div id="pur-input-section" class="flex gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative flex-col md:flex-row md:items-center">
+                <div class="relative flex-1 w-full">
+                    <textarea id="new-pur-text" placeholder="구매 내역 및 특이사항 입력... (@멘션, Enter 저장, Shift+Enter 줄바꿈)" class="w-full h-24 border px-4 py-3 rounded-lg text-sm outline-amber-500 resize-none custom-scrollbar" oninput="window.handleMention(this)" onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); document.getElementById('btn-pur-save').click(); }"></textarea>
+                </div>
+                
+                <div class="w-full md:w-48 border-2 border-dashed border-amber-200 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-amber-50 hover:border-amber-400 transition-colors relative"
+                     onclick="document.getElementById('new-pur-file').click()"
+                     ondragover="event.preventDefault(); this.classList.add('bg-amber-50', 'border-amber-400');"
+                     ondragleave="event.preventDefault(); this.classList.remove('bg-amber-50', 'border-amber-400');"
+                     ondrop="event.preventDefault(); this.classList.remove('bg-amber-50', 'border-amber-400'); document.getElementById('new-pur-file').files = event.dataTransfer.files; window.updateMultiFileNames(document.getElementById('new-pur-file'), 'pur-file-name');">
+                    <i class="fa-solid fa-file-arrow-up text-2xl text-amber-300 mb-2 pointer-events-none"></i>
+                    <p class="text-[11px] font-bold text-slate-500 text-center pointer-events-none">다중 파일/사진 드래그 첨부</p>
+                    <input type="file" id="new-pur-file" class="hidden" multiple onchange="window.updateMultiFileNames(this, 'pur-file-name')">
+                    <div id="pur-file-name" class="text-[10px] text-amber-600 font-bold truncate mt-2 w-full text-center pointer-events-none"></div>
+                </div>
+
+                <div class="flex flex-col gap-2 w-full md:w-auto h-full justify-end">
+                    <button id="btn-pur-save" onclick="window.savePurchaseItem()" class="bg-amber-500 hover:bg-amber-600 text-white px-6 py-2.5 rounded-lg text-sm font-bold transition-colors shadow-sm w-full md:w-20">등록</button>
+                    <button id="btn-pur-cancel" onclick="window.resetPurchaseForm()" class="hidden bg-slate-100 text-slate-600 px-6 py-2.5 rounded-lg text-sm font-bold transition-colors w-full md:w-20">취소</button>
+                </div>
+            </div>
+            <div id="purchase-list" class="space-y-3 flex-1 overflow-y-auto p-1 custom-scrollbar min-h-0"></div>
+        </div>
+    </div>
+</div>
+
+<div id="design-modal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col h-[600px] md:h-[85vh] overflow-hidden">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-teal-50">
+            <h2 class="text-base font-extrabold text-teal-800 flex items-center gap-2">
+                <i class="fa-solid fa-pen-ruler text-teal-500"></i> 설계 파일 관리
+            </h2>
+            <button onclick="window.closeDesignModal()" class="text-teal-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
+        </div>
+        <div class="p-6 bg-slate-50/50 flex-1 flex flex-col gap-4 min-h-0">
+            <input type="hidden" id="des-req-id">
+            <input type="hidden" id="editing-des-id">
+            <div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm"><span id="des-project-title" class="text-sm font-bold text-teal-600"></span></div>
+            
+            <div id="des-readonly-banner" class="hidden bg-rose-50 text-rose-600 p-3 rounded-xl text-xs font-bold text-center border border-rose-200 shadow-sm">
+                <i class="fa-solid fa-lock"></i> 읽기 전용 (설계 파일 등록 권한이 필요합니다)
+            </div>
+
+            <div id="des-input-section" class="flex gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative flex-col md:flex-row md:items-center">
+                <div class="relative flex-1 w-full">
+                    <textarea id="new-des-text" placeholder="설계 관련 내용 입력... (@멘션, Enter 저장, Shift+Enter 줄바꿈)" class="w-full h-24 border px-4 py-3 rounded-lg text-sm outline-teal-500 resize-none custom-scrollbar" oninput="window.handleMention(this)" onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); document.getElementById('btn-des-save').click(); }"></textarea>
+                </div>
+                
+                <div class="w-full md:w-48 border-2 border-dashed border-teal-200 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-teal-50 hover:border-teal-400 transition-colors relative"
+                     onclick="document.getElementById('new-des-file').click()"
+                     ondragover="event.preventDefault(); this.classList.add('bg-teal-50', 'border-teal-400');"
+                     ondragleave="event.preventDefault(); this.classList.remove('bg-teal-50', 'border-teal-400');"
+                     ondrop="event.preventDefault(); this.classList.remove('bg-teal-50', 'border-teal-400'); document.getElementById('new-des-file').files = event.dataTransfer.files; window.updateMultiFileNames(document.getElementById('new-des-file'), 'des-file-name');">
+                    <i class="fa-solid fa-file-arrow-up text-2xl text-teal-300 mb-2 pointer-events-none"></i>
+                    <p class="text-[11px] font-bold text-slate-500 text-center pointer-events-none">다중 도면/사진 드래그 첨부</p>
+                    <input type="file" id="new-des-file" class="hidden" multiple onchange="window.updateMultiFileNames(this, 'des-file-name')">
+                    <div id="des-file-name" class="text-[10px] text-teal-600 font-bold truncate mt-2 w-full text-center pointer-events-none"></div>
+                </div>
+
+                <div class="flex flex-col gap-2 w-full md:w-auto h-full justify-end">
+                    <button id="btn-des-save" onclick="window.saveDesignItem()" class="bg-teal-500 hover:bg-teal-600 text-white px-6 py-2.5 rounded-lg text-sm font-bold transition-colors shadow-sm w-full md:w-20">등록</button>
+                    <button id="btn-des-cancel" onclick="window.resetDesignForm()" class="hidden bg-slate-100 text-slate-600 px-6 py-2.5 rounded-lg text-sm font-bold transition-colors w-full md:w-20">취소</button>
+                </div>
+            </div>
+            <div id="design-list" class="space-y-3 flex-1 overflow-y-auto p-1 custom-scrollbar min-h-0"></div>
+        </div>
+    </div>
+</div>
+
+<div id="pjt-schedule-modal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col h-[600px] md:h-[85vh] overflow-hidden">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-fuchsia-50">
+            <h2 class="text-base font-extrabold text-fuchsia-800 flex items-center gap-2">
+                <i class="fa-regular fa-calendar-check text-fuchsia-500"></i> PJT 일정표 관리
+            </h2>
+            <button onclick="window.closePjtScheduleModal()" class="text-fuchsia-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
+        </div>
+        <div class="p-6 bg-slate-50/50 flex-1 flex flex-col gap-4 min-h-0">
+            <input type="hidden" id="sch-req-id">
+            <input type="hidden" id="editing-sch-id">
+            <div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm"><span id="sch-project-title" class="text-sm font-bold text-fuchsia-600"></span></div>
+            
+            <div id="sch-readonly-banner" class="hidden bg-rose-50 text-rose-600 p-3 rounded-xl text-xs font-bold text-center border border-rose-200 shadow-sm">
+                <i class="fa-solid fa-lock"></i> 읽기 전용 (일정표 작성 권한이 필요합니다)
+            </div>
+
+            <div id="sch-input-section" class="flex gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative flex-col md:flex-row md:items-center">
+                <div class="relative flex-1 w-full">
+                    <textarea id="new-sch-text" placeholder="프로젝트 일정 내역 및 수정사항 입력... (@멘션, Enter 저장, Shift+Enter 줄바꿈)" class="w-full h-24 border px-4 py-3 rounded-lg text-sm outline-fuchsia-500 resize-none custom-scrollbar" oninput="window.handleMention(this)" onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); document.getElementById('btn-sch-save').click(); }"></textarea>
+                </div>
+                
+                <div class="w-full md:w-48 border-2 border-dashed border-fuchsia-200 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-fuchsia-50 hover:border-fuchsia-400 transition-colors relative"
+                     onclick="document.getElementById('new-sch-file').click()"
+                     ondragover="event.preventDefault(); this.classList.add('bg-fuchsia-50', 'border-fuchsia-400');"
+                     ondragleave="event.preventDefault(); this.classList.remove('bg-fuchsia-50', 'border-fuchsia-400');"
+                     ondrop="event.preventDefault(); this.classList.remove('bg-fuchsia-50', 'border-fuchsia-400'); document.getElementById('new-sch-file').files = event.dataTransfer.files; window.updateMultiFileNames(document.getElementById('new-sch-file'), 'sch-file-name');">
+                    <i class="fa-solid fa-file-lines text-2xl text-fuchsia-300 mb-2 pointer-events-none"></i>
+                    <p class="text-[11px] font-bold text-slate-500 text-center pointer-events-none">다중 일정표/사진 드래그 첨부</p>
+                    <input type="file" id="new-sch-file" class="hidden" multiple onchange="window.updateMultiFileNames(this, 'sch-file-name')">
+                    <div id="sch-file-name" class="text-[10px] text-fuchsia-600 font-bold truncate mt-2 w-full text-center pointer-events-none"></div>
+                </div>
+
+                <div class="flex flex-col gap-2 w-full md:w-auto h-full justify-end">
+                    <button id="btn-sch-save" onclick="window.savePjtScheduleItem()" class="bg-fuchsia-500 hover:bg-fuchsia-600 text-white px-6 py-2.5 rounded-lg text-sm font-bold transition-colors shadow-sm w-full md:w-20">등록</button>
+                    <button id="btn-sch-cancel" onclick="window.resetPjtScheduleForm()" class="hidden bg-slate-100 text-slate-600 px-6 py-2.5 rounded-lg text-sm font-bold transition-colors w-full md:w-20">취소</button>
+                </div>
+            </div>
+            <div id="pjt-schedule-list" class="space-y-3 flex-1 overflow-y-auto p-1 custom-scrollbar min-h-0"></div>
+        </div>
+    </div>
+</div>
+
+<div id="daily-log-modal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl flex flex-col h-[600px] md:h-[85vh] overflow-hidden">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-sky-50">
+            <h2 class="text-base font-extrabold text-sky-800 flex items-center gap-2">
+                <i class="fa-solid fa-book text-sky-500"></i> 생산일지 관리 (일별)
+            </h2>
+            <button onclick="window.closeDailyLogModal()" class="text-sky-400 hover:text-rose-500 transition-colors">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
+        </div>
+        <div class="p-6 bg-slate-50/50 flex-1 flex flex-col gap-4 min-h-0">
+            <input type="hidden" id="log-req-id">
+            <input type="hidden" id="editing-log-id">
+            <div class="flex justify-between items-center bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
+                <span id="log-project-title" class="text-sm font-bold text-sky-600"></span>
+                <div class="flex gap-4">
+                    <div class="flex items-center">
+                        <label class="text-[11px] font-bold text-slate-500 mr-2">전장 진행률(%):</label>
+                        <input type="number" id="log-project-purchase-rate" class="w-16 border rounded-lg px-2 py-1 text-sm font-bold text-center" disabled>
+                    </div>
+                    <div class="flex items-center">
+                        <label class="text-[11px] font-bold text-slate-500 mr-2">진행률(%):</label>
+                        <input type="number" id="log-project-progress" class="w-16 border rounded-lg px-2 py-1 text-sm font-bold text-center" disabled>
+                    </div>
+                </div>
             </div>
             
-            <div class="space-y-4 shrink-0">
-                <div>
-                    <label class="block text-[11px] font-bold text-emerald-600 mb-1.5"><i class="fa-solid fa-thumbs-up"></i> Good Point (잘된 점, 품질개선 등)</label>
-                    <textarea id="cr-req-good" class="w-full border border-emerald-200 rounded-xl p-3 text-sm outline-emerald-500 bg-emerald-50/30 focus:bg-white min-h-[80px]" placeholder="제작 과정에서 잘된 점을 작성하세요..."></textarea>
-                </div>
-                <div>
-                    <label class="block text-[11px] font-bold text-rose-600 mb-1.5"><i class="fa-solid fa-thumbs-down"></i> Bad Point (문제점, 아쉬운 점 등)</label>
-                    <textarea id="cr-req-bad" class="w-full border border-rose-200 rounded-xl p-3 text-sm outline-rose-500 bg-rose-50/30 focus:bg-white min-h-[80px]" placeholder="제작 과정에서 발생한 문제점이나 아쉬운 점을 작성하세요..."></textarea>
-                </div>
+            <div id="log-readonly-banner" class="hidden bg-rose-50 text-rose-600 p-3 rounded-xl text-xs font-bold text-center border border-rose-200 shadow-sm">
+                <i class="fa-solid fa-lock"></i> 읽기 전용 (생산일지 작성 권한이 필요합니다)
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 shrink-0">
-                <div class="border-2 border-dashed border-slate-300 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 transition-colors"
-                     onclick="document.getElementById('cr-req-spec-file').click()"
-                     ondragover="event.preventDefault(); this.classList.add('bg-slate-50', 'border-slate-400');"
-                     ondragleave="event.preventDefault(); this.classList.remove('bg-slate-50', 'border-slate-400');"
-                     ondrop="event.preventDefault(); this.classList.remove('bg-slate-50', 'border-slate-400'); document.getElementById('cr-req-spec-file').files = event.dataTransfer.files; window.updateMultiFileNames(document.getElementById('cr-req-spec-file'), 'cr-req-spec-names');">
-                    <i class="fa-solid fa-file-arrow-up text-2xl text-slate-300 mb-2 pointer-events-none"></i>
-                    <p class="text-[11px] font-bold text-slate-500 pointer-events-none">제작사양서 검토LIST (다중 첨부 가능)</p>
-                    <input type="file" id="cr-req-spec-file" class="hidden" multiple onchange="window.updateMultiFileNames(this, 'cr-req-spec-names')">
-                    <div id="cr-req-spec-names" class="text-[10px] text-indigo-600 font-bold mt-2 text-center pointer-events-none"></div>
-                </div>
-
-                <div class="border-2 border-dashed border-slate-300 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 transition-colors"
-                     onclick="document.getElementById('cr-req-design-file').click()"
-                     ondragover="event.preventDefault(); this.classList.add('bg-slate-50', 'border-slate-400');"
-                     ondragleave="event.preventDefault(); this.classList.remove('bg-slate-50', 'border-slate-400');"
-                     ondrop="event.preventDefault(); this.classList.remove('bg-slate-50', 'border-slate-400'); document.getElementById('cr-req-design-file').files = event.dataTransfer.files; window.updateMultiFileNames(document.getElementById('cr-req-design-file'), 'cr-req-design-names');">
-                    <i class="fa-solid fa-pen-ruler text-2xl text-slate-300 mb-2 pointer-events-none"></i>
-                    <p class="text-[11px] font-bold text-slate-500 pointer-events-none">설계개선 검토LIST (다중 첨부 가능)</p>
-                    <input type="file" id="cr-req-design-file" class="hidden" multiple onchange="window.updateMultiFileNames(this, 'cr-req-design-names')">
-                    <div id="cr-req-design-names" class="text-[10px] text-teal-600 font-bold mt-2 text-center pointer-events-none"></div>
-                </div>
-            </div>
-        </div>
-        <div class="px-6 py-4 border-t bg-white flex justify-end gap-2 shrink-0">
-            <button onclick="window.closeCrReqModal()" class="px-6 py-2.5 bg-slate-100 border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 transition-colors">취소</button>
-            <button id="btn-cr-req-temp" onclick="window.tempSaveCrReq()" class="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
-                <i class="fa-solid fa-floppy-disk"></i> 임시저장
-            </button>
-            <button id="btn-cr-req-save" onclick="window.submitCrReq()" class="px-8 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
-                <i class="fa-solid fa-paper-plane"></i> 완료요청 송부
-            </button>
-        </div>
-    </div>
-</div>
-
-<div id="comment-modal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
-    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col h-[600px] md:h-[85vh] overflow-hidden">
-        <div class="px-6 py-4 border-b flex justify-between items-center bg-[#fffbf0]">
-            <h2 class="text-base font-extrabold text-amber-800 flex items-center gap-2">
-                <i class="fa-solid fa-comments text-amber-500"></i> 현황 코멘트 관리
-            </h2>
-            <button onclick="window.closeCommentModal()" class="text-amber-400 hover:text-rose-500 transition-colors">
-                <i class="fa-solid fa-xmark text-xl"></i>
-            </button>
-        </div>
-        <div class="p-6 bg-slate-50/50 flex-1 flex flex-col gap-4 min-h-0">
-            <input type="hidden" id="cmt-req-id">
-            <input type="hidden" id="reply-to-id">
-            <input type="hidden" id="editing-cmt-id">
-            <div id="comment-list" class="flex-1 overflow-y-auto space-y-4 custom-scrollbar p-1 min-h-0"></div>
-            <div class="flex flex-col gap-2 mt-2">
-                <div id="reply-indicator" class="hidden flex justify-between bg-indigo-50 px-4 py-2 rounded-xl border border-indigo-100">
-                    <span id="reply-indicator-name" class="text-xs text-indigo-700"></span>
-                    <button onclick="window.cancelCommentAction()" class="text-xs font-bold text-rose-500 hover:text-rose-700">취소</button>
-                </div>
-                <div class="flex gap-2 items-end relative">
-                    <div class="relative flex-1">
-                        <textarea id="new-cmt-text" autocomplete="off" oninput="window.handleMention(this)" onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); document.getElementById('btn-cmt-save').click(); }" class="w-full h-20 border border-slate-300 px-4 py-3 rounded-xl text-sm outline-amber-500 resize-none custom-scrollbar" placeholder="코멘트 남기기... '@'멘션, 자동 링크 변환 (Shift+Enter 줄바꿈)"></textarea>
+            <div id="log-input-section" class="flex gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative flex-col md:flex-row md:items-start">
+                <div class="relative flex-1 w-full flex flex-col gap-2">
+                    <input type="date" id="new-log-date" class="border px-3 py-2 rounded-lg text-sm font-bold text-slate-600 w-36 h-10 shrink-0 outline-sky-500">
+                    <div class="relative w-full">
+                        <textarea id="new-log-text" placeholder="작업 내용 입력... (@멘션, Enter 저장, Shift+Enter 줄바꿈)" class="w-full h-24 border px-4 py-3 rounded-lg text-sm outline-sky-500 resize-none custom-scrollbar" oninput="window.handleMention(this)" onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); document.getElementById('btn-log-save').click(); }"></textarea>
                     </div>
-                    <input type="file" id="new-cmt-image" accept="image/*" class="hidden">
-                    <label for="new-cmt-image" class="cursor-pointer text-slate-400 hover:text-amber-500 px-2 py-2 mb-2">
-                        <i class="fa-regular fa-image text-[22px]"></i>
-                    </label>
-                    <button id="btn-cmt-save" onclick="window.saveCommentItem()" class="bg-amber-500 hover:bg-amber-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-sm mb-1 h-11">작성</button>
+                </div>
+                
+                <div class="w-full md:w-48 h-[136px] border-2 border-dashed border-sky-200 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-sky-50 hover:border-sky-400 transition-colors relative"
+                     onclick="document.getElementById('new-log-image').click()"
+                     ondragover="event.preventDefault(); this.classList.add('bg-sky-50', 'border-sky-400');"
+                     ondragleave="event.preventDefault(); this.classList.remove('bg-sky-50', 'border-sky-400');"
+                     ondrop="event.preventDefault(); this.classList.remove('bg-sky-50', 'border-sky-400'); if(event.dataTransfer.files.length > 0) { document.getElementById('new-log-image').files = event.dataTransfer.files; window.updateMultiFileNames(document.getElementById('new-log-image'), 'new-log-filename'); }">
+                    <i class="fa-solid fa-image text-2xl text-sky-300 mb-2 pointer-events-none"></i>
+                    <p class="text-[11px] font-bold text-slate-500 text-center pointer-events-none">다중 사진/파일 드래그 첨부</p>
+                    <input type="file" id="new-log-image" class="hidden" multiple onchange="window.updateMultiFileNames(this, 'new-log-filename')">
+                    
+                    <div id="new-log-filename-wrap" class="hidden absolute bottom-2 left-2 right-2 bg-sky-100 text-sky-700 text-[10px] font-bold px-2 py-1 rounded shadow-sm flex items-center justify-between z-10">
+                        <span id="new-log-filename" class="truncate pr-2">파일명</span>
+                        <button onclick="window.clearDailyLogFile(event)" class="text-sky-500 hover:text-rose-500"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                </div>
+
+                <div class="flex flex-col gap-2 w-full md:w-auto h-full justify-end">
+                    <button id="btn-log-save" onclick="window.saveDailyLogItem()" class="bg-sky-500 hover:bg-sky-600 text-white px-6 py-2.5 rounded-lg text-sm font-bold transition-colors shadow-sm w-full md:w-20 h-11">등록</button>
+                    <button id="btn-log-cancel" onclick="window.resetDailyLogForm()" class="hidden bg-slate-100 text-slate-600 px-6 py-2.5 rounded-lg text-sm font-bold transition-colors w-full md:w-20 h-11">취소</button>
                 </div>
             </div>
+
+            <div id="daily-log-list" class="space-y-3 flex-1 overflow-y-auto p-1 custom-scrollbar min-h-0"></div>
         </div>
     </div>
 </div>
 
-<div id="issue-modal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
-    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col h-[600px] md:h-[85vh] overflow-hidden">
-        <div class="px-6 py-4 border-b flex justify-between items-center bg-rose-50/50">
-            <h2 class="text-base font-extrabold text-rose-800 flex items-center gap-2">
-                <i class="fa-solid fa-triangle-exclamation text-rose-500"></i> 현황 이슈 관리
-            </h2>
-            <button onclick="window.closeIssueModal()" class="text-rose-400 hover:text-rose-600 transition-colors">
-                <i class="fa-solid fa-xmark text-xl"></i>
-            </button>
-        </div>
-        <div class="p-6 bg-slate-50/50 flex-1 flex flex-col gap-4 min-h-0">
-            <input type="hidden" id="issue-req-id">
-            <input type="hidden" id="editing-issue-id">
-            <div class="flex gap-2 items-end bg-white p-3 rounded-xl border border-slate-200 shadow-sm relative">
-                <div class="relative flex-1">
-                    <textarea id="new-issue-text" autocomplete="off" oninput="window.handleMention(this)" onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); document.getElementById('btn-issue-save').click(); }" class="w-full h-20 border px-4 py-2.5 rounded-lg text-sm outline-rose-500 resize-none custom-scrollbar" placeholder="이슈 내용... '@'멘션, 자동 링크 변환 (Shift+Enter 줄바꿈)"></textarea>
-                </div>
-                <button id="btn-issue-save" onclick="window.saveIssueItem()" class="bg-rose-500 hover:bg-rose-600 text-white px-6 py-2.5 rounded-lg text-sm font-bold shadow-sm transition-colors mb-0.5 h-10">등록</button>
-            </div>
-            <div id="issue-list" class="flex-1 overflow-y-auto space-y-3 p-1 custom-scrollbar min-h-0"></div>
-        </div>
-    </div>
-</div>
-
-<div id="link-modal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
-    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg flex flex-col h-[600px] md:h-[80vh] overflow-hidden">
-        <div class="px-6 py-4 border-b flex justify-between items-center bg-slate-800">
-            <h2 class="text-base font-extrabold text-white flex items-center gap-2">
-                <i class="fa-solid fa-link text-teal-400"></i> 문서 링크 관리
-            </h2>
-            <button onclick="window.closeLinkModal()" class="text-slate-400 hover:text-white transition-colors">
-                <i class="fa-solid fa-xmark text-xl"></i>
-            </button>
-        </div>
-        <div class="p-6 bg-slate-50 flex-1 flex flex-col gap-4 min-h-0">
-            <input type="hidden" id="link-req-id">
-            <div class="text-sm font-bold text-slate-700 mb-2 truncate bg-white p-4 rounded-xl border border-slate-200 shadow-sm" id="link-project-title"></div>
-            <div class="flex flex-col gap-3 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                <div>
-                    <label class="block text-[11px] font-bold text-slate-500 mb-1">링크 이름 지정</label>
-                    <input type="text" id="new-link-name" class="w-full border px-4 py-2 rounded-lg text-sm outline-teal-500" placeholder="예: 설계 도면, 시방서 등">
-                </div>
-                <div>
-                    <label class="block text-[11px] font-bold text-slate-500 mb-1">문서 링크 URL 입력 (http:// 또는 https:// 포함)</label>
-                    <input type="url" id="new-link-url" class="w-full border px-4 py-2 rounded-lg text-sm outline-teal-500" placeholder="https://...">
-                </div>
-                <div class="flex justify-end gap-2 mt-2">
-                    <button onclick="window.closeLinkModal()" class="px-4 py-2 rounded-lg text-sm font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors">취소</button>
-                    <button onclick="window.saveLinkItem()" class="bg-teal-600 hover:bg-teal-700 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors">확인</button>
-                </div>
-            </div>
-            <h3 class="text-[11px] font-bold text-slate-500 mt-2 uppercase px-1"><i class="fa-solid fa-list-ul"></i> 등록된 링크 목록</h3>
-            <ul id="link-list" class="flex-1 overflow-y-auto space-y-2 custom-scrollbar p-1 min-h-0"></ul>
-        </div>
-    </div>
-</div>
-
-<div id="proj-history-modal" class="fixed inset-0 z-[300] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
-    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col h-[600px] md:h-[80vh] overflow-hidden">
-        <div class="px-6 py-4 border-b flex justify-between items-center bg-indigo-50">
-            <h2 class="text-lg font-extrabold text-indigo-800"><i class="fa-solid fa-clock-rotate-left"></i> 프로젝트 변경 이력</h2>
+<div id="proj-history-modal" class="fixed inset-0 z-[160] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-slate-50">
+            <h2 class="text-lg font-extrabold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-clock-rotate-left text-sky-500"></i> 프로젝트 변경 이력</h2>
             <button onclick="window.closeProjHistoryModal()" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-xl"></i></button>
         </div>
-        <div class="p-6 flex-1 overflow-y-auto custom-scrollbar bg-slate-50 min-h-0">
+        <div class="p-6 overflow-y-auto custom-scrollbar flex-1 bg-slate-50/50 min-h-0">
             <ul id="proj-history-list" class="space-y-3"></ul>
         </div>
     </div>
 </div>
 
-<div id="md-log-modal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
-    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col h-[600px] md:h-[85vh] overflow-hidden">
-        <div class="px-6 py-4 border-b flex justify-between items-center bg-purple-50">
-            <h2 class="text-base font-extrabold text-purple-800 flex items-center gap-2">
-                <i class="fa-solid fa-business-time text-purple-500"></i> 일별 투입 공수(MD) 관리 
-                <span id="md-total-badge" class="text-[11px] bg-purple-200 text-purple-800 px-2.5 py-0.5 rounded-full shadow-sm ml-2"></span>
-            </h2>
-            <button onclick="window.closeMdLogModal()" class="text-purple-400 hover:text-rose-500 transition-colors">
-                <i class="fa-solid fa-xmark text-xl"></i>
-            </button>
+<div id="comment-modal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col h-[600px] md:h-[80vh] overflow-hidden">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-amber-50">
+            <h2 class="text-base font-extrabold text-amber-800 flex items-center gap-2"><i class="fa-regular fa-comment-dots text-amber-500"></i> 코멘트 남기기</h2>
+            <button onclick="window.closeCommentModal()" class="text-amber-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
         </div>
         <div class="p-6 bg-slate-50/50 flex-1 flex flex-col gap-4 min-h-0">
-            <input type="hidden" id="md-req-id">
-            <input type="hidden" id="editing-md-id">
-            <div class="bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
-                <span id="md-project-title" class="text-sm font-bold text-purple-600"></span>
+            <input type="hidden" id="cmt-req-id"><input type="hidden" id="reply-to-id"><input type="hidden" id="editing-cmt-id">
+            
+            <div id="reply-indicator" class="hidden bg-indigo-50 border border-indigo-200 p-3 rounded-xl flex justify-between items-center shadow-sm">
+                <span id="reply-indicator-name" class="text-xs font-bold text-indigo-700 flex items-center"></span>
+                <button onclick="window.cancelCommentAction()" class="text-indigo-400 hover:text-rose-500 text-sm px-2"><i class="fa-solid fa-xmark"></i> 취소</button>
             </div>
-            <div class="flex gap-3 items-end flex-wrap bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                <input type="date" id="new-md-date" class="border px-3 py-2 rounded-lg text-sm font-bold text-slate-600 mb-1 h-10">
-                <input type="number" id="new-md-val" step="0.1" placeholder="MD 입력" class="border px-3 py-2 w-28 rounded-lg text-sm font-bold text-center mb-1 h-10">
-                <div class="relative flex-1 min-w-[200px]">
-                    <textarea id="new-md-desc" placeholder="작업 내용 입력..." class="w-full h-20 border px-3 py-2 rounded-lg text-sm outline-purple-500 resize-none custom-scrollbar"></textarea>
+            
+            <div class="flex gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative flex-col md:flex-row md:items-center">
+                <div class="relative flex-1 w-full">
+                    <textarea id="new-cmt-text" placeholder="코멘트 내용 입력... (@멘션, Enter 저장, Shift+Enter 줄바꿈)" class="w-full h-24 border px-4 py-3 rounded-lg text-sm outline-amber-500 resize-none custom-scrollbar" oninput="window.handleMention(this)" onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); document.getElementById('btn-cmt-save').click(); }"></textarea>
                 </div>
-                <button id="btn-md-save" onclick="window.saveMdLogItem()" class="bg-purple-500 hover:bg-purple-600 text-white px-5 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm mb-1 h-10">등록</button>
-                <button id="btn-md-cancel" onclick="window.resetMdLogForm()" class="hidden bg-slate-100 text-slate-600 px-4 py-2 rounded-lg text-sm font-bold mb-1 h-10">취소</button>
+                <div class="w-full md:w-32 border-2 border-dashed border-amber-200 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-amber-50 transition-colors relative" onclick="document.getElementById('new-cmt-image').click()">
+                    <i class="fa-solid fa-image text-2xl text-amber-300 mb-2 pointer-events-none"></i>
+                    <p class="text-[10px] font-bold text-slate-400 pointer-events-none">사진 첨부</p>
+                    <input type="file" id="new-cmt-image" accept="image/*" class="hidden" onchange="window.updateMultiFileNames(this, 'cmt-file-name')">
+                    <div id="cmt-file-name" class="text-[9px] text-amber-600 font-bold truncate mt-1 w-full text-center pointer-events-none"></div>
+                </div>
+                <button id="btn-cmt-save" onclick="window.saveCommentItem()" class="bg-amber-500 hover:bg-amber-600 text-white px-6 rounded-lg text-sm font-bold h-24 transition-colors shadow-sm w-full md:w-20">작성</button>
             </div>
-            <div class="flex-1 overflow-y-auto custom-scrollbar bg-white rounded-xl border border-slate-200 shadow-sm min-h-0">
+            <div id="comment-list" class="space-y-3 flex-1 overflow-y-auto p-1 custom-scrollbar min-h-0"></div>
+        </div>
+    </div>
+</div>
+
+<div id="issue-modal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col h-[600px] md:h-[80vh] overflow-hidden">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-rose-50">
+            <h2 class="text-base font-extrabold text-rose-800 flex items-center gap-2"><i class="fa-solid fa-triangle-exclamation text-rose-500"></i> 이슈 등록 (To-Do)</h2>
+            <button onclick="window.closeIssueModal()" class="text-rose-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
+        </div>
+        <div class="p-6 bg-slate-50/50 flex-1 flex flex-col gap-4 min-h-0">
+            <input type="hidden" id="issue-req-id"><input type="hidden" id="editing-issue-id">
+            <div class="flex gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative flex-col md:flex-row md:items-center">
+                <textarea id="new-issue-text" placeholder="이슈 내용 입력... (@멘션, Enter 저장, Shift+Enter 줄바꿈)" class="flex-1 w-full h-24 border px-4 py-3 rounded-lg text-sm outline-rose-500 resize-none custom-scrollbar" oninput="window.handleMention(this)" onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); document.getElementById('btn-issue-save').click(); }"></textarea>
+                <button id="btn-issue-save" onclick="window.saveIssueItem()" class="bg-rose-500 hover:bg-rose-600 text-white px-6 rounded-lg text-sm font-bold h-24 transition-colors shadow-sm w-full md:w-20">등록</button>
+            </div>
+            <div id="issue-list" class="space-y-3 flex-1 overflow-y-auto p-1 custom-scrollbar min-h-0"></div>
+        </div>
+    </div>
+</div>
+
+<div id="md-log-modal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-purple-50">
+            <div class="flex items-center gap-3">
+                <h2 class="text-base font-extrabold text-purple-800 flex items-center gap-2"><i class="fa-solid fa-user-clock text-purple-500"></i> 투입 공수(MD) 기록</h2>
+                <span id="md-total-badge" class="bg-purple-200 text-purple-800 px-3 py-1 rounded-full text-xs font-black shadow-sm border border-purple-300">총 0 MD</span>
+            </div>
+            <button onclick="window.closeMdLogModal()" class="text-purple-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
+        </div>
+        <div class="p-6 bg-slate-50/50 flex-1 flex flex-col gap-4 min-h-0">
+            <input type="hidden" id="md-req-id"><input type="hidden" id="editing-md-id">
+            <div class="flex flex-col lg:flex-row gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative items-center">
+                <input type="date" id="new-md-date" class="border px-3 py-2 rounded-lg text-sm font-bold text-slate-600 outline-purple-500 w-36 h-10 shrink-0">
+                <input type="number" step="0.1" id="new-md-val" placeholder="MD입력" class="border px-3 py-2 rounded-lg text-sm font-bold text-purple-600 outline-purple-500 w-24 h-10 shrink-0 text-center">
+                <input type="text" id="new-md-desc" placeholder="작업 내용 간단 메모..." class="flex-1 w-full border px-4 py-2 rounded-lg text-sm outline-purple-500 h-10" oninput="window.handleMention(this)" onkeydown="if(event.key==='Enter') window.saveMdLogItem()">
+                <div class="flex gap-2 w-full lg:w-auto shrink-0">
+                    <button id="btn-md-save" onclick="window.saveMdLogItem()" class="bg-purple-600 hover:bg-purple-700 text-white px-5 rounded-lg text-sm font-bold h-10 transition-colors shadow-sm flex-1 lg:flex-none">등록</button>
+                    <button id="btn-md-cancel" onclick="window.resetMdLogForm()" class="hidden bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 rounded-lg text-sm font-bold h-10 transition-colors">취소</button>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 overflow-auto custom-scrollbar min-h-0">
                 <table class="w-full text-left border-collapse">
-                    <thead class="bg-slate-50 text-[11px] text-slate-500 sticky top-0 border-b border-slate-100">
+                    <thead class="bg-slate-800 text-[11px] text-white sticky top-0">
                         <tr>
-                            <th class="p-3 text-center">일자</th>
-                            <th class="p-3 text-center">투입 MD</th>
-                            <th class="p-3">작업 내용</th>
-                            <th class="p-3 text-center">작업자</th>
-                            <th class="p-3 text-center">관리</th>
+                            <th class="p-3 text-center w-28">날짜</th>
+                            <th class="p-3 text-center w-24 text-purple-300">투입MD</th>
+                            <th class="p-3">작업내용</th>
+                            <th class="p-3 text-center w-24">작성자</th>
+                            <th class="p-3 text-center w-20">관리</th>
                         </tr>
                     </thead>
-                    <tbody id="md-log-list" class="divide-y divide-slate-100 text-xs"></tbody>
+                    <tbody id="md-log-list" class="text-xs divide-y divide-slate-100"></tbody>
                 </table>
             </div>
         </div>
     </div>
 </div>
 
-<div id="ncr-modal" class="fixed inset-0 z-[200] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
+<div id="ncr-modal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
     <div class="bg-white rounded-3xl shadow-2xl w-full max-w-6xl flex flex-col h-[600px] md:h-[85vh] overflow-hidden">
-        <div class="px-6 py-4 border-b flex justify-between items-center bg-rose-50/50">
-            <h2 class="text-base font-extrabold flex items-center gap-2">
-                <i class="fa-solid fa-triangle-exclamation text-rose-500"></i> 
-                <span id="ncr-project-title" class="text-indigo-800 font-black"></span>
-                <span class="text-rose-800 ml-2">부적합(NCR) 상세 현황</span>
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-rose-50">
+            <h2 class="text-lg font-extrabold text-rose-800 flex items-center gap-2">
+                <i class="fa-solid fa-file-circle-exclamation text-rose-500"></i> 부적합(NCR) 보고서 현황
             </h2>
-            <div class="flex items-center gap-2">
-                <button onclick="window.loadNcrData()" class="text-xs font-bold bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 transition-colors"><i class="fa-solid fa-rotate-right"></i> 시트 동기화</button>
-                <button onclick="window.closeNcrModal()" class="text-rose-400 hover:text-rose-600 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
+            <div class="flex items-center gap-4">
+                <span id="ncr-modal-pjt-name" class="text-sm font-bold text-rose-600 bg-white px-3 py-1 rounded-lg border border-rose-200 shadow-sm"></span>
+                <button onclick="window.closeNcrModal()" class="text-rose-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
             </div>
         </div>
         <div class="p-6 bg-slate-50/50 flex-1 flex flex-col gap-4 min-h-0">
-            <div class="flex gap-3 mb-2">
-                <div class="bg-white border border-slate-200 px-4 py-2 rounded-xl shadow-sm font-bold text-slate-600 text-sm">총 발생 <span id="ncr-total-cnt" class="text-lg text-slate-800 ml-1">0</span>건</div>
-                <div class="bg-rose-50 border border-rose-200 px-4 py-2 rounded-xl shadow-sm font-bold text-rose-600 text-sm">진행중 (미결) <span id="ncr-pending-cnt" class="text-lg text-rose-700 ml-1">0</span>건</div>
-                <div class="bg-emerald-50 border border-emerald-200 px-4 py-2 rounded-xl shadow-sm font-bold text-emerald-600 text-sm">조치 완료 <span id="ncr-comp-cnt" class="text-lg text-emerald-700 ml-1">0</span>건</div>
-            </div>
-            
-            <div class="flex-1 overflow-y-auto custom-scrollbar bg-white rounded-xl border border-slate-200 shadow-sm min-h-0">
-                <table class="w-full text-left border-collapse">
-                    <thead class="bg-slate-800 text-[11px] text-white sticky top-0 border-b border-slate-100 z-10 shadow-sm">
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 overflow-auto custom-scrollbar min-h-0">
+                <table class="w-full text-left border-collapse min-w-max">
+                    <thead class="bg-slate-800 text-[10px] text-white sticky top-0 z-10">
                         <tr>
-                            <th class="p-3 text-center whitespace-nowrap">NCR No.</th>
-                            <th class="p-3 text-center whitespace-nowrap"><i class="fa-regular fa-calendar"></i> 발생일</th>
-                            <th class="p-3 text-center whitespace-nowrap">도면번호</th>
-                            <th class="p-3 text-center whitespace-nowrap">Part Name</th>
-                            <th class="p-3 text-center whitespace-nowrap">유형</th>
-                            <th class="p-3 w-[40%]">부적합 내용</th>
-                            <th class="p-3 text-center whitespace-nowrap">진행 현황</th>
+                            <th class="p-3 border-r border-slate-600 text-center w-20">발행일</th>
+                            <th class="p-3 border-r border-slate-600 text-center w-20">구분</th>
+                            <th class="p-3 border-r border-slate-600 w-32">발생부서(업체)</th>
+                            <th class="p-3 border-r border-slate-600">부적합 내용</th>
+                            <th class="p-3 border-r border-slate-600 w-32">원인 및 대책</th>
+                            <th class="p-3 border-r border-slate-600 text-center w-20 text-rose-300">조치예정일</th>
+                            <th class="p-3 border-r border-slate-600 text-center w-20 text-emerald-300">조치완료일</th>
+                            <th class="p-3 text-center w-20">현재상태</th>
                         </tr>
                     </thead>
-                    <tbody id="ncr-list-tbody" class="divide-y divide-slate-100 text-xs"></tbody>
+                    <tbody id="ncr-modal-list" class="text-[11px] text-slate-700 divide-y divide-slate-200"></tbody>
                 </table>
             </div>
+            <div class="text-right text-[10px] font-bold text-slate-400 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                * NCR 세부 등록 및 관리는 [품질 현황판 > NCR 대시보드] 메뉴를 이용하세요.
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="link-modal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-teal-50">
+            <h2 class="text-base font-extrabold text-teal-800 flex items-center gap-2"><i class="fa-solid fa-link text-teal-500"></i> 외부 링크 등록</h2>
+            <button onclick="window.closeLinkModal()" class="text-teal-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
+        </div>
+        <div class="p-6 bg-slate-50 flex flex-col gap-4">
+            <input type="hidden" id="link-req-id">
+            <div class="bg-white border border-slate-200 p-3 rounded-xl shadow-sm text-center mb-2"><span id="link-project-title" class="text-sm font-bold text-teal-600"></span></div>
+            
+            <div class="flex gap-2">
+                <input type="text" id="new-link-name" placeholder="링크명 (예: 먼데이)" class="border px-3 py-2 rounded-lg text-sm outline-teal-500 w-1/3">
+                <input type="text" id="new-link-url" placeholder="https://..." class="border px-3 py-2 rounded-lg text-sm outline-teal-500 flex-1">
+                <button onclick="window.addLink()" class="bg-teal-500 hover:bg-teal-600 text-white px-4 rounded-lg text-sm font-bold shadow-sm transition-colors">추가</button>
+            </div>
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mt-2">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead class="bg-slate-100 text-slate-500">
+                        <tr>
+                            <th class="p-2 text-center border-b w-24">링크명</th>
+                            <th class="p-2 border-b">URL</th>
+                            <th class="p-2 text-center border-b w-16">관리</th>
+                        </tr>
+                    </thead>
+                    <tbody id="link-list-tbody" class="divide-y divide-slate-100"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="cr-req-modal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden transform transition-all">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-rose-50">
+            <h2 class="text-lg font-extrabold text-rose-800 flex items-center gap-2">
+                <i class="fa-solid fa-paper-plane text-rose-500"></i> 품질 완료보고 작성 요청
+            </h2>
+            <button onclick="window.closeCrReqModal()" class="text-rose-400 hover:text-rose-500">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
+        </div>
+        <div class="p-6 bg-white space-y-4">
+            <input type="hidden" id="cr-req-pid">
+            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <p class="text-sm font-bold text-slate-700 text-center mb-1" id="cr-req-pname">프로젝트명</p>
+                <p class="text-[11px] text-slate-500 text-center">해당 프로젝트에 대해 품질경영팀으로 완료보고서 작성을 공식 요청합니다.</p>
+            </div>
+            <div>
+                <label class="block text-[11px] font-bold text-rose-600 mb-1.5"><i class="fa-solid fa-user-check"></i> 요청 대상자 선택 (품질경영팀)</label>
+                <select id="cr-req-target" class="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 font-bold outline-rose-500">
+                    <option value="">품질경영팀 인원 불러오는 중...</option>
+                </select>
+            </div>
+        </div>
+        <div class="px-6 py-4 border-t bg-slate-50 flex justify-end gap-2">
+            <button onclick="window.closeCrReqModal()" class="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-100 transition-colors">취소</button>
+            <button onclick="window.sendCrRequest()" class="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2"><i class="fa-solid fa-paper-plane"></i> 요청 보내기</button>
         </div>
     </div>
 </div>
