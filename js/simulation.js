@@ -365,8 +365,12 @@ window.runSimulation = () => {
     });
 };
 
+// 💡 플래그 전용 함수 추가
+window.markDirty = () => { 
+    if(!window.isLockedMode) window.isProjectDirty = true; 
+};
+
 window.debouncedRunSimulation = () => {
-    if(!window.isLockedMode) window.isProjectDirty = true;
     if (window.simTimer) clearTimeout(window.simTimer);
     window.simTimer = setTimeout(window.runSimulation, 300);
 };
@@ -506,10 +510,11 @@ window.handleMethodChange = () => {
 };
 
 window.setupAutoSaveTriggers = () => {
-    const triggers = document.querySelectorAll('.calc-trigger');
-    triggers.forEach(el => {
-        el.removeEventListener('input', window.debouncedRunSimulation);
+    document.querySelectorAll('.calc-trigger, .auto-save-trigger').forEach(el => {
+        el.removeEventListener('input', window.debouncedRunSimulation); 
         el.addEventListener('input', window.debouncedRunSimulation);
+        el.removeEventListener('change', window.markDirty); 
+        el.addEventListener('change', window.markDirty);
     });
 };
 
