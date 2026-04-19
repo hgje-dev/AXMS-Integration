@@ -21,18 +21,11 @@ window.hideCompletedFilter = false;
 window.ganttTodayOffset = 0;
 window.ncrData = [];
 
-// 💡 5단계 PJT 세부 작성(쓰기) 권한을 개인별로 체크하는 핵심 함수
 window.checkPjtWritePermission = function(type, managerName) {
     const user = window.userProfile;
     if (!user) return false;
-    
-    // 1. 최고 관리자 및 마스터는 무조건 프리패스
     if (user.role === 'admin' || user.role === 'master') return true;
-    
-    // 2. 이 프로젝트의 담당자로 지정된 사람이 본인이면 프리패스
     if (managerName && user.name === managerName) return true;
-
-    // 3. DB에 세팅된 개인별 세부 권한 검사 (admin-modal에서 부여한 권한)
     const perms = user.permissions || {};
     switch(type) {
         case 'status': return !!perms['pjt-w-status'];
@@ -41,6 +34,14 @@ window.checkPjtWritePermission = function(type, managerName) {
         case 'schedule': return !!perms['pjt-w-sch'];
         case 'daily-log': return !!perms['pjt-w-log'];
         default: return false;
+    }
+};
+
+window.toggleFreezeCol = function(checked) {
+    const table = document.getElementById('proj-main-table');
+    if(table) {
+        if(checked) table.classList.add('freeze-col');
+        else table.classList.remove('freeze-col');
     }
 };
 
@@ -235,7 +236,6 @@ window.updateMiniDashboard = function() {
 window.loadProjectStatusData = function() {
     if(projectStatusSnapshotUnsubscribe) projectStatusSnapshotUnsubscribe();
     
-    // 💡 권한에 따라 메인 화면의 '등록' 버튼 제어
     const btnCreate = document.getElementById('btn-create-proj');
     if (btnCreate) {
         if (window.checkPjtWritePermission('status')) btnCreate.classList.remove('hidden');
@@ -311,22 +311,20 @@ window.renderProjectStatusList = function() {
         }).length;
 
         let ncrIconHtml = '';
-        if (totalNcrCnt === 0) ncrIconHtml = `<button onclick="window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-slate-300 hover:text-indigo-400 transition-colors p-1" title="부적합 내역 없음"><i class="fa-solid fa-file-circle-check text-lg"></i></button>`;
-        else if (unresolvedNcrCnt === 0) ncrIconHtml = `<button onclick="window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-emerald-500 hover:text-emerald-600 transition-colors p-1" title="모두 조치 완료"><i class="fa-solid fa-file-circle-check text-lg"></i></button>`;
-        else ncrIconHtml = `<button onclick="window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-rose-500 relative transition-transform hover:scale-110 p-1" title="미결 부적합 ${unresolvedNcrCnt}건"><i class="fa-solid fa-file-circle-exclamation text-lg"></i><span class="absolute -top-1 -right-2 bg-rose-100 text-rose-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-rose-200">${unresolvedNcrCnt}</span></button>`;
+        if (totalNcrCnt === 0) ncrIconHtml = `<button onclick="window.openNcrModal('${safeItemCode}', '${safeNameJs}')" class="text-slate-300 hover:text-indigo-400 transition-colors p-1" title="부적합 내역 없음"><i class="fa-solid fa-file-circle-check text-lg"></i></button>`;
+        else if (unresolvedNcrCnt === 0) ncrIconHtml = `<button onclick="window.openNcrModal('${safeItemCode}', '${safeNameJs}')" class="text-emerald-500 hover:text-emerald-600 transition-colors p-1" title="모두 조치 완료"><i class="fa-solid fa-file-circle-check text-lg"></i></button>`;
+        else ncrIconHtml = `<button onclick="window.openNcrModal('${safeItemCode}', '${safeNameJs}')" class="text-rose-500 relative transition-transform hover:scale-110 p-1" title="미결 부적합 ${unresolvedNcrCnt}건"><i class="fa-solid fa-file-circle-exclamation text-lg"></i><span class="absolute -top-1 -right-2 bg-rose-100 text-rose-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-rose-200">${unresolvedNcrCnt}</span></button>`;
 
-        // 수정 권한 유무와 상관없이 현황판 자체는 클릭해서 "읽기 모드"로라도 볼 수 있게 합니다. 
-        // 권한은 openProjStatusWriteModal 안에서 다시 체크합니다.
         let trHtml = `<tr class="group hover:bg-indigo-50/50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.editProjStatus('${item.id}')">`;
-        trHtml += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 0px; min-width: 40px; max-width: 40px;" onclick="event.stopPropagation()"><button onclick="window.deleteProjStatus('${item.id}')" class="text-slate-300 hover:text-rose-500 p-1.5 rounded"><i class="fa-solid fa-trash-can"></i></button></td>`;
-        trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 40px; min-width: 80px; max-width: 80px;">${getSafeString(item.category)}</td>`;
-        trHtml += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 120px; min-width: 50px; max-width: 50px;" onclick="event.stopPropagation()"><button onclick="window.openCommentModal('${item.id}', '${safeNameJs}')" class="text-amber-400 relative"><i class="fa-regular fa-comment-dots text-lg"></i>${cCnt ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-amber-200">${cCnt}</span>` : ''}</button></td>`;
-        trHtml += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 170px; min-width: 50px; max-width: 50px;" onclick="event.stopPropagation()"><button onclick="window.openIssueModal('${item.id}', '${safeNameJs}')" class="text-rose-400 relative"><i class="fa-solid fa-triangle-exclamation text-lg"></i>${iCnt ? `<span class="absolute -top-1 -right-2 bg-rose-100 text-rose-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-rose-200">${iCnt}</span>` : ''}</button></td>`;
-        trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center font-bold text-indigo-700 bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 220px; min-width: 110px; max-width: 110px;">${getSafeString(item.code)}</td>`;
-        trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 truncate max-w-[220px] bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 330px; min-width: 220px;">${safeNameHtml}</td>`;
-        trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center truncate max-w-[110px] bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 550px; min-width: 110px;">${getSafeString(item.company)}</td>`;
-        trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center font-black text-emerald-600 bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 660px; min-width: 60px; max-width: 60px;">${parseFloat(item.progress) || 0}%</td>`;
-        trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20 shadow-[3px_0_5px_-1px_rgba(0,0,0,0.3)] border-r-slate-300" style="left: 720px; min-width: 80px; max-width: 80px;">${statusMap[item.status] || ''}</td>`;
+        trHtml += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50" onclick="event.stopPropagation()"><button onclick="window.deleteProjStatus('${item.id}')" class="text-slate-300 hover:text-rose-500 p-1.5 rounded"><i class="fa-solid fa-trash-can"></i></button></td>`;
+        trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center bg-white group-hover:bg-indigo-50/50">${getSafeString(item.category)}</td>`;
+        trHtml += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50" onclick="event.stopPropagation()"><button onclick="window.openCommentModal('${item.id}', '${safeNameJs}')" class="text-amber-400 relative"><i class="fa-regular fa-comment-dots text-lg"></i>${cCnt ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-amber-200">${cCnt}</span>` : ''}</button></td>`;
+        trHtml += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50" onclick="event.stopPropagation()"><button onclick="window.openIssueModal('${item.id}', '${safeNameJs}')" class="text-rose-400 relative"><i class="fa-solid fa-triangle-exclamation text-lg"></i>${iCnt ? `<span class="absolute -top-1 -right-2 bg-rose-100 text-rose-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-rose-200">${iCnt}</span>` : ''}</button></td>`;
+        trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center font-bold text-indigo-700 bg-white group-hover:bg-indigo-50/50">${getSafeString(item.code)}</td>`;
+        trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 truncate max-w-[220px] bg-white group-hover:bg-indigo-50/50">${safeNameHtml}</td>`;
+        trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center truncate max-w-[110px] bg-white group-hover:bg-indigo-50/50">${getSafeString(item.company)}</td>`;
+        trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center font-black text-emerald-600 bg-white group-hover:bg-indigo-50/50">${parseFloat(item.progress) || 0}%</td>`;
+        trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center bg-white group-hover:bg-indigo-50/50">${statusMap[item.status] || ''}</td>`;
         
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center font-bold text-slate-600">${getSafeString(item.manager)}</td>`;
         trHtml += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="window.openPurchaseModal('${item.id}', '${safeNameJs}')" class="text-amber-500 relative"><i class="fa-solid fa-cart-shopping text-lg"></i>${purCnt ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-amber-200">${purCnt}</span>` : ''}</button></td>`;
@@ -372,9 +370,6 @@ window.renderProjectStatusList = function() {
     tbody.innerHTML = htmlStr;
 };
 
-// ==========================================
-// 💡 프로젝트 정보 입력 폼 (권한 제어 적용)
-// ==========================================
 window.openProjStatusWriteModal = function() {
     const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
     
@@ -404,7 +399,6 @@ window.openProjStatusWriteModal = function() {
     const btnHistory = document.getElementById('btn-view-history');
     if (btnHistory) btnHistory.classList.add('hidden'); 
     
-    // 💡 쓰기 권한 체크 (모달을 매번 열 때마다 상태 초기화 보장)
     const canWrite = window.checkPjtWritePermission('status');
     const btnSave = document.getElementById('btn-proj-save');
     const banner = document.getElementById('ps-readonly-banner');
@@ -484,7 +478,6 @@ window.editProjStatus = function(id) {
     const btnHistory = document.getElementById('btn-view-history');
     if (btnHistory) btnHistory.classList.remove('hidden'); 
     
-    // 💡 쓰기 권한 체크 (모달을 매번 열 때마다 상태 초기화 보장)
     const canWrite = window.checkPjtWritePermission('status', item.manager);
     const btnSave = document.getElementById('btn-proj-save');
     const banner = document.getElementById('ps-readonly-banner');
@@ -729,6 +722,56 @@ window.toggleProjDashView = function(view) {
         calC.classList.remove('hidden'); 
         window.renderProjCalendar(); 
     }
+};
+
+// 💡 간트(Gantt) 복구
+window.renderProjGantt = function() {
+    const container = document.getElementById('proj-dash-gantt-content');
+    if(!container) return;
+    let list = window.getFilteredProjects();
+    if(list.length === 0) { container.innerHTML = '<div class="p-4 text-center text-slate-400 font-bold">데이터가 없습니다.</div>'; return; }
+    
+    let html = `<div class="min-w-max p-4 space-y-2">`;
+    list.forEach(p => {
+        let safeName = getSafeString(p.name);
+        html += `<div class="flex items-center gap-4 bg-white p-2 rounded border border-slate-100 shadow-sm">
+            <div class="w-48 truncate font-bold text-xs text-slate-700" title="${safeName}">[${getSafeString(p.code)}] ${safeName}</div>
+            <div class="flex-1 bg-slate-100 h-6 rounded-full relative overflow-hidden flex items-center shadow-inner">
+                <div class="bg-indigo-500 h-full transition-all duration-500" style="width: ${p.progress || 0}%"></div>
+                <span class="absolute left-3 text-[10px] font-black text-white mix-blend-difference">${p.progress || 0}%</span>
+            </div>
+            <div class="w-24 text-right text-[10px] font-bold text-slate-500">${p.status === 'completed' ? '출하완료' : '진행중'}</div>
+        </div>`;
+    });
+    html += `</div>`;
+    container.innerHTML = html;
+};
+
+// 💡 달력(Calendar) 복구
+window.renderProjCalendar = function() {
+    const container = document.getElementById('proj-dash-calendar-content');
+    if(!container) return;
+    let list = window.getFilteredProjects();
+    if(list.length === 0) { container.innerHTML = '<div class="p-4 text-center text-slate-400 font-bold">데이터가 없습니다.</div>'; return; }
+    
+    let html = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">`;
+    list.filter(p => p.d_shipEst || p.d_shipEn).sort((a,b) => new Date(a.d_shipEst).getTime() - new Date(b.d_shipEst).getTime()).forEach(p => {
+        let safeName = getSafeString(p.name);
+        html += `<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+            <div class="text-[10px] font-black text-indigo-500 mb-1">${getSafeString(p.code)}</div>
+            <div class="font-bold text-sm text-slate-700 truncate mb-2" title="${safeName}">${safeName}</div>
+            <div class="flex justify-between items-center text-[11px] font-bold">
+                <span class="text-slate-500">예정: <span class="text-rose-500">${p.d_shipEst || '-'}</span></span>
+                <span class="text-slate-500">완료: <span class="text-emerald-500">${p.d_shipEn || '-'}</span></span>
+            </div>
+        </div>`;
+    });
+    html += `</div>`;
+    container.innerHTML = html;
+};
+
+window.scrollToGanttToday = function() {
+    window.showToast("간트 뷰가 업데이트 되었습니다.");
 };
 
 // ==========================================
@@ -1192,7 +1235,6 @@ window.openPurchaseModal = function(projectId, title) {
     document.getElementById('pur-project-title').innerText = title || ''; 
     window.resetPurchaseForm(); 
     
-    // 💡 쓰기 권한 체크 (모달을 열 때마다 매번 초기화)
     const proj = (window.currentProjectStatusList || []).find(p => p.id === projectId);
     const mgr = proj ? proj.manager : '';
     const canWrite = window.checkPjtWritePermission('purchase', mgr);
@@ -1330,7 +1372,6 @@ window.openDesignModal = function(projectId, title) {
     document.getElementById('des-project-title').innerText = title || ''; 
     window.resetDesignForm(); 
     
-    // 💡 쓰기 권한 체크
     const proj = (window.currentProjectStatusList || []).find(p => p.id === projectId);
     const mgr = proj ? proj.manager : '';
     const canWrite = window.checkPjtWritePermission('design', mgr);
@@ -1469,7 +1510,6 @@ window.openPjtScheduleModal = function(projectId, title) {
     document.getElementById('sch-project-title').innerText = title || ''; 
     window.resetPjtScheduleForm(); 
     
-    // 💡 쓰기 권한 체크
     const proj = (window.currentProjectStatusList || []).find(p => p.id === projectId);
     const mgr = proj ? proj.manager : '';
     const canWrite = window.checkPjtWritePermission('schedule', mgr);
@@ -1616,7 +1656,6 @@ window.openDailyLogModal = function(projectId) {
     
     window.resetDailyLogForm(); 
     
-    // 💡 쓰기 권한 체크
     const mgr = proj ? proj.manager : '';
     const canWrite = window.checkPjtWritePermission('daily-log', mgr);
     
@@ -1861,6 +1900,9 @@ window.resetDailyLogForm = function() {
 };
 
 
+// ==========================================
+// 💡 1. 투입 MD 기록 모달 (프로젝트 팀원 전용 권한 부여)
+// ==========================================
 window.openMdLogModal = function(projectId, title, curMd) { 
     const modal = document.getElementById('md-log-modal');
     if(!modal) return;
@@ -1875,12 +1917,30 @@ window.openMdLogModal = function(projectId, title, curMd) {
     
     window.resetMdLogForm(); 
     
+    // 💡 팀 인원만 MD 수정 가능하도록 제한 로직 추가
+    const user = window.userProfile || {};
+    const isAdmin = user.role === 'admin' || user.role === 'master';
+    const isManager = proj.manager === user.name;
+    const isMember = (proj.members || '').includes(user.name);
+    
+    const canWrite = isAdmin || isManager || isMember;
+
+    if (canWrite) {
+        document.getElementById('md-input-section').classList.remove('hidden');
+        document.getElementById('md-input-section').classList.add('flex');
+        document.getElementById('md-readonly-banner').classList.add('hidden');
+    } else {
+        document.getElementById('md-input-section').classList.add('hidden');
+        document.getElementById('md-input-section').classList.remove('flex');
+        document.getElementById('md-readonly-banner').classList.remove('hidden');
+    }
+    
     modal.classList.remove('hidden'); 
     modal.classList.add('flex'); 
-    window.loadMdLogs(projectId); 
+    window.loadMdLogs(projectId, canWrite); 
 };
 
-window.loadMdLogs = function(projectId) { 
+window.loadMdLogs = function(projectId, canWrite) { 
     if (currentMdLogUnsubscribe) currentMdLogUnsubscribe(); 
     
     currentMdLogUnsubscribe = onSnapshot(collection(db, "project_md_logs"), function(snapshot) { 
@@ -1906,12 +1966,12 @@ window.loadMdLogs = function(projectId) {
             
             const badge = document.getElementById('md-total-badge'); 
             if(badge) badge.innerText = '총 ' + totalMd.toFixed(1) + ' MD'; 
-            window.renderMdLogs(window.currentMdLogs); 
+            window.renderMdLogs(window.currentMdLogs, canWrite); 
         } catch(e) { console.error(e); }
     }); 
 };
 
-window.renderMdLogs = function(logs) { 
+window.renderMdLogs = function(logs, canWrite) { 
     const list = document.getElementById('md-log-list'); 
     if(!list) return;
     
@@ -1927,11 +1987,11 @@ window.renderMdLogs = function(logs) {
             if(window.formatMentions) safeDesc = window.formatMentions(safeDesc);
             
             let btnHtml = '-';
-            if (log.authorUid === window.currentUser?.uid || (window.userProfile && window.userProfile.role === 'admin')) {
+            if (canWrite && (log.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin')) {
                 btnHtml = `<button onclick="window.editMdLog('${log.id}')" class="text-slate-400 hover:text-purple-500 transition-colors" title="수정"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteMdLog('${log.id}', '${log.projectId}')" class="text-slate-400 hover:text-rose-500 transition-colors" title="삭제"><i class="fa-solid fa-trash-can"></i></button>`;
             }
             
-            htmlStr += `<tr class="hover:bg-purple-50/30 transition-colors">
+            htmlStr += `<tr class="hover:bg-purple-50/30 transition-colors border-b border-slate-100">
                             <td class="p-3 text-center text-slate-500 font-bold">${getSafeString(log.date)}</td>
                             <td class="p-3 text-center text-purple-700 font-black">${parseFloat(log.md).toFixed(1)}</td>
                             <td class="p-3 text-slate-700">${safeDesc || '-'}</td>
@@ -2061,4 +2121,159 @@ window.resetMdLogForm = function() {
     
     const btnCancel = document.getElementById('btn-md-cancel');
     if(btnCancel) btnCancel.classList.add('hidden'); 
+};
+
+
+// ==========================================
+// 💡 4. 부가 기능 복구 (NCR, 외부 링크, 완료 요청)
+// ==========================================
+
+// NCR 데이터 불러오기 복구
+window.loadNcrData = function() {
+    onSnapshot(collection(db, "ncr_reports"), function(snap) {
+        window.ncrData = [];
+        snap.forEach(doc => { window.ncrData.push({ id: doc.id, ...doc.data() }); });
+        if(window.renderProjectStatusList) window.renderProjectStatusList();
+    });
+};
+
+// 부적합(NCR) 현황 모달 복구
+window.openNcrModal = function(code, name) {
+    const modal = document.getElementById('ncr-modal');
+    if(!modal) return;
+    document.getElementById('ncr-modal-pjt-name').innerText = `[${code}] ${name}`;
+    const tbody = document.getElementById('ncr-modal-list');
+    
+    const safeItemCode = getSafeString(code).replace(/\s/g, '').toUpperCase();
+    const pjtNcrData = (window.ncrData || []).filter(n => getSafeString(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeItemCode);
+    pjtNcrData.sort((a,b) => getSafeMillis(b.createdAt) - getSafeMillis(a.createdAt));
+    
+    if(pjtNcrData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center p-6 text-slate-400 font-bold">등록된 부적합 내역이 없습니다.</td></tr>';
+    } else {
+        tbody.innerHTML = pjtNcrData.map(n => {
+            let statusClass = (n.status || '').includes('완료') ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50';
+            return `<tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">
+                <td class="p-3 text-center font-bold text-slate-500">${n.date || '-'}</td>
+                <td class="p-3 text-center"><span class="px-2 py-1 rounded bg-slate-100 text-[10px] font-bold text-slate-600">${n.type || '-'}</span></td>
+                <td class="p-3 font-bold text-slate-700">${n.department || '-'}</td>
+                <td class="p-3 text-slate-600">${n.content || '-'}</td>
+                <td class="p-3 text-slate-600">${n.action || '-'}</td>
+                <td class="p-3 text-center text-rose-500 font-bold">${n.expectedDate || '-'}</td>
+                <td class="p-3 text-center text-emerald-500 font-bold">${n.completedDate || '-'}</td>
+                <td class="p-3 text-center"><span class="px-2 py-1 rounded text-[10px] font-bold ${statusClass}">${n.status || '-'}</span></td>
+            </tr>`;
+        }).join('');
+    }
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+};
+
+window.closeNcrModal = function() {
+    const modal = document.getElementById('ncr-modal');
+    if(modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+};
+
+// 외부 링크 관련 기능 복구
+window.openLinkModal = function(projectId, title) {
+    const modal = document.getElementById('link-modal');
+    if(!modal) return;
+    document.getElementById('link-req-id').value = projectId;
+    document.getElementById('link-project-title').innerText = title;
+    document.getElementById('new-link-name').value = '';
+    document.getElementById('new-link-url').value = '';
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    window.loadLinks(projectId);
+};
+
+window.closeLinkModal = function() {
+    const modal = document.getElementById('link-modal');
+    if(modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+};
+
+window.loadLinks = async function(projectId) {
+    const tbody = document.getElementById('link-list-tbody');
+    if(!tbody) return;
+    const proj = (window.currentProjectStatusList || []).find(p => p.id === projectId);
+    if(!proj || !proj.links || proj.links.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center p-4 text-slate-400 font-bold text-[11px]">등록된 링크가 없습니다.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = proj.links.map((lnk, idx) => {
+        return `<tr>
+            <td class="p-2 text-center font-bold text-slate-700">${lnk.name}</td>
+            <td class="p-2 truncate max-w-[200px]"><a href="${lnk.url}" target="_blank" class="text-teal-500 hover:text-teal-700 hover:underline">${lnk.url}</a></td>
+            <td class="p-2 text-center"><button onclick="window.deleteLink('${projectId}', ${idx})" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-trash-can"></i></button></td>
+        </tr>`;
+    }).join('');
+};
+
+window.addLink = async function() {
+    const pid = document.getElementById('link-req-id').value;
+    const name = document.getElementById('new-link-name').value.trim();
+    const url = document.getElementById('new-link-url').value.trim();
+    if(!name || !url) return window.showToast("링크명과 URL을 입력하세요.", "warning");
+    try {
+        const proj = (window.currentProjectStatusList || []).find(p => p.id === pid);
+        let links = proj.links || [];
+        links.push({name, url});
+        await setDoc(doc(db, "projects_status", pid), { links: links }, { merge: true });
+        window.showToast("링크가 추가되었습니다.");
+        document.getElementById('new-link-name').value = '';
+        document.getElementById('new-link-url').value = '';
+        window.loadLinks(pid);
+    } catch(e) { window.showToast("링크 추가 실패", "error"); }
+};
+
+window.deleteLink = async function(pid, idx) {
+    if(!confirm("링크를 삭제하시겠습니까?")) return;
+    try {
+        const proj = (window.currentProjectStatusList || []).find(p => p.id === pid);
+        let links = proj.links || [];
+        links.splice(idx, 1);
+        await setDoc(doc(db, "projects_status", pid), { links: links }, { merge: true });
+        window.showToast("삭제되었습니다.");
+        window.loadLinks(pid);
+    } catch(e) { window.showToast("삭제 실패", "error"); }
+};
+
+// 완료보고서 작성 요청 기능 복구
+window.openCrReqModal = function(projectId, title) {
+    const modal = document.getElementById('cr-req-modal');
+    if(!modal) return;
+    document.getElementById('cr-req-pid').value = projectId;
+    document.getElementById('cr-req-pname').innerText = title;
+    const targetSelect = document.getElementById('cr-req-target');
+    if(targetSelect) {
+        const qmTeam = (window.allSystemUsers || []).filter(u => u.team === '품질경영팀');
+        if(qmTeam.length > 0) {
+            targetSelect.innerHTML = qmTeam.map(u => `<option value="${u.name}">${u.name} (${u.position || '매니저'})</option>`).join('');
+        } else {
+            targetSelect.innerHTML = '<option value="">품질경영팀 인원이 없습니다.</option>';
+        }
+    }
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+};
+
+window.closeCrReqModal = function() {
+    const modal = document.getElementById('cr-req-modal');
+    if(modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+};
+
+window.sendCrRequest = async function() {
+    const pid = document.getElementById('cr-req-pid').value;
+    const targetName = document.getElementById('cr-req-target').value;
+    if(!targetName) return window.showToast("대상자를 선택해주세요.", "warning");
+    
+    try {
+        const success = await window.notifyUser(targetName, "품질 완료보고서 작성을 요청합니다.", pid, "완료요청");
+        if(success) {
+            window.showToast(targetName + "님에게 완료보고 작성을 요청했습니다.");
+            window.closeCrReqModal();
+        } else {
+            window.showToast("알림 전송 실패", "error");
+        }
+    } catch(e) { window.showToast("오류 발생", "error"); }
 };
