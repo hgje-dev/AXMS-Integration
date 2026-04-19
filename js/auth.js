@@ -110,7 +110,7 @@ window.completeGoogleSignup = async () => {
     try {
         let initialRole = (finalEmail === 'mfg@axbis.ai') ? 'admin' : 'pending';
 
-        // 💡 신규 가입 시 18개 권한(13개 페이지 접근 + 5개 PJT 쓰기 권한) 팀별 자동 부여
+        // 💡 18단계 페이지 권한(13) + PJT 세부 작성(쓰기) 권한(5) 팀별 초기화
         const dP = { 
             'dashboard-home': false, 'completion-report': false, 'project-status': true,
             'workhours': true, 'weekly-log': true, 'product-cost': false,
@@ -189,7 +189,7 @@ window.initAuthListeners = () => {
                     return; 
                 }
                 
-                // 💡 기존 유저용 권한 자동 동기화 (누락된 권한 덧씌우기)
+                // 💡 누락된 권한 동기화 (기존 유저들 대비)
                 if (!window.userProfile.permissions) window.userProfile.permissions = {}; 
                 const t = window.userProfile.team || window.userProfile.department || '';
                 const dP = { 
