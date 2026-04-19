@@ -6,10 +6,80 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 // ==========================================
-// 1. 전역 변수 및 초기화
+// 1. 전역 변수 및 초기화 (Inline Worker 적용)
 // ==========================================
 const SIMULATION_DRIVE_FOLDER_ID = "1qyW-Ym_16tpRUUE0NQuFmwxg3IadF70e";
-const simulationWorker = new Worker('./js/Worker/simulationWorker.js'); 
+
+// 💡 404 및 CORS 에러 방지를 위해 Worker를 내부로 삽입
+const workerScript = `
+self.onmessage = function(e) {
+    const { method, qty, curve, iters, uncert, diff, rBase, bBase, pers, sMult, processData } = e.data;
+
+    const getNormalRandom = (mean, stdDev) => {
+        let u1 = Math.random(); if (u1 === 0) u1 = 0.0001;
+        return (Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * Math.random())) * stdDev + mean;
+    };
+    
+    const getTriangularRandom = (min, mode, max) => {
+        let u = Math.random(); let F = (mode - min) / (max - min);
+        if (u <= F) return min + Math.sqrt(u * (max - min) * (mode - min));
+        else return max - Math.sqrt((1 - u) * (max - min) * (max - mode));
+    };
+
+    let lR = Math.max(0.7, Math.pow(curve, Math.log2(qty))); 
+    let bArr = new Float32Array(iters), rArr = new Float32Array(iters);
+    let tMd = 0;
+
+    processData.forEach(p => {
+        let pt = p.pType || 'md';
+        let pq = parseFloat(p.q) || 1; 
+        if(pt === 'auto') {
+            let um = 0;
+            (p.unitData || []).forEach(u => um += (parseFloat(u.q)||0)*(parseFloat(u.m)||0));
+            tMd += um * pq; 
+        } else if(pt === 'md') {
+            tMd += (parseFloat(p.q)||0)*(parseFloat(p.m)||0);
+        }
+    });
+
+    for(let i = 0; i < iters; i++) {
+        let im = 0; 
+        processData.forEach(p => {
+            let pt = p.pType || 'md';
+            let pq = parseFloat(p.q) || 1;
+            if(pt === 'auto') {
+                (p.unitData || []).forEach(u => {
+                    let m = parseFloat(u.m) || 0, q = parseFloat(u.q) || 0;
+                    if(m > 0 && q > 0) {
+                        let randVal = method === 'mc' ? getNormalRandom(m, (m*uncert)/3) : getTriangularRandom(m*0.85, m, m*1.3);
+                        im += (q * randVal) * pq; 
+                    }
+                });
+            } else if(pt === 'md') {
+                let m = parseFloat(p.m) || 0, q = parseFloat(p.q) || 0;
+                if(m > 0 && q > 0) {
+                    let randVal = method === 'mc' ? getNormalRandom(m, (m*uncert)/3) : getTriangularRandom(m*0.85, m, m*1.3);
+                    im += q * randVal;
+                }
+            }
+        });
+        
+        bArr[i] = (im * qty) * diff * lR * (1 + Math.max(0, getNormalRandom(rBase, (rBase*0.1)/3))) * (1 + Math.max(0, getNormalRandom(bBase, (bBase*0.1)/3))); 
+        rArr[i] = bArr[i] * sMult;
+    }
+    
+    const sortedRArr = new Float32Array(rArr);
+    sortedRArr.sort(); 
+    const p10 = sortedRArr[Math.floor(iters * 0.1)] || 0;
+    const p50 = sortedRArr[Math.floor(iters * 0.5)] || 0;
+    const p90 = sortedRArr[Math.floor(iters * 0.9)] || 0; 
+    
+    self.postMessage({ p10, p50, p90, d10: Math.ceil(p10 / pers), d50: Math.ceil(p50 / pers), d90: Math.ceil(p90 / pers), rArr: Array.from(sortedRArr), bArr: Array.from(bArr), tMd });
+};
+`;
+
+const blob = new Blob([workerScript], { type: 'application/javascript' });
+const simulationWorker = new Worker(URL.createObjectURL(blob));
 
 window.currentProcessData = window.currentProcessData || [];
 window.latestP50Md = 0;
@@ -21,8 +91,6 @@ window.isProjectDirty = false;
 window.latestAiResult = null; 
 window.completedProjects = [];
 window.selectedSimilarProjects = [];
-window.dashMatchedData = []; 
-window.dashSelectedCodes = []; 
 
 window.isLockedMode = false;
 window.currentProjectLockPassword = null;
@@ -39,8 +107,17 @@ const defaultPresets = {
             { name: "최종 비전 검사 및 출하", q: 1, m: 3.0, pType: 'schedule_insp' }
         ], 
         curve: 98, diff: 1.0, buffer: 5, pSenior: 1, pMid: 2, pJunior: 0, 
-        internal: 3, labor: 300000, plannedExpense: 0, hex: '#8b5cf6', colorClass: 'bg-gradient-to-r from-indigo-500 to-purple-500' 
+        internal: 3, labor: 300000, plannedExpense: 0, hex: '#8b5cf6' 
     }
+};
+
+// 💡 페이지 로드시 라우터에서 호출하는 초기화 함수 (필수)
+window.initSimulation = function() {
+    console.log("✅ 시뮬레이션 Pro 초기화 완료");
+    window.loadMasterPresets();
+    window.updateLockUI();
+    window.setupAutoSaveTriggers();
+    if(window.currentProcessData.length > 0) window.debouncedRunSimulation();
 };
 
 window.addEventListener('beforeunload', (e) => {
@@ -50,34 +127,26 @@ window.addEventListener('beforeunload', (e) => {
     }
 });
 
-// 💡 날짜 및 공휴일 계산 유틸리티 함수 (버그 수정됨)
 window.calculateWorkDate = function(startDateStr, addDays) {
     if (!startDateStr) return new Date();
     let date = new Date(startDateStr);
     let daysAdded = 0;
     let totalDays = Math.ceil(addDays);
-    const applyHolidays = document.getElementById('apply-holidays')?.checked !== false; // 기본값 true
+    const applyHolidays = document.getElementById('apply-holidays')?.checked !== false; 
 
     while (daysAdded < totalDays) {
         date.setDate(date.getDate() + 1);
         if (applyHolidays) {
-            // 주말 제외 (일=0, 토=6)
-            if (date.getDay() !== 0 && date.getDay() !== 6) {
-                daysAdded++;
-            }
-        } else {
-            daysAdded++;
-        }
+            if (date.getDay() !== 0 && date.getDay() !== 6) daysAdded++;
+        } else { daysAdded++; }
     }
     return date;
 };
 
 window.getWorkingDays = function(startDate, endDate) {
-    let start = new Date(startDate);
-    let end = new Date(endDate);
+    let start = new Date(startDate); let end = new Date(endDate);
     if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) return 0;
-    let days = 0;
-    let current = new Date(start);
+    let days = 0; let current = new Date(start);
     while (current <= end) {
         if (current.getDay() !== 0 && current.getDay() !== 6) days++; 
         current.setDate(current.getDate() + 1);
@@ -109,9 +178,7 @@ window.updateLockUI = () => {
 
 window.unlockCurrentProject = () => {
     if (!window.currentProjectLockPassword) {
-        window.isLockedMode = false;
-        window.updateLockUI();
-        return;
+        window.isLockedMode = false; window.updateLockUI(); return;
     }
     const pwd = prompt("🔒 이 프로젝트의 잠금 해제 비밀번호를 입력하세요:");
     if (pwd === window.currentProjectLockPassword) {
@@ -341,13 +408,13 @@ window.cloneProject = () => {
     window.showToast("복제 모드로 전환되었습니다. '저장'을 누르면 새 프로젝트로 등록됩니다.", "success");
 };
 
-// 💡 4. 마스터 프리셋 로드 및 저장
+// 💡 4. 마스터 프리셋 로드
 window.loadMasterPresets = async () => {
+    const sel = document.getElementById('eq-type');
+    if (!sel) return;
+
     try {
         const snap = await getDocs(collection(db, "sim_master_presets"));
-        const sel = document.getElementById('eq-type');
-        if (!sel) return;
-        
         sel.innerHTML = '<option value="">프리셋 선택 안함</option>';
         window.masterPresets = {};
         
@@ -357,19 +424,23 @@ window.loadMasterPresets = async () => {
                 sel.innerHTML += `<option value="${d.id}">${d.data().label}</option>`;
             });
         } else {
-            window.masterPresets = JSON.parse(JSON.stringify(defaultPresets));
-            for (let key in window.masterPresets) {
-                sel.innerHTML += `<option value="${key}">${window.masterPresets[key].label}</option>`;
-            }
+            throw new Error("Empty presets");
         }
-
-        const defaultPresetId = localStorage.getItem('axms_sim_default_preset');
-        if (defaultPresetId && window.masterPresets[defaultPresetId]) {
-            sel.value = defaultPresetId;
+    } catch (e) { 
+        console.warn("Firestore Presets Load Fallback:", e);
+        sel.innerHTML = '<option value="">프리셋 선택 안함</option>';
+        window.masterPresets = JSON.parse(JSON.stringify(defaultPresets));
+        for (let key in window.masterPresets) {
+            sel.innerHTML += `<option value="${key}">${window.masterPresets[key].label}</option>`;
         }
+    }
 
-        window.handleTypeChange();
-    } catch (e) { console.error("Presets Load Error", e); }
+    const defaultPresetId = localStorage.getItem('axms_sim_default_preset');
+    if (defaultPresetId && window.masterPresets[defaultPresetId]) {
+        sel.value = defaultPresetId;
+    }
+
+    window.handleTypeChange();
 };
 
 window.handleTypeChange = () => {
@@ -524,7 +595,7 @@ window.renderProcessTable = () => {
         if(pt === 'auto') {
             let um = 0;
             (p.unitData || []).forEach(u => um += (parseFloat(u.q)||0)*(parseFloat(u.m)||0));
-            let ed = (um / (parseFloat(p.q)||1)).toFixed(1);
+            let ed = (parseFloat(p.q)||1) > 0 ? (um / (parseFloat(p.q)||1)).toFixed(1) : 0;
             h = `
                  <td class="px-3 py-1.5"><input value="${p.name}" onchange="window.updateProcessData(${i},'name',this.value)" ${disabled} class="w-full text-xs font-bold text-slate-800 bg-white border border-slate-300 rounded px-2 py-1 outline-indigo-500"></td>
                  <td class="px-1 py-1.5">${sel}</td>
@@ -648,7 +719,7 @@ window.updateUnitData = (pI, uI, f, v) => {
         
         let pDaysEl = document.getElementById(`p-days-${pI}`);
         let pq = parseFloat(window.currentProcessData[pI].q) || 1;
-        if(pDaysEl) pDaysEl.innerText = (pM / pq).toFixed(1);
+        if(pDaysEl) pDaysEl.innerText = pq > 0 ? (pM / pq).toFixed(1) : 0;
         let pSubEl = document.getElementById(`p-sub-${pI}`);
         if(pSubEl) pSubEl.innerText = pM.toFixed(1);
     }
@@ -676,65 +747,6 @@ window.switchTab = (tab) => {
     document.getElementById('tab-hist').className = tab === 'hist' ? "flex-1 py-2.5 text-xs font-extrabold rounded-xl bg-white text-indigo-600 shadow-sm border border-slate-200 transition-all uppercase tracking-wider" : "flex-1 py-2.5 text-xs font-bold rounded-xl text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-all border border-transparent uppercase tracking-wider";
     document.getElementById('tab-tor').className = tab === 'tor' ? "flex-1 py-2.5 text-xs font-extrabold rounded-xl bg-white text-indigo-600 shadow-sm border border-slate-200 transition-all uppercase tracking-wider" : "flex-1 py-2.5 text-xs font-bold rounded-xl text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-all border border-transparent uppercase tracking-wider";
     window.renderChartJS();
-};
-
-// 💡 대시보드 모달 (분석 결과 뷰어) 로직
-window.openDashboardModal = async () => {
-    const modal = document.getElementById('dashboard-modal');
-    if (modal) {
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-    }
-    if (window.renderSimulationDashboard) window.renderSimulationDashboard();
-};
-
-window.closeDashboardModal = () => {
-    const modal = document.getElementById('dashboard-modal');
-    if (modal) {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-    }
-};
-
-window.renderSimulationDashboard = async () => {
-    const tbody = document.getElementById('accuracy-tbody');
-    if (!tbody) return;
-    
-    try {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-6 text-slate-500 font-bold"><i class="fa-solid fa-spinner fa-spin mr-2"></i>데이터를 불러오는 중입니다...</td></tr>';
-        
-        // PJT 현황판에서 '완료(출하)'된 프로젝트 데이터 가져오기
-        const { collection, getDocs, query, where } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-        const snap = await getDocs(query(collection(db, "projects_status"), where("status", "==", "completed")));
-        
-        let html = '';
-        snap.forEach(doc => {
-            const d = doc.data();
-            const eMd = parseFloat(d.estMd)||0;
-            const fMd = parseFloat(d.finalMd)||0;
-            const err = eMd > 0 ? (((fMd - eMd) / eMd) * 100).toFixed(1) : 0;
-            
-            html += `
-            <tr class="hover:bg-slate-50 border-b border-slate-100 transition-colors">
-                <td class="p-3 text-center font-bold text-slate-500">${d.code||'-'}</td>
-                <td class="p-3 font-bold text-slate-700 truncate max-w-[200px]" title="${d.name}">${d.name}</td>
-                <td class="p-3 text-center text-sky-600 font-bold">${eMd}</td>
-                <td class="p-3 text-center text-indigo-600 font-black">${fMd}</td>
-                <td class="p-3 text-center font-bold ${err > 0 ? 'text-rose-500' : 'text-emerald-500'}">${err}%</td>
-                <td class="p-3 text-center text-slate-500">${d.d_shipEst||'-'}</td>
-                <td class="p-3 text-center text-indigo-600 font-bold">${d.d_shipEn||'-'}</td>
-            </tr>`;
-        });
-        
-        if (html === '') {
-            tbody.innerHTML = '<tr><td colspan="7" class="text-center p-6 text-slate-400 font-bold">비교할 완료(출하) 데이터가 없습니다.</td></tr>';
-        } else {
-            tbody.innerHTML = html;
-        }
-    } catch (e) {
-        console.error(e);
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-6 text-rose-500 font-bold">데이터 로드 중 오류가 발생했습니다.</td></tr>';
-    }
 };
 
 // ==========================================
@@ -1696,7 +1708,3 @@ document.addEventListener('click', function(e) {
         d.classList.add('hidden');
     }
 });
-
-window.loadMasterPresets();
-
-}
