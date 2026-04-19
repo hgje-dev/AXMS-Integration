@@ -50,6 +50,28 @@ window.addEventListener('beforeunload', (e) => {
     }
 });
 
+// 💡 날짜 및 공휴일 계산 유틸리티 함수 (버그 수정됨)
+window.calculateWorkDate = function(startDateStr, addDays) {
+    if (!startDateStr) return new Date();
+    let date = new Date(startDateStr);
+    let daysAdded = 0;
+    let totalDays = Math.ceil(addDays);
+    const applyHolidays = document.getElementById('apply-holidays')?.checked !== false; // 기본값 true
+
+    while (daysAdded < totalDays) {
+        date.setDate(date.getDate() + 1);
+        if (applyHolidays) {
+            // 주말 제외 (일=0, 토=6)
+            if (date.getDay() !== 0 && date.getDay() !== 6) {
+                daysAdded++;
+            }
+        } else {
+            daysAdded++;
+        }
+    }
+    return date;
+};
+
 window.getWorkingDays = function(startDate, endDate) {
     let start = new Date(startDate);
     let end = new Date(endDate);
@@ -57,11 +79,7 @@ window.getWorkingDays = function(startDate, endDate) {
     let days = 0;
     let current = new Date(start);
     while (current <= end) {
-        if (typeof window.isWorkDay === 'function') {
-            if(window.isWorkDay(current)) days++;
-        } else {
-            if(current.getDay() !== 0 && current.getDay() !== 6) days++; 
-        }
+        if (current.getDay() !== 0 && current.getDay() !== 6) days++; 
         current.setDate(current.getDate() + 1);
     }
     return days;
@@ -323,7 +341,7 @@ window.cloneProject = () => {
     window.showToast("복제 모드로 전환되었습니다. '저장'을 누르면 새 프로젝트로 등록됩니다.", "success");
 };
 
-// 💡 4. 마스터 프리셋 로드 및 저장 (복구됨)
+// 💡 4. 마스터 프리셋 로드 및 저장
 window.loadMasterPresets = async () => {
     try {
         const snap = await getDocs(collection(db, "sim_master_presets"));
@@ -658,6 +676,65 @@ window.switchTab = (tab) => {
     document.getElementById('tab-hist').className = tab === 'hist' ? "flex-1 py-2.5 text-xs font-extrabold rounded-xl bg-white text-indigo-600 shadow-sm border border-slate-200 transition-all uppercase tracking-wider" : "flex-1 py-2.5 text-xs font-bold rounded-xl text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-all border border-transparent uppercase tracking-wider";
     document.getElementById('tab-tor').className = tab === 'tor' ? "flex-1 py-2.5 text-xs font-extrabold rounded-xl bg-white text-indigo-600 shadow-sm border border-slate-200 transition-all uppercase tracking-wider" : "flex-1 py-2.5 text-xs font-bold rounded-xl text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-all border border-transparent uppercase tracking-wider";
     window.renderChartJS();
+};
+
+// 💡 대시보드 모달 (분석 결과 뷰어) 로직
+window.openDashboardModal = async () => {
+    const modal = document.getElementById('dashboard-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+    if (window.renderSimulationDashboard) window.renderSimulationDashboard();
+};
+
+window.closeDashboardModal = () => {
+    const modal = document.getElementById('dashboard-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+};
+
+window.renderSimulationDashboard = async () => {
+    const tbody = document.getElementById('accuracy-tbody');
+    if (!tbody) return;
+    
+    try {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-6 text-slate-500 font-bold"><i class="fa-solid fa-spinner fa-spin mr-2"></i>데이터를 불러오는 중입니다...</td></tr>';
+        
+        // PJT 현황판에서 '완료(출하)'된 프로젝트 데이터 가져오기
+        const { collection, getDocs, query, where } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        const snap = await getDocs(query(collection(db, "projects_status"), where("status", "==", "completed")));
+        
+        let html = '';
+        snap.forEach(doc => {
+            const d = doc.data();
+            const eMd = parseFloat(d.estMd)||0;
+            const fMd = parseFloat(d.finalMd)||0;
+            const err = eMd > 0 ? (((fMd - eMd) / eMd) * 100).toFixed(1) : 0;
+            
+            html += `
+            <tr class="hover:bg-slate-50 border-b border-slate-100 transition-colors">
+                <td class="p-3 text-center font-bold text-slate-500">${d.code||'-'}</td>
+                <td class="p-3 font-bold text-slate-700 truncate max-w-[200px]" title="${d.name}">${d.name}</td>
+                <td class="p-3 text-center text-sky-600 font-bold">${eMd}</td>
+                <td class="p-3 text-center text-indigo-600 font-black">${fMd}</td>
+                <td class="p-3 text-center font-bold ${err > 0 ? 'text-rose-500' : 'text-emerald-500'}">${err}%</td>
+                <td class="p-3 text-center text-slate-500">${d.d_shipEst||'-'}</td>
+                <td class="p-3 text-center text-indigo-600 font-bold">${d.d_shipEn||'-'}</td>
+            </tr>`;
+        });
+        
+        if (html === '') {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center p-6 text-slate-400 font-bold">비교할 완료(출하) 데이터가 없습니다.</td></tr>';
+        } else {
+            tbody.innerHTML = html;
+        }
+    } catch (e) {
+        console.error(e);
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-6 text-rose-500 font-bold">데이터 로드 중 오류가 발생했습니다.</td></tr>';
+    }
 };
 
 // ==========================================
@@ -1621,3 +1698,5 @@ document.addEventListener('click', function(e) {
 });
 
 window.loadMasterPresets();
+
+}
