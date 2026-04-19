@@ -1,7 +1,7 @@
 /* eslint-disable */
 import { auth, db } from './firebase.js';
 import { GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { doc, getDoc, setDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { doc, getDoc, setDoc, collection, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 let allUsersUnsubscribe = null, teamMembersUnsubscribe = null;
 window.isSigningUp = false; 
@@ -166,14 +166,33 @@ window.initAuthListeners = () => {
                     const loginModal = document.getElementById('login-modal'); if (loginModal) loginModal.classList.add('hidden'); 
                     const pt = document.getElementById('portal-container'); if (pt) { pt.classList.remove('hidden'); pt.classList.add('flex'); }
                     
-                    // 💡 환영 메시지 복구 (최초 1회만 표시)
+                    // 환영 메시지 복구 (최초 1회만 표시)
                     if (!window.welcomeToastShown) {
                         if(window.showToast) window.showToast(`${window.userProfile.name}님, 반갑습니다! 오늘 하루도 화이팅하세요 🚀`, "success");
                         window.welcomeToastShown = true;
                     }
 
+                    // 💡 사이드바 정보 및 관리자 버튼 업데이트 로직 추가
                     if (document.getElementById('sidebar-user-name')) document.getElementById('sidebar-user-name').innerText = window.userProfile.name || '이름 없음'; 
                     if (document.getElementById('sidebar-team-badge')) document.getElementById('sidebar-team-badge').innerText = window.userProfile.team || '소속 없음';
+                    if (document.getElementById('sidebar-user-position')) document.getElementById('sidebar-user-position').innerText = window.userProfile.position || '직책 없음';
+                    
+                    const btnAdmin = document.getElementById('btn-admin');
+                    const roleBadge = document.getElementById('nav-role-badge');
+                    
+                    if (window.userProfile.role === 'admin' || window.userProfile.role === 'master') {
+                        if(btnAdmin) btnAdmin.classList.remove('hidden');
+                        if(roleBadge) {
+                            roleBadge.innerText = '관리자';
+                            roleBadge.className = 'px-2.5 py-1 rounded-md text-[10px] font-bold shadow-sm bg-purple-600 text-white';
+                        }
+                    } else {
+                        if(btnAdmin) btnAdmin.classList.add('hidden');
+                        if(roleBadge) {
+                            roleBadge.innerText = '사용자';
+                            roleBadge.className = 'px-2.5 py-1 rounded-md text-[10px] font-bold shadow-sm bg-slate-100 text-slate-500 border border-slate-200';
+                        }
+                    }
                     
                     if (allUsersUnsubscribe) allUsersUnsubscribe(); allUsersUnsubscribe = onSnapshot(collection(db,"users"), s=>{ window.allSystemUsers=[]; s.forEach(d=>window.allSystemUsers.push({uid:d.id,...d.data()})); });
                     if (teamMembersUnsubscribe) teamMembersUnsubscribe(); teamMembersUnsubscribe = onSnapshot(collection(db,"team_members"), s=>{ window.teamMembers=[]; s.forEach(d=>window.teamMembers.push({id:d.id,...d.data()})); });
@@ -248,6 +267,7 @@ window.saveUserSettings = async () => {
         window.userProfile.name = newName; window.userProfile.team = newTeam; window.userProfile.position = newPos;
         if(document.getElementById('sidebar-user-name')) document.getElementById('sidebar-user-name').innerText = newName; 
         if(document.getElementById('sidebar-team-badge')) document.getElementById('sidebar-team-badge').innerText = newTeam;
+        if(document.getElementById('sidebar-user-position')) document.getElementById('sidebar-user-position').innerText = newPos;
         window.showToast("내 정보가 저장되었습니다."); window.closeSettingsModal();
     } catch (e) { window.showToast("정보 저장 실패", "error"); }
 };
