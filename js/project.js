@@ -742,6 +742,13 @@ window.saveProjStatus = async function(btn) {
         } else { 
             cleanPayload.createdAt = Date.now(); cleanPayload.currentMd = 0; cleanPayload.authorUid = (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system'; cleanPayload.authorName = (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system';
             await addDoc(collection(db, "projects_status"), cleanPayload); safeShowSuccess("성공적으로 등록되었습니다."); 
+            
+            try {
+                const folderName = cleanPayload.code ? cleanPayload.code : cleanPayload.name;
+                await window.pjtUploadToDrive({name: "init.txt", type: "text/plain", size: 4}, folderName);
+            } catch(e) {
+                console.warn("폴더 생성 지연(무시가능):", e);
+            }
         } 
         
         if(window.closeProjStatusWriteModal) window.closeProjStatusWriteModal(); 
@@ -1058,7 +1065,7 @@ window.openCommentModal = function(projectId, title) {
                         }
                         attachmentsHtml += `<div class="relative border border-slate-200 rounded-lg p-1 bg-slate-50 hover:border-amber-300 hover:shadow-sm transition-all cursor-pointer" onclick="event.stopPropagation(); window.openImageViewer('${rawUrl}')">
                             <div class="w-14 h-14 flex items-center justify-center overflow-hidden rounded bg-white">
-                                <img src="${rawUrl}" class="max-w-full max-h-full object-contain">
+                                <img src="${rawUrl}" class="max-w-full max-h-full object-contain" onerror="this.src='https://placehold.co/100x100?text=IMG'">
                             </div>
                         </div>`;
                     });
@@ -1084,7 +1091,7 @@ window.openCommentModal = function(projectId, title) {
                                 }
                                 rAttachmentsHtml += `<div class="relative border border-slate-200 rounded-lg p-1 bg-slate-50 hover:border-amber-300 hover:shadow-sm transition-all cursor-pointer" onclick="event.stopPropagation(); window.openImageViewer('${rawUrl}')">
                                     <div class="w-12 h-12 flex items-center justify-center overflow-hidden rounded bg-white">
-                                        <img src="${rawUrl}" class="max-w-full max-h-full object-contain">
+                                        <img src="${rawUrl}" class="max-w-full max-h-full object-contain" onerror="this.src='https://placehold.co/100x100?text=IMG'">
                                     </div>
                                 </div>`;
                             });
@@ -1315,7 +1322,7 @@ window.editMdLog = function(id) { const log = (window.currentMdLogs || []).find(
 window.updateProjectTotalMd = async function(projectId) { const snap = await getDocs(query(collection(db, "project_md_logs"), where("projectId", "==", projectId))); let total = 0; snap.forEach(docSnap => total += parseFloat(docSnap.data().md) || 0); const projRef = doc(db, "projects_status", projectId); const projSnap = await getDoc(projRef); if(projSnap.exists()) { const outMd = parseFloat(projSnap.data().outMd) || 0; await setDoc(projRef, { currentMd: total, finalMd: total + outMd }, { merge: true }); } };
 
 // ==========================================
-// 💡 생산일지 모달 (팀원 전용 쓰기 권한 및 드라이브 연동, 이미지 URL 파싱)
+// 💡 생산일지 모달 (팀원 전용 쓰기 권한 및 드라이브 연동, 이미지 URL 파싱 수정)
 // ==========================================
 window.openDailyLogModal = function(projectId) { 
     try {
@@ -1383,17 +1390,23 @@ window.openDailyLogModal = function(projectId) {
                         let isImg = f.name && f.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i) || url.startsWith('data:image');
                         
                         let rawUrl = url;
+                        let thumbUrl = f.thumbBase64 || url;
+
                         if (url.includes('drive.google.com')) {
                             let fileIdMatch = url.match(/\/d\/(.+?)\/view/);
                             if (fileIdMatch) {
-                                rawUrl = `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}`;
+                                rawUrl = `https://drive.google.com/file/d/${fileIdMatch[1]}/view`;
+                                // 만약 썸네일 Base64가 없다면 구글 드라이브 썸네일 API 사용 (폴백)
+                                if (!f.thumbBase64) {
+                                    thumbUrl = `https://drive.google.com/thumbnail?id=${fileIdMatch[1]}&sz=w400`;
+                                }
                             }
                         }
 
                         if (isImg || url.startsWith('data:image')) {
                             attachmentsHtml += `<div class="relative border border-slate-200 rounded-lg p-1 bg-slate-50 hover:border-sky-300 hover:shadow-sm transition-all cursor-pointer" onclick="event.stopPropagation(); window.openImageViewer('${rawUrl}')">
                                 <div class="w-14 h-14 flex items-center justify-center overflow-hidden rounded bg-white">
-                                    <img src="${rawUrl}" class="max-w-full max-h-full object-contain">
+                                    <img src="${thumbUrl}" class="max-w-full max-h-full object-contain" onerror="this.src='https://placehold.co/100x100?text=IMG'">
                                 </div>
                             </div>`;
                         } else {
@@ -1439,24 +1452,40 @@ window.saveDailyLogItem = async function() {
         let filesData = [];
         
         if (fileInput && fileInput.files.length > 0) {
-            window.showToast("구글 드라이브에 파일을 업로드 중입니다...", "success");
+            window.showToast("파일 처리 및 업로드 중입니다...", "success");
             const processFile = async (file) => {
+                let isImage = file.type.match(/image.*/);
+                let thumb = null;
+                // 💡 이미지일 경우 무조건 미리보기용 가벼운 Base64 썸네일을 하나 만듭니다.
+                if (isImage) {
+                    thumb = await new Promise(res => window.resizeAndConvertToBase64(file, b64 => res(b64), 300));
+                }
+
                 if(window.googleAccessToken) {
                     try {
                         let url = await window.pjtUploadToDrive(file, folderName);
-                        return { name: file.name, url: url };
+                        // 💡 드라이브 업로드 성공 시에도 썸네일 Base64를 함께 저장합니다!
+                        return { name: file.name, url: url, thumbBase64: thumb };
                     } catch(e) {
                         console.warn("드라이브 업로드 실패, Base64 변환 시도", e);
-                        return await new Promise(res => window.resizeAndConvertToBase64(file, b64 => res({name: file.name, url: b64, thumbBase64: b64}), 1200));
+                        let fullB64 = null;
+                        if (isImage) {
+                            fullB64 = await new Promise(res => window.resizeAndConvertToBase64(file, b64 => res(b64), 1200));
+                        }
+                        return { name: file.name, url: fullB64, thumbBase64: thumb };
                     }
                 } else {
-                     return await new Promise(res => window.resizeAndConvertToBase64(file, b64 => res({name: file.name, url: b64, thumbBase64: b64}), 1200));
+                     let fullB64 = null;
+                     if (isImage) {
+                         fullB64 = await new Promise(res => window.resizeAndConvertToBase64(file, b64 => res(b64), 1200));
+                     }
+                     return { name: file.name, url: fullB64, thumbBase64: thumb };
                 }
             };
             
             for(let i=0; i<fileInput.files.length; i++) {
                 let fData = await processFile(fileInput.files[i]);
-                if(fData && fData.url) filesData.push(fData);
+                if(fData && (fData.url || fData.thumbBase64)) filesData.push(fData);
             }
         }
 
@@ -1525,6 +1554,7 @@ const setupModalLogic = (modalTitle, domPrefix, collectionName) => {
                     `<button onclick="window.edit${modalTitle}Item('${item.id}')" class="text-${colorClass}-400 hover:text-${colorClass}-600 px-1"><i class="fa-solid fa-pen-to-square"></i></button>
                      <button onclick="window.delete${modalTitle}Item('${item.id}')" class="text-rose-400 hover:text-rose-600 px-1"><i class="fa-solid fa-trash-can"></i></button>` : '';
                      
+                // 💡 다중 이미지 렌더링 (썸네일 우선 적용)
                 let filesHtml = '';
                 if(item.files && item.files.length > 0) {
                     filesHtml = '<div class="mt-2 flex flex-wrap gap-2">' + item.files.map(f => {
@@ -1532,15 +1562,22 @@ const setupModalLogic = (modalTitle, domPrefix, collectionName) => {
                         let isImg = f.name && f.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i) || url.startsWith('data:image');
                         
                         let rawUrl = url;
+                        let thumbUrl = f.thumbBase64 || url;
+
                         if (url.includes('drive.google.com')) {
                             let fileIdMatch = url.match(/\/d\/(.+?)\/view/);
-                            if (fileIdMatch) rawUrl = `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}`;
+                            if (fileIdMatch) {
+                                rawUrl = `https://drive.google.com/file/d/${fileIdMatch[1]}/view`;
+                                if (!f.thumbBase64) {
+                                    thumbUrl = `https://drive.google.com/thumbnail?id=${fileIdMatch[1]}&sz=w400`;
+                                }
+                            }
                         }
 
                         if(isImg || url.startsWith('data:image')) {
                             return `<div class="relative border border-slate-200 rounded-lg p-1 bg-slate-50 hover:border-${colorClass}-300 hover:shadow-sm transition-all cursor-pointer" onclick="event.stopPropagation(); window.openImageViewer('${rawUrl}')">
                                 <div class="w-14 h-14 flex items-center justify-center overflow-hidden rounded bg-white">
-                                    <img src="${rawUrl}" class="max-w-full max-h-full object-contain">
+                                    <img src="${thumbUrl}" class="max-w-full max-h-full object-contain" onerror="this.src='https://placehold.co/100x100?text=IMG'">
                                 </div>
                             </div>`;
                         } else {
@@ -1594,22 +1631,32 @@ const setupModalLogic = (modalTitle, domPrefix, collectionName) => {
 
             if (fileInput.files.length > 0) {
                 const processFile = async (file) => {
+                    let isImage = file.type.match(/image.*/);
+                    let thumb = null;
+                    if (isImage) {
+                        thumb = await new Promise(res => window.resizeAndConvertToBase64(file, b64 => res(b64), 300));
+                    }
+
                     if(window.googleAccessToken) {
                         try {
                             let url = await window.pjtUploadToDrive(file, folderName);
-                            return { name: file.name, url: url };
+                            return { name: file.name, url: url, thumbBase64: thumb };
                         } catch(e) {
                             console.warn("드라이브 업로드 실패, Base64 변환 시도", e);
-                            return await new Promise(res => window.resizeAndConvertToBase64(file, b64 => res({name: file.name, url: b64, thumbBase64: b64}), 1200));
+                            let fullB64 = null;
+                            if (isImage) fullB64 = await new Promise(res => window.resizeAndConvertToBase64(file, b64 => res(b64), 1200));
+                            return { name: file.name, url: fullB64, thumbBase64: thumb };
                         }
                     } else {
-                         return await new Promise(res => window.resizeAndConvertToBase64(file, b64 => res({name: file.name, url: b64, thumbBase64: b64}), 1200));
+                         let fullB64 = null;
+                         if (isImage) fullB64 = await new Promise(res => window.resizeAndConvertToBase64(file, b64 => res(b64), 1200));
+                         return { name: file.name, url: fullB64, thumbBase64: thumb };
                     }
                 };
 
                 for(let i=0; i<fileInput.files.length; i++) {
                     let fData = await processFile(fileInput.files[i]);
-                    if(fData && fData.url) filesData.push(fData);
+                    if(fData && (fData.url || fData.thumbBase64)) filesData.push(fData);
                 }
             }
             
