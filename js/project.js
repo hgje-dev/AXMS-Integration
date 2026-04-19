@@ -21,7 +21,7 @@ const KR_HOLIDAYS = new Set([
     '2027-01-01', '2027-02-06', '2027-02-07', '2027-02-08', '2027-02-09', '2027-03-01', '2027-05-05', '2027-05-13', '2027-06-06', '2027-08-15', '2027-08-16', '2027-09-14', '2027-09-15', '2027-09-16', '2027-10-03', '2027-10-09', '2027-10-11', '2027-12-25'
 ]);
 
-// 💡 전역 상태 초기화 (완료 숨김 기본값 true 설정)
+// 전역 상태 초기화
 window.currentProjDashView = 'list';
 window.currentProjPartTab = '제조';
 window.currentStatusFilter = 'all';
@@ -264,7 +264,6 @@ window.filterByYear = function(yearStr) { window.currentYearFilter = yearStr; wi
 window.filterByMonth = function(monthStr) { window.currentMonthFilter = monthStr; window.updateMiniDashboard(); window.filterProjectStatus(window.currentStatusFilter); };
 window.toggleHideCompleted = function(checked) { window.hideCompletedFilter = checked; window.filterProjectStatus(window.currentStatusFilter); };
 
-// 💡 리셋 시 완료숨김 필터 기본값(true)으로 복구
 window.resetAllFilters = function() {
     window.currentStatusFilter = 'all'; 
     window.currentCategoryFilter = 'all'; 
@@ -485,7 +484,6 @@ window.renderProjectStatusList = function() {
                 else crBtnHtml = `<button onclick="event.stopPropagation(); window.openCrReqModal('${item.id}', '${safeNameJs}')" class="text-[10px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-500 hover:text-white px-2 py-1 rounded border border-rose-200 transition-colors shadow-sm whitespace-nowrap">완료요청</button>`;
             }
 
-            // 💡 버튼들에 event.stopPropagation()을 안전하게 직접 적용하여 모달이 안 열리던 버그를 고쳤습니다.
             htmlStr += `<tr class="group hover:bg-indigo-50/50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.editProjStatus('${item.id}')">`;
             
             htmlStr += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center" style="min-width: 40px; max-width: 40px;" onclick="event.stopPropagation()"><button onclick="window.deleteProjStatus('${item.id}')" class="text-slate-300 hover:text-rose-500 p-1.5 rounded"><i class="fa-solid fa-trash-can"></i></button></td>`;
@@ -541,7 +539,6 @@ window.renderProjectStatusList = function() {
 
     setTimeout(() => { window.applyTableLock(); }, 50);
 };
-
 
 // ==========================================
 // 💡 모달창 & 공통 함수들
@@ -1210,10 +1207,25 @@ window.openDailyLogModal = function(projectId) {
             
             list.innerHTML = window.currentDailyLogs.map(log => {
                 let safeContent = getSafeString(log.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+                
+                // 💡 [수정됨] 이미지 렌더링을 위한 안전한 HTML 직접 생성 방식 적용
                 let legacyFiles = [];
                 if(log.imageUrl) legacyFiles.push({ name: '첨부사진.jpg', url: log.imageUrl, thumbBase64: log.imageUrl });
                 let allFiles = log.files && log.files.length > 0 ? [...legacyFiles, ...log.files] : legacyFiles;
-                let attachmentsHtml = window.generateMediaHtml ? window.generateMediaHtml(allFiles) : '';
+                
+                let attachmentsHtml = '';
+                if (allFiles.length > 0) {
+                    attachmentsHtml = '<div class="mt-3 flex flex-wrap gap-2">';
+                    allFiles.forEach(f => {
+                        let url = f.url || f.thumbBase64;
+                        attachmentsHtml += `<div class="relative border border-slate-200 rounded-lg p-1 bg-slate-50 hover:border-sky-300 hover:shadow-sm transition-all cursor-pointer" onclick="event.stopPropagation(); window.openImageViewer('${url}')">
+                            <div class="w-14 h-14 flex items-center justify-center overflow-hidden rounded bg-white">
+                                <img src="${url}" class="max-w-full max-h-full object-contain">
+                            </div>
+                        </div>`;
+                    });
+                    attachmentsHtml += '</div>';
+                }
                 
                 let workersHtml = `<span class="font-bold text-slate-700">${getSafeString(log.authorName)}</span>`;
                 if (log.members) {
@@ -1250,11 +1262,23 @@ window.saveDailyLogItem = async function() {
         const folderName = proj.code || proj.name || '미지정';
         let filesData = [];
         
+        // 💡 [수정됨] 파일 저장 시 Base64로 압축 변환 처리
         if (fileInput && fileInput.files.length > 0) {
-            let total = fileInput.files.length;
-            for(let i=0; i<total; i++) {
-                let url = await window.uploadFileWithProgress(fileInput.files[i], folderName, '생산일지', i+1, total);
-                filesData.push({ name: fileInput.files[i].name, url: url });
+            const processFile = (file) => {
+                return new Promise((resolve) => {
+                    if(window.resizeAndConvertToBase64) {
+                        window.resizeAndConvertToBase64(file, (base64) => {
+                            resolve({ name: file.name, url: base64 });
+                        }, 1200);
+                    } else {
+                        resolve(null);
+                    }
+                });
+            };
+            
+            for(let i=0; i<fileInput.files.length; i++) {
+                let fData = await processFile(fileInput.files[i]);
+                if(fData && fData.url) filesData.push(fData);
             }
         }
 
