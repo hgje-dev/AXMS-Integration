@@ -19,16 +19,16 @@ self.onmessage = function(e) {
     let bArr = new Float32Array(iters), rArr = new Float32Array(iters);
     let tMd = 0;
 
-    // tMd(기본 총 투입 시간) 사전 계산
+    // tMd(기본 투입 시간) 사전 계산
     processData.forEach(p => {
         let pt = p.pType || 'md';
-        let pq = parseFloat(p.q) || 1; // 공정 수량 계수 반영
+        let pq = parseFloat(p.q) || 1; // 💡 공정 수량 계수 반영
         if(pt === 'auto') {
             let um = 0;
             (p.unitData || []).forEach(u => um += (parseFloat(u.q)||0)*(parseFloat(u.m)||0));
-            tMd += um * pq; // 유닛별 계산값에 공정수량을 곱해 정확한 기준 MD 산출
+            tMd += um * pq; // 💡 유닛 합산에 공정 수량 곱하기
         } else if(pt === 'md') {
-            tMd += (parseFloat(p.q)||0)*(parseFloat(p.m)||0);
+            tMd += (parseFloat(p.q)||0)*(parseFloat(p.m)||0); // 💡 수동 공정도 동일하게 처리
         }
     });
 
@@ -36,13 +36,13 @@ self.onmessage = function(e) {
         let im = 0; 
         processData.forEach(p => {
             let pt = p.pType || 'md';
-            let pq = parseFloat(p.q) || 1;
+            let pq = parseFloat(p.q) || 1; // 💡 공정 수량 계수
             if(pt === 'auto') {
                 (p.unitData || []).forEach(u => {
                     let m = parseFloat(u.m) || 0, q = parseFloat(u.q) || 0;
                     if(m > 0 && q > 0) {
                         let randVal = method === 'mc' ? getNormalRandom(m, (m*uncert)/3) : getTriangularRandom(m*0.85, m, m*1.3);
-                        im += (q * randVal) * pq; // 몬테카를로 변동성 값에 수량 곱연산
+                        im += (q * randVal) * pq; // 💡 몬테카를로 난수 값에 유닛수량(q)과 공정수량(pq) 모두 반영
                     }
                 });
             } else if(pt === 'md') {
