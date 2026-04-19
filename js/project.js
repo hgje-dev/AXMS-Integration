@@ -540,6 +540,7 @@ window.renderProjectStatusList = function() {
     setTimeout(() => { window.applyTableLock(); }, 50);
 };
 
+
 // ==========================================
 // 💡 모달창 & 공통 함수들
 // ==========================================
@@ -726,7 +727,7 @@ window.restoreProjectHistory = async function(histId, projectId) {
 };
 
 // ==========================================
-// 💡 간트 & 달력 뷰 (원상 복구)
+// 💡 간트 & 달력 뷰 
 // ==========================================
 window.toggleProjDashView = function(view) {
     window.currentProjDashView = view;
@@ -961,8 +962,21 @@ window.openCommentModal = function(projectId, title) {
                 let safeContent = getSafeString(c.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
                 let files = [];
                 if(c.imageUrl) files.push({name:'첨부사진.jpg', url: c.imageUrl, thumbBase64: c.imageUrl});
-                const cImgHtml = window.generateMediaHtml ? window.generateMediaHtml(files) : '';
                 
+                let attachmentsHtml = '';
+                if (files.length > 0) {
+                    attachmentsHtml = '<div class="mt-3 flex flex-wrap gap-2">';
+                    files.forEach(f => {
+                        let url = f.url || f.thumbBase64;
+                        attachmentsHtml += `<div class="relative border border-slate-200 rounded-lg p-1 bg-slate-50 hover:border-amber-300 hover:shadow-sm transition-all cursor-pointer" onclick="event.stopPropagation(); window.openImageViewer('${url}')">
+                            <div class="w-14 h-14 flex items-center justify-center overflow-hidden rounded bg-white">
+                                <img src="${url}" class="max-w-full max-h-full object-contain">
+                            </div>
+                        </div>`;
+                    });
+                    attachmentsHtml += '</div>';
+                }
+
                 let repliesHtml = ''; 
                 if(c.replies && c.replies.length > 0) { 
                     repliesHtml += '<div class="pl-4 border-l-[3px] border-indigo-100/60 space-y-2 mt-4 pt-2 ml-2">'; 
@@ -970,18 +984,30 @@ window.openCommentModal = function(projectId, title) {
                         let safeReplyContent = getSafeString(r.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>'); 
                         let rFiles = [];
                         if(r.imageUrl) rFiles.push({name:'첨부사진.jpg', url: r.imageUrl, thumbBase64: r.imageUrl});
-                        const rImgHtml = window.generateMediaHtml ? window.generateMediaHtml(rFiles) : '';
+                        let rAttachmentsHtml = '';
+                        if (rFiles.length > 0) {
+                            rAttachmentsHtml = '<div class="mt-2 flex flex-wrap gap-2">';
+                            rFiles.forEach(f => {
+                                let url = f.url || f.thumbBase64;
+                                rAttachmentsHtml += `<div class="relative border border-slate-200 rounded-lg p-1 bg-slate-50 hover:border-amber-300 hover:shadow-sm transition-all cursor-pointer" onclick="event.stopPropagation(); window.openImageViewer('${url}')">
+                                    <div class="w-12 h-12 flex items-center justify-center overflow-hidden rounded bg-white">
+                                        <img src="${url}" class="max-w-full max-h-full object-contain">
+                                    </div>
+                                </div>`;
+                            });
+                            rAttachmentsHtml += '</div>';
+                        }
                         
                         let replyBtnHtml = (r.authorUid === (window.currentUser && window.currentUser.uid) || (window.userProfile && window.userProfile.role === 'admin')) ? `<button onclick="window.editComment('${r.id}')" class="text-slate-400 hover:text-amber-500 px-1"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteComment('${r.id}')" class="text-slate-400 hover:text-rose-500 px-1"><i class="fa-solid fa-trash-can"></i></button>` : '';
                         
-                        repliesHtml += `<div class="bg-slate-50 p-4 rounded-xl border border-slate-100"><div class="flex justify-between items-start mb-2"><div class="flex items-center gap-2"><i class="fa-solid fa-reply text-[10px] text-slate-400 rotate-180 scale-y-[-1]"></i><span class="font-black text-slate-700 text-sm">${getSafeString(r.authorName)}</span><span class="text-xs font-medium text-slate-400">${window.getDateTimeStr(new Date(getSafeMillis(r.createdAt)))}</span></div><div class="flex gap-2">${replyBtnHtml}</div></div><div class="text-slate-700 text-[13px] font-medium pl-6 break-words">${safeReplyContent}</div>${rImgHtml}</div>`; 
+                        repliesHtml += `<div class="bg-slate-50 p-4 rounded-xl border border-slate-100"><div class="flex justify-between items-start mb-2"><div class="flex items-center gap-2"><i class="fa-solid fa-reply text-[10px] text-slate-400 rotate-180 scale-y-[-1]"></i><span class="font-black text-slate-700 text-sm">${getSafeString(r.authorName)}</span><span class="text-xs font-medium text-slate-400">${window.getDateTimeStr(new Date(getSafeMillis(r.createdAt)))}</span></div><div class="flex gap-2">${replyBtnHtml}</div></div><div class="text-slate-700 text-[13px] font-medium pl-6 break-words">${safeReplyContent}</div>${rAttachmentsHtml}</div>`; 
                     }); 
                     repliesHtml += '</div>'; 
                 } 
                 
                 let mainBtnHtml = (c.authorUid === (window.currentUser && window.currentUser.uid) || (window.userProfile && window.userProfile.role === 'admin')) ? `<button onclick="window.editComment('${c.id}')" class="text-slate-400 hover:text-amber-500 px-1"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteComment('${c.id}')" class="text-slate-400 hover:text-rose-500 px-1"><i class="fa-solid fa-trash-can"></i></button>` : '';
                 
-                return `<div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm"><div class="flex justify-between items-start mb-3"><div class="flex items-center gap-2"><span class="font-bold text-slate-800 text-[15px]">${getSafeString(c.authorName)}</span><span class="text-xs font-medium text-slate-400">${window.getDateTimeStr(new Date(getSafeMillis(c.createdAt)))}</span></div><div class="flex gap-2"><button onclick="window.setReplyTo('${c.id}', '${getSafeString(c.authorName)}')" class="text-[11px] bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-1 rounded-lg font-bold shadow-sm">답글달기</button>${mainBtnHtml}</div></div><div class="text-slate-800 text-[14px] font-medium pl-1 break-words">${safeContent}</div>${cImgHtml}${repliesHtml}</div>`; 
+                return `<div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm"><div class="flex justify-between items-start mb-3"><div class="flex items-center gap-2"><span class="font-bold text-slate-800 text-[15px]">${getSafeString(c.authorName)}</span><span class="text-xs font-medium text-slate-400">${window.getDateTimeStr(new Date(getSafeMillis(c.createdAt)))}</span></div><div class="flex gap-2"><button onclick="window.setReplyTo('${c.id}', '${getSafeString(c.authorName)}')" class="text-[11px] bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-1 rounded-lg font-bold shadow-sm">답글달기</button>${mainBtnHtml}</div></div><div class="text-slate-800 text-[14px] font-medium pl-1 break-words">${safeContent}</div>${attachmentsHtml}${repliesHtml}</div>`; 
             }).join('');
         }); 
     } catch(e) { safeShowError('코멘트 로드 에러', e); }
@@ -990,25 +1016,37 @@ window.openCommentModal = function(projectId, title) {
 window.closeCommentModal = function() { const m = document.getElementById('comment-modal'); if(m){m.classList.add('hidden'); m.classList.remove('flex');} if (currentCommentUnsubscribe) currentCommentUnsubscribe(); };
 window.saveCommentItem = async function() { 
     const projectId = document.getElementById('cmt-req-id').value, content = document.getElementById('new-cmt-text').value.trim(), parentId = document.getElementById('reply-to-id').value || null, editId = document.getElementById('editing-cmt-id').value; 
-    if(!content) return safeShowError("코멘트를 입력하세요."); 
+    const fileInput = document.getElementById('new-cmt-image');
+    if(!content && (!fileInput || fileInput.files.length === 0)) return safeShowError("코멘트 내용이나 사진을 첨부하세요."); 
     const btnSave = document.getElementById('btn-cmt-save'); if(btnSave) { btnSave.innerHTML = '저장중..'; btnSave.disabled = true; }
-    try { 
-        const payload = { content: content, updatedAt: Date.now() }; 
-        if (editId) { 
-            await setDoc(doc(db, "project_comments", editId), payload, { merge: true }); safeShowSuccess("수정됨"); 
-        } else { 
-            payload.projectId = projectId; payload.parentId = parentId; 
-            payload.authorUid = (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system'; 
-            payload.authorName = (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system'; 
-            payload.createdAt = Date.now(); 
-            await addDoc(collection(db, "project_comments"), payload); safeShowSuccess("등록됨"); 
-        } 
-        if(window.cancelCommentAction) window.cancelCommentAction(); 
-    } catch(e) { safeShowError("저장 오류", e); } finally { if(btnSave) { btnSave.innerHTML = '작성'; btnSave.disabled = false; } } 
+    
+    const saveData = async function(base64Img) {
+        try { 
+            const payload = { content: content, updatedAt: Date.now() }; 
+            if(base64Img) payload.imageUrl = base64Img;
+            if (editId) { 
+                await setDoc(doc(db, "project_comments", editId), payload, { merge: true }); safeShowSuccess("수정됨"); 
+            } else { 
+                payload.projectId = projectId; payload.parentId = parentId; 
+                payload.authorUid = (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system'; 
+                payload.authorName = (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system'; 
+                payload.createdAt = Date.now(); 
+                await addDoc(collection(db, "project_comments"), payload); safeShowSuccess("등록됨"); 
+            } 
+            if(window.cancelCommentAction) window.cancelCommentAction(); 
+        } catch(e) { safeShowError("저장 오류", e); } finally { if(btnSave) { btnSave.innerHTML = '작성'; btnSave.disabled = false; } } 
+    };
+
+    if (fileInput && fileInput.files.length > 0) {
+        if(window.resizeAndConvertToBase64) window.resizeAndConvertToBase64(fileInput.files[0], saveData, 1200);
+        else saveData(null);
+    } else {
+        saveData(null);
+    }
 };
 window.editComment = function(id) { const c = window.currentComments.find(x => x.id === id); if(!c) return; if(window.cancelCommentAction) window.cancelCommentAction(); document.getElementById('editing-cmt-id').value = id; document.getElementById('new-cmt-text').value = c.content || ''; document.getElementById('btn-cmt-save').innerText = '수정'; document.getElementById('reply-indicator-name').innerHTML = '코멘트 수정 중'; document.getElementById('reply-indicator').classList.remove('hidden'); };
 window.setReplyTo = function(cid, name) { if(window.cancelCommentAction) window.cancelCommentAction(); document.getElementById('reply-to-id').value = cid; document.getElementById('reply-indicator-name').innerHTML = `${name} 님에게 답글 작성 중`; document.getElementById('reply-indicator').classList.remove('hidden'); };
-window.cancelCommentAction = function() { document.getElementById('reply-to-id').value = ''; document.getElementById('editing-cmt-id').value = ''; document.getElementById('new-cmt-text').value = ''; document.getElementById('btn-cmt-save').innerText = '작성'; document.getElementById('reply-indicator').classList.add('hidden'); };
+window.cancelCommentAction = function() { document.getElementById('reply-to-id').value = ''; document.getElementById('editing-cmt-id').value = ''; document.getElementById('new-cmt-text').value = ''; document.getElementById('btn-cmt-save').innerText = '작성'; document.getElementById('reply-indicator').classList.add('hidden'); document.getElementById('new-cmt-image').value = ''; document.getElementById('cmt-file-name').innerText = ''; };
 window.deleteComment = async function(id) { if(!confirm("삭제하시겠습니까?")) return; try { await deleteDoc(doc(db, "project_comments", id)); const q = query(collection(db, "project_comments"), where("parentId", "==", id)); const snapshot = await getDocs(q); if(!snapshot.empty) { const batch = writeBatch(db); snapshot.forEach(d => batch.delete(d.ref)); await batch.commit(); } safeShowSuccess("삭제됨"); if(window.cancelCommentAction) window.cancelCommentAction(); } catch(e) { safeShowError("삭제 실패", e); } };
 
 // ==========================================
@@ -1054,6 +1092,37 @@ window.editIssue = function(id) { const iss = window.currentIssues.find(i => i.i
 window.deleteIssue = async function(id) { if(!confirm("이 이슈를 삭제하시겠습니까?")) return; try { await deleteDoc(doc(db, "project_issues", id)); safeShowSuccess("삭제됨"); } catch(e) { safeShowError("삭제 실패", e); } };
 
 // ==========================================
+// 💡 작업자(팀원) 추가를 위한 공통 스크립트
+// ==========================================
+window.addLogMember = function(name, mode = 'log') {
+    if(!name) return;
+    window.currentLogMembers = window.currentLogMembers || [];
+    if(!window.currentLogMembers.includes(name)) {
+        window.currentLogMembers.push(name);
+        if(window.renderLogMembers) window.renderLogMembers(mode);
+    }
+    const el = document.getElementById(mode === 'md' ? 'md-member-add' : 'log-member-add');
+    if(el) el.selectedIndex = 0;
+};
+window.removeLogMember = function(name, mode = 'log') {
+    window.currentLogMembers = (window.currentLogMembers || []).filter(n => n !== name);
+    if(window.renderLogMembers) window.renderLogMembers(mode);
+};
+window.renderLogMembers = function(mode = 'log') {
+    const containerId = mode === 'md' ? 'md-selected-members' : 'log-selected-members';
+    const inputId = mode === 'md' ? 'new-md-members' : 'log-members';
+    const color = mode === 'md' ? 'purple' : 'sky';
+    const container = document.getElementById(containerId);
+    const hiddenInput = document.getElementById(inputId);
+    const members = window.currentLogMembers || [];
+    
+    if(hiddenInput) hiddenInput.value = members.join(',');
+    if(container) {
+        container.innerHTML = members.map(name => `<span class="bg-${color}-100 text-${color}-700 px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1.5 shadow-sm">${name} <i class="fa-solid fa-xmark cursor-pointer hover:text-rose-500 bg-white/50 rounded-full px-1 py-0.5" onclick="window.removeLogMember('${name}', '${mode}')"></i></span>`).join('');
+    }
+};
+
+// ==========================================
 // 💡 MD 투입 기록 모달 (팀원 전용 쓰기 권한)
 // ==========================================
 window.openMdLogModal = function(projectId, title, curMd) { 
@@ -1067,7 +1136,7 @@ window.openMdLogModal = function(projectId, title, curMd) {
         const badge = document.getElementById('md-total-badge'); if(badge) badge.innerText = '총 ' + (proj.currentMd || 0) + ' MD'; 
         
         const members = window.teamMembers || [];
-        const mHtml = '<option value="">팀원 추가</option>' + members.map(t => `<option value="${t.name||''}">${t.name||''} (${t.part||''})</option>`).join('');
+        const mHtml = '<option value="">선택</option>' + members.map(t => `<option value="${t.name||''}">${t.name||''} (${t.part||''})</option>`).join('');
         const logMemberSelect = document.getElementById('md-member-add');
         if(logMemberSelect) logMemberSelect.innerHTML = mHtml;
 
@@ -1119,7 +1188,7 @@ window.resetMdLogForm = function() {
     if(document.getElementById('new-md-val')) document.getElementById('new-md-val').value = ''; 
     if(document.getElementById('new-md-desc')) document.getElementById('new-md-desc').value = ''; 
     window.currentLogMembers = (window.userProfile && window.userProfile.name) ? [window.userProfile.name] : []; 
-    if(window.renderLogMembers) window.renderLogMembers(); 
+    if(window.renderLogMembers) window.renderLogMembers('md'); 
     if(document.getElementById('btn-md-save')) document.getElementById('btn-md-save').innerText = '등록'; 
     if(document.getElementById('btn-md-cancel')) document.getElementById('btn-md-cancel').classList.add('hidden'); 
 };
@@ -1149,7 +1218,7 @@ window.saveMdLogItem = async function() {
     } catch(e) { safeShowError("저장 중 오류 발생", e); } finally { if(btnSave) { btnSave.innerHTML = '등록'; btnSave.disabled = false; } } 
 };
 window.deleteMdLog = async function(id, projectId) { if(!confirm("삭제하시겠습니까?")) return; try { await deleteDoc(doc(db, "project_md_logs", id)); if(window.updateProjectTotalMd) await window.updateProjectTotalMd(projectId); safeShowSuccess("삭제되었습니다."); if(window.resetMdLogForm) window.resetMdLogForm(); } catch(e) { safeShowError("삭제 실패", e); } };
-window.editMdLog = function(id) { const log = (window.currentMdLogs || []).find(l => l.id === id); if(!log) return; document.getElementById('editing-md-id').value = id; document.getElementById('new-md-date').value = log.date || window.getLocalDateStr(new Date()); document.getElementById('new-md-val').value = log.md || ''; document.getElementById('new-md-desc').value = log.desc || ''; window.currentLogMembers = (log.members && typeof log.members === 'string') ? log.members.split(',').map(s=>s.trim()).filter(Boolean) : []; if(window.renderLogMembers) window.renderLogMembers(); const btnSave = document.getElementById('btn-md-save'); if(btnSave) btnSave.innerText = '수정'; const btnCancel = document.getElementById('btn-md-cancel'); if(btnCancel) btnCancel.classList.remove('hidden'); };
+window.editMdLog = function(id) { const log = (window.currentMdLogs || []).find(l => l.id === id); if(!log) return; document.getElementById('editing-md-id').value = id; document.getElementById('new-md-date').value = log.date || window.getLocalDateStr(new Date()); document.getElementById('new-md-val').value = log.md || ''; document.getElementById('new-md-desc').value = log.desc || ''; window.currentLogMembers = (log.members && typeof log.members === 'string') ? log.members.split(',').map(s=>s.trim()).filter(Boolean) : []; if(window.renderLogMembers) window.renderLogMembers('md'); const btnSave = document.getElementById('btn-md-save'); if(btnSave) btnSave.innerText = '수정'; const btnCancel = document.getElementById('btn-md-cancel'); if(btnCancel) btnCancel.classList.remove('hidden'); };
 window.updateProjectTotalMd = async function(projectId) { const snap = await getDocs(query(collection(db, "project_md_logs"), where("projectId", "==", projectId))); let total = 0; snap.forEach(docSnap => total += parseFloat(docSnap.data().md) || 0); const projRef = doc(db, "projects_status", projectId); const projSnap = await getDoc(projRef); if(projSnap.exists()) { const outMd = parseFloat(projSnap.data().outMd) || 0; await setDoc(projRef, { currentMd: total, finalMd: total + outMd }, { merge: true }); } };
 
 // ==========================================
@@ -1168,7 +1237,7 @@ window.openDailyLogModal = function(projectId) {
         const rateEl = document.getElementById('log-project-purchase-rate'); if(rateEl) rateEl.value = proj.purchaseRate || 0;
 
         const members = window.teamMembers || [];
-        const mHtml = '<option value="">팀원 추가</option>' + members.map(t => `<option value="${t.name||''}">${t.name||''} (${t.part||''})</option>`).join('');
+        const mHtml = '<option value="">선택</option>' + members.map(t => `<option value="${t.name||''}">${t.name||''} (${t.part||''})</option>`).join('');
         const logMemberSelect = document.getElementById('log-member-add');
         if(logMemberSelect) logMemberSelect.innerHTML = mHtml;
 
@@ -1208,7 +1277,7 @@ window.openDailyLogModal = function(projectId) {
             list.innerHTML = window.currentDailyLogs.map(log => {
                 let safeContent = getSafeString(log.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
                 
-                // 💡 [수정됨] 이미지 렌더링을 위한 안전한 HTML 직접 생성 방식 적용
+                // 💡 다중 이미지 렌더링 HTML 직접 생성 방식으로 복구
                 let legacyFiles = [];
                 if(log.imageUrl) legacyFiles.push({ name: '첨부사진.jpg', url: log.imageUrl, thumbBase64: log.imageUrl });
                 let allFiles = log.files && log.files.length > 0 ? [...legacyFiles, ...log.files] : legacyFiles;
@@ -1262,7 +1331,6 @@ window.saveDailyLogItem = async function() {
         const folderName = proj.code || proj.name || '미지정';
         let filesData = [];
         
-        // 💡 [수정됨] 파일 저장 시 Base64로 압축 변환 처리
         if (fileInput && fileInput.files.length > 0) {
             const processFile = (file) => {
                 return new Promise((resolve) => {
@@ -1302,7 +1370,7 @@ window.saveDailyLogItem = async function() {
         if(window.resetDailyLogForm) window.resetDailyLogForm(); 
     } catch(e) { safeShowError("저장 실패", e); } finally { if(btnSave) { btnSave.innerHTML = '등록'; btnSave.disabled = false; } } 
 };
-window.editDailyLog = function(id) { const log = (window.currentDailyLogs || []).find(l => l.id === id); if(!log) return; document.getElementById('editing-log-id').value = id; document.getElementById('new-log-date').value = log.date || window.getLocalDateStr(new Date()); document.getElementById('new-log-text').value = log.content || ''; window.currentLogMembers = (log.members && typeof log.members === 'string') ? log.members.split(',').map(s=>s.trim()).filter(Boolean) : []; if(window.renderLogMembers) window.renderLogMembers(); const btnSave = document.getElementById('btn-log-save'); if(btnSave) btnSave.innerText = '수정'; const btnCancel = document.getElementById('btn-log-cancel'); if(btnCancel) btnCancel.classList.remove('hidden'); const txt = document.getElementById('new-log-text'); if(txt) txt.focus(); };
+window.editDailyLog = function(id) { const log = (window.currentDailyLogs || []).find(l => l.id === id); if(!log) return; document.getElementById('editing-log-id').value = id; document.getElementById('new-log-date').value = log.date || window.getLocalDateStr(new Date()); document.getElementById('new-log-text').value = log.content || ''; window.currentLogMembers = (log.members && typeof log.members === 'string') ? log.members.split(',').map(s=>s.trim()).filter(Boolean) : []; if(window.renderLogMembers) window.renderLogMembers('log'); const btnSave = document.getElementById('btn-log-save'); if(btnSave) btnSave.innerText = '수정'; const btnCancel = document.getElementById('btn-log-cancel'); if(btnCancel) btnCancel.classList.remove('hidden'); const txt = document.getElementById('new-log-text'); if(txt) txt.focus(); };
 window.deleteDailyLog = async function(id) { if(!confirm("이 일지를 삭제하시겠습니까?")) return; try { await deleteDoc(doc(db, "daily_logs", id)); safeShowSuccess("삭제되었습니다."); if(window.resetDailyLogForm) window.resetDailyLogForm(); } catch(e) { safeShowError("삭제 실패", e); } };
 window.resetDailyLogForm = function() { 
     if(document.getElementById('editing-log-id')) document.getElementById('editing-log-id').value = ''; 
@@ -1311,13 +1379,145 @@ window.resetDailyLogForm = function() {
     if(document.getElementById('new-log-image')) document.getElementById('new-log-image').value = ''; 
     if(window.clearDailyLogFile) window.clearDailyLogFile();
     window.currentLogMembers = (window.userProfile && window.userProfile.name) ? [window.userProfile.name] : []; 
-    if(window.renderLogMembers) window.renderLogMembers();
+    if(window.renderLogMembers) window.renderLogMembers('log');
     const btnSave = document.getElementById('btn-log-save'); if(btnSave) btnSave.innerText = '등록'; 
     const btnCancel = document.getElementById('btn-log-cancel'); if(btnCancel) btnCancel.classList.add('hidden'); 
 };
 window.closeDailyLogModal = function() { const m = document.getElementById('daily-log-modal'); if(m) { m.classList.add('hidden'); m.classList.remove('flex'); } if (currentLogUnsubscribe) currentLogUnsubscribe(); };
 window.clearDailyLogFile = function(e) { if(e && typeof e.stopPropagation === 'function') e.stopPropagation(); const input = document.getElementById('new-log-image'), wrap = document.getElementById('new-log-filename-wrap'); if(input) input.value = ''; if(wrap) wrap.classList.add('hidden'); };
 
+
+// ==========================================
+// 💡 구매, 설계, 일정 모달창 로직 복구
+// ==========================================
+const setupModalLogic = (type, prefix, color, collectionName) => {
+    window[`open${type}Modal`] = function(projectId, title) {
+        const modal = document.getElementById(`${prefix}-modal`);
+        if(!modal) return;
+        modal.classList.remove('hidden'); modal.classList.add('flex');
+        document.getElementById(`${prefix}-req-id`).value = projectId;
+        document.getElementById(`${prefix}-project-title`).innerText = title;
+        window[`reset${type}Form`]();
+        
+        if(window[`current${type}Unsubscribe`]) window[`current${type}Unsubscribe`]();
+        window[`current${type}Unsubscribe`] = onSnapshot(collection(db, collectionName), snap => {
+            window[`current${type}s`] = [];
+            snap.forEach(d => { if(d.data().projectId === projectId) window[`current${type}s`].push({id: d.id, ...d.data()})});
+            window[`current${type}s`].sort((a,b) => getSafeMillis(a.createdAt) - getSafeMillis(b.createdAt));
+            
+            const list = document.getElementById(`${prefix}-list`);
+            if(!list) return;
+            if(window[`current${type}s`].length === 0) { list.innerHTML = '<div class="text-center p-6 text-slate-400 font-bold">내역이 없습니다.</div>'; return; }
+            
+            list.innerHTML = window[`current${type}s`].map(item => {
+                let btnHtml = (item.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin') ? 
+                    `<button onclick="window.edit${type}Item('${item.id}')" class="text-${color}-400 hover:text-${color}-600 px-1"><i class="fa-solid fa-pen-to-square"></i></button>
+                     <button onclick="window.delete${type}Item('${item.id}')" class="text-rose-400 hover:text-rose-600 px-1"><i class="fa-solid fa-trash-can"></i></button>` : '';
+                     
+                let filesHtml = '';
+                if(item.files && item.files.length > 0) {
+                    filesHtml = '<div class="mt-2 flex flex-wrap gap-2">' + item.files.map(f => {
+                        let url = f.url || f.thumbBase64;
+                        return `<div class="relative border border-slate-200 rounded-lg p-1 bg-slate-50 hover:border-${color}-300 hover:shadow-sm transition-all cursor-pointer" onclick="event.stopPropagation(); window.openImageViewer('${url}')">
+                            <div class="w-14 h-14 flex items-center justify-center overflow-hidden rounded bg-white">
+                                <img src="${url}" class="max-w-full max-h-full object-contain">
+                            </div>
+                        </div>`;
+                    }).join('') + '</div>';
+                }
+                
+                return `<div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm mb-2">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="font-bold text-xs text-${color}-600">${item.authorName}</span>
+                        <div>${btnHtml}</div>
+                    </div>
+                    <div class="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">${item.content}</div>
+                    ${filesHtml}
+                </div>`;
+            }).join('');
+        });
+    };
+    
+    window[`close${type}Modal`] = function() { 
+        const m = document.getElementById(`${prefix}-modal`);
+        if(m){ m.classList.add('hidden'); m.classList.remove('flex'); } 
+        if(window[`current${type}Unsubscribe`]) window[`current${type}Unsubscribe`](); 
+    };
+    
+    window[`reset${type}Form`] = function() { 
+        document.getElementById(`editing-${prefix}-id`).value = ''; 
+        document.getElementById(`new-${prefix}-text`).value = ''; 
+        document.getElementById(`new-${prefix}-file`).value = ''; 
+        document.getElementById(`${prefix}-file-name`).innerText = ''; 
+        document.getElementById(`btn-${prefix}-save`).innerText = '등록'; 
+        document.getElementById(`btn-${prefix}-cancel`).classList.add('hidden'); 
+    };
+    
+    window[`save${type}Item`] = async function() {
+        const pid = document.getElementById(`${prefix}-req-id`).value;
+        const id = document.getElementById(`editing-${prefix}-id`).value;
+        const content = document.getElementById(`new-${prefix}-text`).value.trim();
+        const fileInput = document.getElementById(`new-${prefix}-file`);
+        
+        if(!content && fileInput.files.length === 0) return safeShowError("내용이나 파일을 입력하세요.");
+        
+        const btnSave = document.getElementById(`btn-${prefix}-save`);
+        if(btnSave) { btnSave.disabled = true; btnSave.innerText = '저장중...'; }
+        
+        try {
+            let filesData = [];
+            if (fileInput.files.length > 0) {
+                for(let i=0; i<fileInput.files.length; i++) {
+                    let fData = await new Promise(res => window.resizeAndConvertToBase64(fileInput.files[i], b64 => res({name: fileInput.files[i].name, url: b64}), 1200));
+                    if(fData.url) filesData.push(fData);
+                }
+            }
+            
+            let payload = { content, updatedAt: Date.now() };
+            if(filesData.length > 0) payload.files = filesData;
+            
+            if(id) {
+                await setDoc(doc(db, collectionName, id), payload, {merge: true});
+                safeShowSuccess("수정되었습니다.");
+            } else {
+                payload.projectId = pid; 
+                payload.authorUid = window.currentUser?.uid || 'system'; 
+                payload.authorName = window.userProfile?.name || 'system'; 
+                payload.createdAt = Date.now();
+                await addDoc(collection(db, collectionName), payload);
+                safeShowSuccess("등록되었습니다.");
+            }
+            window[`reset${type}Form`]();
+        } catch(e) {
+            safeShowError("저장 실패", e);
+        } finally {
+            if(btnSave) { btnSave.disabled = false; btnSave.innerText = '등록'; }
+        }
+    };
+    
+    window[`edit${type}Item`] = function(id) {
+        const item = window[`current${type}s`].find(p => p.id === id);
+        if(!item) return;
+        document.getElementById(`editing-${prefix}-id`).value = id;
+        document.getElementById(`new-${prefix}-text`).value = item.content || '';
+        document.getElementById(`btn-${prefix}-save`).innerText = '수정';
+        document.getElementById(`btn-${prefix}-cancel`).classList.remove('hidden');
+    };
+    
+    window[`delete${type}Item`] = async function(id) { 
+        if(!confirm('삭제하시겠습니까?')) return; 
+        try {
+            await deleteDoc(doc(db, collectionName, id)); 
+            safeShowSuccess("삭제되었습니다.");
+        } catch(e) {
+            safeShowError("삭제 실패", e);
+        }
+    };
+};
+
+setupModalLogic('Purchase', 'pur', 'amber', 'project_purchases');
+setupModalLogic('Design', 'des', 'teal', 'project_designs');
+setupModalLogic('PjtSchedule', 'sch', 'fuchsia', 'project_schedules');
 
 // ==========================================
 // 💡 부적합(NCR) 데이터 동기화
