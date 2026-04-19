@@ -212,6 +212,7 @@ window.updateMultiFileNames = function(inputEl, displayElId) {
 // ==========================================
 // 💡 구글 드라이브 연동 (PJT 공통) 및 진행률 모달 연결
 // ==========================================
+// 💡 하위 폴더명을 동적으로 받을 수 있도록 subFolderName 파라미터 추가
 window.pjtUploadToDrive = async function(file, folderName, subFolderName = '생산일지') {
     const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
     if (!window.googleAccessToken || !storedExpiry || Date.now() > parseInt(storedExpiry)) {
@@ -745,7 +746,7 @@ window.saveProjStatus = async function(btn) {
             
             try {
                 const folderName = cleanPayload.code ? cleanPayload.code : cleanPayload.name;
-                await window.pjtUploadToDrive({name: "init.txt", type: "text/plain", size: 4}, folderName);
+                await window.pjtUploadToDrive({name: "init.txt", type: "text/plain", size: 4}, folderName, '기본생성폴더');
             } catch(e) {
                 console.warn("폴더 생성 지연(무시가능):", e);
             }
@@ -1059,13 +1060,19 @@ window.openCommentModal = function(projectId, title) {
                     files.forEach(f => {
                         let url = f.url || f.thumbBase64;
                         let rawUrl = url;
+                        // 💡 썸네일 API 오류 우회
+                        let thumbUrl = f.thumbBase64 ? f.thumbBase64 : (url.startsWith('data:image') ? url : 'https://cdn-icons-png.flaticon.com/512/833/833281.png');
+
                         if (url.includes('drive.google.com')) {
                             let fileIdMatch = url.match(/\/d\/(.+?)\/view/);
-                            if (fileIdMatch) rawUrl = `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}`;
+                            if (fileIdMatch) {
+                                rawUrl = `https://drive.google.com/file/d/${fileIdMatch[1]}/view`;
+                            }
                         }
+                        
                         attachmentsHtml += `<div class="relative border border-slate-200 rounded-lg p-1 bg-slate-50 hover:border-amber-300 hover:shadow-sm transition-all cursor-pointer" onclick="event.stopPropagation(); window.openImageViewer('${rawUrl}')">
                             <div class="w-14 h-14 flex items-center justify-center overflow-hidden rounded bg-white">
-                                <img src="${rawUrl}" class="max-w-full max-h-full object-contain" onerror="this.src='https://placehold.co/100x100?text=IMG'">
+                                <img src="${thumbUrl}" class="max-w-full max-h-full object-contain" onerror="this.src='https://cdn-icons-png.flaticon.com/512/833/833281.png'">
                             </div>
                         </div>`;
                     });
@@ -1085,13 +1092,17 @@ window.openCommentModal = function(projectId, title) {
                             rFiles.forEach(f => {
                                 let url = f.url || f.thumbBase64;
                                 let rawUrl = url;
+                                let thumbUrl = f.thumbBase64 ? f.thumbBase64 : (url.startsWith('data:image') ? url : 'https://cdn-icons-png.flaticon.com/512/833/833281.png');
+
                                 if (url.includes('drive.google.com')) {
                                     let fileIdMatch = url.match(/\/d\/(.+?)\/view/);
-                                    if (fileIdMatch) rawUrl = `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}`;
+                                    if (fileIdMatch) {
+                                        rawUrl = `https://drive.google.com/file/d/${fileIdMatch[1]}/view`;
+                                    }
                                 }
                                 rAttachmentsHtml += `<div class="relative border border-slate-200 rounded-lg p-1 bg-slate-50 hover:border-amber-300 hover:shadow-sm transition-all cursor-pointer" onclick="event.stopPropagation(); window.openImageViewer('${rawUrl}')">
                                     <div class="w-12 h-12 flex items-center justify-center overflow-hidden rounded bg-white">
-                                        <img src="${rawUrl}" class="max-w-full max-h-full object-contain" onerror="this.src='https://placehold.co/100x100?text=IMG'">
+                                        <img src="${thumbUrl}" class="max-w-full max-h-full object-contain" onerror="this.src='https://cdn-icons-png.flaticon.com/512/833/833281.png'">
                                     </div>
                                 </div>`;
                             });
@@ -1390,23 +1401,20 @@ window.openDailyLogModal = function(projectId) {
                         let isImg = f.name && f.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i) || url.startsWith('data:image');
                         
                         let rawUrl = url;
-                        let thumbUrl = f.thumbBase64 || url;
+                        // 💡 썸네일 API 오류 우회: Base64가 있으면 쓰고, 없으면 아이콘 출력
+                        let thumbUrl = f.thumbBase64 ? f.thumbBase64 : 'https://cdn-icons-png.flaticon.com/512/833/833281.png';
 
                         if (url.includes('drive.google.com')) {
                             let fileIdMatch = url.match(/\/d\/(.+?)\/view/);
                             if (fileIdMatch) {
                                 rawUrl = `https://drive.google.com/file/d/${fileIdMatch[1]}/view`;
-                                // 만약 썸네일 Base64가 없다면 구글 드라이브 썸네일 API 사용 (폴백)
-                                if (!f.thumbBase64) {
-                                    thumbUrl = `https://drive.google.com/thumbnail?id=${fileIdMatch[1]}&sz=w400`;
-                                }
                             }
                         }
 
                         if (isImg || url.startsWith('data:image')) {
                             attachmentsHtml += `<div class="relative border border-slate-200 rounded-lg p-1 bg-slate-50 hover:border-sky-300 hover:shadow-sm transition-all cursor-pointer" onclick="event.stopPropagation(); window.openImageViewer('${rawUrl}')">
                                 <div class="w-14 h-14 flex items-center justify-center overflow-hidden rounded bg-white">
-                                    <img src="${thumbUrl}" class="max-w-full max-h-full object-contain" onerror="this.src='https://placehold.co/100x100?text=IMG'">
+                                    <img src="${thumbUrl}" class="max-w-full max-h-full object-contain" onerror="this.src='https://cdn-icons-png.flaticon.com/512/833/833281.png'">
                                 </div>
                             </div>`;
                         } else {
@@ -1463,7 +1471,7 @@ window.saveDailyLogItem = async function() {
 
                 if(window.googleAccessToken) {
                     try {
-                        let url = await window.pjtUploadToDrive(file, folderName);
+                        let url = await window.pjtUploadToDrive(file, folderName, '생산일지');
                         // 💡 드라이브 업로드 성공 시에도 썸네일 Base64를 함께 저장합니다!
                         return { name: file.name, url: url, thumbBase64: thumb };
                     } catch(e) {
@@ -1562,22 +1570,20 @@ const setupModalLogic = (modalTitle, domPrefix, collectionName) => {
                         let isImg = f.name && f.name.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i) || url.startsWith('data:image');
                         
                         let rawUrl = url;
-                        let thumbUrl = f.thumbBase64 || url;
+                        // 💡 썸네일 API 오류 우회: Base64가 있으면 쓰고, 없으면 아이콘 출력
+                        let thumbUrl = f.thumbBase64 ? f.thumbBase64 : 'https://cdn-icons-png.flaticon.com/512/833/833281.png';
 
                         if (url.includes('drive.google.com')) {
                             let fileIdMatch = url.match(/\/d\/(.+?)\/view/);
                             if (fileIdMatch) {
                                 rawUrl = `https://drive.google.com/file/d/${fileIdMatch[1]}/view`;
-                                if (!f.thumbBase64) {
-                                    thumbUrl = `https://drive.google.com/thumbnail?id=${fileIdMatch[1]}&sz=w400`;
-                                }
                             }
                         }
 
                         if(isImg || url.startsWith('data:image')) {
                             return `<div class="relative border border-slate-200 rounded-lg p-1 bg-slate-50 hover:border-${colorClass}-300 hover:shadow-sm transition-all cursor-pointer" onclick="event.stopPropagation(); window.openImageViewer('${rawUrl}')">
                                 <div class="w-14 h-14 flex items-center justify-center overflow-hidden rounded bg-white">
-                                    <img src="${thumbUrl}" class="max-w-full max-h-full object-contain" onerror="this.src='https://placehold.co/100x100?text=IMG'">
+                                    <img src="${thumbUrl}" class="max-w-full max-h-full object-contain" onerror="this.src='https://cdn-icons-png.flaticon.com/512/833/833281.png'">
                                 </div>
                             </div>`;
                         } else {
@@ -1637,9 +1643,15 @@ const setupModalLogic = (modalTitle, domPrefix, collectionName) => {
                         thumb = await new Promise(res => window.resizeAndConvertToBase64(file, b64 => res(b64), 300));
                     }
 
+                    // 💡 각 모달 접두사에 맞는 하위 폴더 지정
+                    let targetSubFolder = '기타파일';
+                    if(domPrefix === 'pur') targetSubFolder = '구매내역';
+                    else if(domPrefix === 'des') targetSubFolder = '설계파일';
+                    else if(domPrefix === 'sch') targetSubFolder = '일정표';
+
                     if(window.googleAccessToken) {
                         try {
-                            let url = await window.pjtUploadToDrive(file, folderName);
+                            let url = await window.pjtUploadToDrive(file, folderName, targetSubFolder);
                             return { name: file.name, url: url, thumbBase64: thumb };
                         } catch(e) {
                             console.warn("드라이브 업로드 실패, Base64 변환 시도", e);
@@ -1815,3 +1827,147 @@ window.sendCrRequest = async function() {
         if(success) { await setDoc(doc(db, "projects_status", pid), { crSent: true }, { merge: true }); safeShowSuccess(targetName + "님에게 요청을 보냈습니다."); window.closeCrReqModal(); if(window.renderProjectStatusList) window.renderProjectStatusList(); } else safeShowError("전송 실패");
     } catch(e) { safeShowError("오류 발생", e); }
 };
+
+// ==========================================
+// 💡 코멘트 모달
+// ==========================================
+window.openCommentModal = function(projectId, title) { 
+    try {
+        const modal = document.getElementById('comment-modal');
+        if(!modal) { safeShowError("코멘트 모달 요소 없음"); return; }
+        
+        modal.classList.remove('hidden'); modal.classList.add('flex');
+        
+        document.getElementById('cmt-req-id').value = projectId; 
+        if(window.cancelCommentAction) window.cancelCommentAction(); 
+        
+        if (currentCommentUnsubscribe) currentCommentUnsubscribe(); 
+        currentCommentUnsubscribe = onSnapshot(collection(db, "project_comments"), function(snapshot) { 
+            window.currentComments = []; 
+            snapshot.forEach(docSnap => { 
+                const d = docSnap.data(); 
+                if(d.projectId === projectId) { d.id = docSnap.id; window.currentComments.push(d); } 
+            }); 
+            
+            const topLevel = window.currentComments.filter(c => !c.parentId || c.parentId === 'null' || c.parentId === '').sort((a,b) => getSafeMillis(a.createdAt) - getSafeMillis(b.createdAt)); 
+            const replies = window.currentComments.filter(c => c.parentId && c.parentId !== 'null' && c.parentId !== '').sort((a,b) => getSafeMillis(a.createdAt) - getSafeMillis(b.createdAt)); 
+            topLevel.forEach(c => c.replies = replies.filter(r => r.parentId === c.id)); 
+            
+            const list = document.getElementById('comment-list'); 
+            if(!list) return;
+            
+            if (topLevel.length === 0) { 
+                list.innerHTML = '<div class="text-center p-10 text-slate-400 font-bold">등록된 코멘트가 없습니다.</div>'; 
+                return; 
+            } 
+            
+            list.innerHTML = topLevel.map(c => {
+                let safeContent = getSafeString(c.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+                let files = [];
+                if(c.imageUrl) files.push({name:'첨부사진.jpg', url: c.imageUrl, thumbBase64: c.imageUrl});
+                
+                let attachmentsHtml = '';
+                if (files.length > 0) {
+                    attachmentsHtml = '<div class="mt-3 flex flex-wrap gap-2">';
+                    files.forEach(f => {
+                        let url = f.url || f.thumbBase64;
+                        let rawUrl = url;
+                        // 💡 썸네일 API 오류 우회
+                        let thumbUrl = f.thumbBase64 ? f.thumbBase64 : (url.startsWith('data:image') ? url : 'https://cdn-icons-png.flaticon.com/512/833/833281.png');
+
+                        if (url.includes('drive.google.com')) {
+                            let fileIdMatch = url.match(/\/d\/(.+?)\/view/);
+                            if (fileIdMatch) {
+                                rawUrl = `https://drive.google.com/file/d/${fileIdMatch[1]}/view`;
+                            }
+                        }
+                        
+                        attachmentsHtml += `<div class="relative border border-slate-200 rounded-lg p-1 bg-slate-50 hover:border-amber-300 hover:shadow-sm transition-all cursor-pointer" onclick="event.stopPropagation(); window.openImageViewer('${rawUrl}')">
+                            <div class="w-14 h-14 flex items-center justify-center overflow-hidden rounded bg-white">
+                                <img src="${thumbUrl}" class="max-w-full max-h-full object-contain" onerror="this.src='https://cdn-icons-png.flaticon.com/512/833/833281.png'">
+                            </div>
+                        </div>`;
+                    });
+                    attachmentsHtml += '</div>';
+                }
+
+                let repliesHtml = ''; 
+                if(c.replies && c.replies.length > 0) { 
+                    repliesHtml += '<div class="pl-4 border-l-[3px] border-indigo-100/60 space-y-2 mt-4 pt-2 ml-2">'; 
+                    c.replies.forEach(r => { 
+                        let safeReplyContent = getSafeString(r.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>'); 
+                        let rFiles = [];
+                        if(r.imageUrl) rFiles.push({name:'첨부사진.jpg', url: r.imageUrl, thumbBase64: r.imageUrl});
+                        let rAttachmentsHtml = '';
+                        if (rFiles.length > 0) {
+                            rAttachmentsHtml = '<div class="mt-2 flex flex-wrap gap-2">';
+                            rFiles.forEach(f => {
+                                let url = f.url || f.thumbBase64;
+                                let rawUrl = url;
+                                let thumbUrl = f.thumbBase64 ? f.thumbBase64 : (url.startsWith('data:image') ? url : 'https://cdn-icons-png.flaticon.com/512/833/833281.png');
+
+                                if (url.includes('drive.google.com')) {
+                                    let fileIdMatch = url.match(/\/d\/(.+?)\/view/);
+                                    if (fileIdMatch) {
+                                        rawUrl = `https://drive.google.com/file/d/${fileIdMatch[1]}/view`;
+                                    }
+                                }
+                                rAttachmentsHtml += `<div class="relative border border-slate-200 rounded-lg p-1 bg-slate-50 hover:border-amber-300 hover:shadow-sm transition-all cursor-pointer" onclick="event.stopPropagation(); window.openImageViewer('${rawUrl}')">
+                                    <div class="w-12 h-12 flex items-center justify-center overflow-hidden rounded bg-white">
+                                        <img src="${thumbUrl}" class="max-w-full max-h-full object-contain" onerror="this.src='https://cdn-icons-png.flaticon.com/512/833/833281.png'">
+                                    </div>
+                                </div>`;
+                            });
+                            rAttachmentsHtml += '</div>';
+                        }
+                        
+                        let replyBtnHtml = (r.authorUid === (window.currentUser && window.currentUser.uid) || (window.userProfile && window.userProfile.role === 'admin')) ? `<button onclick="window.editComment('${r.id}')" class="text-slate-400 hover:text-amber-500 px-1"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteComment('${r.id}')" class="text-slate-400 hover:text-rose-500 px-1"><i class="fa-solid fa-trash-can"></i></button>` : '';
+                        
+                        repliesHtml += `<div class="bg-slate-50 p-4 rounded-xl border border-slate-100"><div class="flex justify-between items-start mb-2"><div class="flex items-center gap-2"><i class="fa-solid fa-reply text-[10px] text-slate-400 rotate-180 scale-y-[-1]"></i><span class="font-black text-slate-700 text-sm">${getSafeString(r.authorName)}</span><span class="text-xs font-medium text-slate-400">${window.getDateTimeStr(new Date(getSafeMillis(r.createdAt)))}</span></div><div class="flex gap-2">${replyBtnHtml}</div></div><div class="text-slate-700 text-[13px] font-medium pl-6 break-words">${safeReplyContent}</div>${rAttachmentsHtml}</div>`; 
+                    }); 
+                    repliesHtml += '</div>'; 
+                } 
+                
+                let mainBtnHtml = (c.authorUid === (window.currentUser && window.currentUser.uid) || (window.userProfile && window.userProfile.role === 'admin')) ? `<button onclick="window.editComment('${c.id}')" class="text-slate-400 hover:text-amber-500 px-1"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="window.deleteComment('${c.id}')" class="text-slate-400 hover:text-rose-500 px-1"><i class="fa-solid fa-trash-can"></i></button>` : '';
+                
+                return `<div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm"><div class="flex justify-between items-start mb-3"><div class="flex items-center gap-2"><span class="font-bold text-slate-800 text-[15px]">${getSafeString(c.authorName)}</span><span class="text-xs font-medium text-slate-400">${window.getDateTimeStr(new Date(getSafeMillis(c.createdAt)))}</span></div><div class="flex gap-2"><button onclick="window.setReplyTo('${c.id}', '${getSafeString(c.authorName)}')" class="text-[11px] bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-1 rounded-lg font-bold shadow-sm">답글달기</button>${mainBtnHtml}</div></div><div class="text-slate-800 text-[14px] font-medium pl-1 break-words">${safeContent}</div>${attachmentsHtml}${repliesHtml}</div>`; 
+            }).join('');
+        }); 
+    } catch(e) { safeShowError('코멘트 로드 에러', e); }
+};
+
+window.closeCommentModal = function() { const m = document.getElementById('comment-modal'); if(m){m.classList.add('hidden'); m.classList.remove('flex');} if (currentCommentUnsubscribe) currentCommentUnsubscribe(); };
+window.saveCommentItem = async function() { 
+    const projectId = document.getElementById('cmt-req-id').value, content = document.getElementById('new-cmt-text').value.trim(), parentId = document.getElementById('reply-to-id').value || null, editId = document.getElementById('editing-cmt-id').value; 
+    const fileInput = document.getElementById('new-cmt-image');
+    if(!content && (!fileInput || fileInput.files.length === 0)) return safeShowError("코멘트 내용이나 사진을 첨부하세요."); 
+    const btnSave = document.getElementById('btn-cmt-save'); if(btnSave) { btnSave.innerHTML = '저장중..'; btnSave.disabled = true; }
+    
+    const saveData = async function(base64Img) {
+        try { 
+            const payload = { content: content, updatedAt: Date.now() }; 
+            if(base64Img) payload.imageUrl = base64Img;
+            if (editId) { 
+                await setDoc(doc(db, "project_comments", editId), payload, { merge: true }); safeShowSuccess("수정됨"); 
+            } else { 
+                payload.projectId = projectId; payload.parentId = parentId; 
+                payload.authorUid = (window.currentUser && window.currentUser.uid) ? window.currentUser.uid : 'system'; 
+                payload.authorName = (window.userProfile && window.userProfile.name) ? window.userProfile.name : 'system'; 
+                payload.createdAt = Date.now(); 
+                await addDoc(collection(db, "project_comments"), payload); safeShowSuccess("등록됨"); 
+            } 
+            if(window.cancelCommentAction) window.cancelCommentAction(); 
+        } catch(e) { safeShowError("저장 오류", e); } finally { if(btnSave) { btnSave.innerHTML = '작성'; btnSave.disabled = false; } } 
+    };
+
+    if (fileInput && fileInput.files.length > 0) {
+        if(window.resizeAndConvertToBase64) window.resizeAndConvertToBase64(fileInput.files[0], saveData, 1200);
+        else saveData(null);
+    } else {
+        saveData(null);
+    }
+};
+window.editComment = function(id) { const c = window.currentComments.find(x => x.id === id); if(!c) return; if(window.cancelCommentAction) window.cancelCommentAction(); document.getElementById('editing-cmt-id').value = id; document.getElementById('new-cmt-text').value = c.content || ''; document.getElementById('btn-cmt-save').innerText = '수정'; document.getElementById('reply-indicator-name').innerHTML = '코멘트 수정 중'; document.getElementById('reply-indicator').classList.remove('hidden'); };
+window.setReplyTo = function(cid, name) { if(window.cancelCommentAction) window.cancelCommentAction(); document.getElementById('reply-to-id').value = cid; document.getElementById('reply-indicator-name').innerHTML = `${name} 님에게 답글 작성 중`; document.getElementById('reply-indicator').classList.remove('hidden'); };
+window.cancelCommentAction = function() { document.getElementById('reply-to-id').value = ''; document.getElementById('editing-cmt-id').value = ''; document.getElementById('new-cmt-text').value = ''; document.getElementById('btn-cmt-save').innerText = '작성'; document.getElementById('reply-indicator').classList.add('hidden'); document.getElementById('new-cmt-image').value = ''; document.getElementById('cmt-file-name').innerText = ''; };
+window.deleteComment = async function(id) { if(!confirm("삭제하시겠습니까?")) return; try { await deleteDoc(doc(db, "project_comments", id)); const q = query(collection(db, "project_comments"), where("parentId", "==", id)); const snapshot = await getDocs(q); if(!snapshot.empty) { const batch = writeBatch(db); snapshot.forEach(d => batch.delete(d.ref)); await batch.commit(); } safeShowSuccess("삭제됨"); if(window.cancelCommentAction) window.cancelCommentAction(); } catch(e) { safeShowError("삭제 실패", e); } };
