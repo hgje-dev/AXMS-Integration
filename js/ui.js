@@ -3,6 +3,39 @@ import { db } from './firebase.js';
 import { collection, query, where, onSnapshot, doc, setDoc, deleteDoc, writeBatch, addDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 // ==========================================
+// 💡 글로벌 유틸리티 함수 (날짜 및 주차 계산 추가)
+// ==========================================
+window.getWeekString = function(dateObj) {
+    if (!dateObj || isNaN(dateObj.getTime())) return '';
+    const d = new Date(Date.UTC(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    return d.getUTCFullYear() + '-W' + String(weekNo).padStart(2, '0');
+};
+
+window.getDatesFromWeek = function(weekStr) {
+    if (!weekStr) return { start: new Date(), end: new Date() };
+    const parts = weekStr.split('-W');
+    if (parts.length !== 2) return { start: new Date(), end: new Date() };
+    const year = parseInt(parts[0]);
+    const week = parseInt(parts[1]);
+    const simple = new Date(year, 0, 1 + (week - 1) * 7);
+    const dow = simple.getDay();
+    const ISOweekStart = simple;
+    if (dow <= 4)
+        ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
+    else
+        ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
+        
+    const start = new Date(ISOweekStart);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    return { start, end };
+};
+
+// ==========================================
 // 💡 토스트 메시지 (알림 팝업) 시스템
 // ==========================================
 window.showToast = function(message, type = 'success') {
