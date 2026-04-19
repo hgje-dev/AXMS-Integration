@@ -464,7 +464,7 @@ window.populateUserDropdowns = function() {
     }
 };
 
-// 💡 관리자 모달: 팀별 정렬 & 18개(13+5) 초정밀 권한 UI 렌더링
+// 💡 관리자 모달: 팀별 정렬 & 18개 권한(페이지 13개 + 쓰기 5개) 초정밀 UI 렌더링
 window.renderAdminUsers = () => {
     const tb = document.getElementById('admin-users-tbody'); 
     if (!tb) return;
@@ -540,7 +540,7 @@ window.renderAdminUsers = () => {
                 : `<span class="inline-flex items-center gap-1.5 bg-slate-50 text-slate-500 px-2 py-1 rounded-full text-[10px] font-bold border border-slate-200"><span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>오프라인</span>`;
             const lastActiveStr = lastActive ? new Date(lastActive).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '기록 없음';
 
-            // 💡 18개 권한(페이지 13종 + PJT 세부 쓰기 5종) UI 블록 구성
+            // 💡 18개 권한(페이지 13종 + PJT 쓰기 5종) UI 블록
             const permHtml = isMaster ? 
                 `<div class="text-center text-[10px] font-black text-indigo-500 bg-indigo-50 py-3 rounded-lg border border-indigo-100"><i class="fa-solid fa-unlock-keyhole mr-1"></i>최고 관리자 (모든 메뉴 접근 및 쓰기 가능)</div>` 
                 : 
