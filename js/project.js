@@ -102,7 +102,7 @@ window.loadCounts = function() {
         onSnapshot(collection(db, "project_purchases"), (snap) => { window.projectPurchaseCounts = {}; snap.forEach(doc => { let pid = doc.data().projectId; if(pid) window.projectPurchaseCounts[pid] = (window.projectPurchaseCounts[pid]||0)+1; }); window.renderProjectStatusList(); });
         onSnapshot(collection(db, "project_designs"), (snap) => { window.projectDesignCounts = {}; snap.forEach(doc => { let pid = doc.data().projectId; if(pid) window.projectDesignCounts[pid] = (window.projectDesignCounts[pid]||0)+1; }); window.renderProjectStatusList(); });
         onSnapshot(collection(db, "project_schedules"), (snap) => { window.projectScheduleCounts = {}; snap.forEach(doc => { let pid = doc.data().projectId; if(pid) window.projectScheduleCounts[pid] = (window.projectScheduleCounts[pid]||0)+1; }); window.renderProjectStatusList(); });
-        window.loadNcrData();
+        if(window.loadNcrData) window.loadNcrData();
     } catch(e) { console.warn("카운트 로드 실패:", e); }
 };
 
@@ -136,8 +136,8 @@ window.filterByCompletedThisMonth = function() {
 
 window.filterProjectStatus = function(status) {
     window.currentStatusFilter = status;
-    if(window.currentProjDashView === 'gantt') window.renderProjGantt(); 
-    else if(window.currentProjDashView === 'calendar') window.renderProjCalendar(); 
+    if(window.currentProjDashView === 'gantt') { if(window.renderProjGantt) window.renderProjGantt(); }
+    else if(window.currentProjDashView === 'calendar') { if(window.renderProjCalendar) window.renderProjCalendar(); }
     else window.renderProjectStatusList();
 };
 
@@ -235,7 +235,7 @@ window.updateMiniDashboard = function() {
 window.loadProjectStatusData = function() {
     if(projectStatusSnapshotUnsubscribe) projectStatusSnapshotUnsubscribe();
     
-    // 권한에 따라 '등록' 버튼 제어
+    // 💡 권한에 따라 메인 화면의 '등록' 버튼 제어
     const btnCreate = document.getElementById('btn-create-proj');
     if (btnCreate) {
         if (window.checkPjtWritePermission('status')) btnCreate.classList.remove('hidden');
@@ -264,8 +264,8 @@ window.loadProjectStatusData = function() {
         }
         
         window.updateMiniDashboard();
-        if(window.currentProjDashView === 'gantt') window.renderProjGantt(); 
-        else if(window.currentProjDashView === 'calendar') window.renderProjCalendar();
+        if(window.currentProjDashView === 'gantt') { if(window.renderProjGantt) window.renderProjGantt(); }
+        else if(window.currentProjDashView === 'calendar') { if(window.renderProjCalendar) window.renderProjCalendar(); }
         else window.renderProjectStatusList();
     });
 };
@@ -315,6 +315,8 @@ window.renderProjectStatusList = function() {
         else if (unresolvedNcrCnt === 0) ncrIconHtml = `<button onclick="window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-emerald-500 hover:text-emerald-600 transition-colors p-1" title="모두 조치 완료"><i class="fa-solid fa-file-circle-check text-lg"></i></button>`;
         else ncrIconHtml = `<button onclick="window.openNcrModal('${item.code}', '${safeNameJs}')" class="text-rose-500 relative transition-transform hover:scale-110 p-1" title="미결 부적합 ${unresolvedNcrCnt}건"><i class="fa-solid fa-file-circle-exclamation text-lg"></i><span class="absolute -top-1 -right-2 bg-rose-100 text-rose-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-rose-200">${unresolvedNcrCnt}</span></button>`;
 
+        // 수정 권한 유무와 상관없이 현황판 자체는 클릭해서 "읽기 모드"로라도 볼 수 있게 합니다. 
+        // 권한은 openProjStatusWriteModal 안에서 다시 체크합니다.
         let trHtml = `<tr class="group hover:bg-indigo-50/50 transition-colors cursor-pointer border-b border-slate-100" onclick="window.editProjStatus('${item.id}')">`;
         trHtml += `<td class="border-b border-r border-slate-200 px-1 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 0px; min-width: 40px; max-width: 40px;" onclick="event.stopPropagation()"><button onclick="window.deleteProjStatus('${item.id}')" class="text-slate-300 hover:text-rose-500 p-1.5 rounded"><i class="fa-solid fa-trash-can"></i></button></td>`;
         trHtml += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center bg-white group-hover:bg-indigo-50/50 sticky z-20" style="left: 40px; min-width: 80px; max-width: 80px;">${getSafeString(item.category)}</td>`;
@@ -371,7 +373,7 @@ window.renderProjectStatusList = function() {
 };
 
 // ==========================================
-// 💡 프로젝트 정보 입력 폼
+// 💡 프로젝트 정보 입력 폼 (권한 제어 적용)
 // ==========================================
 window.openProjStatusWriteModal = function() {
     const setVal = (eid, val) => { const el = document.getElementById(eid); if(el) el.value = val; };
@@ -482,7 +484,7 @@ window.editProjStatus = function(id) {
     const btnHistory = document.getElementById('btn-view-history');
     if (btnHistory) btnHistory.classList.remove('hidden'); 
     
-    // 💡 쓰기 권한 체크
+    // 💡 쓰기 권한 체크 (모달을 매번 열 때마다 상태 초기화 보장)
     const canWrite = window.checkPjtWritePermission('status', item.manager);
     const btnSave = document.getElementById('btn-proj-save');
     const banner = document.getElementById('ps-readonly-banner');
@@ -796,7 +798,7 @@ window.renderComments = function(topLevelComments) {
             
             let files = [];
             if(c.imageUrl) files.push({name:'첨부사진.jpg', url: c.imageUrl, thumbBase64: c.imageUrl});
-            const cImgHtml = window.generateMediaHtml(files);
+            const cImgHtml = window.generateMediaHtml ? window.generateMediaHtml(files) : '';
             
             let repliesHtml = ''; 
             if(c.replies && c.replies.length > 0) { 
@@ -807,7 +809,7 @@ window.renderComments = function(topLevelComments) {
                     
                     let rFiles = [];
                     if(r.imageUrl) rFiles.push({name:'첨부사진.jpg', url: r.imageUrl, thumbBase64: r.imageUrl});
-                    const rImgHtml = window.generateMediaHtml(rFiles);
+                    const rImgHtml = window.generateMediaHtml ? window.generateMediaHtml(rFiles) : '';
                     
                     let replyBtnHtml = '';
                     if (r.authorUid === window.currentUser?.uid || (window.userProfile && window.userProfile.role === 'admin')) {
@@ -1190,7 +1192,7 @@ window.openPurchaseModal = function(projectId, title) {
     document.getElementById('pur-project-title').innerText = title || ''; 
     window.resetPurchaseForm(); 
     
-    // 💡 쓰기 권한 체크
+    // 💡 쓰기 권한 체크 (모달을 열 때마다 매번 초기화)
     const proj = (window.currentProjectStatusList || []).find(p => p.id === projectId);
     const mgr = proj ? proj.manager : '';
     const canWrite = window.checkPjtWritePermission('purchase', mgr);
@@ -1228,7 +1230,7 @@ window.openPurchaseModal = function(projectId, title) {
             let dateStr = item.createdAt ? window.getDateTimeStr(new Date(getSafeMillis(item.createdAt))) : '';
             let safeContent = getSafeString(item.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             if(window.formatMentions) safeContent = window.formatMentions(safeContent);
-            let attachmentsHtml = window.generateMediaHtml(item.files);
+            let attachmentsHtml = window.generateMediaHtml ? window.generateMediaHtml(item.files) : '';
             
             let deleteBtnHtml = '';
             if (canWrite && (item.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin')) {
@@ -1367,7 +1369,7 @@ window.openDesignModal = function(projectId, title) {
             let safeContent = getSafeString(item.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             if(window.formatMentions) safeContent = window.formatMentions(safeContent);
 
-            let attachmentsHtml = window.generateMediaHtml(item.files);
+            let attachmentsHtml = window.generateMediaHtml ? window.generateMediaHtml(item.files) : '';
             
             let deleteBtnHtml = '';
             if (canWrite && (item.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin')) {
@@ -1506,7 +1508,7 @@ window.openPjtScheduleModal = function(projectId, title) {
             let safeContent = getSafeString(item.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             if(window.formatMentions) safeContent = window.formatMentions(safeContent);
 
-            let attachmentsHtml = window.generateMediaHtml(item.files);
+            let attachmentsHtml = window.generateMediaHtml ? window.generateMediaHtml(item.files) : '';
             
             let deleteBtnHtml = '';
             if (canWrite && (item.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin')) {
@@ -1686,7 +1688,7 @@ window.renderDailyLogs = function(logs, canWrite) {
                 allFiles = [...allFiles, ...log.files];
             }
             
-            let attachmentsHtml = window.generateMediaHtml(allFiles);
+            let attachmentsHtml = window.generateMediaHtml ? window.generateMediaHtml(allFiles) : '';
             
             let btnHtml = '';
             if (canWrite && (log.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin')) {
