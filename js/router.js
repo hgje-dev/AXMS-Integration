@@ -21,7 +21,7 @@ window.appRoutes = {
     'mfg-cost': { url: './views/mfg-cost.html', init: () => { if(window.initMfgCost) window.initMfgCost(); } },
     'ncr-dashboard': { url: './views/ncr-dashboard.html', init: () => { if(window.initNcrDashboard) window.initNcrDashboard(); } },
     'quality-report': { url: './views/quality-report.html', init: () => { if(window.initQualityReport) window.initQualityReport(); } },
-    'simulation': { url: './views/simulation.html', init: () => { if(window.handleTypeChange) window.handleTypeChange(); if(window.setupAutoSaveTriggers) window.setupAutoSaveTriggers(); } },
+    'simulation': { url: './views/simulation.html', init: () => { if(window.initSimulation) window.initSimulation(); } },
     'collab': { url: './views/request.html', init: () => { window.currentAppId = 'collab'; if(window.loadRequestsData) window.loadRequestsData('collab'); } },
     'purchase': { url: './views/request.html', init: () => { window.currentAppId = 'purchase'; if(window.loadRequestsData) window.loadRequestsData('purchase'); } },
     'repair': { url: './views/request.html', init: () => { window.currentAppId = 'repair'; if(window.loadRequestsData) window.loadRequestsData('repair'); } }
