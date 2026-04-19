@@ -464,7 +464,7 @@ window.populateUserDropdowns = function() {
     }
 };
 
-// 💡 관리자 모달: 팀별 정렬 & 18개 권한(페이지 13개 + 쓰기 5개) 초정밀 UI 렌더링
+// 💡 관리자 모달: 옵셔널 체이닝(?.)을 철저히 적용하여 undefined 에러를 완벽 차단!
 window.renderAdminUsers = () => {
     const tb = document.getElementById('admin-users-tbody'); 
     if (!tb) return;
@@ -515,7 +515,9 @@ window.renderAdminUsers = () => {
                  </tr>`;
 
         teamUsers.forEach(u => {
-            const p = u.permissions || {}; 
+            // 💡 만약 DB의 u.permissions가 꼬여서 null/undefined로 내려오더라도 에러가 나지 않도록 빈 객체 할당 강화
+            const p = (u && u.permissions) ? u.permissions : {}; 
+            
             const isP = u.role === 'pending';
             const isMaster = (u.role === 'admin' || u.role === 'master');
             const trClass = isP ? 'bg-rose-50/40 border-l-4 border-rose-500' : 'hover:bg-slate-50 transition-colors border-b border-slate-100';
@@ -540,7 +542,7 @@ window.renderAdminUsers = () => {
                 : `<span class="inline-flex items-center gap-1.5 bg-slate-50 text-slate-500 px-2 py-1 rounded-full text-[10px] font-bold border border-slate-200"><span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>오프라인</span>`;
             const lastActiveStr = lastActive ? new Date(lastActive).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '기록 없음';
 
-            // 💡 18개 권한(페이지 13종 + PJT 쓰기 5종) UI 블록
+            // 💡 18개 권한 UI 블록: p?.['key'] 문법(옵셔널 체이닝)을 적용하여 에러 원천 차단
             const permHtml = isMaster ? 
                 `<div class="text-center text-[10px] font-black text-indigo-500 bg-indigo-50 py-3 rounded-lg border border-indigo-100"><i class="fa-solid fa-unlock-keyhole mr-1"></i>최고 관리자 (모든 메뉴 접근 및 쓰기 가능)</div>` 
                 : 
@@ -548,29 +550,29 @@ window.renderAdminUsers = () => {
                     <div class="bg-slate-50 p-2 rounded border border-slate-200">
                         <span class="block text-[9px] font-black text-slate-400 mb-1">■ 페이지 접근 권한 (13개)</span>
                         <div class="grid grid-cols-4 gap-y-1.5 gap-x-2 text-left">
-                            <label class="flex items-center gap-1 text-[10px] font-bold text-indigo-600"><input type="checkbox" class="accent-indigo-500" ${p['dashboard-home'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','dashboard-home',this.checked)">홈 대시보드</label>
-                            <label class="flex items-center gap-1 text-[10px] font-bold text-indigo-600"><input type="checkbox" class="accent-indigo-500" ${p['completion-report'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','completion-report',this.checked)">통합 완료보고</label>
-                            <label class="flex items-center gap-1 text-[10px] font-bold text-blue-600"><input type="checkbox" class="accent-blue-500" ${p['project-status'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','project-status',this.checked)">PJT 현황판</label>
-                            <label class="flex items-center gap-1 text-[10px] font-bold text-blue-600"><input type="checkbox" class="accent-blue-500" ${p['workhours'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','workhours',this.checked)">투입 현황</label>
-                            <label class="flex items-center gap-1 text-[10px] font-bold text-blue-600"><input type="checkbox" class="accent-blue-500" ${p['weekly-log'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','weekly-log',this.checked)">주간 업무</label>
-                            <label class="flex items-center gap-1 text-[10px] font-bold text-emerald-600"><input type="checkbox" class="accent-emerald-500" ${p['product-cost'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','product-cost',this.checked)">Product Cost</label>
-                            <label class="flex items-center gap-1 text-[10px] font-bold text-amber-600"><input type="checkbox" class="accent-amber-500" ${p['mfg-cost'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','mfg-cost',this.checked)">제조 Cost</label>
-                            <label class="flex items-center gap-1 text-[10px] font-bold text-rose-500"><input type="checkbox" class="accent-rose-500" ${p['ncr-dashboard'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','ncr-dashboard',this.checked)">NCR 대시보드</label>
-                            <label class="flex items-center gap-1 text-[10px] font-bold text-rose-500"><input type="checkbox" class="accent-rose-500" ${p['quality-report'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','quality-report',this.checked)">품질 완료보고</label>
-                            <label class="flex items-center gap-1 text-[10px] font-bold text-slate-600"><input type="checkbox" class="accent-slate-500" ${p['collab'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','collab',this.checked)">협업/조립</label>
-                            <label class="flex items-center gap-1 text-[10px] font-bold text-slate-600"><input type="checkbox" class="accent-slate-500" ${p['purchase'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','purchase',this.checked)">구매 의뢰</label>
-                            <label class="flex items-center gap-1 text-[10px] font-bold text-slate-600"><input type="checkbox" class="accent-slate-500" ${p['repair'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','repair',this.checked)">수리/점검</label>
-                            <label class="flex items-center gap-1 text-[10px] font-bold text-purple-600"><input type="checkbox" class="accent-purple-500" ${p['simulation'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','simulation',this.checked)">시뮬레이터</label>
+                            <label class="flex items-center gap-1 text-[10px] font-bold text-indigo-600"><input type="checkbox" class="accent-indigo-500" ${p?.['dashboard-home'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','dashboard-home',this.checked)">홈 대시보드</label>
+                            <label class="flex items-center gap-1 text-[10px] font-bold text-indigo-600"><input type="checkbox" class="accent-indigo-500" ${p?.['completion-report'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','completion-report',this.checked)">통합 완료보고</label>
+                            <label class="flex items-center gap-1 text-[10px] font-bold text-blue-600"><input type="checkbox" class="accent-blue-500" ${p?.['project-status'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','project-status',this.checked)">PJT 현황판</label>
+                            <label class="flex items-center gap-1 text-[10px] font-bold text-blue-600"><input type="checkbox" class="accent-blue-500" ${p?.['workhours'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','workhours',this.checked)">투입 현황</label>
+                            <label class="flex items-center gap-1 text-[10px] font-bold text-blue-600"><input type="checkbox" class="accent-blue-500" ${p?.['weekly-log'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','weekly-log',this.checked)">주간 업무</label>
+                            <label class="flex items-center gap-1 text-[10px] font-bold text-emerald-600"><input type="checkbox" class="accent-emerald-500" ${p?.['product-cost'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','product-cost',this.checked)">Product Cost</label>
+                            <label class="flex items-center gap-1 text-[10px] font-bold text-amber-600"><input type="checkbox" class="accent-amber-500" ${p?.['mfg-cost'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','mfg-cost',this.checked)">제조 Cost</label>
+                            <label class="flex items-center gap-1 text-[10px] font-bold text-rose-500"><input type="checkbox" class="accent-rose-500" ${p?.['ncr-dashboard'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','ncr-dashboard',this.checked)">NCR 대시보드</label>
+                            <label class="flex items-center gap-1 text-[10px] font-bold text-rose-500"><input type="checkbox" class="accent-rose-500" ${p?.['quality-report'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','quality-report',this.checked)">품질 완료보고</label>
+                            <label class="flex items-center gap-1 text-[10px] font-bold text-slate-600"><input type="checkbox" class="accent-slate-500" ${p?.['collab'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','collab',this.checked)">협업/조립</label>
+                            <label class="flex items-center gap-1 text-[10px] font-bold text-slate-600"><input type="checkbox" class="accent-slate-500" ${p?.['purchase'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','purchase',this.checked)">구매 의뢰</label>
+                            <label class="flex items-center gap-1 text-[10px] font-bold text-slate-600"><input type="checkbox" class="accent-slate-500" ${p?.['repair'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','repair',this.checked)">수리/점검</label>
+                            <label class="flex items-center gap-1 text-[10px] font-bold text-purple-600"><input type="checkbox" class="accent-purple-500" ${p?.['simulation'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','simulation',this.checked)">시뮬레이터</label>
                         </div>
                     </div>
                     <div class="bg-indigo-50/50 p-2 rounded border border-indigo-100">
-                        <span class="block text-[9px] font-black text-indigo-500 mb-1">■ PJT 현황판 세부 항목 쓰기(Write) 권한 (부서 기본값 + 개인 예외 통제)</span>
+                        <span class="block text-[9px] font-black text-indigo-500 mb-1">■ PJT 현황판 세부 항목 쓰기(Write) 권한 (부서 기본값 + 개인 예외 부여)</span>
                         <div class="grid grid-cols-5 gap-y-1.5 gap-x-2 text-left">
-                            <label class="flex items-center gap-1 text-[10px] font-bold text-slate-700"><input type="checkbox" class="accent-indigo-500" ${p['pjt-w-status'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','pjt-w-status',this.checked)">기본현황 등록</label>
-                            <label class="flex items-center gap-1 text-[10px] font-bold text-slate-700"><input type="checkbox" class="accent-amber-500" ${p['pjt-w-pur'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','pjt-w-pur',this.checked)">구매 내역</label>
-                            <label class="flex items-center gap-1 text-[10px] font-bold text-slate-700"><input type="checkbox" class="accent-teal-500" ${p['pjt-w-des'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','pjt-w-des',this.checked)">설계 파일</label>
-                            <label class="flex items-center gap-1 text-[10px] font-bold text-slate-700"><input type="checkbox" class="accent-fuchsia-500" ${p['pjt-w-sch'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','pjt-w-sch',this.checked)">일정표</label>
-                            <label class="flex items-center gap-1 text-[10px] font-bold text-slate-700"><input type="checkbox" class="accent-sky-500" ${p['pjt-w-log'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','pjt-w-log',this.checked)">생산일지</label>
+                            <label class="flex items-center gap-1 text-[10px] font-bold text-slate-700"><input type="checkbox" class="accent-indigo-500" ${p?.['pjt-w-status'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','pjt-w-status',this.checked)">기본현황 등록</label>
+                            <label class="flex items-center gap-1 text-[10px] font-bold text-slate-700"><input type="checkbox" class="accent-amber-500" ${p?.['pjt-w-pur'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','pjt-w-pur',this.checked)">구매 내역</label>
+                            <label class="flex items-center gap-1 text-[10px] font-bold text-slate-700"><input type="checkbox" class="accent-teal-500" ${p?.['pjt-w-des'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','pjt-w-des',this.checked)">설계 파일</label>
+                            <label class="flex items-center gap-1 text-[10px] font-bold text-slate-700"><input type="checkbox" class="accent-fuchsia-500" ${p?.['pjt-w-sch'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','pjt-w-sch',this.checked)">일정표</label>
+                            <label class="flex items-center gap-1 text-[10px] font-bold text-slate-700"><input type="checkbox" class="accent-sky-500" ${p?.['pjt-w-log'] ? 'checked' : ''} onchange="window.updateUserPerm('${u.uid}','pjt-w-log',this.checked)">생산일지</label>
                         </div>
                     </div>
                 </div>`;
@@ -608,7 +610,25 @@ window.renderAdminUsers = () => {
 window.updateUserTeam = async (uid, team) => { try { await setDoc(doc(db, "users", uid), { team: team, department: team }, { merge: true }); if(window.showToast) window.showToast("소속 팀이 변경되었습니다."); } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } };
 window.updateUserPosition = async (uid, pos) => { try { await setDoc(doc(db, "users", uid), { position: pos }, { merge: true }); if(window.showToast) window.showToast("직책이 변경되었습니다."); } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } };
 window.updateUserRole = async (uid, role) => { try { await setDoc(doc(db, "users", uid), { role: role }, { merge: true }); if(window.showToast) window.showToast("등급이 변경되었습니다."); } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } };
-window.updateUserPerm = async (uid, key, val) => { try { const uR = doc(db, "users", uid); const uD = await getDoc(uR); if (uD.exists()) { let p = uD.data().permissions || {}; p[key] = val; await setDoc(uR, { permissions: p }, { merge: true }); if(window.showToast) window.showToast("권한이 업데이트되었습니다."); } } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } };
+
+// 💡 권한 업데이트 저장 시 빈 객체 증발 방지를 위한 방어 코드 추가
+window.updateUserPerm = async (uid, key, val) => { 
+    try { 
+        const uR = doc(db, "users", uid); 
+        const uD = await getDoc(uR); 
+        if (uD.exists()) { 
+            const data = uD.data();
+            let p = data.permissions ? data.permissions : {}; 
+            p[key] = val; 
+            await setDoc(uR, { permissions: p }, { merge: true }); 
+            if(window.showToast) window.showToast("권한이 업데이트되었습니다."); 
+        } 
+    } catch (e) { 
+        console.error("권한 업데이트 에러:", e);
+        if(window.showToast) window.showToast("오류 발생", "error"); 
+    } 
+};
+
 window.approveUser = async (uid) => { try { await setDoc(doc(db, "users", uid), { role: 'user' }, { merge: true }); if(window.showToast) window.showToast("계정이 정상적으로 승인되었습니다.", "success"); } catch(e) { window.showToast("승인 처리 실패", "error"); console.error(e); } };
 window.deleteUser = async (uid) => { if (!confirm("이 사용자를 정말 삭제하시겠습니까?\n\n삭제 시 해당 사용자의 시스템 접근이 즉시 영구 차단됩니다.\n(참고: 동일한 이메일로 다시 회원가입을 하려면 Firebase Authentication 콘솔에서도 계정을 삭제해주셔야 합니다.)")) return; try { await deleteDoc(doc(db, "users", uid)); if(window.showToast) window.showToast("계정 권한이 영구적으로 삭제(차단) 되었습니다."); } catch (e) { if(window.showToast) window.showToast("오류 발생", "error"); } };
 
