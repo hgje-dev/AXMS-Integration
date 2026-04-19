@@ -210,6 +210,70 @@ window.updateMultiFileNames = function(inputEl, displayElId) {
 };
 
 // ==========================================
+// 💡 구글 드라이브 연동 (PJT 공통)
+// ==========================================
+window.pjtUploadToDrive = async function(file, folderName) {
+    const storedExpiry = localStorage.getItem('axmsGoogleTokenExpiryV2');
+    if (!window.googleAccessToken || !storedExpiry || Date.now() > parseInt(storedExpiry)) {
+        throw new Error("구글 인증 토큰이 만료되었습니다. 로그아웃 후 다시 연동해주세요.");
+    }
+    
+    // 1. 프로젝트 현황 부모 폴더 검색 (axbis.ai 내)
+    const q1 = `name='${encodeURIComponent(folderName.replace(/['\/\\]/g, '_'))}' and mimeType='application/vnd.google-apps.folder' and '${TARGET_DRIVE_FOLDER}' in parents and trashed=false`;
+    const r1 = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q1}&supportsAllDrives=true&includeItemsFromAllDrives=true`, { headers: {'Authorization': 'Bearer ' + window.googleAccessToken}});
+    const d1 = await r1.json();
+    if(d1.error) throw new Error(`[API 조회 에러] ${d1.error.message}`);
+    
+    let pjtFid = (d1.files && d1.files.length > 0) ? d1.files[0].id : null;
+    if(!pjtFid) {
+        const res = await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
+            method: 'POST', headers: {'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json'},
+            body: JSON.stringify({name: folderName.replace(/['\/\\]/g, '_'), mimeType: 'application/vnd.google-apps.folder', parents: [TARGET_DRIVE_FOLDER]})
+        });
+        const data = await res.json(); 
+        if(data.error) throw new Error(data.error.message);
+        pjtFid = data.id;
+    }
+
+    // 2. 하위 폴더 자동 생성 분기 처리 (생산일지, 도면 등)
+    const q2 = `name='생산일지' and mimeType='application/vnd.google-apps.folder' and '${pjtFid}' in parents and trashed=false`;
+    const r2 = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q2)}&supportsAllDrives=true&includeItemsFromAllDrives=true`, { headers: {'Authorization': 'Bearer ' + window.googleAccessToken}});
+    const d2 = await r2.json();
+    if(d2.error) throw new Error(d2.error.message);
+    
+    let logFid = (d2.files && d2.files.length > 0) ? d2.files[0].id : null;
+    if(!logFid) {
+        const res = await fetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true', {
+            method: 'POST', headers: {'Authorization': 'Bearer ' + window.googleAccessToken, 'Content-Type': 'application/json'},
+            body: JSON.stringify({name: '생산일지', mimeType: 'application/vnd.google-apps.folder', parents: [pjtFid]})
+        });
+        const data = await res.json(); 
+        if(data.error) throw new Error(data.error.message);
+        logFid = data.id;
+    }
+
+    // 3. 파일 업로드 실행
+    const metadata = { name: file.name, parents: [logFid] };
+    const form = new FormData(); form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' })); form.append('file', file);
+
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', true);
+        xhr.setRequestHeader('Authorization', 'Bearer ' + window.googleAccessToken);
+        
+        xhr.onload = function() {
+            if (xhr.status >= 200 && xhr.status < 300) { 
+                resolve(`https://drive.google.com/file/d/${JSON.parse(xhr.responseText).id}/view`); 
+            } else { 
+                reject(new Error(`업로드 실패 (HTTP ${xhr.status})`)); 
+            }
+        };
+        xhr.onerror = () => reject(new Error("네트워크 오류"));
+        xhr.send(form);
+    });
+};
+
+// ==========================================
 // 💡 데이터 로드 및 필터링
 // ==========================================
 window.loadCounts = function() {
@@ -497,9 +561,9 @@ window.renderProjectStatusList = function() {
             htmlStr += `<td class="border-b border-r border-slate-200 px-2 py-1 text-center border-r-slate-300" style="min-width: 80px; max-width: 80px;">${statusMap[item.status] || ''}</td>`;
             
             htmlStr += `<td class="border border-slate-200 px-2 py-1 text-center font-bold text-slate-600">${getSafeString(item.manager)}</td>`;
-            htmlStr += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="event.stopPropagation(); window.openPurchaseModal('${item.id}', '${safeNameJs}')" class="text-amber-500 relative"><i class="fa-solid fa-cart-shopping text-lg"></i>${purCnt ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-amber-200">${purCnt}</span>` : ''}</button></td>`;
-            htmlStr += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="event.stopPropagation(); window.openDesignModal('${item.id}', '${safeNameJs}')" class="text-teal-400 relative"><i class="fa-solid fa-pen-ruler text-lg"></i>${desCnt ? `<span class="absolute -top-1 -right-2 bg-teal-100 text-teal-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-teal-200">${desCnt}</span>` : ''}</button></td>`;
-            htmlStr += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="event.stopPropagation(); window.openPjtScheduleModal('${item.id}', '${safeNameJs}')" class="text-fuchsia-400 relative"><i class="fa-regular fa-calendar-check text-lg"></i>${schCnt ? `<span class="absolute -top-1 -right-2 bg-fuchsia-100 text-fuchsia-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-fuchsia-200">${schCnt}</span>` : ''}</button></td>`;
+            htmlStr += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="event.stopPropagation(); window.openPurModal('${item.id}', '${safeNameJs}')" class="text-amber-500 relative"><i class="fa-solid fa-cart-shopping text-lg"></i>${purCnt ? `<span class="absolute -top-1 -right-2 bg-amber-100 text-amber-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-amber-200">${purCnt}</span>` : ''}</button></td>`;
+            htmlStr += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="event.stopPropagation(); window.openDesModal('${item.id}', '${safeNameJs}')" class="text-teal-400 relative"><i class="fa-solid fa-pen-ruler text-lg"></i>${desCnt ? `<span class="absolute -top-1 -right-2 bg-teal-100 text-teal-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-teal-200">${desCnt}</span>` : ''}</button></td>`;
+            htmlStr += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="event.stopPropagation(); window.openSchModal('${item.id}', '${safeNameJs}')" class="text-fuchsia-400 relative"><i class="fa-regular fa-calendar-check text-lg"></i>${schCnt ? `<span class="absolute -top-1 -right-2 bg-fuchsia-100 text-fuchsia-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-fuchsia-200">${schCnt}</span>` : ''}</button></td>`;
             htmlStr += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()"><button onclick="event.stopPropagation(); window.openDailyLogModal('${item.id}')" class="text-sky-400 relative"><i class="fa-solid fa-book text-lg"></i>${lCnt ? `<span class="absolute -top-1 -right-2 bg-sky-100 text-sky-600 text-[9px] font-bold px-1 rounded-full shadow-sm border border-sky-200">${lCnt}</span>` : ''}</button></td>`;
             
             htmlStr += `<td class="border border-slate-200 px-2 py-1 text-center" onclick="event.stopPropagation()">${ncrIconHtml}</td>`;
@@ -539,7 +603,6 @@ window.renderProjectStatusList = function() {
 
     setTimeout(() => { window.applyTableLock(); }, 50);
 };
-
 
 // ==========================================
 // 💡 모달창 & 공통 함수들
@@ -655,7 +718,7 @@ window.saveProjStatus = async function(btn) {
             
             try {
                 const folderName = cleanPayload.code ? cleanPayload.code : cleanPayload.name;
-                await window.getOrCreateDriveFolder(folderName, TARGET_DRIVE_FOLDER);
+                await window.pjtUploadToDrive({name: "init.txt", type: "text/plain", size: 4}, folderName);
             } catch(e) {
                 console.warn("폴더 생성 지연(무시가능):", e);
             }
@@ -1222,7 +1285,7 @@ window.editMdLog = function(id) { const log = (window.currentMdLogs || []).find(
 window.updateProjectTotalMd = async function(projectId) { const snap = await getDocs(query(collection(db, "project_md_logs"), where("projectId", "==", projectId))); let total = 0; snap.forEach(docSnap => total += parseFloat(docSnap.data().md) || 0); const projRef = doc(db, "projects_status", projectId); const projSnap = await getDoc(projRef); if(projSnap.exists()) { const outMd = parseFloat(projSnap.data().outMd) || 0; await setDoc(projRef, { currentMd: total, finalMd: total + outMd }, { merge: true }); } };
 
 // ==========================================
-// 💡 생산일지 모달 (팀원 전용 쓰기 권한)
+// 💡 생산일지 모달 (팀원 전용 쓰기 권한 및 드라이브 연동)
 // ==========================================
 window.openDailyLogModal = function(projectId) { 
     try {
@@ -1277,7 +1340,7 @@ window.openDailyLogModal = function(projectId) {
             list.innerHTML = window.currentDailyLogs.map(log => {
                 let safeContent = getSafeString(log.content).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
                 
-                // 💡 다중 이미지 렌더링 HTML 직접 생성 방식으로 복구
+                // 💡 다중 이미지 렌더링 HTML
                 let legacyFiles = [];
                 if(log.imageUrl) legacyFiles.push({ name: '첨부사진.jpg', url: log.imageUrl, thumbBase64: log.imageUrl });
                 let allFiles = log.files && log.files.length > 0 ? [...legacyFiles, ...log.files] : legacyFiles;
@@ -1332,16 +1395,19 @@ window.saveDailyLogItem = async function() {
         let filesData = [];
         
         if (fileInput && fileInput.files.length > 0) {
-            const processFile = (file) => {
-                return new Promise((resolve) => {
-                    if(window.resizeAndConvertToBase64) {
-                        window.resizeAndConvertToBase64(file, (base64) => {
-                            resolve({ name: file.name, url: base64 });
-                        }, 1200);
-                    } else {
-                        resolve(null);
+            window.showToast("구글 드라이브에 파일을 업로드 중입니다...", "success");
+            const processFile = async (file) => {
+                if(window.googleAccessToken) {
+                    try {
+                        let url = await window.pjtUploadToDrive(file, folderName);
+                        return { name: file.name, url: url };
+                    } catch(e) {
+                        console.warn("드라이브 업로드 실패, Base64 변환 시도", e);
+                        return await new Promise(res => window.resizeAndConvertToBase64(file, b64 => res({name: file.name, url: b64, thumbBase64: b64}), 1200));
                     }
-                });
+                } else {
+                     return await new Promise(res => window.resizeAndConvertToBase64(file, b64 => res({name: file.name, url: b64, thumbBase64: b64}), 1200));
+                }
             };
             
             for(let i=0; i<fileInput.files.length; i++) {
@@ -1388,37 +1454,38 @@ window.clearDailyLogFile = function(e) { if(e && typeof e.stopPropagation === 'f
 
 
 // ==========================================
-// 💡 구매, 설계, 일정 모달창 로직 복구
+// 💡 구매, 설계, 일정 모달창 (접근자 Fix)
 // ==========================================
-const setupModalLogic = (type, prefix, color, collectionName) => {
-    window[`open${type}Modal`] = function(projectId, title) {
-        const modal = document.getElementById(`${prefix}-modal`);
+const setupModalLogic = (modalTitle, domPrefix, collectionName) => {
+    window[`open${modalTitle}Modal`] = function(projectId, title) {
+        const modal = document.getElementById(`${domPrefix}-modal`);
         if(!modal) return;
         modal.classList.remove('hidden'); modal.classList.add('flex');
-        document.getElementById(`${prefix}-req-id`).value = projectId;
-        document.getElementById(`${prefix}-project-title`).innerText = title;
-        window[`reset${type}Form`]();
+        document.getElementById(`${domPrefix}-req-id`).value = projectId;
+        document.getElementById(`${domPrefix}-project-title`).innerText = title;
+        window[`reset${modalTitle}Form`]();
         
-        if(window[`current${type}Unsubscribe`]) window[`current${type}Unsubscribe`]();
-        window[`current${type}Unsubscribe`] = onSnapshot(collection(db, collectionName), snap => {
-            window[`current${type}s`] = [];
-            snap.forEach(d => { if(d.data().projectId === projectId) window[`current${type}s`].push({id: d.id, ...d.data()})});
-            window[`current${type}s`].sort((a,b) => getSafeMillis(a.createdAt) - getSafeMillis(b.createdAt));
+        if(window[`current${modalTitle}Unsubscribe`]) window[`current${modalTitle}Unsubscribe`]();
+        window[`current${modalTitle}Unsubscribe`] = onSnapshot(collection(db, collectionName), snap => {
+            window[`current${modalTitle}s`] = [];
+            snap.forEach(d => { if(d.data().projectId === projectId) window[`current${modalTitle}s`].push({id: d.id, ...d.data()})});
+            window[`current${modalTitle}s`].sort((a,b) => getSafeMillis(a.createdAt) - getSafeMillis(b.createdAt));
             
-            const list = document.getElementById(`${prefix}-list`);
+            const list = document.getElementById(`${domPrefix}-list`);
             if(!list) return;
-            if(window[`current${type}s`].length === 0) { list.innerHTML = '<div class="text-center p-6 text-slate-400 font-bold">내역이 없습니다.</div>'; return; }
+            if(window[`current${modalTitle}s`].length === 0) { list.innerHTML = '<div class="text-center p-6 text-slate-400 font-bold">내역이 없습니다.</div>'; return; }
             
-            list.innerHTML = window[`current${type}s`].map(item => {
+            list.innerHTML = window[`current${modalTitle}s`].map(item => {
+                let colorClass = domPrefix === 'pur' ? 'amber' : (domPrefix === 'des' ? 'teal' : 'fuchsia');
                 let btnHtml = (item.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin') ? 
-                    `<button onclick="window.edit${type}Item('${item.id}')" class="text-${color}-400 hover:text-${color}-600 px-1"><i class="fa-solid fa-pen-to-square"></i></button>
-                     <button onclick="window.delete${type}Item('${item.id}')" class="text-rose-400 hover:text-rose-600 px-1"><i class="fa-solid fa-trash-can"></i></button>` : '';
+                    `<button onclick="window.edit${modalTitle}Item('${item.id}')" class="text-${colorClass}-400 hover:text-${colorClass}-600 px-1"><i class="fa-solid fa-pen-to-square"></i></button>
+                     <button onclick="window.delete${modalTitle}Item('${item.id}')" class="text-rose-400 hover:text-rose-600 px-1"><i class="fa-solid fa-trash-can"></i></button>` : '';
                      
                 let filesHtml = '';
                 if(item.files && item.files.length > 0) {
                     filesHtml = '<div class="mt-2 flex flex-wrap gap-2">' + item.files.map(f => {
                         let url = f.url || f.thumbBase64;
-                        return `<div class="relative border border-slate-200 rounded-lg p-1 bg-slate-50 hover:border-${color}-300 hover:shadow-sm transition-all cursor-pointer" onclick="event.stopPropagation(); window.openImageViewer('${url}')">
+                        return `<div class="relative border border-slate-200 rounded-lg p-1 bg-slate-50 hover:border-${colorClass}-300 hover:shadow-sm transition-all cursor-pointer" onclick="event.stopPropagation(); window.openImageViewer('${url}')">
                             <div class="w-14 h-14 flex items-center justify-center overflow-hidden rounded bg-white">
                                 <img src="${url}" class="max-w-full max-h-full object-contain">
                             </div>
@@ -1428,7 +1495,7 @@ const setupModalLogic = (type, prefix, color, collectionName) => {
                 
                 return `<div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm mb-2">
                     <div class="flex justify-between items-center mb-1">
-                        <span class="font-bold text-xs text-${color}-600">${item.authorName}</span>
+                        <span class="font-bold text-xs text-${colorClass}-600">${item.authorName}</span>
                         <div>${btnHtml}</div>
                     </div>
                     <div class="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">${item.content}</div>
@@ -1438,30 +1505,30 @@ const setupModalLogic = (type, prefix, color, collectionName) => {
         });
     };
     
-    window[`close${type}Modal`] = function() { 
-        const m = document.getElementById(`${prefix}-modal`);
+    window[`close${modalTitle}Modal`] = function() { 
+        const m = document.getElementById(`${domPrefix}-modal`);
         if(m){ m.classList.add('hidden'); m.classList.remove('flex'); } 
-        if(window[`current${type}Unsubscribe`]) window[`current${type}Unsubscribe`](); 
+        if(window[`current${modalTitle}Unsubscribe`]) window[`current${modalTitle}Unsubscribe`](); 
     };
     
-    window[`reset${type}Form`] = function() { 
-        document.getElementById(`editing-${prefix}-id`).value = ''; 
-        document.getElementById(`new-${prefix}-text`).value = ''; 
-        document.getElementById(`new-${prefix}-file`).value = ''; 
-        document.getElementById(`${prefix}-file-name`).innerText = ''; 
-        document.getElementById(`btn-${prefix}-save`).innerText = '등록'; 
-        document.getElementById(`btn-${prefix}-cancel`).classList.add('hidden'); 
+    window[`reset${modalTitle}Form`] = function() { 
+        document.getElementById(`editing-${domPrefix}-id`).value = ''; 
+        document.getElementById(`new-${domPrefix}-text`).value = ''; 
+        document.getElementById(`new-${domPrefix}-file`).value = ''; 
+        document.getElementById(`${domPrefix}-file-name`).innerText = ''; 
+        document.getElementById(`btn-${domPrefix}-save`).innerText = '등록'; 
+        document.getElementById(`btn-${domPrefix}-cancel`).classList.add('hidden'); 
     };
     
-    window[`save${type}Item`] = async function() {
-        const pid = document.getElementById(`${prefix}-req-id`).value;
-        const id = document.getElementById(`editing-${prefix}-id`).value;
-        const content = document.getElementById(`new-${prefix}-text`).value.trim();
-        const fileInput = document.getElementById(`new-${prefix}-file`);
+    window[`save${modalTitle}Item`] = async function() {
+        const pid = document.getElementById(`${domPrefix}-req-id`).value;
+        const id = document.getElementById(`editing-${domPrefix}-id`).value;
+        const content = document.getElementById(`new-${domPrefix}-text`).value.trim();
+        const fileInput = document.getElementById(`new-${domPrefix}-file`);
         
         if(!content && fileInput.files.length === 0) return safeShowError("내용이나 파일을 입력하세요.");
         
-        const btnSave = document.getElementById(`btn-${prefix}-save`);
+        const btnSave = document.getElementById(`btn-${domPrefix}-save`);
         if(btnSave) { btnSave.disabled = true; btnSave.innerText = '저장중...'; }
         
         try {
@@ -1487,7 +1554,7 @@ const setupModalLogic = (type, prefix, color, collectionName) => {
                 await addDoc(collection(db, collectionName), payload);
                 safeShowSuccess("등록되었습니다.");
             }
-            window[`reset${type}Form`]();
+            window[`reset${modalTitle}Form`]();
         } catch(e) {
             safeShowError("저장 실패", e);
         } finally {
@@ -1495,16 +1562,16 @@ const setupModalLogic = (type, prefix, color, collectionName) => {
         }
     };
     
-    window[`edit${type}Item`] = function(id) {
-        const item = window[`current${type}s`].find(p => p.id === id);
+    window[`edit${modalTitle}Item`] = function(id) {
+        const item = window[`current${modalTitle}s`].find(p => p.id === id);
         if(!item) return;
-        document.getElementById(`editing-${prefix}-id`).value = id;
-        document.getElementById(`new-${prefix}-text`).value = item.content || '';
-        document.getElementById(`btn-${prefix}-save`).innerText = '수정';
-        document.getElementById(`btn-${prefix}-cancel`).classList.remove('hidden');
+        document.getElementById(`editing-${domPrefix}-id`).value = id;
+        document.getElementById(`new-${domPrefix}-text`).value = item.content || '';
+        document.getElementById(`btn-${domPrefix}-save`).innerText = '수정';
+        document.getElementById(`btn-${domPrefix}-cancel`).classList.remove('hidden');
     };
     
-    window[`delete${type}Item`] = async function(id) { 
+    window[`delete${modalTitle}Item`] = async function(id) { 
         if(!confirm('삭제하시겠습니까?')) return; 
         try {
             await deleteDoc(doc(db, collectionName, id)); 
@@ -1515,9 +1582,9 @@ const setupModalLogic = (type, prefix, color, collectionName) => {
     };
 };
 
-setupModalLogic('Purchase', 'pur', 'amber', 'project_purchases');
-setupModalLogic('Design', 'des', 'teal', 'project_designs');
-setupModalLogic('PjtSchedule', 'sch', 'fuchsia', 'project_schedules');
+setupModalLogic('Pur', 'pur', 'project_purchases');
+setupModalLogic('Des', 'des', 'project_designs');
+setupModalLogic('Sch', 'sch', 'project_schedules');
 
 // ==========================================
 // 💡 부적합(NCR) 데이터 동기화
