@@ -1913,14 +1913,14 @@ window.saveWhPlans = async function(targetStatus) {
     });
 
     try {
-        const batch = window.writeBatch ? window.writeBatch(db) : await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(m => m.writeBatch(db));
+        const batch = writeBatch(db);
         
-        const q = window.query(window.collection(db, "work_plans"), window.where("period", "==", currentPeriod));
-        const existingSnap = await window.getDocs(q);
+        const q = query(collection(db, "work_plans"), where("period", "==", currentPeriod));
+        const existingSnap = await getDocs(q);
         existingSnap.forEach(docSnap => batch.delete(docSnap.ref));
         
         toSave.forEach(data => {
-            const ref = window.doc(window.collection(db, "work_plans")); 
+            const ref = doc(collection(db, "work_plans")); 
             data.createdAt = Date.now();
             delete data.id; 
             batch.set(ref, data);
@@ -1929,7 +1929,7 @@ window.saveWhPlans = async function(targetStatus) {
         await batch.commit();
         window.showToast(targetStatus === 'confirmed' ? "계획이 확정되어 대시보드에 반영됩니다." : "임시 저장되었습니다.", "success");
         
-        window.fetchWorkPlansForContext(); 
+        fetchWorkPlansForContext(); 
         window.closeWhPlanModal();
     } catch(e) {
         console.error(e);
