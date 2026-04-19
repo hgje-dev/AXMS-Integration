@@ -2260,3 +2260,222 @@ window.exportToExcel = async () => {
     saveAs(new Blob([buffer]), `공수보고서_${pCode||pName}_${new Date().toISOString().split('T')[0]}.xlsx`);
     window.showToast("엑셀 파일이 성공적으로 다운로드되었습니다.");
 };
+// ==========================================
+// 💡 프로젝트 불러오기 & 저장 (모달 로직)
+// ==========================================
+window.openProjectModal = async () => {
+    const modal = document.getElementById('project-list-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+    
+    const container = document.getElementById('project-list-container');
+    if (!container) return;
+    
+    container.innerHTML = '<div class="text-center p-6"><i class="fa-solid fa-spinner fa-spin text-slate-400 text-xl"></i></div>';
+    
+    try {
+        const snap = await getDocs(query(collection(db, "sim_projects")));
+        let projects = [];
+        snap.forEach(d => projects.push({ id: d.id, ...d.data() }));
+        projects.sort((a, b) => b.updatedAt - a.updatedAt); // 최신순 정렬
+
+        if (projects.length === 0) {
+            container.innerHTML = '<div class="text-center p-6 text-slate-500 font-bold">저장된 프로젝트가 없습니다.</div>';
+            return;
+        }
+        
+        let html = '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
+        projects.forEach(d => {
+            html += `
+            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md cursor-pointer transition-all border-l-4 border-l-indigo-500" onclick="window.loadProject('${d.id}')">
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded">${d.code || '코드없음'}</span>
+                    <span class="text-[10px] text-slate-400">${new Date(d.updatedAt).toLocaleDateString()}</span>
+                </div>
+                <h3 class="text-sm font-black text-slate-800 mb-1">${d.name || '제목 없음'}</h3>
+                <p class="text-xs text-slate-500">담당자: ${d.manager || '미정'} | ${d.processData ? d.processData.length : 0}개 공정</p>
+            </div>`;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+    } catch (e) {
+        container.innerHTML = '<div class="text-center p-6 text-rose-500 font-bold">데이터를 불러오지 못했습니다.</div>';
+    }
+};
+
+window.closeProjectModal = () => {
+    const modal = document.getElementById('project-list-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+};
+
+window.loadProject = async (id) => {
+    try {
+        const docSnap = await getDoc(doc(db, "sim_projects", id));
+        if (docSnap.exists()) {
+            const d = docSnap.data();
+            window.currentProjectId = id;
+            document.getElementById('project-code').value = d.code || '';
+            document.getElementById('project-name').value = d.name || '';
+            document.getElementById('manager-name').value = d.manager || '';
+            document.getElementById('equip-qty').value = d.qty || 1;
+            document.getElementById('learning-curve').value = d.curve || 95;
+            document.getElementById('diff-multiplier').value = d.diff || 1.0;
+            document.getElementById('buffer-rate').value = d.buffer || 5;
+            
+            document.getElementById('start-date').value = d.startDate || window.getLocalDateStr(new Date());
+            document.getElementById('target-date').value = d.targetDate || '';
+            document.getElementById('shipping-date').value = d.shippingDate || '';
+            
+            window.currentProcessData = d.processData || [];
+            
+            window.renderProcessTable();
+            window.renderUnitTables();
+            window.debouncedRunSimulation();
+            
+            window.closeProjectModal();
+            window.showToast("프로젝트를 성공적으로 불러왔습니다.", "success");
+        }
+    } catch (e) {
+        window.showToast("프로젝트 불러오기 실패", "error");
+    }
+};
+
+window.saveToFirestore = async (isHistory = false) => {
+    const code = document.getElementById('project-code').value.trim();
+    const name = document.getElementById('project-name').value.trim();
+    
+    if(!name) return window.showToast("프로젝트 명을 입력해주세요.", "warning");
+    
+    const payload = {
+        code: code,
+        name: name,
+        manager: document.getElementById('manager-name').value.trim(),
+        qty: parseFloat(document.getElementById('equip-qty').value) || 1,
+        curve: parseFloat(document.getElementById('learning-curve').value) || 95,
+        diff: parseFloat(document.getElementById('diff-multiplier').value) || 1.0,
+        buffer: parseFloat(document.getElementById('buffer-rate').value) || 5,
+        startDate: document.getElementById('start-date').value,
+        targetDate: document.getElementById('target-date').value,
+        shippingDate: document.getElementById('shipping-date').value,
+        processData: window.currentProcessData,
+        updatedAt: Date.now()
+    };
+
+    try {
+        if (window.currentProjectId && !isHistory) {
+            await setDoc(doc(db, "sim_projects", window.currentProjectId), payload, { merge: true });
+            window.showToast("프로젝트가 성공적으로 저장되었습니다.", "success");
+        } else {
+            payload.createdAt = Date.now();
+            const docRef = await addDoc(collection(db, "sim_projects"), payload);
+            if (!isHistory) window.currentProjectId = docRef.id;
+            window.showToast("새 프로젝트가 성공적으로 등록되었습니다.", "success");
+        }
+        window.isProjectDirty = false;
+    } catch (e) {
+        window.showToast("저장에 실패했습니다.", "error");
+    }
+};
+
+// ==========================================
+// 💡 예측 vs 실적 대시보드 모달 렌더링 (차트 포함)
+// ==========================================
+window.renderSimulationDashboard = async () => {
+    const tbody = document.getElementById('accuracy-tbody');
+    if (!tbody) return;
+    
+    try {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-6 text-slate-500 font-bold"><i class="fa-solid fa-spinner fa-spin mr-2"></i>데이터를 불러오는 중입니다...</td></tr>';
+        
+        // PJT 현황판에서 '완료(출하)'된 프로젝트 데이터 가져오기
+        const snap = await getDocs(query(collection(db, "projects_status"), where("status", "==", "completed")));
+        
+        let html = '';
+        let labels = [];
+        let mdData = [];
+        let dateData = [];
+
+        snap.forEach(docSnap => {
+            const d = docSnap.data();
+            const eMd = parseFloat(d.estMd) || 0;
+            const fMd = parseFloat(d.finalMd) || 0;
+            const errMd = fMd - eMd;
+            const errRate = eMd > 0 ? ((errMd / eMd) * 100).toFixed(1) : 0;
+            
+            // 날짜 오차 계산 (일수)
+            let dateDiff = 0;
+            if(d.d_shipEst && d.d_shipEn) {
+                const estD = new Date(d.d_shipEst);
+                const actD = new Date(d.d_shipEn);
+                dateDiff = Math.ceil((actD - estD) / (1000 * 60 * 60 * 24));
+            }
+
+            labels.push(d.code || '미지정');
+            mdData.push(errMd);
+            dateData.push(dateDiff);
+
+            html += `
+            <tr class="hover:bg-slate-50 border-b border-slate-100 transition-colors">
+                <td class="p-3 text-center font-bold text-slate-500">${d.code||'-'}</td>
+                <td class="p-3 font-bold text-slate-700 truncate max-w-[200px]" title="${d.name}">${d.name}</td>
+                <td class="p-3 text-center text-sky-600 font-bold">${eMd}</td>
+                <td class="p-3 text-center text-indigo-600 font-black">${fMd}</td>
+                <td class="p-3 text-center font-bold ${errRate > 0 ? 'text-rose-500' : 'text-emerald-500'}">${errRate}%</td>
+                <td class="p-3 text-center text-slate-500">${d.d_shipEst||'-'}</td>
+                <td class="p-3 text-center text-indigo-600 font-bold">${d.d_shipEn||'-'}</td>
+            </tr>`;
+        });
+        
+        if (html === '') {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center p-6 text-slate-400 font-bold">비교할 완료(출하) 데이터가 없습니다.</td></tr>';
+        } else {
+            tbody.innerHTML = html;
+        }
+
+        // --- 차트 그리기 로직 추가 ---
+        if(window.simDashChartMd) window.simDashChartMd.destroy();
+        if(window.simDashChartDate) window.simDashChartDate.destroy();
+
+        const ctxMd = document.getElementById('accuracy-chart-md')?.getContext('2d');
+        if (ctxMd) {
+            window.simDashChartMd = new Chart(ctxMd, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'MD 오차 (실적 - 예측)',
+                        data: mdData,
+                        backgroundColor: mdData.map(v => v > 0 ? '#ef4444' : '#10b981'),
+                        borderRadius: 4
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+
+        const ctxDate = document.getElementById('accuracy-chart-date')?.getContext('2d');
+        if (ctxDate) {
+            window.simDashChartDate = new Chart(ctxDate, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '일정 지연 일수 (실적 - 예측)',
+                        data: dateData,
+                        backgroundColor: dateData.map(v => v > 0 ? '#ef4444' : '#10b981'),
+                        borderRadius: 4
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+
+    } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-6 text-rose-500 font-bold">데이터 로드 중 오류가 발생했습니다.</td></tr>';
+    }
+};
