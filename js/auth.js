@@ -110,7 +110,6 @@ window.completeGoogleSignup = async () => {
     try {
         let initialRole = (finalEmail === 'mfg@axbis.ai') ? 'admin' : 'pending';
 
-        // 💡 18단계 페이지 권한(13) + PJT 세부 작성(쓰기) 권한(5) 팀별 초기화
         const dP = { 
             'dashboard-home': false, 'completion-report': false, 'project-status': true,
             'workhours': true, 'weekly-log': true, 'product-cost': false,
@@ -189,8 +188,7 @@ window.initAuthListeners = () => {
                     return; 
                 }
                 
-                // 💡 누락된 권한 동기화 (기존 유저들 대비)
-                if (!window.userProfile.permissions) window.userProfile.permissions = {}; 
+                let perms = window.userProfile.permissions || {}; 
                 const t = window.userProfile.team || window.userProfile.department || '';
                 const dP = { 
                     'dashboard-home': false, 'completion-report': false, 'project-status': true,
@@ -205,19 +203,21 @@ window.initAuthListeners = () => {
                 }; 
                 
                 let needsUpdate = false;
-                for (let p in dP) { 
-                    if (window.userProfile.permissions[p] === undefined) {
+                for (let pKey in dP) { 
+                    if (perms[pKey] === undefined) {
                         if (window.userProfile.role === 'admin' || window.userProfile.role === 'master') {
-                            window.userProfile.permissions[p] = true;
+                            perms[pKey] = true;
                         } else {
-                            window.userProfile.permissions[p] = dP[p];
+                            perms[pKey] = dP[pKey];
                         }
                         needsUpdate = true;
                     } 
                 }
                 
+                window.userProfile.permissions = perms;
+
                 if (needsUpdate) {
-                    await setDoc(doc(db, "users", u.uid), { permissions: window.userProfile.permissions }, { merge: true });
+                    await setDoc(doc(db, "users", u.uid), { permissions: perms }, { merge: true });
                 }
                 
                 window.currentUser = u;
