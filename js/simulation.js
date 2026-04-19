@@ -2279,7 +2279,9 @@ window.openProjectModal = async () => {
         const snap = await getDocs(query(collection(db, "sim_projects")));
         let projects = [];
         snap.forEach(d => projects.push({ id: d.id, ...d.data() }));
-        projects.sort((a, b) => b.updatedAt - a.updatedAt); // 최신순 정렬
+        
+        // 정렬 시 updatedAt 또는 createdAt 기준으로 정렬 처리
+        projects.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
 
         if (projects.length === 0) {
             container.innerHTML = '<div class="text-center p-6 text-slate-500 font-bold">저장된 프로젝트가 없습니다.</div>';
@@ -2288,14 +2290,30 @@ window.openProjectModal = async () => {
         
         let html = '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
         projects.forEach(d => {
+            // 과거 데이터(projectCode)와 신규 데이터(code)를 모두 호환하도록 매핑
+            const pCode = d.projectCode || d.code || '코드없음';
+            const pName = d.projectName || d.name || '제목 없음';
+            const pManager = d.managerName || d.manager || '미정';
+            const pDate = new Date(d.updatedAt || d.createdAt || Date.now()).toLocaleDateString();
+            const processCount = d.processData ? d.processData.length : 0;
+            const isLocked = !!d.isLocked;
+
             html += `
             <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md cursor-pointer transition-all border-l-4 border-l-indigo-500" onclick="window.loadProject('${d.id}')">
                 <div class="flex justify-between items-start mb-2">
-                    <span class="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded">${d.code || '코드없음'}</span>
-                    <span class="text-[10px] text-slate-400">${new Date(d.updatedAt).toLocaleDateString()}</span>
+                    <span class="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded">${pCode}</span>
+                    <span class="text-[10px] text-slate-400">${pDate}</span>
                 </div>
-                <h3 class="text-sm font-black text-slate-800 mb-1">${d.name || '제목 없음'}</h3>
-                <p class="text-xs text-slate-500">담당자: ${d.manager || '미정'} | ${d.processData ? d.processData.length : 0}개 공정</p>
+                <div class="flex justify-between items-start">
+                    <h3 class="text-sm font-black text-slate-800 mb-1 truncate pr-2">${pName}</h3>
+                    <div class="flex gap-2 shrink-0">
+                        <button onclick="window.toggleLockSimulationProject(event, '${d.id}', ${isLocked})" class="${isLocked ? 'text-amber-500' : 'text-slate-300 hover:text-amber-500'} transition-colors p-1" title="${isLocked ? '잠금 해제' : '잠금'}">
+                            <i class="fa-solid ${isLocked ? 'fa-lock' : 'fa-lock-open'}"></i>
+                        </button>
+                        <button onclick="window.deleteSimulationProject(event, '${d.id}')" class="text-slate-300 hover:text-rose-500 transition-colors p-1" title="삭제"><i class="fa-solid fa-trash-can"></i></button>
+                    </div>
+                </div>
+                <p class="text-xs text-slate-500">담당자: ${pManager} | ${processCount}개 공정</p>
             </div>`;
         });
         html += '</div>';
@@ -2310,6 +2328,50 @@ window.closeProjectModal = () => {
     if (modal) {
         modal.classList.add('hidden');
         modal.classList.remove('flex');
+    }
+};
+
+// 시뮬레이션 프로젝트 삭제 기능 복구
+window.deleteSimulationProject = async (e, id) => {
+    e.stopPropagation();
+    if (!confirm("이 시뮬레이션 프로젝트를 삭제하시겠습니까?")) return;
+    try {
+        await deleteDoc(doc(db, "sim_projects", id));
+        window.showToast("삭제되었습니다.", "success");
+        window.openProjectModal(); // 목록 새로고침
+    } catch(err) {
+        window.showToast("삭제 실패", "error");
+    }
+};
+
+// 시뮬레이션 프로젝트 잠금/해제 기능 복구
+window.toggleLockSimulationProject = async (e, id, currentLock) => {
+    e.stopPropagation();
+    let newPwd = null;
+    let isLocked = false;
+    
+    if (!currentLock) {
+        newPwd = prompt("이 프로젝트를 다른 사람이 수정하지 못하도록 잠급니다.\n사용할 비밀번호를 입력하세요:");
+        if (!newPwd) return;
+        isLocked = true;
+    } else {
+        const inputPwd = prompt("잠금을 해제하기 위한 비밀번호를 입력하세요:");
+        if (inputPwd === null) return;
+        
+        const docSnap = await getDoc(doc(db, "sim_projects", id));
+        if (docSnap.exists() && docSnap.data().lockPassword !== inputPwd) {
+            return window.showToast("비밀번호가 일치하지 않습니다.", "error");
+        }
+        isLocked = false;
+        newPwd = null;
+    }
+    
+    try {
+        await setDoc(doc(db, "sim_projects", id), { isLocked: isLocked, lockPassword: newPwd }, { merge: true });
+        window.showToast(isLocked ? "프로젝트가 잠겼습니다." : "잠금이 해제되었습니다.", "success");
+        window.openProjectModal(); // 목록 새로고침
+    } catch(err) {
+        window.showToast("처리 실패", "error");
     }
 };
 
