@@ -39,7 +39,6 @@
     </div>
 
     <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[80vh]">
-        
         <div class="px-5 py-3 border-b border-slate-100 flex flex-wrap gap-y-3 gap-x-4 justify-between items-center bg-slate-50 flex-shrink-0">
             <div class="flex items-center gap-3">
                 <h3 class="font-extrabold text-slate-800 text-base md:text-lg whitespace-nowrap">
@@ -130,7 +129,6 @@
                         <th class="border-b border-r border-slate-600 px-2 py-2 text-center sticky top-0 z-50 bg-slate-800" style="left: 550px; min-width: 110px; max-width: 110px;">업체명</th>
                         <th class="border-b border-r border-slate-600 px-2 py-2 text-center text-emerald-300 sticky top-0 z-50 bg-slate-800" style="left: 660px; min-width: 60px; max-width: 60px;">진행률</th>
                         <th class="border-b border-r border-slate-600 px-2 py-2 text-center sticky top-0 z-50 bg-slate-800 shadow-[3px_0_5px_-1px_rgba(0,0,0,0.3)] border-r-slate-300" style="left: 720px; min-width: 80px; max-width: 80px;">현재상태</th>
-                        
                         <th class="border border-slate-600 px-2 py-2 text-center">담당자</th>
                         <th class="border border-slate-600 px-2 py-2 text-center text-amber-500 w-16">구매</th>
                         <th class="border border-slate-600 px-2 py-2 text-center text-teal-400 w-16">설계</th>
@@ -686,7 +684,9 @@
     </div>
 </div>
 
-<div class="px-6 py-4 border-b flex flex-wrap justify-between items-center bg-rose-50 gap-4">
+<div id="ncr-modal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-6xl flex flex-col h-[600px] md:h-[85vh] overflow-hidden">
+        <div class="px-6 py-4 border-b flex flex-wrap justify-between items-center bg-rose-50 gap-4">
             <div class="flex items-center gap-4 flex-wrap">
                 <h2 class="text-lg font-extrabold text-rose-800 flex items-center gap-2">
                     <i class="fa-solid fa-file-circle-exclamation text-rose-500"></i> 부적합(NCR) 보고서 현황
