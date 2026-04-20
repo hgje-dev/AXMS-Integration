@@ -67,14 +67,16 @@
             <table class="w-full text-left border-collapse text-xs whitespace-nowrap">
                 <thead class="bg-slate-50 text-slate-500 sticky top-0 border-b border-slate-200 shadow-sm z-10">
                     <tr>
-                        <th class="p-3 font-bold text-center w-28">지출일</th>
-                        <th class="p-3 font-bold text-center w-20">파트</th>
-                        <th class="p-3 font-bold text-center text-indigo-600 w-32">PJT 코드</th>
-                        <th class="p-3 font-bold text-center w-28">지출 구분</th>
-                        <th class="p-3 font-bold min-w-[200px]">품목명 (규격 등 포함)</th>
-                        <th class="p-3 font-bold text-center w-24">수량</th>
-                        <th class="p-3 font-bold text-center text-emerald-600 w-28">단가 (원)</th>
-                        <th class="p-3 font-bold text-center text-blue-600 w-32">총 금액 (원)</th>
+                        <th class="p-3 font-bold text-center w-24">지출일</th>
+                        <th class="p-3 font-bold text-center w-20">작성자</th>
+                        <th class="p-3 font-bold text-center w-24">결재 구분</th>
+                        <th class="p-3 font-bold text-center w-16">파트</th>
+                        <th class="p-3 font-bold text-center text-indigo-600 w-28">PJT 코드</th>
+                        <th class="p-3 font-bold text-center w-24">지출 구분</th>
+                        <th class="p-3 font-bold min-w-[180px]">품목명 (규격 등 포함)</th>
+                        <th class="p-3 font-bold text-center w-16">수량</th>
+                        <th class="p-3 font-bold text-center text-emerald-600 w-24">단가 (원)</th>
+                        <th class="p-3 font-bold text-center text-blue-600 w-28">총 금액 (원)</th>
                         <th class="p-3 font-bold min-w-[150px]">용도 / 비고</th>
                         <th class="p-3 font-bold text-center w-16">관리</th>
                     </tr>
@@ -82,6 +84,14 @@
                 <tbody class="divide-y divide-slate-100">
                     <tr class="bg-indigo-50/30 border-b-2 border-indigo-100">
                         <td class="p-2"><input type="date" id="new-mfg-date" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-indigo-500 font-bold text-slate-600 cursor-pointer"></td>
+                        <td class="p-2 text-center text-[10px] font-bold text-indigo-400">자동입력</td>
+                        <td class="p-2">
+                            <select id="new-mfg-payment-type" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-indigo-500 font-bold text-slate-600 cursor-pointer bg-white">
+                                <option value="카드결재">카드결재</option>
+                                <option value="지출결의">지출결의</option>
+                                <option value="구매요청">구매요청</option>
+                            </select>
+                        </td>
                         <td class="p-2">
                             <select id="new-mfg-part" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-indigo-500 font-bold text-slate-600 cursor-pointer bg-white">
                                 <option value="제조">제조</option>
