@@ -1158,7 +1158,7 @@ window.generateAiComparison = async () => {
 };
 
 window.showAutocomplete = function(inputEl, targetId1, targetId2, isNameSearch) {
-    if(window.isLockedMode) return;
+    if (window.isLockedMode && inputEl.id === 'project-code') return;
     const val = inputEl.value.trim().toLowerCase(); 
     let dropdown = document.getElementById('pjt-autocomplete-dropdown');
     
@@ -1175,12 +1175,13 @@ window.showAutocomplete = function(inputEl, targetId1, targetId2, isNameSearch) 
     }
     
     let matches = [];
-    for (let i = 0; i < (window.pjtCodeMasterList || []).length; i++) {
-        let p = window.pjtCodeMasterList[i];
+    const masterList = window.pjtCodeMasterList || [];
+    for (let i = 0; i < masterList.length; i++) {
+        let p = masterList[i];
         if (isNameSearch) { 
-            if (p.name.toLowerCase().includes(val) || window.matchString(val, p.name)) matches.push(p); 
+            if ((p.name || '').toLowerCase().includes(val) || window.matchString(val, p.name)) matches.push(p); 
         } else { 
-            if (p.code.toLowerCase().includes(val) || window.matchString(val, p.code)) matches.push(p); 
+            if ((p.code || '').toLowerCase().includes(val) || window.matchString(val, p.code)) matches.push(p); 
         }
     }
     
@@ -1188,8 +1189,11 @@ window.showAutocomplete = function(inputEl, targetId1, targetId2, isNameSearch) 
         dropdown.classList.remove('hidden');
         let dropHtml = '';
         matches.forEach(function(m) {
-            let safeName = m.name.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
-            dropHtml += `<li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-slate-700 font-bold text-xs border-b border-slate-50 last:border-0 truncate transition-colors" onmousedown="window.selectAutocomplete('${m.code}', '${safeName}', '${inputEl.id}', '${targetId1}')"><span class="text-indigo-600">[${m.code}]</span> ${m.name}</li>`;
+            let safeCompany = m.company || '업체미상'; 
+            let safeName = (m.name || '').replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+            let safeCode = m.code || '-';
+            // 파라미터를 6개 모두 넘겨주도록 수정
+            dropHtml += `<li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-slate-700 font-bold text-xs border-b border-slate-50 last:border-0 truncate transition-colors" onmousedown="window.selectAutocomplete('${safeCode}', '${safeName}', '${safeCompany}', '${inputEl.id}', '${targetId1}', '${targetId2}')"><span class="text-indigo-600">[${safeCode}]</span> ${m.name} <span class="text-[10px] text-slate-400">(${safeCompany})</span></li>`;
         }); 
         dropdown.innerHTML = dropHtml;
     } else { 
@@ -1197,18 +1201,24 @@ window.showAutocomplete = function(inputEl, targetId1, targetId2, isNameSearch) 
     }
 };
 
-window.selectAutocomplete = function(code, name, sourceId, targetId1) { 
-    if(window.isLockedMode) return;
+window.selectAutocomplete = function(code, name, company, sourceId, targetId1, targetId2) { 
+    if (window.isLockedMode && sourceId === 'project-code') return;
+    
     const sourceEl = document.getElementById(sourceId); 
     const t1 = document.getElementById(targetId1); 
+    const t2 = document.getElementById(targetId2); 
     
-    if (sourceId === 'project-code') { 
+    // 💡 핵심: ID에 'code'가 포함되어 있으면 코드를 첫 번째 칸에 넣도록 범용적으로 검사
+    if (sourceId.includes('code')) { 
         if (sourceEl) sourceEl.value = code; 
         if (t1) t1.value = name; 
+        if (t2 && company !== 'undefined') t2.value = company; 
     } else { 
         if (sourceEl) sourceEl.value = name; 
         if (t1) t1.value = code; 
+        if (t2 && company !== 'undefined') t2.value = company; 
     } 
+    
     const drop = document.getElementById('pjt-autocomplete-dropdown'); 
     if (drop) drop.classList.add('hidden'); 
 };
