@@ -116,55 +116,6 @@ window.switchWeeklyTab = function(tabName) {
     }
 };
 
-window.showAutocomplete = function(inputEl, targetId1, targetId2, isNameSearch) {
-    const val = inputEl.value.trim().toLowerCase();
-    let dropdown = document.getElementById('pjt-autocomplete-dropdown');
-    
-    if(!dropdown) {
-        dropdown = document.createElement('ul');
-        dropdown.id = 'pjt-autocomplete-dropdown';
-        dropdown.className = 'absolute z-[9999] bg-white border border-indigo-200 shadow-xl rounded-xl max-h-48 overflow-y-auto text-sm w-[300px] custom-scrollbar py-1 mt-1';
-        inputEl.parentNode.appendChild(dropdown);
-    }
-    
-    if(val.length < 1) { dropdown.classList.add('hidden'); return; }
-
-    let matches = (window.pjtCodeMasterList || []).filter(p => {
-        let code = (p.code || '').toLowerCase();
-        let name = (p.name || '').toLowerCase();
-        return code.includes(val) || name.includes(val) ||
-               (window.matchString && window.matchString(val, p.code)) ||
-               (window.matchString && window.matchString(val, p.name));
-    });
-
-    if(matches.length > 0) {
-        dropdown.classList.remove('hidden');
-        dropdown.innerHTML = matches.map(m => {
-            let safeName = m.name.replace(/'/g, "\\'").replace(/"/g, "&quot;");
-            return `<li class="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer text-slate-700 font-bold text-xs border-b border-slate-50 last:border-0 truncate transition-colors" onmousedown="window.selectAutocomplete('${m.code}', '${safeName}', '${inputEl.id}', '${targetId1}')"><span class="text-indigo-600">[${m.code}]</span> ${m.name}</li>`;
-        }).join('');
-    } else {
-        dropdown.classList.add('hidden');
-    }
-};
-
-window.selectAutocomplete = function(code, name, sourceId, targetId1) {
-    const sourceEl = document.getElementById(sourceId);
-    const t1 = document.getElementById(targetId1);
-    if (sourceEl) sourceEl.value = name;
-    if (t1) t1.value = code;
-    const drop = document.getElementById('pjt-autocomplete-dropdown');
-    if (drop) drop.classList.add('hidden');
-};
-
-document.addEventListener('click', function(e) {
-    const d = document.getElementById('pjt-autocomplete-dropdown');
-    if (d && !d.classList.contains('hidden') && !e.target.closest('#pjt-autocomplete-dropdown') && !e.target.closest('input[oninput*="showAutocomplete"]')) {
-        d.classList.add('hidden');
-    }
-});
-
-
 window.updateWeekLabels = function(weekStr) {
     if(!weekStr || !window.getDatesFromWeek) return;
     const dates = window.getDatesFromWeek(weekStr); 
