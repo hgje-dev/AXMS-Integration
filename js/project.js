@@ -482,6 +482,16 @@ window.loadProjectStatusData = function() {
 
     if (window.initGoogleAPI) window.initGoogleAPI();
 
+    // 💡 등록 버튼 권한 제어
+    const user = window.userProfile || {};
+    const isAdmin = user.role === 'admin' || user.role === 'master';
+    const hasStatusPerm = user.permissions && user.permissions['pjt-w-status'];
+    const btnCreate = document.getElementById('btn-create-proj');
+    if (btnCreate) {
+        if (isAdmin || hasStatusPerm) btnCreate.style.display = '';
+        else btnCreate.style.display = 'none';
+    }
+
     if(projectStatusSnapshotUnsubscribe) projectStatusSnapshotUnsubscribe();
     
     projectStatusSnapshotUnsubscribe = onSnapshot(query(collection(db, "projects_status")), function(snapshot) {
@@ -698,6 +708,23 @@ window.editProjStatus = function(id) {
         
         const btnHistory = document.getElementById('btn-view-history'); if (btnHistory) btnHistory.classList.remove('hidden'); 
         
+        // 💡 기본현황 쓰기 권한 체크 및 UI 제어
+        const user = window.userProfile || {};
+        const isAdmin = user.role === 'admin' || user.role === 'master';
+        const isManager = item.manager === user.name;
+        const hasPerm = user.permissions && user.permissions['pjt-w-status'];
+        const canWrite = isAdmin || isManager || hasPerm;
+
+        const saveBtn = document.getElementById('btn-proj-save');
+        const readonlyBanner = document.getElementById('ps-readonly-banner');
+        if (canWrite) {
+            if(saveBtn) saveBtn.style.display = '';
+            if(readonlyBanner) readonlyBanner.classList.add('hidden');
+        } else {
+            if(saveBtn) saveBtn.style.display = 'none';
+            if(readonlyBanner) readonlyBanner.classList.remove('hidden');
+        }
+
         const modal = document.getElementById('proj-status-write-modal');
         if(!modal) { safeShowError('프로젝트 수정 모달창 요소를 찾을 수 없습니다.'); return; }
         
@@ -1243,7 +1270,7 @@ window.renderLogMembers = function(mode = 'log') {
 };
 
 // ==========================================
-// 💡 MD 투입 기록 모달 (팀원 전용 쓰기 권한)
+// 💡 MD 투입 기록 모달
 // ==========================================
 window.openMdLogModal = function(projectId, title, curMd) { 
     try {
@@ -1262,12 +1289,13 @@ window.openMdLogModal = function(projectId, title, curMd) {
 
         if(window.resetMdLogForm) window.resetMdLogForm(); 
         
-        // 💡 팀 인원 및 관리자만 작성 가능
+        // 💡 팀 인원, 관리자, 또는 투입현황/기본현황 권한 보유자 작성 가능하도록 권한 수정
         const user = window.userProfile || {};
         const isAdmin = user.role === 'admin' || user.role === 'master';
         const isManager = proj.manager === user.name;
         const isMember = (proj.members || '').includes(user.name);
-        const canWrite = isAdmin || isManager || isMember;
+        const hasPerm = user.permissions && (user.permissions['pjt-w-status'] || user.permissions['workhours']);
+        const canWrite = isAdmin || isManager || isMember || hasPerm;
 
         if (canWrite) {
             document.getElementById('md-input-section').classList.remove('hidden'); document.getElementById('md-input-section').classList.add('flex');
@@ -1342,7 +1370,7 @@ window.editMdLog = function(id) { const log = (window.currentMdLogs || []).find(
 window.updateProjectTotalMd = async function(projectId) { const snap = await getDocs(query(collection(db, "project_md_logs"), where("projectId", "==", projectId))); let total = 0; snap.forEach(docSnap => total += parseFloat(docSnap.data().md) || 0); const projRef = doc(db, "projects_status", projectId); const projSnap = await getDoc(projRef); if(projSnap.exists()) { const outMd = parseFloat(projSnap.data().outMd) || 0; await setDoc(projRef, { currentMd: total, finalMd: total + outMd }, { merge: true }); } };
 
 // ==========================================
-// 💡 생산일지 모달 (팀원 전용 쓰기 권한 및 드라이브 연동, 이미지 URL 파싱 수정)
+// 💡 생산일지 모달
 // ==========================================
 window.openDailyLogModal = function(projectId) { 
     try {
@@ -1363,12 +1391,13 @@ window.openDailyLogModal = function(projectId) {
 
         if(window.resetDailyLogForm) window.resetDailyLogForm(); 
         
-        // 💡 팀 인원 및 관리자만 작성 가능
+        // 💡 팀 인원, 관리자, 또는 생산일지 권한 보유자 작성 가능하도록 권한 수정
         const user = window.userProfile || {};
         const isAdmin = user.role === 'admin' || user.role === 'master';
         const isManager = proj.manager === user.name;
         const isMember = (proj.members || '').includes(user.name);
-        const canWrite = isAdmin || isManager || isMember;
+        const hasPerm = user.permissions && user.permissions['pjt-w-log'];
+        const canWrite = isAdmin || isManager || isMember || hasPerm;
 
         if (canWrite) {
             document.getElementById('log-input-section').classList.remove('hidden'); document.getElementById('log-input-section').classList.add('flex');
@@ -1553,12 +1582,38 @@ window.clearDailyLogFile = function(e) { if(e && typeof e.stopPropagation === 'f
 
 
 // ==========================================
-// 💡 구매, 설계, 일정 모달창 (접근자 Fix 및 이미지 파싱 보완)
+// 💡 구매, 설계, 일정 모달창
 // ==========================================
 const setupModalLogic = (modalTitle, domPrefix, collectionName) => {
     window[`open${modalTitle}Modal`] = function(projectId, title) {
         const modal = document.getElementById(`${domPrefix}-modal`);
         if(!modal) return;
+        
+        // 💡 모달별 권한 체크 추가 및 UI 제어
+        const proj = (window.currentProjectStatusList || []).find(p => p.id === projectId) || {};
+        const user = window.userProfile || {};
+        const isAdmin = user.role === 'admin' || user.role === 'master';
+        const isManager = proj.manager === user.name;
+        
+        let permKey = '';
+        if (domPrefix === 'pur') permKey = 'pjt-w-pur';
+        else if (domPrefix === 'des') permKey = 'pjt-w-des';
+        else if (domPrefix === 'sch') permKey = 'pjt-w-sch';
+        
+        const hasPerm = user.permissions && user.permissions[permKey];
+        const canWrite = isAdmin || isManager || hasPerm;
+
+        const inputSection = document.getElementById(`${domPrefix}-input-section`);
+        const readonlyBanner = document.getElementById(`${domPrefix}-readonly-banner`);
+        
+        if (canWrite) {
+            if (inputSection) { inputSection.classList.remove('hidden'); inputSection.classList.add('flex'); }
+            if (readonlyBanner) readonlyBanner.classList.add('hidden');
+        } else {
+            if (inputSection) { inputSection.classList.add('hidden'); inputSection.classList.remove('flex'); }
+            if (readonlyBanner) readonlyBanner.classList.remove('hidden');
+        }
+
         modal.classList.remove('hidden'); modal.classList.add('flex');
         document.getElementById(`${domPrefix}-req-id`).value = projectId;
         document.getElementById(`${domPrefix}-project-title`).innerText = title;
@@ -1576,7 +1631,7 @@ const setupModalLogic = (modalTitle, domPrefix, collectionName) => {
             
             list.innerHTML = window[`current${modalTitle}s`].map(item => {
                 let colorClass = domPrefix === 'pur' ? 'amber' : (domPrefix === 'des' ? 'teal' : 'fuchsia');
-                let btnHtml = (item.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin') ? 
+                let btnHtml = (canWrite && (item.authorUid === window.currentUser?.uid || window.userProfile?.role === 'admin')) ? 
                     `<button onclick="window.edit${modalTitle}Item('${item.id}')" class="text-${colorClass}-400 hover:text-${colorClass}-600 px-1"><i class="fa-solid fa-pen-to-square"></i></button>
                      <button onclick="window.delete${modalTitle}Item('${item.id}')" class="text-rose-400 hover:text-rose-600 px-1"><i class="fa-solid fa-trash-can"></i></button>` : '';
                      
