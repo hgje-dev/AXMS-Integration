@@ -686,13 +686,18 @@
     </div>
 </div>
 
-<div id="ncr-modal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10">
-    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-6xl flex flex-col h-[600px] md:h-[85vh] overflow-hidden">
-        <div class="px-6 py-4 border-b flex justify-between items-center bg-rose-50">
-            <h2 class="text-lg font-extrabold text-rose-800 flex items-center gap-2">
-                <i class="fa-solid fa-file-circle-exclamation text-rose-500"></i> 부적합(NCR) 보고서 현황
-            </h2>
-            <div class="flex items-center gap-4">
+<div class="px-6 py-4 border-b flex flex-wrap justify-between items-center bg-rose-50 gap-4">
+            <div class="flex items-center gap-4 flex-wrap">
+                <h2 class="text-lg font-extrabold text-rose-800 flex items-center gap-2">
+                    <i class="fa-solid fa-file-circle-exclamation text-rose-500"></i> 부적합(NCR) 보고서 현황
+                </h2>
+                <div id="ncr-modal-summary" class="hidden items-center gap-2">
+                    <span class="bg-white border border-slate-200 text-slate-600 px-2.5 py-1 rounded-md text-[11px] font-bold shadow-sm">총 발생 <span id="ncr-modal-total" class="text-rose-500 ml-1 font-black">0</span>건</span>
+                    <span class="bg-rose-50 border border-rose-200 text-rose-600 px-2.5 py-1 rounded-md text-[11px] font-bold shadow-sm">진행중 <span id="ncr-modal-prog" class="ml-1 font-black">0</span>건</span>
+                    <span class="bg-emerald-50 border border-emerald-200 text-emerald-600 px-2.5 py-1 rounded-md text-[11px] font-bold shadow-sm">조치완료 <span id="ncr-modal-comp" class="ml-1 font-black">0</span>건</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-4 ml-auto">
                 <span id="ncr-modal-pjt-name" class="text-sm font-bold text-rose-600 bg-white px-3 py-1 rounded-lg border border-rose-200 shadow-sm"></span>
                 <button onclick="window.closeNcrModal()" class="text-rose-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
             </div>
