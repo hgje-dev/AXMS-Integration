@@ -936,7 +936,7 @@ window.selectAutocomplete = function(code, name, company, sourceId, targetId1, t
     const t1 = document.getElementById(targetId1); 
     const t2 = document.getElementById(targetId2); 
     
-    // 해결: 입력창 ID에 'code'가 포함되어 있는지 범용적으로 확인
+    // 💡 핵심: ID에 'code'가 포함되어 있으면 코드를 첫 번째 칸에 넣음
     if (sourceId.includes('code')) { 
         if (sourceEl) sourceEl.value = code; 
         if (t1) t1.value = name; 
