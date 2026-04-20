@@ -1843,13 +1843,33 @@ window.openNcrModal = function(pjtCode, pjtName) {
         const modal = document.getElementById('ncr-modal');
         if(modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
         
-        const tbody = document.getElementById('ncr-modal-list'); if (!tbody) return;
-        const safeTargetCode = getSafeString(pjtCode).replace(/\s/g, '').toUpperCase();
-        const list = (window.ncrData || []).filter(n => getSafeString(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeTargetCode);
-        
-        if (list.length === 0) { tbody.innerHTML = '<tr><td colspan="8" class="text-center p-6 text-slate-400 font-bold bg-white">등록된 부적합 내역이 없습니다.</td></tr>'; return; }
-        
-        tbody.innerHTML = list.map(n => {
+         const tbody = document.getElementById('ncr-modal-list'); if (!tbody) return;
+                const safeTargetCode = getSafeString(pjtCode).replace(/\s/g, '').toUpperCase();
+                const list = (window.ncrData || []).filter(n => getSafeString(n.pjtCode).replace(/\s/g, '').toUpperCase() === safeTargetCode);
+                
+                // 👇 추가된 카운트 계산 및 UI 업데이트 로직 시작
+                let total = list.length;
+                let comp = 0;
+                let prog = 0;
+                
+                list.forEach(n => {
+                    const isComp = getSafeString(n.status).includes('완료') || getSafeString(n.status).includes('종결') || getSafeString(n.status).includes('완료됨');
+                    if(isComp) comp++; else prog++;
+                });
+
+                const summaryWrap = document.getElementById('ncr-modal-summary');
+                if(summaryWrap) {
+                    summaryWrap.classList.remove('hidden');
+                    summaryWrap.classList.add('flex');
+                    document.getElementById('ncr-modal-total').innerText = total;
+                    document.getElementById('ncr-modal-prog').innerText = prog;
+                    document.getElementById('ncr-modal-comp').innerText = comp;
+                }
+                // 👆 추가된 카운트 로직 끝
+
+                if (list.length === 0) { tbody.innerHTML = '<tr><td colspan="8" class="text-center p-6 text-slate-400 font-bold bg-white">등록된 부적합 내역이 없습니다.</td></tr>'; return; }
+                
+                tbody.innerHTML = list.map(n => {
             const isComp = getSafeString(n.status).includes('완료') || getSafeString(n.status).includes('종결');
             return `<tr class="hover:bg-slate-50 transition-colors bg-white border-b border-slate-100"><td class="p-3 text-center font-bold text-slate-500 whitespace-nowrap">${getSafeString(n.ncrNo) || '-'}</td><td class="p-3 text-center text-slate-500 whitespace-nowrap">${getSafeString(n.date) || '-'}</td><td class="p-3 font-bold text-slate-700">${getSafeString(n.drawingNo) || '-'}</td><td class="p-3 text-slate-600">${getSafeString(n.partName) || '-'}</td><td class="p-3 text-slate-600">${getSafeString(n.content).replace(/</g, '&lt;').replace(/>/g, '&gt;') || '-'}</td><td class="p-3 text-center text-rose-500 font-bold">${getSafeString(n.expectedDate) || '-'}</td><td class="p-3 text-center text-emerald-500 font-bold">${getSafeString(n.completedDate) || '-'}</td><td class="p-3 text-center whitespace-nowrap">${isComp ? `<span class="bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">완료</span>` : `<span class="bg-rose-50 text-rose-600 border border-rose-200 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">진행중</span>`}</td></tr>`;
         }).join('');
