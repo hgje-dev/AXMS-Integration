@@ -1936,3 +1936,100 @@ window.saveWhPlans = async function(targetStatus) {
         window.showToast("저장 실패: " + e.message, "error");
     }
 };
+// ==========================================
+// 💡 최근입력DATA (생산일지) 모달 기능 추가
+// ==========================================
+window.openRecentLogsModal = async function() {
+    const modal = document.getElementById('recent-logs-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+    
+    const containerMfg = document.getElementById('recent-logs-mfg-list');
+    const containerOpt = document.getElementById('recent-logs-opt-list');
+    
+    if (containerMfg) containerMfg.innerHTML = '<div class="text-center p-6 text-slate-400 font-bold"><i class="fa-solid fa-spinner fa-spin text-xl mb-2 text-indigo-400"></i><br>제조 파트 데이터를 불러오는 중...</div>';
+    if (containerOpt) containerOpt.innerHTML = '<div class="text-center p-6 text-slate-400 font-bold"><i class="fa-solid fa-spinner fa-spin text-xl mb-2 text-sky-400"></i><br>광학 파트 데이터를 불러오는 중...</div>';
+
+    try {
+        const { collection, getDocs, query, orderBy, limit } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        
+        // PJT 파트(제조/광학) 구분을 위해 프로젝트 현황 정보 로드
+        let pjtMap = {};
+        if (window.currentProjectStatusList && window.currentProjectStatusList.length > 0) {
+            window.currentProjectStatusList.forEach(p => { pjtMap[p.id] = p; });
+        } else {
+            const pSnap = await getDocs(collection(db, "projects_status"));
+            pSnap.forEach(doc => { pjtMap[doc.id] = doc.data(); });
+        }
+
+        // 전체 생산일지 컬렉션에서 최신순으로 100개를 가져와 분배
+        const snap = await getDocs(query(collection(db, "daily_logs"), orderBy("createdAt", "desc"), limit(100)));
+        
+        let mfgLogs = [];
+        let optLogs = [];
+
+        snap.forEach(doc => {
+            const data = { id: doc.id, ...doc.data() };
+            const proj = pjtMap[data.projectId] || {};
+            
+            const part = proj.part || '제조'; 
+            data.projectName = proj.name || '알수없는 프로젝트';
+            data.projectCode = proj.code || '-';
+
+            // 파트별로 최신 15개까지만 담음
+            if (part === '광학') {
+                if (optLogs.length < 15) optLogs.push(data);
+            } else {
+                if (mfgLogs.length < 15) mfgLogs.push(data);
+            }
+        });
+
+        // 렌더링 템플릿
+        const renderLog = (log) => {
+            const dateStr = log.date || '-';
+            const author = log.authorName || '작성자';
+            const safeContent = (log.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+            const title = `[${log.projectCode}] ${log.projectName}`;
+            const timeStr = log.createdAt ? new Date(log.createdAt).toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'}) : '';
+            
+            // 클릭 시 1. 현재 모달 닫기 2. 프로젝트 현황판 화면으로 이동 3. 약간의 딜레이 후 생산일지 모달 열기
+            const onClickAction = `window.closeRecentLogsModal(); window.openApp('project-status'); setTimeout(()=>window.openDailyLogModal('${log.projectId}'), 500);`;
+            
+            return `
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:bg-slate-50 hover:border-indigo-300 hover:shadow-md transition-all mb-3 group" onclick="${onClickAction}">
+                    <div class="flex justify-between items-start mb-2 border-b border-slate-100 pb-2">
+                        <div class="font-black text-xs text-indigo-700 truncate flex-1 pr-2 group-hover:text-indigo-500 transition-colors">${title}</div>
+                        <div class="text-[10px] text-slate-500 font-bold shrink-0 bg-slate-100 px-1.5 py-0.5 rounded flex items-center gap-1"><i class="fa-regular fa-calendar-check"></i> ${dateStr}</div>
+                    </div>
+                    <div class="text-[11px] text-slate-600 font-medium line-clamp-2 leading-relaxed mb-2">${safeContent}</div>
+                    <div class="flex justify-between items-center mt-2 pt-2 border-t border-slate-50 border-dashed">
+                        <div class="text-[10px] font-bold text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100"><i class="fa-solid fa-user-pen mr-1 text-slate-400"></i>${author}</div>
+                        <div class="text-[9px] font-bold text-slate-300">${timeStr}</div>
+                    </div>
+                </div>
+            `;
+        };
+
+        if (containerMfg) {
+            containerMfg.innerHTML = mfgLogs.length > 0 ? mfgLogs.map(renderLog).join('') : '<div class="text-center p-6 text-xs font-bold text-slate-400">최근 입력된 데이터가 없습니다.</div>';
+        }
+        if (containerOpt) {
+            containerOpt.innerHTML = optLogs.length > 0 ? optLogs.map(renderLog).join('') : '<div class="text-center p-6 text-xs font-bold text-slate-400">최근 입력된 데이터가 없습니다.</div>';
+        }
+
+    } catch (e) {
+        console.error("최근 입력 데이터 로드 실패:", e);
+        if (containerMfg) containerMfg.innerHTML = '<div class="text-center p-6 text-xs font-bold text-rose-500">데이터를 불러오는 중 오류가 발생했습니다.</div>';
+        if (containerOpt) containerOpt.innerHTML = '<div class="text-center p-6 text-xs font-bold text-rose-500">데이터를 불러오는 중 오류가 발생했습니다.</div>';
+    }
+};
+
+window.closeRecentLogsModal = function() {
+    const modal = document.getElementById('recent-logs-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+};
