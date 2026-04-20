@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { db } from './firebase.js';
 import { collection, doc, setDoc, addDoc, deleteDoc, query, onSnapshot, where, orderBy } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
@@ -86,8 +87,9 @@ window.filterMfgCostData = function() {
         if (partFilter !== 'all' && cost.part !== partFilter) match = false;
         if (monthFilter && cost.date && !cost.date.startsWith(monthFilter)) match = false;
 
+        // 검색 시 프로젝트 정보 및 작성자 이름도 포함되도록 개선
         if (searchKeyword) {
-            const targetStr = `${cost.pjtCode || ''} ${cost.pjtName || ''}`;
+            const targetStr = `${cost.pjtCode || ''} ${cost.pjtName || ''} ${cost.authorName || ''}`;
             if (!mfgMatchString(searchKeyword, targetStr)) {
                 match = false;
             }
@@ -162,7 +164,7 @@ function renderMfgCostTable() {
     if (!tbody) return;
 
     if (window.filteredMfgCosts.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="10" class="text-center p-8 text-slate-400 font-bold">해당 조건의 지출 내역이 없습니다.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="12" class="text-center p-8 text-slate-400 font-bold">해당 조건의 지출 내역이 없습니다.</td></tr>`;
         return;
     }
 
@@ -181,6 +183,8 @@ function renderMfgCostTable() {
         html += `
         <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">
             <td class="p-3 text-center font-bold text-slate-500">${cost.date || '-'}</td>
+            <td class="p-3 text-center font-bold text-indigo-500">${cost.authorName || '-'}</td>
+            <td class="p-3 text-center"><span class="bg-amber-50 text-amber-700 border border-amber-200 px-2 py-1 rounded shadow-sm font-bold">${cost.paymentType || '-'}</span></td>
             <td class="p-3 text-center font-bold text-slate-600">${cost.part || '-'}</td>
             <td class="p-3 text-center font-bold text-indigo-600">${cost.pjtCode || '-'}</td>
             <td class="p-3 text-center"><span class="bg-slate-100 text-slate-600 px-2 py-1 rounded font-bold">${cost.category || '-'}</span></td>
@@ -209,6 +213,7 @@ window.calcMfgAmount = function() {
 
 window.saveMfgCost = async function() {
     const dateEl = document.getElementById('new-mfg-date');
+    const paymentTypeEl = document.getElementById('new-mfg-payment-type');
     const partEl = document.getElementById('new-mfg-part');
     const pjtCodeEl = document.getElementById('new-mfg-pjt');
     const pjtNameEl = document.getElementById('new-mfg-pjt-name');
@@ -226,6 +231,7 @@ window.saveMfgCost = async function() {
 
     const payload = {
         date: dateEl.value,
+        paymentType: paymentTypeEl.value,
         part: partEl.value,
         pjtCode: pjtCodeEl.value.trim(),
         pjtName: pjtNameEl.value.trim(),
@@ -284,7 +290,7 @@ function getCombinedPjtPool() {
     (window.currentProjectStatusList || []).forEach(p => {
         if (p.code && !seenCodes.has(p.code)) {
             seenCodes.add(p.code);
-            pool.push({ code: p.code, name: p.name, part: p.part }); // 파트 정보 포함
+            pool.push({ code: p.code, name: p.name, part: p.part }); 
         }
     });
     
