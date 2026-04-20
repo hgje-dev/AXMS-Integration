@@ -394,26 +394,27 @@ window.loadWeeklyLogsData = function() {
         }
     });
 
-    if (!noticeUnsubscribe) {
-        noticeUnsubscribe = onSnapshot(doc(db, "settings", "weekly_notice"), (docSnap) => {
-            const el = document.getElementById('weekly-notice-text');
-            const rawEl = document.getElementById('weekly-notice-raw-text');
-            
-            if (el) {
-                if (docSnap.exists() && docSnap.data().text) {
-                    let rawText = docSnap.data().text;
-                    if(rawEl) rawEl.value = rawText;
-                    
-                    let formatted = rawText.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
-                    if(window.formatMentions) formatted = window.formatMentions(formatted);
-                    el.innerHTML = formatted;
-                } else {
-                    if(rawEl) rawEl.value = '';
-                    el.innerText = "등록된 공지사항이 없습니다.";
-                }
+    // 💡 조건문을 변경하여 화면에 들어올 때마다 리스너를 재연결하도록 수정
+    if (noticeUnsubscribe) noticeUnsubscribe();
+    
+    noticeUnsubscribe = onSnapshot(doc(db, "settings", "weekly_notice"), (docSnap) => {
+        const el = document.getElementById('weekly-notice-text');
+        const rawEl = document.getElementById('weekly-notice-raw-text');
+        
+        if (el) {
+            if (docSnap.exists() && docSnap.data().text) {
+                let rawText = docSnap.data().text;
+                if(rawEl) rawEl.value = rawText;
+                
+                let formatted = rawText.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+                if(window.formatMentions) formatted = window.formatMentions(formatted);
+                el.innerHTML = formatted;
+            } else {
+                if(rawEl) rawEl.value = '';
+                el.innerText = "등록된 공지사항이 없습니다.";
             }
-        });
-    }
+        }
+    });
 
     if (currentWeeklyLogUnsubscribe) currentWeeklyLogUnsubscribe(); 
     currentWeeklyLogUnsubscribe = onSnapshot(query(collection(db, "weekly_logs_v2"), where("week", "==", w)), function(s) { 
