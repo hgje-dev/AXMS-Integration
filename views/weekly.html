@@ -352,3 +352,59 @@
         </div>
     </div>
 </div>
+<div class="flex items-center gap-3">
+    <button onclick="window.openTeamModal()" class="text-[11px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-2 rounded-xl transition-colors border border-indigo-100 flex items-center gap-1.5 whitespace-nowrap hidden sm:flex">
+        <i class="fa-solid fa-users-gear"></i> 팀원 관리
+    </button>
+    
+    <div class="flex items-center bg-white border border-slate-200 rounded-xl p-1 shadow-sm relative shrink-0">
+        <button onclick="window.changeWeeklyWeek(-1)" class="px-3 py-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-all z-10"><i class="fa-solid fa-chevron-left"></i></button>
+        
+        <div class="relative flex items-center justify-center px-4 cursor-pointer z-10 group min-w-[140px] h-full" onclick="document.getElementById('weekly-log-filter-week').showPicker()">
+            <span id="weekly-display-text" class="text-sm font-black text-slate-700 group-hover:text-indigo-600 transition-colors">데이터 로드중...</span>
+            <i class="fa-regular fa-calendar ml-2 text-slate-400 group-hover:text-indigo-500 transition-colors"></i>
+            <input type="week" id="weekly-log-filter-week" class="absolute w-0 h-0 opacity-0 -z-10" onchange="window.handleWeekChange(this.value)">
+        </div>
+        
+        <button onclick="window.changeWeeklyWeek(1)" class="px-3 py-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-all z-10"><i class="fa-solid fa-chevron-right"></i></button>
+    </div>
+
+    <button id="btn-export-weekly" onclick="window.exportWeeklyLogsExcel()" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md transition-colors items-center gap-2 whitespace-nowrap">
+        <i class="fa-solid fa-file-excel"></i> 엑셀 다운로드
+    </button>
+
+    <button onclick="window.openRecentLogsModal()" class="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2 whitespace-nowrap">
+        <i class="fa-solid fa-clock-rotate-left"></i> 최근입력DATA
+    </button>
+
+    <button onclick="window.openWeeklyLogWriteModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2 whitespace-nowrap">
+        <i class="fa-solid fa-plus"></i> 일지 작성
+    </button>
+</div>
+
+<div id="recent-logs-modal" class="fixed inset-0 z-[300] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm py-10 transition-opacity">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-5xl flex flex-col h-[700px] md:h-[85vh] overflow-hidden transform transition-all">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-teal-50 shrink-0">
+            <h2 class="text-base font-extrabold text-teal-800 flex items-center gap-2">
+                <i class="fa-solid fa-clock-rotate-left text-teal-500"></i> 최근 생산일지 데이터 (Top 15)
+            </h2>
+            <button onclick="window.closeRecentLogsModal()" class="text-teal-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
+        </div>
+        <div class="p-6 bg-slate-50 flex-1 overflow-hidden flex flex-col md:flex-row gap-6">
+            <div class="flex-1 flex flex-col h-full bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="bg-indigo-50 px-4 py-3 border-b border-indigo-100 flex items-center justify-between">
+                    <h3 class="font-black text-indigo-800 text-sm flex items-center gap-2"><i class="fa-solid fa-industry text-indigo-500"></i> 제조 파트</h3>
+                    <span class="text-[10px] font-bold text-indigo-400">최근 15건</span>
+                </div>
+                <div id="recent-logs-mfg-list" class="flex-1 overflow-y-auto p-4 custom-scrollbar bg-slate-50/50"></div>
+            </div>
+            <div class="flex-1 flex flex-col h-full bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="bg-sky-50 px-4 py-3 border-b border-sky-100 flex items-center justify-between">
+                    <h3 class="font-black text-sky-800 text-sm flex items-center gap-2"><i class="fa-solid fa-microscope text-sky-500"></i> 광학 파트</h3>
+                    <span class="text-[10px] font-bold text-sky-400">최근 15건</span>
+                </div>
+                <div id="recent-logs-opt-list" class="flex-1 overflow-y-auto p-4 custom-scrollbar bg-slate-50/50"></div>
+            </div>
+        </div>
+    </div>
+</div>
