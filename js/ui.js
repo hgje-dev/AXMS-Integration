@@ -936,15 +936,17 @@ window.selectAutocomplete = function(code, name, company, sourceId, targetId1, t
     const t1 = document.getElementById(targetId1); 
     const t2 = document.getElementById(targetId2); 
     
-    if (sourceId === 'ps-code') { 
+    // 해결: 입력창 ID에 'code'가 포함되어 있는지 범용적으로 확인
+    if (sourceId.includes('code')) { 
         if (sourceEl) sourceEl.value = code; 
         if (t1) t1.value = name; 
-        if (t2) t2.value = company; 
+        if (t2 && company !== 'undefined') t2.value = company; 
     } else { 
         if (sourceEl) sourceEl.value = name; 
         if (t1) t1.value = code; 
-        if (t2) t2.value = company; 
+        if (t2 && company !== 'undefined') t2.value = company; 
     } 
+    
     const drop = document.getElementById('pjt-autocomplete-dropdown'); 
     if (drop) drop.classList.add('hidden'); 
 };
