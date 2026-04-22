@@ -1201,7 +1201,7 @@ window.saveWhInputData = async function() {
     let toSave = [];
     let totalHours = 0; 
 
-    // 💡 [추가된 부분 1] 시스템 유저 목록에서 해당 작업자의 고유 UID를 찾습니다.
+    // 💡 [추가] 1. 시스템 유저 목록에서 해당 작업자의 고유 UID를 매핑합니다.
     let targetUid = window.currentUser ? window.currentUser.uid : 'system';
     if (window.allSystemUsers) {
         const matchedUser = window.allSystemUsers.find(u => u.name === authorName);
@@ -1228,7 +1228,7 @@ window.saveWhInputData = async function() {
                 id, 
                 date: dateStr, 
                 authorName, 
-                authorUid: targetUid, // 💡 [추가된 부분 2] DB에 저장할 때 UID를 반드시 포함합니다!
+                authorUid: targetUid, // 💡 [추가] 2. DB 전송 페이로드에 반드시 authorUid를 포함합니다!
                 projectId, 
                 projectCode, 
                 projectName, 
@@ -1274,7 +1274,13 @@ window.saveWhInputData = async function() {
         window.showToast("투입공수가 저장되었습니다.");
         window.closeWhInputModal();
     } catch(e) {
-        window.showToast("저장 실패", "error");
+        console.error("저장 에러:", e);
+        // 💡 [추가] 3. 권한 에러(permission-denied)인 경우 친절한 안내 팝업창 띄우기
+        if (e.code === 'permission-denied' || String(e.message).includes('permission')) {
+            alert(`⚠️ [권한 충돌] 해당 날짜(${dateStr})에 덮어쓸 수 없는 과거 데이터가 남아있습니다.\n\n시스템 업데이트 전에 생성된 기록 때문에 발생한 현상입니다. 번거로우시겠지만 관리자(팀장님)에게 이 날짜의 기록을 한 번 비워달라고(휴지통 🗑️) 요청해 주세요!`);
+        } else {
+            window.showToast("저장 실패: " + e.message, "error");
+        }
     }
 };
 
