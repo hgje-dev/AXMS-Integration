@@ -1201,6 +1201,15 @@ window.saveWhInputData = async function() {
     let toSave = [];
     let totalHours = 0; 
 
+    // 💡 [추가된 부분 1] 시스템 유저 목록에서 해당 작업자의 고유 UID를 찾습니다.
+    let targetUid = window.currentUser ? window.currentUser.uid : 'system';
+    if (window.allSystemUsers) {
+        const matchedUser = window.allSystemUsers.find(u => u.name === authorName);
+        if (matchedUser && matchedUser.uid) {
+            targetUid = matchedUser.uid;
+        }
+    }
+
     rows.forEach(tr => {
         const id = tr.querySelector('.row-id').value;
         const projectCodeInput = tr.querySelector('.row-pjt-name').value.trim(); 
@@ -1219,6 +1228,7 @@ window.saveWhInputData = async function() {
                 id, 
                 date: dateStr, 
                 authorName, 
+                authorUid: targetUid, // 💡 [추가된 부분 2] DB에 저장할 때 UID를 반드시 포함합니다!
                 projectId, 
                 projectCode, 
                 projectName, 
