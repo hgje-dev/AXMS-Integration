@@ -20,11 +20,16 @@ let allocChartInstance = null;
 window.allocPartTab = '제조'; 
 window.allocPeriodMode = 'week'; 
 
+// 💡 [핵심] vacationDates, supportDates 필드 추가
 window.allocTeamMaster = [
-    { name: '홍승현', part: '제조', active: true, manualVacation: 0, status: '정상' }, { name: '박종민', part: '제조', active: true, manualVacation: 0, status: '정상' },
-    { name: '박원범', part: '제조', active: true, manualVacation: 0, status: '정상' }, { name: '표영덕', part: '제조', active: true, manualVacation: 0, status: '정상' },
-    { name: '양윤석', part: '광학', active: true, manualVacation: 0, status: '정상' }, { name: '조성주', part: '광학', active: true, manualVacation: 0, status: '정상' },
-    { name: '박광렬', part: '광학', active: true, manualVacation: 0, status: '정상' }, { name: '이원범', part: '광학', active: true, manualVacation: 0, status: '정상' }
+    { name: '홍승현', part: '제조', active: true, manualVacation: 0, status: '정상', vacationDates: '', supportDates: '' },
+    { name: '박종민', part: '제조', active: true, manualVacation: 0, status: '정상', vacationDates: '', supportDates: '' },
+    { name: '박원범', part: '제조', active: true, manualVacation: 0, status: '정상', vacationDates: '', supportDates: '' },
+    { name: '표영덕', part: '제조', active: true, manualVacation: 0, status: '정상', vacationDates: '', supportDates: '' },
+    { name: '양윤석', part: '광학', active: true, manualVacation: 0, status: '정상', vacationDates: '', supportDates: '' },
+    { name: '조성주', part: '광학', active: true, manualVacation: 0, status: '정상', vacationDates: '', supportDates: '' },
+    { name: '박광렬', part: '광학', active: true, manualVacation: 0, status: '정상', vacationDates: '', supportDates: '' },
+    { name: '이원범', part: '광학', active: true, manualVacation: 0, status: '정상', vacationDates: '', supportDates: '' }
 ];
 window.allocProjects = [];
 window.historicalMemberMd = {};
@@ -37,8 +42,33 @@ const KR_HOLIDAYS = new Set([
     '2027-01-01', '2027-02-06', '2027-02-07', '2027-02-08', '2027-02-09', '2027-03-01', '2027-05-05', '2027-05-13', '2027-06-06', '2027-08-15', '2027-08-16', '2027-09-14', '2027-09-15', '2027-09-16', '2027-10-03', '2027-10-09', '2027-10-11', '2027-12-25'
 ]);
 
+// 💡 영업일 추출 유틸리티 함수 (주간/월간 통합 사용)
+function getValidDays(periodMode, targetValue) {
+    let validDays = [];
+    if (periodMode === 'week') {
+        const dates = window.getDatesFromWeek(targetValue);
+        for(let i=0; i<5; i++) {
+            let d = new Date(dates.start); d.setDate(d.getDate() + i);
+            validDays.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+        }
+    } else {
+        const parts = targetValue.split('-');
+        const y = parseInt(parts[0]);
+        const m = parseInt(parts[1]);
+        const lastDate = new Date(y, m, 0).getDate();
+        for(let i=1; i<=lastDate; i++) {
+            let dStr = `${y}-${String(m).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+            let dObj = new Date(y, m-1, i);
+            if(dObj.getDay() !== 0 && dObj.getDay() !== 6 && !KR_HOLIDAYS.has(dStr)) {
+                validDays.push(dStr);
+            }
+        }
+    }
+    return validDays;
+}
+
 window.initAllocationPlan = function() {
-    console.log("✅ AI 투입 계획 모듈 (납기일정 배분 고도화 버전) 초기화");
+    console.log("✅ AI 투입 계획 모듈 (개별 휴가/지원일 파싱 및 캘린더 연동 완벽 버전)");
     
     window.switchAllocPeriodMode('week'); 
     window.switchAllocPartTab('제조'); 
@@ -148,11 +178,13 @@ window.loadAllocationData = function() {
     window.lastAllocatedData = null; 
 };
 
+// 💡 [핵심] 휴가일 / 지원일 입력 필드 추가
 window.renderAllocMemberSelectors = function() {
     const container = document.getElementById('alloc-member-list-container');
     if(!container) return;
 
     const members = window.allocTeamMaster.filter(m => m.part === window.allocPartTab);
+    
     if (members.length === 0) {
         container.innerHTML = `<span class="text-xs font-bold text-rose-500 bg-rose-50 px-3 py-1.5 rounded-lg border border-rose-200">선택된 파트에 해당하는 인원이 없습니다.</span>`;
         return;
@@ -161,25 +193,45 @@ window.renderAllocMemberSelectors = function() {
     container.innerHTML = members.map(m => {
         let isNormal = m.status === '정상';
         return `
-        <div class="flex items-center justify-between bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-white transition-all shadow-sm w-full md:w-auto min-w-[260px]">
-            <label class="flex items-center gap-1.5 cursor-pointer shrink-0">
-                <input type="checkbox" class="w-3.5 h-3.5 accent-indigo-600 member-checkbox" data-name="${m.name}" ${m.active ? 'checked' : ''} onchange="window.updateAllocMemberActive('${m.name}', this.checked)">
-                <span class="text-[11px] font-bold text-slate-700">${m.name}</span>
-            </label>
-            <div class="flex items-center gap-2 ml-3 border-l border-slate-200 pl-3">
-                <select class="border border-slate-200 rounded px-1 py-0.5 text-[10px] font-bold text-slate-600 outline-indigo-500 bg-white cursor-pointer" onchange="window.updateAllocMemberStatus('${m.name}', this.value)" ${m.active ? '' : 'disabled'}>
-                    <option value="정상" ${m.status === '정상' ? 'selected' : ''}>정상</option>
-                    <option value="타팀지원" ${m.status === '타팀지원' ? 'selected' : ''}>타팀지원</option>
-                    <option value="장기휴가" ${m.status === '장기휴가' ? 'selected' : ''}>장기휴가</option>
-                </select>
-                <div class="flex items-center gap-1">
-                    <span class="text-[9px] font-bold text-slate-400">차감</span>
-                    <input type="number" step="0.5" min="0" value="${m.manualVacation || 0}" onchange="window.updateAllocMemberVacation('${m.name}', this.value)" class="w-10 border border-slate-200 rounded px-1 py-0.5 text-[10px] text-rose-500 font-bold outline-indigo-500 text-right bg-white" ${m.active && isNormal ? '' : 'disabled'}>
+        <div class="flex flex-col bg-slate-50 px-3 py-2 rounded-lg border border-slate-200 shadow-sm w-full md:w-auto min-w-[280px]">
+            <div class="flex items-center justify-between mb-2">
+                <label class="flex items-center gap-1.5 cursor-pointer shrink-0">
+                    <input type="checkbox" class="w-3.5 h-3.5 accent-indigo-600 member-checkbox" data-name="${m.name}" ${m.active ? 'checked' : ''} onchange="window.updateAllocMemberActive('${m.name}', this.checked)">
+                    <span class="text-[11px] font-bold text-slate-700">${m.name}</span>
+                </label>
+                <div class="flex items-center gap-2">
+                    <select class="border border-slate-200 rounded px-1 py-0.5 text-[10px] font-bold text-slate-600 outline-indigo-500 bg-white cursor-pointer" onchange="window.updateAllocMemberStatus('${m.name}', this.value)" ${m.active ? '' : 'disabled'}>
+                        <option value="정상" ${m.status === '정상' ? 'selected' : ''}>정상</option>
+                        <option value="타팀지원" ${m.status === '타팀지원' ? 'selected' : ''}>타팀지원(전체)</option>
+                        <option value="장기휴가" ${m.status === '장기휴가' ? 'selected' : ''}>장기휴가(전체)</option>
+                    </select>
+                    <div class="flex items-center gap-1">
+                        <span class="text-[9px] font-bold text-slate-400">MD차감</span>
+                        <input type="number" step="0.5" min="0" value="${m.manualVacation || 0}" onchange="window.updateAllocMemberVacation('${m.name}', this.value)" class="w-10 border border-slate-200 rounded px-1 py-0.5 text-[10px] text-rose-500 font-bold outline-indigo-500 text-right bg-white" ${m.active && isNormal ? '' : 'disabled'}>
+                    </div>
                 </div>
+            </div>
+            <div class="flex flex-col gap-1.5 border-t border-slate-200/60 pt-2 w-full">
+                 <div class="flex items-center gap-2">
+                      <span class="text-[9px] font-bold text-rose-500 shrink-0 w-10">휴가일:</span>
+                      <input type="text" value="${m.vacationDates || ''}" onchange="window.updateAllocMemberDates('${m.name}', 'vacation', this.value)" placeholder="일자 쉼표구분 (예: 12, 15)" class="flex-1 border border-slate-200 rounded px-1.5 py-0.5 text-[10px] outline-indigo-500 text-slate-700" ${m.active && isNormal ? '' : 'disabled'}>
+                 </div>
+                 <div class="flex items-center gap-2">
+                      <span class="text-[9px] font-bold text-orange-500 shrink-0 w-10">지원일:</span>
+                      <input type="text" value="${m.supportDates || ''}" onchange="window.updateAllocMemberDates('${m.name}', 'support', this.value)" placeholder="일자 쉼표구분 (예: 20, 21)" class="flex-1 border border-slate-200 rounded px-1.5 py-0.5 text-[10px] outline-indigo-500 text-slate-700" ${m.active && isNormal ? '' : 'disabled'}>
+                 </div>
             </div>
         </div>
         `;
     }).join('');
+};
+
+window.updateAllocMemberDates = function(name, type, val) {
+    const member = window.allocTeamMaster.find(m => m.name === name);
+    if(member) {
+        if (type === 'vacation') member.vacationDates = val;
+        else if (type === 'support') member.supportDates = val;
+    }
 };
 
 window.updateAllocMemberActive = (name, active) => {
@@ -296,7 +348,7 @@ window.openAxttVerifyModal = function() {
 };
 window.closeAxttVerifyModal = function() { const m = document.getElementById('axtt-verify-modal'); if(m){ m.classList.add('hidden'); m.classList.remove('flex'); } };
 
-// 💡 [AI 핵심 엔진] 납기일자 반영 및 스마트 분배
+// 💡 [AI 핵심 로직] 개별 날짜 기반 정밀 계산 적용
 window.executeAiAllocation = async function() {
     const activeMembers = window.allocTeamMaster.filter(m => m.part === window.allocPartTab && m.active);
     if (activeMembers.length === 0) return window.showToast(`투입할 [${window.allocPartTab}] 파트 인원을 최소 1명 이상 선택하세요.`, "error");
@@ -310,46 +362,49 @@ window.executeAiAllocation = async function() {
 
     setTimeout(() => {
         try {
-            let availMD = 0;
-            let periodMultiplier = 1; 
-            let targetValue = '';
-            
-            // 주/월간 배수 산출
-            if (window.allocPeriodMode === 'month') {
-                targetValue = document.getElementById('alloc-month-picker')?.value || ''; 
-                if(targetValue) {
-                    const parts = targetValue.split('-');
-                    const lastDate = new Date(parseInt(parts[0]), parseInt(parts[1]), 0).getDate();
-                    let workDays = 0;
-                    for(let i=1; i<=lastDate; i++) {
-                        let dStr = `${parts[0]}-${parts[1]}-${String(i).padStart(2,'0')}`;
-                        let d = new Date(parseInt(parts[0]), parseInt(parts[1])-1, i);
-                        if(d.getDay() !== 0 && d.getDay() !== 6 && !KR_HOLIDAYS.has(dStr)) workDays++;
-                    }
-                    periodMultiplier = workDays / 5; 
-                } else targetValue = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
-            } else {
-                targetValue = document.getElementById('alloc-week-picker')?.value || '';
-                if (!targetValue) targetValue = window.getWeekString ? window.getWeekString(new Date()) : "2026-W17";
+            let targetValue = window.allocPeriodMode === 'week' ? document.getElementById('alloc-week-picker').value : document.getElementById('alloc-month-picker').value;
+            if (!targetValue) {
+                targetValue = window.allocPeriodMode === 'week' ? window.getWeekString(new Date()) : `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
             }
 
-            // 인원별 가용성 체크
+            // 💡 유효 영업일 산출
+            const validDaysList = getValidDays(window.allocPeriodMode, targetValue);
+            let totalPeriodDays = validDaysList.length;
+            if (totalPeriodDays === 0) totalPeriodDays = 1; // 0 분모 방지
+
+            let availMD = 0;
+
             activeMembers.forEach(m => {
                 let baseWeeklyMd = window.historicalMemberMd[m.name] || 5.0; 
-                let basePeriodMd = baseWeeklyMd * periodMultiplier;
-                if (m.status === '타팀지원' || m.status === '장기휴가') {
-                    m.expectedMd = 0; m.vacationDeduct = basePeriodMd; 
-                } else {
-                    let vDeduct = parseFloat(m.manualVacation) || 0;
-                    m.expectedMd = Math.max(0, basePeriodMd - vDeduct);
-                    m.vacationDeduct = vDeduct;
-                }
+                let dailyMd = baseWeeklyMd / 5;
+                
+                // 사용자가 쉼표로 입력한 특정일 파싱
+                let vDates = new Set((m.vacationDates || '').split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)));
+                let sDates = new Set((m.supportDates || '').split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)));
+
+                let activeDays = 0;
+                m.specificVacationDays = new Set();
+                m.specificSupportDays = new Set();
+
+                validDaysList.forEach(dStr => {
+                    let dayNum = parseInt(dStr.split('-')[2]);
+                    if (m.status === '장기휴가' || vDates.has(dayNum)) {
+                        m.specificVacationDays.add(dStr);
+                    } else if (m.status === '타팀지원' || sDates.has(dayNum)) {
+                        m.specificSupportDays.add(dStr);
+                    } else {
+                        activeDays++;
+                    }
+                });
+
+                let vDeduct = parseFloat(m.manualVacation) || 0;
+                m.expectedMd = Math.max(0, (activeDays * dailyMd) - vDeduct);
+                m.vacationDeduct = vDeduct;
                 availMD += m.expectedMd;
             });
 
             let pjtResults = []; let outResults = []; let aiReport = [];
 
-            // 프로젝트 점수화
             let priorities = targetProjects.map(p => {
                 let remain = Math.max(0, (parseFloat(p.estMd)||0) - (parseFloat(p.finalMd)||0));
                 let outMd = parseFloat(p.outMd) || 0;
@@ -361,8 +416,8 @@ window.executeAiAllocation = async function() {
                 return { ...p, internalReq, score, dDay };
             }).filter(p => p.internalReq > 0 || p.dDay <= 14).sort((a,b) => b.score - a.score);
 
-            // 캐파 분배 (오버플로우)
             let currentAvail = availMD;
+            let periodMultiplier = totalPeriodDays / 5;
             let maxPjtLimit = Math.max(10 * periodMultiplier, availMD * 0.45); 
 
             priorities.forEach((p, idx) => {
@@ -386,55 +441,40 @@ window.executeAiAllocation = async function() {
                 pjtResults.push({ code: 'COMMON', name: '부서 공통 업무', allocated: Math.max(0, currentAvail), priority: 99, dDay: '-', progress: 100, part: window.allocPartTab });
             }
 
-            // 파트 분리된 스마트 매칭
             let pjtRemainMap = {};
             pjtResults.forEach(p => pjtRemainMap[p.code] = p.allocated);
 
             let sortedMembers = [...activeMembers].sort((a,b) => b.expectedMd - a.expectedMd);
 
-            // 💡 멤버별로 PJT 마감일(Deadline)을 기록
             sortedMembers.forEach(m => {
-                if (m.status === '타팀지원') {
-                    m.assignedPjtName = '타팀 지원 (파견)'; m.assignedPjtCode = 'SUPPORT'; m.assignedPjtDeadline = '-';
-                } else if (m.status === '장기휴가') {
-                    m.assignedPjtName = '장기 휴가'; m.assignedPjtCode = 'VACATION'; m.assignedPjtDeadline = '-';
-                } else {
-                    let bestPjt = pjtResults.find(p => pjtRemainMap[p.code] > 0);
-                    if (!bestPjt) bestPjt = pjtResults[0];
+                let bestPjt = pjtResults.find(p => pjtRemainMap[p.code] > 0);
+                if (!bestPjt) bestPjt = pjtResults[0];
 
-                    m.assignedPjtName = bestPjt ? `[${bestPjt.code}] ${bestPjt.name}` : 'COMMON';
-                    m.assignedPjtCode = bestPjt ? bestPjt.code : 'COMMON';
-                    m.assignedPjtDeadline = bestPjt ? (bestPjt.d_shipEst || '-') : '-';
+                m.assignedPjtName = bestPjt ? `[${bestPjt.code}] ${bestPjt.name}` : 'COMMON';
+                m.assignedPjtCode = bestPjt ? bestPjt.code : 'COMMON';
+                m.assignedPjtDeadline = bestPjt ? (bestPjt.d_shipEst || '-') : '-';
 
-                    if (bestPjt) pjtRemainMap[bestPjt.code] -= m.expectedMd;
-                }
+                if (bestPjt) pjtRemainMap[bestPjt.code] -= m.expectedMd;
             });
 
             let idleRate = (currentAvail / availMD) * 100;
             let periodText = window.allocPeriodMode === 'week' ? '주간' : '월간';
 
-            aiReport.push(`[${window.allocPartTab} 파트 전용 ${periodText} 계획]\n선택 인원 ${activeMembers.length}명, 휴가/예외를 제외한 실 가용 공수는 총 ${availMD.toFixed(1)}MD 로 산출되었습니다.`);
+            aiReport.push(`[${window.allocPartTab} 파트 전용 ${periodText} 계획]\n선택 인원 ${activeMembers.length}명, 휴가/지원 등 예외를 정밀 적용한 실 가용 공수는 총 ${availMD.toFixed(1)}MD 로 산출되었습니다.`);
             
-            let dispatchCount = activeMembers.filter(m => m.status === '타팀지원').length;
-            if (dispatchCount > 0) aiReport.push(`ℹ️ 타팀 지원(파견)으로 인해 ${dispatchCount}명이 우리 파트 가용 캐파에서 제외되었습니다.`);
-
             if (pjtResults.length > 0 && pjtResults[0].code !== 'COMMON') {
                 const topP = pjtResults[0];
-                if (topP.dDay <= 7) aiReport.push(`[${topP.name}] 건이 납기 임박(D-${topP.dDay})이므로 해당 파트 가용력의 최대 60% 한도 내에서 집중 배정했습니다.`);
-                else aiReport.push(`특정 프로젝트 쏠림을 방지하기 위해 단일 PJT 최대 투입량을 캐파의 45% 이내로 자동 제한하고 분산 배치했습니다.`);
+                if (topP.dDay <= 7) aiReport.push(`[${topP.name}] 건이 납기 임박이므로 해당 파트 가용력의 최대 60% 한도 내에서 배정했습니다.`);
+                else aiReport.push(`특정 프로젝트 쏠림을 방지하기 위해 단일 PJT 최대 투입량을 제한하고 분산 배치했습니다.`);
             }
 
             if (outResults.length > 0) aiReport.push(`⚠️ 내부 가용 인력 대비 초과된 잔여 공수는 '외주 전환 필요' 항목으로 분리하였습니다.`);
-            else aiReport.push(`✅ 현재 파트 내부 가동률만으로 이번 기간에 요구되는 프로젝트 할당량을 무리 없이 소화 가능합니다.`);
+            else aiReport.push(`✅ 현재 파트 가동률만으로 이번 기간에 요구되는 프로젝트 할당량을 소화 가능합니다.`);
 
-            if (idleRate > 30) {
-                aiReport.push(`🚨 [유휴 캐파 경고] 현재 팀의 가용 시간 대비 배정된 프로젝트 물량이 너무 적어, '공통 업무' 배정 비율이 비정상적으로 높게(${idleRate.toFixed(1)}%) 산출되었습니다.\n💡 AI 권고사항:\n1) 다음 달 수주 예정인 프로젝트의 선행 작업(조기 착수) 검토\n2) 파트별 기술 교육 및 장비/지그 유지보수 기간으로 적극 활용\n3) 타 파트(부서) 혹은 긴급 프로젝트로의 업무 지원 편성 검토`);
-            }
-
-            window.lastAllocatedData = { periodMode: window.allocPeriodMode, targetValue: targetValue, members: activeMembers, pjtResults: pjtResults, outResults: outResults, availMD: availMD };
+            window.lastAllocatedData = { periodMode: window.allocPeriodMode, targetValue: targetValue, validDaysList: validDaysList, members: activeMembers, pjtResults: pjtResults, outResults: outResults, availMD: availMD };
 
             window.renderAllocUI(activeMembers.length * 5.0 * periodMultiplier, availMD, pjtResults, outResults, activeMembers, aiReport.join('\n\n'));
-            window.renderAllocGrid(); // 표 동적 생성
+            window.renderAllocGrid(); 
             
             if (document.getElementById('alloc-view-cal') && !document.getElementById('alloc-view-cal').classList.contains('hidden')) {
                 window.renderAllocCalendar();
@@ -449,17 +489,16 @@ window.executeAiAllocation = async function() {
             if(btnSave) { btnSave.classList.remove('hidden'); btnSave.classList.add('flex'); }
             if(btn) { btn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> 다시 계산'; btn.disabled = false; }
             
-            window.showToast(`${window.allocPartTab} 파트 전용 최적화 계획이 생성되었습니다.`, "success");
+            window.showToast(`${window.allocPartTab} 파트 계획이 생성되었습니다.`, "success");
             
         } catch (err) {
-            console.error("AI Allocation Error: ", err);
+            console.error("AI Error: ", err);
             window.showToast("할당 분석 중 오류 발생", "error");
             if(btn) { btn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> 다시 계산'; btn.disabled = false; }
         }
     }, 800);
 };
 
-// 상단 KPI 렌더링 
 window.renderAllocUI = function(maxMD, availMD, pjtResults, outResults, members, aiText) {
     const insightEl = document.getElementById('alloc-ai-insight'); if (insightEl) insightEl.innerText = aiText;
     const kpiM = document.getElementById('alloc-kpi-members'); if(kpiM) kpiM.innerText = members.length;
@@ -501,10 +540,10 @@ window.renderAllocUI = function(maxMD, availMD, pjtResults, outResults, members,
     }
 };
 
-// 💡 1. 납기일에 따른 스마트 압축 배분이 적용된 그리드(표) 렌더링
+// 💡 [핵심] 수동 지정 휴가/지원 날짜와 납기일 차단을 완벽히 구현한 그리드 렌더링
 window.renderAllocGrid = function() {
     if (!window.lastAllocatedData) return;
-    const { members, pjtResults, periodMode, targetValue } = window.lastAllocatedData;
+    const { members, pjtResults, periodMode, validDaysList } = window.lastAllocatedData;
     
     const pjtOptionsHtml = pjtResults.map(p => {
         let label = p.code === 'COMMON' ? '부서 공통 업무' : `[${p.code}] ${p.name}`;
@@ -515,15 +554,6 @@ window.renderAllocGrid = function() {
     const tbody = document.getElementById('alloc-grid-body');
     if (!thead || !tbody) return;
 
-    let validDates = [];
-    if (periodMode === 'week') {
-        const dates = window.getDatesFromWeek(targetValue);
-        for(let i=0; i<5; i++){
-            let d = new Date(dates.start); d.setDate(d.getDate() + i);
-            validDates.push(window.getLocalDateStr(d));
-        }
-    }
-
     let colCount = periodMode === 'week' ? 5 : 4; 
     let hHtml = `<tr><th class="p-3 text-center font-bold w-24 rounded-tl-lg bg-slate-800">이름(파트)</th><th class="p-3 font-bold w-48 text-center bg-slate-800">배정 PJT (선택)</th>`;
     if (periodMode === 'week') hHtml += `<th class="p-3 text-center font-bold bg-slate-800">월</th><th class="p-3 text-center font-bold bg-slate-800">화</th><th class="p-3 text-center font-bold bg-slate-800">수</th><th class="p-3 text-center font-bold bg-slate-800">목</th><th class="p-3 text-center font-bold bg-slate-800">금</th>`;
@@ -532,47 +562,42 @@ window.renderAllocGrid = function() {
     thead.innerHTML = hHtml;
 
     tbody.innerHTML = members.map((m) => {
-        let activeDays = 0;
-        if (periodMode === 'week') {
-            // 납기일 이전의 유효한 일수만 카운트
-            validDates.forEach(vd => {
-                if (!m.assignedPjtDeadline || m.assignedPjtDeadline === '-' || vd <= m.assignedPjtDeadline) activeDays++;
-            });
-        } else {
-            activeDays = colCount; // 월간은 일단 주차 단위로 균등분배 (원한다면 일할 계산 가능)
-        }
-        let divisor = activeDays > 0 ? activeDays : 1;
+        // 해당 멤버의 실제 작업 가능 일수 구하기 (주/월간 상관없이)
+        let activeDaysCount = 0;
+        validDaysList.forEach(vd => {
+            if (!m.specificVacationDays.has(vd) && !m.specificSupportDays.has(vd)) {
+                if (!m.assignedPjtDeadline || m.assignedPjtDeadline === '-' || vd <= m.assignedPjtDeadline || m.assignedPjtCode === 'COMMON') {
+                    activeDaysCount++;
+                }
+            }
+        });
+
+        // 💡 남은 작업 일수로 공수를 균등 분배
+        let divisor = activeDaysCount > 0 ? (periodMode === 'week' ? activeDaysCount : colCount) : 1;
         const dMd = (m.expectedMd / divisor).toFixed(1); 
 
-        const vacTag = m.status === '타팀지원' ? `<div class="text-[9px] text-orange-600 font-bold mt-1 bg-orange-50 border border-orange-200 rounded text-center">타팀지원</div>` : 
-                       m.status === '장기휴가' ? `<div class="text-[9px] text-rose-500 font-bold mt-1 bg-rose-50 border border-rose-200 rounded text-center">장기휴가</div>` :
-                       m.vacationDeduct > 0 ? `<div class="text-[9px] text-rose-500 font-bold mt-1 bg-rose-50 border border-rose-100 rounded text-center">차감 -${m.vacationDeduct}MD</div>` : '';
+        const vacTag = m.vacationDeduct > 0 ? `<div class="text-[9px] text-rose-500 font-bold mt-1 bg-rose-50 border border-rose-100 rounded text-center">차감 -${m.vacationDeduct}MD</div>` : '';
         
-        let selectHtml = '';
-        if (m.status === '타팀지원' || m.status === '장기휴가') {
-            selectHtml = `<div class="w-full text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-1.5 rounded shadow-sm text-center truncate">${m.assignedPjtName}</div>`;
-        } else {
-            selectHtml = `<select class="w-full text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-1.5 rounded shadow-sm outline-none cursor-pointer text-center truncate" onchange="window.updateManualPjtAssignment('${m.name}', this.value, this.options[this.selectedIndex].text)">`;
-            selectHtml += pjtOptionsHtml.replace(`value="${m.assignedPjtCode}"`, `value="${m.assignedPjtCode}" selected`);
-            selectHtml += `</select>`;
-        }
+        let selectHtml = `<select class="w-full text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-1.5 rounded shadow-sm outline-none cursor-pointer text-center truncate" onchange="window.updateManualPjtAssignment('${m.name}', this.value, this.options[this.selectedIndex].text)">`;
+        selectHtml += pjtOptionsHtml.replace(`value="${m.assignedPjtCode}"`, `value="${m.assignedPjtCode}" selected`);
+        selectHtml += `</select>`;
 
         let tdHtml = '';
         for(let c=0; c<colCount; c++){
-            if (m.status === '타팀지원' || m.status === '장기휴가') {
-                tdHtml += `<td class="p-2 border-r bg-slate-100/50"><input type="number" step="0.5" value="0.0" class="w-full text-center text-xs font-bold text-slate-400 bg-transparent outline-none cursor-not-allowed" disabled></td>`;
-            } else {
-                let cellVal = dMd;
-                let bgClass = 'bg-slate-50/30';
-                let textClass = 'text-slate-800';
-                
-                // 💡 출하일이 지났다면 해당 칸은 MD 0으로 강제
-                if (periodMode === 'week' && m.assignedPjtDeadline && m.assignedPjtDeadline !== '-' && validDates[c] > m.assignedPjtDeadline) {
-                    cellVal = '0.0';
-                    bgClass = 'bg-rose-50/30';
-                    textClass = 'text-rose-300';
+            if (periodMode === 'week') {
+                let dStr = validDaysList[c];
+                if (m.specificVacationDays.has(dStr)) {
+                    tdHtml += `<td class="p-2 border-r bg-rose-50/50"><input type="text" value="휴가" class="w-full text-center text-xs font-bold text-rose-400 bg-transparent outline-none cursor-not-allowed" disabled></td>`;
+                } else if (m.specificSupportDays.has(dStr)) {
+                    tdHtml += `<td class="p-2 border-r bg-orange-50/50"><input type="text" value="지원" class="w-full text-center text-xs font-bold text-orange-400 bg-transparent outline-none cursor-not-allowed" disabled></td>`;
+                } else if (m.assignedPjtCode !== 'COMMON' && m.assignedPjtDeadline && m.assignedPjtDeadline !== '-' && dStr > m.assignedPjtDeadline) {
+                    tdHtml += `<td class="p-2 border-r bg-slate-100"><input type="number" step="0.5" value="0.0" class="w-full text-center text-xs font-bold text-slate-300 bg-transparent outline-none cursor-not-allowed" title="납기 초과" disabled></td>`;
+                } else {
+                    tdHtml += `<td class="p-2 border-r bg-slate-50/30"><input type="number" step="0.5" value="${dMd}" class="w-full text-center text-xs font-bold text-slate-800 bg-transparent outline-none calc-trigger-md"></td>`;
                 }
-                tdHtml += `<td class="p-2 border-r ${bgClass}"><input type="number" step="0.5" value="${cellVal}" class="w-full text-center text-xs font-bold ${textClass} bg-transparent outline-none calc-trigger-md"></td>`;
+            } else {
+                // Monthly는 단순 칸막이이므로 텍스트로 처리
+                tdHtml += `<td class="p-2 border-r bg-slate-50/30"><input type="number" step="0.5" value="${dMd}" class="w-full text-center text-xs font-bold text-slate-800 bg-transparent outline-none calc-trigger-md"></td>`;
             }
         }
 
@@ -594,7 +619,6 @@ window.renderAllocGrid = function() {
     });
 };
 
-// 💡 2. 수동 PJT 변경 시 즉시 캘린더/그리드 업데이트
 window.updateManualPjtAssignment = function(memberName, pjtCode, pjtNameText) {
     if (window.lastAllocatedData && window.lastAllocatedData.members) {
         let mem = window.lastAllocatedData.members.find(m => m.name === memberName);
@@ -602,13 +626,10 @@ window.updateManualPjtAssignment = function(memberName, pjtCode, pjtNameText) {
             mem.assignedPjtCode = pjtCode;
             mem.assignedPjtName = pjtNameText;
             
-            // 새 프로젝트의 납기일 가져오기
             let targetPjt = window.allocProjects.find(p => p.code === pjtCode);
             mem.assignedPjtDeadline = targetPjt ? (targetPjt.d_shipEst || '-') : '-';
             
-            // 변경된 납기일에 맞춰 그리드 다시 그리기 (공수 자동 재분배)
             window.renderAllocGrid();
-            
             if (document.getElementById('alloc-view-cal') && !document.getElementById('alloc-view-cal').classList.contains('hidden')) {
                 window.renderAllocCalendar();
             }
@@ -617,7 +638,6 @@ window.updateManualPjtAssignment = function(memberName, pjtCode, pjtNameText) {
     }
 };
 
-// 💡 3. 납기일자 반영된 월간 달력 렌더링
 window.renderAllocCalendar = function() {
     const grid = document.getElementById('alloc-cal-grid');
     const titleEl = document.getElementById('alloc-cal-title');
@@ -629,37 +649,19 @@ window.renderAllocCalendar = function() {
         targetDateObj = dates.start;
     } else {
         const parts = window.lastAllocatedData.targetValue.split('-');
+        if(parts.length !== 2) return;
         targetDateObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, 1);
     }
     
     const y = targetDateObj.getFullYear();
     const m = targetDateObj.getMonth(); 
-    
-    let subTitle = window.lastAllocatedData.periodMode === 'week' ? '해당 주차 캘린더' : '해당 월 캘린더';
-    if (titleEl) titleEl.innerText = `${y}년 ${m + 1}월 ${subTitle} (${window.allocPartTab})`;
+    if (titleEl) titleEl.innerText = `${y}년 ${m + 1}월 달력 (${window.allocPartTab})`;
 
     const firstDay = new Date(y, m, 1).getDay();
     const lastDate = new Date(y, m + 1, 0).getDate();
 
-    let validDays = new Set();
-    if (window.lastAllocatedData.periodMode === 'week') {
-        for(let i=0; i<5; i++) {
-            let d = new Date(targetDateObj);
-            d.setDate(d.getDate() + i);
-            validDays.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
-        }
-    } else {
-        for(let i=1; i<=lastDate; i++) {
-            let dStr = `${y}-${String(m+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
-            let dObj = new Date(y, m, i);
-            if(dObj.getDay() !== 0 && dObj.getDay() !== 6 && !KR_HOLIDAYS.has(dStr)) validDays.add(dStr);
-        }
-    }
-
     let html = '';
-    for(let i=0; i<firstDay; i++) {
-        html += `<div class="bg-slate-50 opacity-50 border-b border-slate-200"></div>`;
-    }
+    for(let i=0; i<firstDay; i++) html += `<div class="bg-slate-50 opacity-50 border-b border-slate-200"></div>`;
 
     for(let i=1; i<=lastDate; i++) {
         let dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
@@ -673,50 +675,42 @@ window.renderAllocCalendar = function() {
         let badgeHtml = '';
 
         if (isSunday || isHoliday) {
-            txtClass = 'text-rose-500';
-            bgClass = 'bg-rose-50/20';
+            txtClass = 'text-rose-500'; bgClass = 'bg-rose-50/20';
             if (isHoliday) badgeHtml += `<div class="text-[9px] font-bold text-rose-500 bg-rose-50 rounded text-center mb-1 py-0.5 border border-rose-100">공휴일</div>`;
         } else if (isSaturday) {
-            txtClass = 'text-blue-500';
-            bgClass = 'bg-blue-50/20';
+            txtClass = 'text-blue-500'; bgClass = 'bg-blue-50/20';
         } else {
-            if (validDays.has(dateStr)) {
+            if (window.lastAllocatedData.validDaysList.includes(dateStr)) {
                 let tintColor = window.allocPartTab === '제조' ? 'indigo' : 'teal';
                 bgClass = `bg-${tintColor}-50/10 border-t-2 border-t-${tintColor}-400`;
                 
-                // 분배 값을 정확히 계산
-                let divisorMap = new Map();
-                window.lastAllocatedData.members.forEach(mem => {
-                    let actD = 0;
-                    validDays.forEach(vd => {
-                        if (!mem.assignedPjtDeadline || mem.assignedPjtDeadline === '-' || vd <= mem.assignedPjtDeadline) actD++;
-                    });
-                    divisorMap.set(mem.name, actD > 0 ? actD : 1);
-                });
-
                 let membersHtml = window.lastAllocatedData.members.map(mem => {
-                    if (mem.status === '장기휴가') return ''; 
-                    
-                    // 💡 출하예정일 이후면 달력에 뱃지 그리지 않음!
-                    if (mem.assignedPjtCode !== 'COMMON' && mem.assignedPjtCode !== 'SUPPORT') {
-                        if (mem.assignedPjtDeadline && mem.assignedPjtDeadline !== '-' && dateStr > mem.assignedPjtDeadline) {
-                            return '';
+                    let sName = mem.assignedPjtName || '-';
+
+                    if (mem.specificVacationDays.has(dateStr)) {
+                        return `<div class="text-[9px] font-bold border border-rose-200 bg-rose-50 text-rose-600 px-1.5 py-0.5 rounded mb-0.5 truncate shadow-sm flex justify-between items-center"><span class="truncate pr-1">${mem.name}</span><span class="shrink-0">휴가</span></div>`;
+                    }
+                    if (mem.specificSupportDays.has(dateStr)) {
+                        return `<div class="text-[9px] font-bold border border-orange-200 bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded mb-0.5 truncate shadow-sm flex justify-between items-center"><span class="truncate pr-1">${mem.name}</span><span class="shrink-0">지원</span></div>`;
+                    }
+
+                    // 💡 출하일 이후 차단 로직
+                    if (mem.assignedPjtCode !== 'COMMON' && mem.assignedPjtDeadline && mem.assignedPjtDeadline !== '-' && dateStr > mem.assignedPjtDeadline) {
+                        return '';
+                    }
+
+                    let activeD = 0;
+                    window.lastAllocatedData.validDaysList.forEach(vd => {
+                        if (!mem.specificVacationDays.has(vd) && !mem.specificSupportDays.has(vd)) {
+                            if (!mem.assignedPjtDeadline || mem.assignedPjtDeadline === '-' || vd <= mem.assignedPjtDeadline || mem.assignedPjtCode === 'COMMON') activeD++;
                         }
-                    }
-
-                    if (mem.status === '타팀지원') {
-                        return `
-                        <div class="text-[9px] font-bold border border-orange-200 bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded mb-0.5 truncate shadow-sm flex justify-between items-center" title="${mem.assignedPjtName}">
-                            <span class="truncate pr-1">${mem.name}</span>
-                            <span class="shrink-0 opacity-70">지원</span>
-                        </div>`;
-                    }
-
-                    let d = divisorMap.get(mem.name);
-                    let mdStr = (mem.expectedMd / d).toFixed(1);
+                    });
+                    
+                    let divisor = activeD > 0 ? activeD : 1;
+                    let mdStr = (mem.expectedMd / divisor).toFixed(1);
                     
                     return `
-                        <div class="text-[9px] font-bold border border-${tintColor}-100 bg-white text-${tintColor}-700 px-1.5 py-0.5 rounded mb-0.5 truncate shadow-sm flex justify-between items-center" title="${mem.assignedPjtName}">
+                        <div class="text-[9px] font-bold border border-${tintColor}-100 bg-white text-${tintColor}-700 px-1.5 py-0.5 rounded mb-0.5 truncate shadow-sm flex justify-between items-center" title="${sName}">
                             <span class="truncate pr-1">${mem.name}</span>
                             <span class="shrink-0 opacity-70">${mdStr}MD</span>
                         </div>`;
@@ -726,12 +720,7 @@ window.renderAllocCalendar = function() {
             }
         }
 
-        html += `
-            <div class="${bgClass} p-1.5 border-b border-r border-slate-200 hover:bg-slate-50 transition-colors flex flex-col">
-                <div class="text-xs font-black text-center mb-1 ${txtClass}">${i}</div>
-                ${badgeHtml}
-            </div>
-        `;
+        html += `<div class="${bgClass} p-1.5 border-b border-r border-slate-200 hover:bg-slate-50 transition-colors flex flex-col"><div class="text-xs font-black text-center mb-1 ${txtClass}">${i}</div>${badgeHtml}</div>`;
     }
 
     grid.innerHTML = html;
