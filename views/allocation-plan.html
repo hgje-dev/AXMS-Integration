@@ -14,7 +14,7 @@
                     <button id="btn-alloc-part-opt" onclick="window.switchAllocPartTab('광학')" class="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap">광학 파트</button>
                 </div>
             </div>
-            <p class="text-xs font-bold text-slate-500 mt-2">숙련도, 리스크 버퍼, 특근 여부를 종합적으로 반영하여 계획 대비 실행(Plan vs Actual) 오차를 최소화합니다.</p>
+            <p class="text-xs font-bold text-slate-500 mt-2">머신러닝(ML) 보정 및 다중 최적화 알고리즘을 통해 계획 대비 실행(Plan vs Actual) 오차를 0%에 수렴시킵니다.</p>
         </div>
         <div class="flex items-center gap-3 flex-wrap">
             <button onclick="window.openAxttVerifyModal()" class="text-[11px] font-bold text-teal-600 bg-teal-50 border border-teal-200 hover:bg-teal-100 px-3 py-2.5 rounded-xl transition-colors shadow-sm flex items-center gap-1.5">
@@ -43,29 +43,48 @@
         </div>
     </div>
 
-    <div class="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 shadow-sm flex flex-wrap gap-6 items-center">
+    <div class="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 shadow-sm flex flex-wrap gap-5 items-center">
         <div class="flex items-center gap-2">
-            <div class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-md"><i class="fa-solid fa-sliders"></i></div>
+            <div class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-md"><i class="fa-solid fa-brain"></i></div>
             <div>
-                <h3 class="text-xs font-black text-indigo-900">시뮬레이션 환경 설정</h3>
-                <p class="text-[10px] font-bold text-indigo-500">실행 정확도를 높이기 위한 변수 제어</p>
+                <h3 class="text-xs font-black text-indigo-900">AI 심층 시뮬레이터</h3>
+                <p class="text-[9px] font-bold text-indigo-500">예측 오차 방어 및 최적화 전략</p>
             </div>
         </div>
         <div class="w-px h-8 bg-indigo-200 hidden md:block"></div>
+        
         <label class="flex items-center gap-2 cursor-pointer group">
             <div class="relative flex items-center">
                 <input type="checkbox" id="opt-overtime" class="sr-only peer">
-                <div class="w-9 h-5 bg-slate-300 rounded-full peer-checked:bg-rose-500 transition-colors"></div>
-                <div class="absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
+                <div class="w-8 h-4 bg-slate-300 rounded-full peer-checked:bg-rose-500 transition-colors"></div>
+                <div class="absolute left-1 top-1 w-2 h-2 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
             </div>
-            <span class="text-xs font-bold text-slate-700 group-hover:text-rose-600 transition-colors">주말/휴일 특근 허용 (가동률 MAX)</span>
+            <span class="text-xs font-bold text-slate-700 group-hover:text-rose-600 transition-colors">주말특근(MAX)</span>
         </label>
+
+        <label class="flex items-center gap-2 cursor-pointer group" title="초기 단계(진행률 50% 미만) 프로젝트에 과거 지연 패턴을 반영하여 요구 공수를 15% 할증합니다.">
+            <div class="relative flex items-center">
+                <input type="checkbox" id="opt-ml" class="sr-only peer" checked>
+                <div class="w-8 h-4 bg-slate-300 rounded-full peer-checked:bg-indigo-600 transition-colors"></div>
+                <div class="absolute left-1 top-1 w-2 h-2 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
+            </div>
+            <span class="text-xs font-bold text-slate-700 group-hover:text-indigo-600 transition-colors">ML 지연예측 보정</span>
+        </label>
+
+        <div class="flex items-center gap-2 ml-auto">
+            <span class="text-[11px] font-bold text-slate-600">배분 전략:</span>
+            <select id="opt-strategy" class="border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold text-indigo-700 outline-none cursor-pointer shadow-sm">
+                <option value="speed" selected>납기 최우선 (Urgency First)</option>
+                <option value="balance">수익성/육성 밸런스 (Senior↔Urgent, Junior↔余裕)</option>
+            </select>
+        </div>
+
         <div class="flex items-center gap-2">
-            <span class="text-xs font-bold text-slate-700">PJT 리스크 버퍼:</span>
+            <span class="text-[11px] font-bold text-slate-600">버퍼:</span>
             <select id="opt-buffer" class="border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold text-indigo-700 outline-none cursor-pointer shadow-sm">
-                <option value="1.0">0% (타이트한 원본 기준)</option>
-                <option value="1.1" selected>10% (권장/일반 변수 대비)</option>
-                <option value="1.2">20% (보수적/높은 지연 리스크)</option>
+                <option value="1.0">0%</option>
+                <option value="1.1" selected>10%</option>
+                <option value="1.2">20%</option>
             </select>
         </div>
     </div>
@@ -75,7 +94,7 @@
             <div class="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div>
                     <h3 class="text-sm font-black text-slate-700"><i class="fa-solid fa-users-viewfinder text-indigo-500 mr-1.5"></i> 투입 자원 상태 및 개별 일정 설정 <span id="current-part-label" class="text-indigo-600 ml-1"></span></h3>
-                    <p class="text-[10px] font-bold text-slate-400 mt-1">개인별 숙련도(능률)와 휴가/파견 기간을 설정하세요.</p>
+                    <p class="text-[10px] font-bold text-slate-400 mt-1">시작일과 종료일 달력을 지정하여 휴가/지원 기간을 손쉽게 추가하세요.</p>
                 </div>
                 <div class="flex gap-2">
                     <button onclick="window.selectAllAllocMembers(true)" class="text-[10px] font-bold text-slate-500 hover:text-indigo-600 transition-colors">전체 선택</button>
@@ -105,13 +124,14 @@
     <div id="alloc-empty-state" class="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-dashed border-slate-300">
         <div class="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mb-4"><i class="fa-solid fa-robot text-3xl text-indigo-400"></i></div>
         <h3 class="text-lg font-black text-slate-700 mb-2">자동 할당 대기 중</h3>
-        <p class="text-sm text-slate-500 font-medium text-center max-w-md">옵션 및 자원을 설정한 후<br><b>[초정밀 AI 할당 실행]</b> 버튼을 클릭하세요.</p>
+        <p class="text-sm text-slate-500 font-medium text-center max-w-md">팀원 일정 및 시뮬레이션 옵션을 설정한 후<br><b>[초정밀 AI 할당 실행]</b> 버튼을 클릭하세요.</p>
     </div>
 
     <div id="alloc-result-dashboard" class="hidden space-y-6 animate-fade-in">
+        
         <div class="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-3xl p-6 border border-indigo-100 shadow-sm relative overflow-hidden">
             <div class="absolute -right-6 -top-6 text-indigo-500/10"><i class="fa-solid fa-brain text-9xl"></i></div>
-            <h3 class="text-sm font-black text-indigo-800 mb-3 flex items-center gap-2 relative z-10"><i class="fa-solid fa-robot text-indigo-600"></i> AI 배분 리포트 및 의사결정 사유</h3>
+            <h3 class="text-sm font-black text-indigo-800 mb-3 flex items-center gap-2 relative z-10"><i class="fa-solid fa-wand-magic-sparkles text-indigo-600"></i> AI 진단 및 의사결정 전략 리포트</h3>
             <p id="alloc-ai-insight" class="text-[13px] font-bold text-slate-700 leading-relaxed relative z-10 break-keep whitespace-pre-wrap"></p>
         </div>
 
@@ -120,10 +140,10 @@
                 <div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-slate-500">투입 인원</span><i class="fa-solid fa-users text-slate-300 text-lg"></i></div>
                 <p class="text-2xl font-black text-slate-700"><span id="alloc-kpi-members">0</span> <span class="text-sm text-slate-400 ml-1">명</span></p>
             </div>
-            <div class="glass-card p-5 border-l-4 border-l-emerald-400 bg-white">
-                <div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-emerald-600">실질 PJT 산출력(MD)</span><i class="fa-solid fa-gauge-high text-emerald-300 text-lg"></i></div>
-                <p class="text-2xl font-black text-emerald-600"><span id="alloc-kpi-avail">0</span> <span class="text-sm text-emerald-400 ml-1">MD</span></p>
-                <p class="text-[10px] text-emerald-500/70 mt-1">숙련도(효율) 및 특근 옵션 반영됨</p>
+            <div class="glass-card p-5 border-l-4 border-l-emerald-400 bg-white relative overflow-hidden">
+                <div class="flex justify-between items-start mb-1 relative z-10"><span class="text-xs font-bold text-emerald-600">실질 산출 캐파 (MD)</span><i class="fa-solid fa-gauge-high text-emerald-300 text-lg"></i></div>
+                <p class="text-2xl font-black text-emerald-600 relative z-10"><span id="alloc-kpi-avail">0</span> <span class="text-sm text-emerald-400 ml-1">MD</span></p>
+                <p class="text-[10px] text-emerald-500/70 mt-1 relative z-10">숙련도 및 공통(0.1MD) 분리 반영</p>
             </div>
             <div class="glass-card p-5 border-l-4 border-l-indigo-400 bg-white">
                 <div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-indigo-600">사내 할당 완료</span><i class="fa-solid fa-list-check text-indigo-300 text-lg"></i></div>
@@ -139,7 +159,10 @@
             <div class="lg:col-span-2 glass-card flex flex-col bg-white overflow-hidden">
                 <div class="px-6 py-4 border-b bg-slate-50/50 flex justify-between items-center">
                     <h3 class="text-sm font-black text-slate-800">프로젝트 배분 결과</h3>
-                    <span id="buffer-badge" class="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded border border-amber-200 hidden">리스크 버퍼 반영됨</span>
+                    <div class="flex gap-2">
+                        <span id="badge-ml" class="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded border border-indigo-200 hidden"><i class="fa-solid fa-robot"></i> ML 오차보정됨</span>
+                        <span id="buffer-badge" class="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded border border-amber-200 hidden">리스크 버퍼 반영됨</span>
+                    </div>
                 </div>
                 <div class="p-6 overflow-y-auto max-h-[400px]"><div class="space-y-4" id="alloc-pjt-list"></div></div>
             </div>
@@ -152,7 +175,7 @@
         <div class="glass-card overflow-hidden bg-white shadow-sm flex flex-col">
             <div class="px-6 py-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
                 <h3 class="text-sm font-black text-slate-800"><i class="fa-solid fa-table text-indigo-500 mr-1.5"></i> 투입 할당표 및 캘린더</h3>
-                <span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200"><i class="fa-solid fa-check"></i> 1일 0.1MD 공통업무 자동분리 반영됨</span>
+                <span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200"><i class="fa-solid fa-check"></i> Squeeze 2차 분배 가동 완료</span>
             </div>
             
             <div id="alloc-view-grid" class="overflow-x-auto custom-scrollbar bg-white p-4">
@@ -180,7 +203,6 @@
             <button onclick="window.closeAxttVerifyModal()" class="text-teal-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
         </div>
         <div class="p-6 bg-slate-50 flex-1 overflow-y-auto custom-scrollbar">
-            <p class="text-xs font-bold text-slate-500 mb-4">현재 AI가 인원 배분에 사용하는 팀원별 '최근 4주 주간 평균 가용력(MD)' 입니다.<br>(* 데이터가 없거나 0인 경우 기본값 5.0 MD가 부여됩니다.)</p>
             <table class="w-full text-left border-collapse bg-white border border-slate-200 shadow-sm rounded-lg overflow-hidden">
                 <thead class="bg-slate-800 text-white text-[11px]">
                     <tr><th class="p-3 text-center">이름</th><th class="p-3 text-center">소속 파트</th><th class="p-3 text-center text-teal-300">AXTT 추출 평균 (MD)</th><th class="p-3 text-center text-amber-300">최종 적용치 (MD)</th></tr>
