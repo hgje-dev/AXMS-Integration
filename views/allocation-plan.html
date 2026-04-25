@@ -14,7 +14,7 @@
                     <button id="btn-alloc-part-opt" onclick="window.switchAllocPartTab('광학')" class="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap">광학 파트</button>
                 </div>
             </div>
-            <p class="text-xs font-bold text-slate-500 mt-2">선택한 파트와 기간에 맞춰 AI가 개인별 특정일(휴가/지원)을 계산하여 최적의 투입을 계획합니다.</p>
+            <p class="text-xs font-bold text-slate-500 mt-2">선택한 파트와 기간에 맞춰 담당자 우선 배정 및 개인별 휴가일을 적용하여 최적의 투입을 계획합니다.</p>
         </div>
         <div class="flex items-center gap-3 flex-wrap">
             <button onclick="window.openAxttVerifyModal()" class="text-[11px] font-bold text-teal-600 bg-teal-50 border border-teal-200 hover:bg-teal-100 px-3 py-2.5 rounded-xl transition-colors shadow-sm flex items-center gap-1.5">
@@ -99,9 +99,9 @@
                 <p class="text-2xl font-black text-slate-700"><span id="alloc-kpi-members">0</span> <span class="text-sm text-slate-400 ml-1">명</span></p>
             </div>
             <div class="glass-card p-5 border-l-4 border-l-emerald-400 bg-white">
-                <div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-emerald-600">최종 가용 공수</span><i class="fa-solid fa-check-to-slot text-emerald-300 text-lg"></i></div>
+                <div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-emerald-600">총 PJT 가용 공수</span><i class="fa-solid fa-check-to-slot text-emerald-300 text-lg"></i></div>
                 <p class="text-2xl font-black text-emerald-600"><span id="alloc-kpi-avail">0</span> <span class="text-sm text-emerald-400 ml-1">MD</span></p>
-                <p class="text-[10px] text-emerald-500/70 mt-1">개별 휴가/지원 차감 완벽 반영</p>
+                <p class="text-[10px] text-emerald-500/70 mt-1">공통업무(0.2MD/일) 제외량</p>
             </div>
             <div class="glass-card p-5 border-l-4 border-l-indigo-400 bg-white">
                 <div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-indigo-600">사내 할당 완료</span><i class="fa-solid fa-list-check text-indigo-300 text-lg"></i></div>
@@ -126,11 +126,8 @@
 
         <div class="glass-card overflow-hidden bg-white shadow-sm flex flex-col">
             <div class="px-6 py-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                <div class="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
-                    <button id="btn-alloc-view-grid" onclick="window.switchAllocView('grid')" class="px-4 py-1.5 text-xs font-bold bg-indigo-50 text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-1.5"><i class="fa-solid fa-table"></i> 할당표 (그리드)</button>
-                    <button id="btn-alloc-view-cal" onclick="window.switchAllocView('calendar')" class="px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-1.5 bg-transparent"><i class="fa-regular fa-calendar-days"></i> 캘린더 뷰</button>
-                </div>
-                <span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200"><i class="fa-solid fa-check"></i> 스마트 매칭 완료 (개별 수정 가능)</span>
+                <h3 class="text-sm font-black text-slate-800"><i class="fa-solid fa-table text-indigo-500 mr-1.5"></i> 투입 할당표 및 캘린더</h3>
+                <span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200"><i class="fa-solid fa-check"></i> 1일 0.2MD 공통업무 자동분리 반영됨</span>
             </div>
 
             <div id="alloc-view-grid" class="overflow-x-auto custom-scrollbar bg-white p-4">
@@ -140,7 +137,7 @@
                 </table>
             </div>
 
-            <div id="alloc-view-cal" class="hidden flex-col bg-white p-4">
+            <div id="alloc-view-cal" class="flex-col bg-slate-50 border-t border-slate-200 p-4">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-sm font-black text-slate-700" id="alloc-cal-title">할당 캘린더</h3>
                     <span class="text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-1 rounded border border-rose-200">대한민국 공휴일 적용됨</span>
@@ -155,12 +152,8 @@
 <div id="axtt-verify-modal" class="fixed inset-0 z-[400] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
     <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden transform transition-all">
         <div class="px-6 py-5 border-b border-slate-200 flex justify-between items-center bg-teal-50">
-            <h2 class="text-base font-extrabold text-teal-800 flex items-center gap-2">
-                <i class="fa-solid fa-database text-teal-500"></i> AXTT 과거 4주 공수 데이터 확인
-            </h2>
-            <button onclick="window.closeAxttVerifyModal()" class="text-teal-400 hover:text-rose-500 transition-colors">
-                <i class="fa-solid fa-xmark text-xl"></i>
-            </button>
+            <h2 class="text-base font-extrabold text-teal-800 flex items-center gap-2"><i class="fa-solid fa-database text-teal-500"></i> AXTT 과거 4주 공수 데이터 확인</h2>
+            <button onclick="window.closeAxttVerifyModal()" class="text-teal-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
         </div>
         <div class="p-6 bg-slate-50 flex-1 overflow-y-auto custom-scrollbar">
             <p class="text-xs font-bold text-slate-500 mb-4">현재 AI가 인원 배분에 사용하는 팀원별 '최근 4주 주간 평균 가용력(MD)' 입니다.<br>(* 데이터가 없거나 0인 경우 기본값 5.0 MD가 부여됩니다.)</p>
