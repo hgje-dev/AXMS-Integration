@@ -3,9 +3,6 @@ import { app, db as axmsDb } from './firebase.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import { getFirestore, collection, query, onSnapshot, doc, setDoc, where, getDocs, writeBatch } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-// ==============================================================
-// 💡 AXTT (과거 공수 데이터) 서브 파이어베이스 연결 (사용자 제공 설정)
-// ==============================================================
 const axttConfig = {
     apiKey: "AIzaSyA_LSZ2wvuvkyh_nCqMbdFchkG_qQvmFWY",
     authDomain: "axtt-b064c.firebaseapp.com",
@@ -41,17 +38,23 @@ const KR_HOLIDAYS = new Set([
 ]);
 
 window.initAllocationPlan = function() {
-    console.log("✅ AI 투입 계획 모듈 (인원별 지정 및 인사이트 강화) 초기화");
+    console.log("✅ AI 투입 계획 모듈 (프로젝트 선택 기능 추가) 초기화");
     
     window.switchAllocPeriodMode('week'); 
     window.switchAllocPartTab('제조'); 
 
     onSnapshot(query(collection(axmsDb, "projects_status")), (snap) => {
+        let oldProjects = [...window.allocProjects]; // 기존 선택 상태 유지를 위해 백업
         window.allocProjects = [];
         snap.forEach(d => {
             let p = d.data(); p.id = d.id;
-            if (p.status !== 'completed' && p.status !== 'rejected') window.allocProjects.push(p);
+            if (p.status !== 'completed' && p.status !== 'rejected') {
+                let old = oldProjects.find(op => op.id === p.id);
+                p.active = old ? old.active : true; // 기본값은 항상 포함
+                window.allocProjects.push(p);
+            }
         });
+        window.renderAllocProjectSelectors(); // PJT 선택 목록 갱신
     });
     
     fetchHistoricalDataFromAXTT();
@@ -66,6 +69,7 @@ window.switchAllocPartTab = function(part) {
     if(lbl) lbl.innerText = `[${part} 파트]`;
     
     window.renderAllocMemberSelectors();
+    window.renderAllocProjectSelectors(); // 파트 변경 시 PJT 목록도 해당 파트로 갱신
     window.loadAllocationData(); 
 };
 
@@ -145,6 +149,7 @@ window.loadAllocationData = function() {
     window.lastAllocatedData = null; 
 };
 
+// 💡 1. 투입 팀원 체크 UI
 window.renderAllocMemberSelectors = function() {
     const container = document.getElementById('alloc-member-list-container');
     if(!container) return;
@@ -185,6 +190,39 @@ window.updateAllocMemberVacation = (name, val) => {
 window.selectAllAllocMembers = (active) => {
     window.allocTeamMaster.filter(m => m.part === window.allocPartTab).forEach(m => m.active = active);
     window.renderAllocMemberSelectors();
+};
+
+// 💡 2. 대상 프로젝트 체크 UI 추가
+window.renderAllocProjectSelectors = function() {
+    const cont = document.getElementById('alloc-project-list-container');
+    if(!cont) return;
+    
+    // 현재 선택된 파트에 해당하는 PJT만 표시
+    const projects = window.allocProjects.filter(p => p.part === window.allocPartTab);
+    
+    if(projects.length === 0) {
+        cont.innerHTML = `<span class="text-xs font-bold text-slate-400 p-2">해당 파트에 진행 중인 프로젝트가 없습니다.</span>`;
+        return;
+    }
+    
+    cont.innerHTML = projects.map(p => `
+        <label class="flex items-center gap-2 bg-slate-50 hover:bg-indigo-50/50 px-3 py-2 rounded-lg border border-slate-200 cursor-pointer transition-all shadow-sm">
+            <input type="checkbox" class="w-4 h-4 accent-indigo-600 shrink-0" ${p.active !== false ? 'checked' : ''} onchange="window.updateAllocProjectActive('${p.id}', this.checked)">
+            <span class="text-indigo-600 font-black text-xs shrink-0 w-24">[${p.code}]</span>
+            <span class="text-[11px] font-bold text-slate-700 truncate w-full" title="${p.name}">${p.name}</span>
+            <span class="text-[10px] font-bold text-slate-400 shrink-0 border-l pl-2">${p.progress || 0}% 진행</span>
+        </label>
+    `).join('');
+};
+
+window.updateAllocProjectActive = function(id, active) {
+    const p = window.allocProjects.find(x => x.id === id);
+    if(p) p.active = active;
+};
+
+window.selectAllAllocProjects = function(active) {
+    window.allocProjects.filter(p => p.part === window.allocPartTab).forEach(p => p.active = active);
+    window.renderAllocProjectSelectors();
 };
 
 window.switchAllocView = function(viewMode) {
@@ -265,9 +303,13 @@ window.openAxttVerifyModal = function() {
 };
 window.closeAxttVerifyModal = function() { const m = document.getElementById('axtt-verify-modal'); if(m){ m.classList.add('hidden'); m.classList.remove('flex'); } };
 
+
 window.executeAiAllocation = async function() {
     const activeMembers = window.allocTeamMaster.filter(m => m.part === window.allocPartTab && m.active);
     if (activeMembers.length === 0) return window.showToast(`투입할 [${window.allocPartTab}] 파트 인원을 최소 1명 이상 선택하세요.`, "error");
+
+    // 💡 [수정] 사용자가 체크 해제한 프로젝트는 제외하고 타겟팅
+    let targetProjects = window.allocProjects.filter(p => p.part === window.allocPartTab && p.active !== false);
 
     const btn = document.getElementById('btn-run-ai');
     if(btn) {
@@ -324,8 +366,6 @@ window.executeAiAllocation = async function() {
             let outResults = [];
             let aiReport = [];
 
-            let targetProjects = window.allocProjects.filter(p => p.part === window.allocPartTab);
-            
             let priorities = targetProjects.map(p => {
                 let remain = Math.max(0, (parseFloat(p.estMd)||0) - (parseFloat(p.finalMd)||0));
                 let outMd = parseFloat(p.outMd) || 0;
@@ -342,7 +382,7 @@ window.executeAiAllocation = async function() {
 
             priorities.forEach((p, idx) => {
                 if (currentAvail <= 0) {
-                    outResults.push({ code: p.code, name: p.name, allocated: p.internalReq, reason: '사내 캐파 부족 (오버플로우)' });
+                    outResults.push({ code: p.code, name: p.name, allocated: p.internalReq, reason: '사내 캐파 부족' });
                     return;
                 }
                 
@@ -356,7 +396,7 @@ window.executeAiAllocation = async function() {
                 } else if (currentAvail > 0) {
                     pjtResults.push({ ...p, allocated: currentAvail, priority: idx + 1 });
                     let overflow = reqMd - currentAvail;
-                    outResults.push({ code: p.code, name: p.name, allocated: overflow, reason: '사내 캐파 부족 (오버플로우)' });
+                    outResults.push({ code: p.code, name: p.name, allocated: overflow, reason: '사내 캐파 부족' });
                     currentAvail = 0;
                 }
             });
@@ -380,7 +420,6 @@ window.executeAiAllocation = async function() {
                 if (bestPjt) pjtRemainMap[bestPjt.code] -= m.expectedMd;
             });
 
-            // 💡 [개선] 공통 업무 쏠림(유휴 캐파) 비율 계산
             let idleRate = (currentAvail / availMD) * 100;
             let periodText = window.allocPeriodMode === 'week' ? '주간' : '월간';
 
@@ -401,21 +440,18 @@ window.executeAiAllocation = async function() {
                 aiReport.push(`✅ 현재 파트 내부 가동률만으로 이번 기간에 요구되는 프로젝트 할당량을 무리 없이 소화 가능합니다.`);
             }
 
-            // 💡 [핵심] 공통 업무가 너무 많을 경우(30% 이상) AI 인사이트 강한 경고 추가
             if (idleRate > 30) {
                 aiReport.push(`🚨 [유휴 캐파 경고] 현재 팀의 가용 시간 대비 배정된 프로젝트 물량이 너무 적어, '공통 업무' 배정 비율이 비정상적으로 높게(${idleRate.toFixed(1)}%) 산출되었습니다.\n\n💡 AI 권고사항:\n1) 다음 달 수주 예정인 프로젝트의 선행 작업(조기 착수) 검토\n2) 파트별 기술 교육 및 장비/지그 유지보수 기간으로 적극 활용\n3) 타 파트(부서) 혹은 긴급 프로젝트로의 업무 지원(Help) 편성 검토`);
             }
 
             window.lastAllocatedData = { periodMode: window.allocPeriodMode, targetValue: targetValue, members: activeMembers, pjtResults: pjtResults };
 
-            // UI 렌더링 호출
             window.renderAllocUI(activeMembers.length * 5.0 * periodMultiplier, availMD, pjtResults, outResults, activeMembers, aiReport.join('\n\n'));
             
             if (document.getElementById('alloc-view-cal') && !document.getElementById('alloc-view-cal').classList.contains('hidden')) {
                 window.renderAllocCalendar();
             }
             
-            // 상태 전환
             const emptyState = document.getElementById('alloc-empty-state');
             const resultDash = document.getElementById('alloc-result-dashboard');
             const btnSave = document.getElementById('btn-save-alloc');
@@ -471,14 +507,13 @@ window.renderAllocUI = function(maxMD, availMD, pjtResults, outResults, members,
         `).join('');
     }
 
-    // 💡 프로젝트 개별 선택(수동 오버라이드)을 위한 옵션 리스트 생성
     const pjtOptionsHtml = pjtResults.map(p => {
         let label = p.code === 'COMMON' ? '부서 공통 업무' : `[${p.code}] ${p.name}`;
         return `<option value="${p.code}">${label}</option>`;
     }).join('');
 
     const thead = document.getElementById('alloc-grid-headers');
-    const tbody = document.getElementById('alloc-member-list');
+    const tbody = document.getElementById('alloc-grid-body');
     
     if (thead && tbody) {
         let hHtml = `<tr><th class="p-3 text-center font-bold w-24 rounded-tl-lg bg-slate-800">이름(파트)</th><th class="p-3 font-bold w-48 text-center bg-slate-800">배정 PJT (선택)</th>`;
@@ -497,7 +532,6 @@ window.renderAllocUI = function(maxMD, availMD, pjtResults, outResults, members,
             const dMd = (m.expectedMd / colCount).toFixed(1); 
             const vacTag = m.vacationDeduct > 0 ? `<div class="text-[9px] text-rose-500 font-bold mt-1 bg-rose-50 border border-rose-100 rounded text-center">차감 -${m.vacationDeduct}MD</div>` : '';
             
-            // 💡 텍스트 대신 select 태그 사용 (개별 선택 기능)
             let selectHtml = `<select class="w-full text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-1.5 rounded shadow-sm outline-none cursor-pointer text-center truncate" onchange="window.updateManualPjtAssignment('${m.name}', this.value, this.options[this.selectedIndex].text)">`;
             selectHtml += pjtOptionsHtml.replace(`value="${m.assignedPjtCode}"`, `value="${m.assignedPjtCode}" selected`);
             selectHtml += `</select>`;
@@ -536,7 +570,6 @@ window.renderAllocUI = function(maxMD, availMD, pjtResults, outResults, members,
     }
 };
 
-// 💡 드롭다운으로 개별 프로젝트 변경 시 캘린더에도 즉시 반영되도록 데이터 업데이트
 window.updateManualPjtAssignment = function(memberName, pjtCode, pjtNameText) {
     if (window.lastAllocatedData && window.lastAllocatedData.members) {
         let mem = window.lastAllocatedData.members.find(m => m.name === memberName);
@@ -544,8 +577,7 @@ window.updateManualPjtAssignment = function(memberName, pjtCode, pjtNameText) {
             mem.assignedPjtCode = pjtCode;
             mem.assignedPjtName = pjtNameText;
             
-            // 캘린더 뷰가 활성화되어 있으면 다시 그림
-            if (!document.getElementById('alloc-view-cal').classList.contains('hidden')) {
+            if (document.getElementById('alloc-view-cal') && !document.getElementById('alloc-view-cal').classList.contains('hidden')) {
                 window.renderAllocCalendar();
             }
             if (window.showToast) window.showToast(`${memberName}님의 프로젝트가 [${pjtNameText}](으)로 변경되었습니다.`, "success");
