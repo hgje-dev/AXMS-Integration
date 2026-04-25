@@ -8,7 +8,7 @@
                 </div>
                 투입 자동계획 (AI Allocation)
             </h2>
-            <p class="text-xs font-bold text-slate-500 mt-2">AXTT 과거 실적 및 현재 휴가 데이터를 바탕으로 팀원의 투입 계획을 자동 생성합니다.</p>
+            <p class="text-xs font-bold text-slate-500 mt-2">파트별 인원 및 휴가(예외 공수)를 직접 입력하여 최적의 투입 조합을 구성하세요.</p>
         </div>
         <div class="flex items-center gap-3">
             <div class="flex items-center bg-white border border-slate-200 rounded-xl p-1 shadow-sm relative group">
@@ -20,7 +20,7 @@
                 </div>
                 <button onclick="window.changeAllocWeek(1)" class="px-3 py-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-all z-10"><i class="fa-solid fa-chevron-right"></i></button>
             </div>
-            <button id="btn-run-ai" onclick="window.executeAiAllocation()" class="animate-[pulse_2s_infinite] bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md transition-all flex items-center gap-2">
+            <button id="btn-run-ai" onclick="window.executeAiAllocation()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md transition-all flex items-center gap-2">
                 <i class="fa-solid fa-microchip"></i> AI 자동 할당 실행
             </button>
             <button id="btn-save-alloc" onclick="window.saveAllocationPlan()" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md transition-all items-center gap-2">
@@ -29,67 +29,99 @@
         </div>
     </div>
 
+    <div class="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+                <h3 class="text-sm font-black text-slate-700"><i class="fa-solid fa-users-viewfinder text-indigo-500 mr-1.5"></i> 투입 자원 및 휴가(예외) 설정</h3>
+                <p class="text-[10px] font-bold text-slate-400 mt-1">이번 주 휴가나 예외로 인해 빠지는 공수(MD)를 직접 차감할 수 있습니다.</p>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="window.selectAllAllocMembers(true)" class="text-[10px] font-bold text-slate-500 hover:text-indigo-600 transition-colors">전체 선택</button>
+                <span class="text-slate-200">|</span>
+                <button onclick="window.selectAllAllocMembers(false)" class="text-[10px] font-bold text-slate-500 hover:text-rose-500 transition-colors">전체 해제</button>
+            </div>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="space-y-3">
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-4 bg-indigo-500 rounded-full"></span>
+                    <span class="text-xs font-black text-slate-800">제조파트</span>
+                    <label class="ml-auto inline-flex items-center cursor-pointer">
+                        <input type="checkbox" checked onchange="window.toggleAllocPart('제조', this.checked)" class="sr-only peer">
+                        <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-500"></div>
+                    </label>
+                </div>
+                <div id="alloc-member-list-mfg" class="flex flex-wrap gap-2"></div>
+            </div>
+            <div class="space-y-3">
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-4 bg-teal-500 rounded-full"></span>
+                    <span class="text-xs font-black text-slate-800">광학파트</span>
+                    <label class="ml-auto inline-flex items-center cursor-pointer">
+                        <input type="checkbox" checked onchange="window.toggleAllocPart('광학', this.checked)" class="sr-only peer">
+                        <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-teal-500"></div>
+                    </label>
+                </div>
+                <div id="alloc-member-list-opt" class="flex flex-wrap gap-2"></div>
+            </div>
+        </div>
+    </div>
+
     <div id="alloc-empty-state" class="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-dashed border-slate-300">
         <div class="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mb-4">
             <i class="fa-solid fa-robot text-3xl text-indigo-400"></i>
         </div>
         <h3 class="text-lg font-black text-slate-700 mb-2">자동 할당 대기 중</h3>
-        <p class="text-sm text-slate-500 font-medium text-center max-w-md">상단의 <b>[AI 자동 할당 실행]</b> 버튼을 클릭하면<br>AXTT 데이터와 PJT 현황을 분석하여 최적의 투입 계획 초안을 생성합니다.</p>
+        <p class="text-sm text-slate-500 font-medium text-center max-w-md">팀원 선택 및 휴가 차감을 설정한 후<br><b>[AI 자동 할당 실행]</b> 버튼을 클릭하세요.</p>
     </div>
 
     <div id="alloc-result-dashboard" class="hidden space-y-6 animate-fade-in">
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div class="glass-card p-5 border-l-4 border-l-slate-400 bg-white">
-                <div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-slate-500">팀 총 기본 캐파</span><i class="fa-solid fa-users text-slate-300 text-lg"></i></div>
-                <p class="text-2xl font-black text-slate-700"><span id="alloc-kpi-total">0</span> <span class="text-sm text-slate-400 ml-1">MD</span></p>
-                <p class="text-[10px] text-slate-400 mt-1"><span id="alloc-kpi-members">0</span>명 기준</p>
+                <div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-slate-500">선택된 팀원 수</span><i class="fa-solid fa-users text-slate-300 text-lg"></i></div>
+                <p class="text-2xl font-black text-slate-700"><span id="alloc-kpi-members">0</span> <span class="text-sm text-slate-400 ml-1">명</span></p>
             </div>
             <div class="glass-card p-5 border-l-4 border-l-emerald-400 bg-white">
                 <div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-emerald-600">최종 가용 공수</span><i class="fa-solid fa-check-to-slot text-emerald-300 text-lg"></i></div>
                 <p class="text-2xl font-black text-emerald-600"><span id="alloc-kpi-avail">0</span> <span class="text-sm text-emerald-400 ml-1">MD</span></p>
-                <p class="text-[10px] text-emerald-500/70 mt-1">AXTT 실적 반영 및 휴가 제외</p>
+                <p class="text-[10px] text-emerald-500/70 mt-1">수동 휴가/차감 공수 제외 적용</p>
             </div>
             <div class="glass-card p-5 border-l-4 border-l-indigo-400 bg-white">
                 <div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-indigo-600">사내 할당 완료</span><i class="fa-solid fa-list-check text-indigo-300 text-lg"></i></div>
                 <p class="text-2xl font-black text-indigo-600"><span id="alloc-kpi-assigned">0</span> <span class="text-sm text-indigo-400 ml-1">MD</span></p>
-                <p class="text-[10px] text-indigo-400 mt-1"><span id="alloc-kpi-pjt-count">0</span>개 PJT 배분됨</p>
             </div>
             <div class="glass-card p-5 border-l-4 border-l-rose-400 bg-rose-50/30">
-                <div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-rose-600">외주 전환 필요 공수</span><i class="fa-solid fa-handshake-angle text-rose-300 text-lg"></i></div>
+                <div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-rose-600">외주 전환 필요</span><i class="fa-solid fa-handshake-angle text-rose-300 text-lg"></i></div>
                 <p class="text-2xl font-black text-rose-600"><span id="alloc-kpi-outsourcing">0</span> <span class="text-sm text-rose-400 ml-1">MD</span></p>
-                <p class="text-[10px] text-rose-500 mt-1">사내 캐파 오버플로우 분량</p>
             </div>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div class="lg:col-span-2 glass-card flex flex-col overflow-hidden bg-white border border-slate-200">
-                <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                    <h3 class="text-sm font-black text-slate-800"><i class="fa-solid fa-arrow-down-1-9 text-indigo-500 mr-1"></i> 프로젝트 우선순위 및 공수 배분 결과</h3>
-                </div>
-                <div class="p-6 flex-1 bg-white overflow-y-auto custom-scrollbar max-h-[400px]">
-                    <div class="space-y-4" id="alloc-pjt-list"></div>
-                </div>
+            <div class="lg:col-span-2 glass-card flex flex-col bg-white overflow-hidden">
+                <div class="px-6 py-4 border-b bg-slate-50/50"><h3 class="text-sm font-black text-slate-800">프로젝트 배분 결과</h3></div>
+                <div class="p-6 overflow-y-auto max-h-[400px]"><div class="space-y-4" id="alloc-pjt-list"></div></div>
             </div>
-
-            <div class="glass-card p-6 flex flex-col bg-white border border-slate-200">
-                <h3 class="text-sm font-black text-slate-800 mb-4 border-b border-slate-100 pb-2">이번 주 PJT별 사내 공수 점유율</h3>
-                <div class="relative flex-1 min-h-[250px] flex items-center justify-center">
-                    <canvas id="alloc-chart"></canvas>
-                </div>
+            <div class="glass-card p-6 flex flex-col bg-white">
+                <h3 class="text-sm font-black text-slate-800 mb-4 border-b pb-2">공수 점유율</h3>
+                <div class="relative flex-1 min-h-[250px] flex items-center justify-center"><canvas id="alloc-chart"></canvas></div>
             </div>
         </div>
 
-        <div class="glass-card overflow-hidden bg-white border border-slate-200 shadow-sm">
-            <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-                <h3 class="text-sm font-black text-slate-800"><i class="fa-solid fa-users text-indigo-500 mr-1"></i> 팀원별 주간 투입 계획표 (수동 조정 가능)</h3>
+        <div class="glass-card overflow-hidden bg-white shadow-sm flex flex-col">
+            <div class="px-6 py-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                <div class="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
+                    <button id="btn-alloc-view-grid" onclick="window.switchAllocView('grid')" class="px-4 py-1.5 text-xs font-bold bg-indigo-50 text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-1.5"><i class="fa-solid fa-table"></i> 주간 할당표</button>
+                    <button id="btn-alloc-view-cal" onclick="window.switchAllocView('calendar')" class="px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-1.5 bg-transparent"><i class="fa-regular fa-calendar-days"></i> 월간 캘린더</button>
+                </div>
                 <span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200"><i class="fa-solid fa-check"></i> 자동 매칭 초안</span>
             </div>
-            <div class="overflow-x-auto custom-scrollbar bg-white p-4">
+
+            <div id="alloc-view-grid" class="overflow-x-auto custom-scrollbar bg-white p-4">
                 <table class="w-full text-left border-collapse whitespace-nowrap table-fixed min-w-[800px]">
                     <thead class="bg-slate-800 text-white text-[11px]">
                         <tr>
                             <th class="p-3 text-center font-bold w-24 rounded-tl-lg">이름(파트)</th>
-                            <th class="p-3 font-bold w-48 text-center">주력 배정 PJT (AI)</th>
+                            <th class="p-3 font-bold w-48 text-center">배정 PJT</th>
                             <th class="p-3 text-center font-bold">월</th>
                             <th class="p-3 text-center font-bold">화</th>
                             <th class="p-3 text-center font-bold">수</th>
@@ -102,6 +134,16 @@
                     </tbody>
                 </table>
             </div>
+
+            <div id="alloc-view-cal" class="hidden flex-col bg-white p-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-sm font-black text-slate-700" id="alloc-cal-title">2026년 4월 할당 캘린더</h3>
+                    <span class="text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-1 rounded border border-rose-200">대한민국 공휴일 적용됨</span>
+                </div>
+                <div class="grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-lg overflow-hidden flex-1 min-h-[500px]" id="alloc-cal-grid">
+                    </div>
+            </div>
+
         </div>
     </div>
 </div>
