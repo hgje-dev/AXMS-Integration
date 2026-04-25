@@ -41,13 +41,15 @@ const KR_HOLIDAYS = new Set([
     '2027-01-01', '2027-02-06', '2027-02-07', '2027-02-08', '2027-02-09', '2027-03-01', '2027-05-05', '2027-05-13', '2027-06-06', '2027-08-15', '2027-08-16', '2027-09-14', '2027-09-15', '2027-09-16', '2027-10-03', '2027-10-09', '2027-10-11', '2027-12-25'
 ]);
 
+// 공휴일을 완벽 제외하여 유효한 영업일 추출
 function getValidDays(periodMode, targetValue) {
     let validDays = [];
     if (periodMode === 'week') {
         const dates = window.getDatesFromWeek(targetValue);
         for(let i=0; i<5; i++) {
             let d = new Date(dates.start); d.setDate(d.getDate() + i);
-            validDays.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+            let dStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            if(!KR_HOLIDAYS.has(dStr)) validDays.push(dStr);
         }
     } else {
         const parts = targetValue.split('-');
@@ -65,7 +67,7 @@ function getValidDays(periodMode, targetValue) {
     return validDays;
 }
 
-// 💡 [핵심] 문자열을 분석해 콤마(,)와 범위(-)를 모두 날짜 배열로 변환하는 파서
+// 💡 12, 15-18 등 복합 문자열 파싱 엔진
 window.parseDateString = function(str) {
     let days = new Set();
     if(!str) return days;
@@ -88,127 +90,20 @@ window.parseDateString = function(str) {
     return days;
 };
 
-window.initAllocationPlan = function() {
-    console.log("✅ AI 투입 계획 모듈 (기간 범위 UI 탑재 완료) 초기화");
-    
-    window.switchAllocPeriodMode('week'); 
-    window.switchAllocPartTab('제조'); 
-
-    onSnapshot(query(collection(axmsDb, "projects_status")), (snap) => {
-        let oldProjects = [...window.allocProjects]; 
-        window.allocProjects = [];
-        snap.forEach(d => {
-            let p = d.data(); p.id = d.id;
-            if (p.status !== 'completed' && p.status !== 'rejected') {
-                let old = oldProjects.find(op => op.id === p.id);
-                p.active = old ? old.active : true; 
-                window.allocProjects.push(p);
-            }
-        });
-        window.renderAllocProjectSelectors(); 
-    });
-    
-    fetchHistoricalDataFromAXTT();
-};
-
-window.switchAllocPartTab = function(part) {
-    window.allocPartTab = part;
-    document.getElementById('btn-alloc-part-mfg').className = part === '제조' ? "px-3 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
-    document.getElementById('btn-alloc-part-opt').className = part === '광학' ? "px-3 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
-    
-    const lbl = document.getElementById('current-part-label');
-    if(lbl) lbl.innerText = `[${part} 파트]`;
-    
-    window.renderAllocMemberSelectors();
-    window.renderAllocProjectSelectors(); 
-    window.loadAllocationData(); 
-};
-
-window.switchAllocPeriodMode = function(mode) {
-    window.allocPeriodMode = mode;
-    const btnW = document.getElementById('btn-alloc-period-week');
-    const btnM = document.getElementById('btn-alloc-period-month');
-    const pickW = document.getElementById('alloc-week-picker');
-    const pickM = document.getElementById('alloc-month-picker');
-
-    if (mode === 'week') {
-        if(btnW) btnW.className = 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap';
-        if(btnM) btnM.className = 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-1.5 bg-transparent whitespace-nowrap';
-        if(pickW) pickW.classList.remove('hidden'); 
-        if(pickM) pickM.classList.add('hidden');
-        if(pickW && !pickW.value) pickW.value = window.getWeekString ? window.getWeekString(new Date()) : "2026-W17";
-        if(pickW) window.updateAllocPeriodDisplay(pickW.value);
-    } else {
-        if(btnM) btnM.className = 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap';
-        if(btnW) btnW.className = 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-1.5 bg-transparent whitespace-nowrap';
-        if(pickM) pickM.classList.remove('hidden'); 
-        if(pickW) pickW.classList.add('hidden');
-        if(pickM && !pickM.value) {
-            const now = new Date();
-            pickM.value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-        }
-        if(pickM) window.updateAllocPeriodDisplay(pickM.value);
-    }
-    window.loadAllocationData();
-};
-
-window.updateAllocPeriodDisplay = function(val) {
-    if(!val) return;
-    const displayEl = document.getElementById('alloc-period-display');
-    if (!displayEl) return;
-    if (window.allocPeriodMode === 'week') {
-        displayEl.innerText = window.formatWeekToKorean ? window.formatWeekToKorean(val) : val;
-    } else {
-        const parts = val.split('-');
-        displayEl.innerText = `${parts[0]}년 ${parseInt(parts[1])}월`;
-    }
-};
-
-window.changeAllocPeriod = function(offset) {
-    if (window.allocPeriodMode === 'week') {
-        const picker = document.getElementById('alloc-week-picker');
-        if (!picker || !picker.value) return;
-        const parts = picker.value.split('-W');
-        const d = new Date(parseInt(parts[0]), 0, (parseInt(parts[1]) + offset - 1) * 7 + 1);
-        if (window.getWeekString) {
-            picker.value = window.getWeekString(d);
-            window.updateAllocPeriodDisplay(picker.value);
-            window.loadAllocationData();
-        }
-    } else {
-        const picker = document.getElementById('alloc-month-picker');
-        if (!picker || !picker.value) return;
-        const parts = picker.value.split('-');
-        const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1 + offset, 1);
-        picker.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-        window.updateAllocPeriodDisplay(picker.value);
-        window.loadAllocationData();
-    }
-};
-
-window.loadAllocationData = function() {
-    const emptyState = document.getElementById('alloc-empty-state');
-    const resultDash = document.getElementById('alloc-result-dashboard');
-    if(emptyState) { emptyState.classList.remove('hidden'); emptyState.classList.add('flex'); }
-    if(resultDash) resultDash.classList.add('hidden');
-    
-    const btnSave = document.getElementById('btn-save-alloc');
-    const btnRun = document.getElementById('btn-run-ai');
-    if (btnSave) btnSave.classList.add('hidden');
-    if (btnRun) btnRun.innerHTML = '<i class="fa-solid fa-microchip"></i> AI 자동 할당 실행';
-    window.lastAllocatedData = null; 
-};
-
-// 💡 [핵심] 시작일/종료일 선택 시 범위를 입력창에 추가해주는 함수
+// 💡 달력에서 시작일/종료일 선택하여 텍스트박스에 밀어넣기
 window.addDateRangeToInput = function(name, type) {
-    const startEl = document.getElementById(`${type}-start-${name}`);
-    const endEl = document.getElementById(`${type}-end-${name}`);
-    const inputEl = document.getElementById(`${type === 'vacation' ? 'vac' : 'sup'}-input-${name}`);
+    const prefix = type === 'vacation' ? 'vac' : 'sup';
+    const startEl = document.getElementById(`${prefix}-start-${name}`);
+    const endEl = document.getElementById(`${prefix}-end-${name}`);
+    const inputEl = document.getElementById(`${prefix}-input-${name}`);
 
-    if(!startEl.value) return window.showToast("시작일을 먼저 선택하세요.", "warning");
+    if(!startEl || !startEl.value) {
+        if(window.showToast) window.showToast("시작일 달력을 먼저 선택하세요.", "warning");
+        return;
+    }
 
     let startDay = new Date(startEl.value).getDate();
-    let endDay = endEl.value ? new Date(endEl.value).getDate() : startDay;
+    let endDay = endEl && endEl.value ? new Date(endEl.value).getDate() : startDay;
 
     if (startDay > endDay) {
         let temp = startDay; startDay = endDay; endDay = temp;
@@ -226,12 +121,100 @@ window.addDateRangeToInput = function(name, type) {
 
     window.updateAllocMemberDates(name, type, inputEl.value);
 
-    // 날짜 선택기 초기화
     startEl.value = '';
-    endEl.value = '';
+    if(endEl) endEl.value = '';
 };
 
-// 💡 1. 향상된 UI 렌더링 (기간 범위 선택기 탑재)
+window.initAllocationPlan = function() {
+    console.log("✅ AI 투입 계획 모듈 (완벽통합본: 범위선택, 담당자배정, 통합뷰, 공통분리) 초기화");
+    window.switchAllocPeriodMode('week'); 
+    window.switchAllocPartTab('제조'); 
+
+    onSnapshot(query(collection(axmsDb, "projects_status")), (snap) => {
+        let oldProjects = [...window.allocProjects]; 
+        window.allocProjects = [];
+        snap.forEach(d => {
+            let p = d.data(); p.id = d.id;
+            if (p.status !== 'completed' && p.status !== 'rejected') {
+                let old = oldProjects.find(op => op.id === p.id);
+                p.active = old ? old.active : true; 
+                window.allocProjects.push(p);
+            }
+        });
+        window.renderAllocProjectSelectors(); 
+    });
+    fetchHistoricalDataFromAXTT();
+};
+
+window.switchAllocPartTab = function(part) {
+    window.allocPartTab = part;
+    document.getElementById('btn-alloc-part-mfg').className = part === '제조' ? "px-3 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
+    document.getElementById('btn-alloc-part-opt').className = part === '광학' ? "px-3 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
+    const lbl = document.getElementById('current-part-label'); if(lbl) lbl.innerText = `[${part} 파트]`;
+    window.renderAllocMemberSelectors(); window.renderAllocProjectSelectors(); window.loadAllocationData(); 
+};
+
+window.switchAllocPeriodMode = function(mode) {
+    window.allocPeriodMode = mode;
+    const btnW = document.getElementById('btn-alloc-period-week');
+    const btnM = document.getElementById('btn-alloc-period-month');
+    const pickW = document.getElementById('alloc-week-picker');
+    const pickM = document.getElementById('alloc-month-picker');
+
+    if (mode === 'week') {
+        if(btnW) btnW.className = 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap';
+        if(btnM) btnM.className = 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-1.5 bg-transparent whitespace-nowrap';
+        if(pickW) pickW.classList.remove('hidden'); if(pickM) pickM.classList.add('hidden');
+        if(pickW && !pickW.value) pickW.value = window.getWeekString ? window.getWeekString(new Date()) : "2026-W17";
+        if(pickW) window.updateAllocPeriodDisplay(pickW.value);
+    } else {
+        if(btnM) btnM.className = 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap';
+        if(btnW) btnW.className = 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-1.5 bg-transparent whitespace-nowrap';
+        if(pickM) pickM.classList.remove('hidden'); if(pickW) pickW.classList.add('hidden');
+        if(pickM && !pickM.value) { pickM.value = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`; }
+        if(pickM) window.updateAllocPeriodDisplay(pickM.value);
+    }
+    window.loadAllocationData();
+};
+
+window.updateAllocPeriodDisplay = function(val) {
+    if(!val) return;
+    const displayEl = document.getElementById('alloc-period-display');
+    if (!displayEl) return;
+    if (window.allocPeriodMode === 'week') displayEl.innerText = window.formatWeekToKorean ? window.formatWeekToKorean(val) : val;
+    else displayEl.innerText = `${val.split('-')[0]}년 ${parseInt(val.split('-')[1])}월`;
+};
+
+window.changeAllocPeriod = function(offset) {
+    if (window.allocPeriodMode === 'week') {
+        const picker = document.getElementById('alloc-week-picker');
+        if (!picker || !picker.value) return;
+        const parts = picker.value.split('-W');
+        const d = new Date(parseInt(parts[0]), 0, (parseInt(parts[1]) + offset - 1) * 7 + 1);
+        if (window.getWeekString) { picker.value = window.getWeekString(d); window.updateAllocPeriodDisplay(picker.value); window.loadAllocationData(); }
+    } else {
+        const picker = document.getElementById('alloc-month-picker');
+        if (!picker || !picker.value) return;
+        const parts = picker.value.split('-');
+        const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1 + offset, 1);
+        picker.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+        window.updateAllocPeriodDisplay(picker.value); window.loadAllocationData();
+    }
+};
+
+window.loadAllocationData = function() {
+    const emptyState = document.getElementById('alloc-empty-state');
+    const resultDash = document.getElementById('alloc-result-dashboard');
+    if(emptyState) { emptyState.classList.remove('hidden'); emptyState.classList.add('flex'); }
+    if(resultDash) resultDash.classList.add('hidden');
+    const btnSave = document.getElementById('btn-save-alloc');
+    const btnRun = document.getElementById('btn-run-ai');
+    if (btnSave) btnSave.classList.add('hidden');
+    if (btnRun) btnRun.innerHTML = '<i class="fa-solid fa-microchip"></i> AI 자동 할당 실행';
+    window.lastAllocatedData = null; 
+};
+
+// 💡 렌더링 시 시작일~종료일 UI 표출
 window.renderAllocMemberSelectors = function() {
     const container = document.getElementById('alloc-member-list-container');
     if(!container) return;
@@ -303,105 +286,60 @@ window.updateAllocMemberDates = function(name, type, val) {
         else if (type === 'support') member.supportDates = val;
     }
 };
-
-window.updateAllocMemberActive = (name, active) => {
-    const member = window.allocTeamMaster.find(m => m.name === name);
-    if(member) member.active = active;
-    window.renderAllocMemberSelectors(); 
-};
-window.updateAllocMemberStatus = (name, status) => {
-    const member = window.allocTeamMaster.find(m => m.name === name);
-    if(member) member.status = status;
-    window.renderAllocMemberSelectors();
-};
-window.updateAllocMemberVacation = (name, val) => {
-    const member = window.allocTeamMaster.find(m => m.name === name);
-    if(member) member.manualVacation = parseFloat(val) || 0;
-};
-window.selectAllAllocMembers = (active) => {
-    window.allocTeamMaster.filter(m => m.part === window.allocPartTab).forEach(m => m.active = active);
-    window.renderAllocMemberSelectors();
-};
+window.updateAllocMemberActive = (name, active) => { const member = window.allocTeamMaster.find(m => m.name === name); if(member) member.active = active; window.renderAllocMemberSelectors(); };
+window.updateAllocMemberStatus = (name, status) => { const member = window.allocTeamMaster.find(m => m.name === name); if(member) member.status = status; window.renderAllocMemberSelectors(); };
+window.updateAllocMemberVacation = (name, val) => { const member = window.allocTeamMaster.find(m => m.name === name); if(member) member.manualVacation = parseFloat(val) || 0; };
+window.selectAllAllocMembers = (active) => { window.allocTeamMaster.filter(m => m.part === window.allocPartTab).forEach(m => m.active = active); window.renderAllocMemberSelectors(); };
 
 window.renderAllocProjectSelectors = function() {
     const cont = document.getElementById('alloc-project-list-container');
     if(!cont) return;
     const projects = window.allocProjects.filter(p => p.part === window.allocPartTab);
-    if(projects.length === 0) {
-        cont.innerHTML = `<span class="text-xs font-bold text-slate-400 p-2">해당 파트에 진행 중인 프로젝트가 없습니다.</span>`;
-        return;
-    }
+    if(projects.length === 0) { cont.innerHTML = `<span class="text-xs font-bold text-slate-400 p-2">해당 파트에 진행 중인 프로젝트가 없습니다.</span>`; return; }
     cont.innerHTML = projects.map(p => `
         <label class="flex items-center gap-2 bg-slate-50 hover:bg-indigo-50/50 px-3 py-2 rounded-lg border border-slate-200 cursor-pointer transition-all shadow-sm">
             <input type="checkbox" class="w-4 h-4 accent-indigo-600 shrink-0" ${p.active !== false ? 'checked' : ''} onchange="window.updateAllocProjectActive('${p.id}', this.checked)">
             <span class="text-indigo-600 font-black text-xs shrink-0 w-24">[${p.code}]</span>
             <span class="text-[11px] font-bold text-slate-700 truncate w-full" title="${p.name}">${p.name}</span>
             <span class="text-[10px] font-bold text-slate-400 shrink-0 border-l pl-2">${p.progress || 0}% 진행</span>
-        </label>
-    `).join('');
+        </label>`).join('');
 };
+window.updateAllocProjectActive = function(id, active) { const p = window.allocProjects.find(x => x.id === id); if(p) p.active = active; };
+window.selectAllAllocProjects = function(active) { window.allocProjects.filter(p => p.part === window.allocPartTab).forEach(p => p.active = active); window.renderAllocProjectSelectors(); };
 
-window.updateAllocProjectActive = function(id, active) {
-    const p = window.allocProjects.find(x => x.id === id);
-    if(p) p.active = active;
-};
-window.selectAllAllocProjects = function(active) {
-    window.allocProjects.filter(p => p.part === window.allocPartTab).forEach(p => p.active = active);
-    window.renderAllocProjectSelectors();
-};
-
-window.switchAllocView = function(viewMode) {
+window.switchAllocView = function() {
     window.renderAllocGrid();
     window.renderAllocCalendar();
 };
 
 async function fetchHistoricalDataFromAXTT() {
-    let d = new Date();
-    let endStr = d.toISOString().split('T')[0];
-    d.setDate(d.getDate() - 28);
-    let startStr = d.toISOString().split('T')[0];
-
+    let d = new Date(); let endStr = d.toISOString().split('T')[0]; d.setDate(d.getDate() - 28); let startStr = d.toISOString().split('T')[0];
     try {
         const q = query(collection(axttDb, "work_logs"), where("date", ">=", startStr), where("date", "<=", endStr));
         const snap = await getDocs(q);
         if (snap.empty) { window.historicalMemberMd = {}; return; }
         let rawStats = {};
-        snap.forEach(docSnap => {
-            const data = docSnap.data();
-            const name = data.authorName;
-            const hours = parseFloat(data.hours) || 0;
-            if (!rawStats[name]) rawStats[name] = 0;
-            rawStats[name] += (hours / 8); 
-        });
+        snap.forEach(docSnap => { const data = docSnap.data(); const name = data.authorName; const hours = parseFloat(data.hours) || 0; if (!rawStats[name]) rawStats[name] = 0; rawStats[name] += (hours / 8); });
         window.historicalMemberMd = {};
-        for (let name in rawStats) {
-            window.historicalMemberMd[name] = Math.min(rawStats[name] / 4, 5.0); 
-        }
+        for (let name in rawStats) window.historicalMemberMd[name] = Math.min(rawStats[name] / 4, 5.0); 
     } catch (error) { window.historicalMemberMd = {}; }
 }
 
 window.openAxttVerifyModal = function() {
-    const modal = document.getElementById('axtt-verify-modal');
-    if(!modal) return;
-    const tbody = document.getElementById('axtt-verify-tbody');
-    let html = '';
+    const modal = document.getElementById('axtt-verify-modal'); if(!modal) return;
+    const tbody = document.getElementById('axtt-verify-tbody'); let html = '';
     window.allocTeamMaster.forEach(m => {
-        let rawVal = window.historicalMemberMd[m.name] || 0;
-        let finalVal = rawVal > 0 ? rawVal.toFixed(1) : '5.0'; 
+        let rawVal = window.historicalMemberMd[m.name] || 0; let finalVal = rawVal > 0 ? rawVal.toFixed(1) : '5.0'; 
         let badgeColor = m.part === '제조' ? 'text-indigo-600 bg-indigo-50 border-indigo-200' : 'text-teal-600 bg-teal-50 border-teal-200';
         html += `<tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-            <td class="p-3 text-center font-bold text-slate-800">${m.name}</td>
-            <td class="p-3 text-center"><span class="px-2 py-0.5 text-[10px] font-bold rounded shadow-sm border ${badgeColor}">${m.part}</span></td>
-            <td class="p-3 text-center text-teal-600 font-bold">${rawVal > 0 ? rawVal.toFixed(1) : '<span class="text-slate-300">데이터 없음</span>'}</td>
-            <td class="p-3 text-center text-amber-600 font-black">${finalVal}</td>
-        </tr>`;
+            <td class="p-3 text-center font-bold text-slate-800">${m.name}</td><td class="p-3 text-center"><span class="px-2 py-0.5 text-[10px] font-bold rounded shadow-sm border ${badgeColor}">${m.part}</span></td>
+            <td class="p-3 text-center text-teal-600 font-bold">${rawVal > 0 ? rawVal.toFixed(1) : '<span class="text-slate-300">데이터 없음</span>'}</td><td class="p-3 text-center text-amber-600 font-black">${finalVal}</td></tr>`;
     });
-    tbody.innerHTML = html;
-    modal.classList.remove('hidden'); modal.classList.add('flex');
+    tbody.innerHTML = html; modal.classList.remove('hidden'); modal.classList.add('flex');
 };
 window.closeAxttVerifyModal = function() { const m = document.getElementById('axtt-verify-modal'); if(m){ m.classList.add('hidden'); m.classList.remove('flex'); } };
 
-// AI 실행 로직 (파서 적용)
+// AI 실행 로직 (파싱 엔진 적용 완료)
 window.executeAiAllocation = async function() {
     const activeMembers = window.allocTeamMaster.filter(m => m.part === window.allocPartTab && m.active);
     if (activeMembers.length === 0) return window.showToast(`투입할 [${window.allocPartTab}] 파트 인원을 최소 1명 이상 선택하세요.`, "error");
@@ -434,7 +372,6 @@ window.executeAiAllocation = async function() {
                 let dailyCommonMd = Math.min(0.2, dailyTotalMd);
                 let dailyPjtMd = dailyTotalMd - dailyCommonMd;
                 
-                // 💡 [핵심] 입력된 문자열(12, 15-18)을 정확하게 파싱하여 Set 배열로 생성
                 let vDates = window.parseDateString(m.vacationDates);
                 let sDates = window.parseDateString(m.supportDates);
 
@@ -536,7 +473,7 @@ window.executeAiAllocation = async function() {
             aiReport.push(`[${window.allocPartTab} 파트 전용 ${periodText} 계획]\n선택 인원 ${activeMembers.length}명, 1일 0.2MD(공통업무)를 자동 분리한 순수 PJT 가용 공수는 총 ${pjtAvailMD.toFixed(1)}MD 로 산출되었습니다.`);
             
             let dispatchCount = activeMembers.filter(m => m.status === '타팀지원' || m.specificSupportDays.size > 0).length;
-            if (dispatchCount > 0) aiReport.push(`ℹ️ 입력하신 기간에 해당하는 타팀 지원(파견) 데이터가 가용 캐파에서 완벽하게 제외되었습니다.`);
+            if (dispatchCount > 0) aiReport.push(`ℹ️ 지정하신 기간의 휴가/지원(파견) 일정이 가용 캐파에서 완벽하게 차감되었습니다.`);
 
             aiReport.push(`🎯 PJT 현황의 담당자(Manager)로 지정된 인원에게 해당 프로젝트를 0순위로 우선 배정하는 스마트 매칭이 적용되었습니다.`);
 
@@ -558,7 +495,7 @@ window.executeAiAllocation = async function() {
             if(btnSave) { btnSave.classList.remove('hidden'); btnSave.classList.add('flex'); }
             if(btn) { btn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> 다시 계산'; btn.disabled = false; }
             
-            window.showToast(`${window.allocPartTab} 파트 최적화 계획이 완성되었습니다.`, "success");
+            window.showToast(`${window.allocPartTab} 파트 계획이 생성되었습니다.`, "success");
             
         } catch (err) {
             console.error("AI Error: ", err);
@@ -640,7 +577,6 @@ window.renderAllocGrid = function() {
         });
 
         let divisor = activeDaysCount > 0 ? (periodMode === 'week' ? activeDaysCount : colCount) : 1;
-        
         let maxVal = periodMode === 'week' ? 0.8 : 4.0;
         let rawDMd = m.expectedPjtMd / divisor;
         if (rawDMd > maxVal) rawDMd = maxVal;
@@ -722,7 +658,6 @@ window.updateManualPjtAssignment = function(memberName, pjtCode, pjtNameText) {
 
 window.renderAllocCalendar = function() {
     const grid = document.getElementById('alloc-cal-grid');
-    const titleEl = document.getElementById('alloc-cal-title');
     if (!grid || !window.lastAllocatedData) return;
 
     let targetDateObj;
@@ -737,17 +672,12 @@ window.renderAllocCalendar = function() {
     
     const y = targetDateObj.getFullYear();
     const m = targetDateObj.getMonth(); 
-    
-    let subTitle = window.lastAllocatedData.periodMode === 'week' ? '해당 주차 캘린더' : '해당 월 캘린더';
-    if (titleEl) titleEl.innerText = `${y}년 ${m + 1}월 ${subTitle} (${window.allocPartTab})`;
 
     const firstDay = new Date(y, m, 1).getDay();
     const lastDate = new Date(y, m + 1, 0).getDate();
 
     let html = '';
-    for(let i=0; i<firstDay; i++) {
-        html += `<div class="bg-slate-50 opacity-50 border-b border-slate-200"></div>`;
-    }
+    for(let i=0; i<firstDay; i++) html += `<div class="bg-slate-50 opacity-50 border-b border-slate-200"></div>`;
 
     for(let i=1; i<=lastDate; i++) {
         let dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
@@ -786,16 +716,14 @@ window.renderAllocCalendar = function() {
                             if (!mem.assignedPjtDeadline || mem.assignedPjtDeadline === '-' || vd <= mem.assignedPjtDeadline || mem.assignedPjtCode === 'COMMON') activeD++;
                         }
                     });
-                    
                     let divisor = activeD > 0 ? activeD : 1;
-                    
+
                     let pjtMd = mem.expectedPjtMd / divisor;
                     if (pjtMd > 0.8) pjtMd = 0.8;
                     let commonMd = mem.expectedCommonMd / divisor;
                     if (commonMd > 0.2) commonMd = 0.2;
 
                     let badges = '';
-
                     if (mem.assignedPjtCode !== 'COMMON' && mem.assignedPjtCode !== 'SUPPORT') {
                         if (!mem.assignedPjtDeadline || mem.assignedPjtDeadline === '-' || dateStr <= mem.assignedPjtDeadline) {
                             badges += `
@@ -825,10 +753,8 @@ window.renderAllocCalendar = function() {
                 badgeHtml += `<div class="flex-1 flex flex-col gap-0.5 overflow-y-auto custom-scrollbar mt-1">${membersHtml}</div>`;
             }
         }
-
         html += `<div class="${bgClass} p-1.5 border-b border-r border-slate-200 hover:bg-slate-50 transition-colors flex flex-col"><div class="text-xs font-black text-center mb-1 ${txtClass}">${i}</div>${badgeHtml}</div>`;
     }
-
     grid.innerHTML = html;
 };
 
