@@ -20,8 +20,8 @@ const axttApp = initializeApp(axttConfig, "AXTT_APP");
 const axttDb = getFirestore(axttApp);
 
 let allocChartInstance = null;
-window.allocPartTab = '제조'; // 기본 선택 파트
-window.allocPeriodMode = 'week'; // 기본 선택 기간 (week / month)
+window.allocPartTab = '제조'; 
+window.allocPeriodMode = 'week'; 
 
 window.allocTeamMaster = [
     { name: '홍승현', part: '제조', active: true, manualVacation: 0 }, { name: '박종민', part: '제조', active: true, manualVacation: 0 },
@@ -41,10 +41,10 @@ const KR_HOLIDAYS = new Set([
 ]);
 
 window.initAllocationPlan = function() {
-    console.log("✅ AI 투입 계획 모듈 (파트분리/월간기능 추가) 초기화");
+    console.log("✅ AI 투입 계획 모듈 (인원별 지정 및 인사이트 강화) 초기화");
     
-    window.switchAllocPeriodMode('week'); // 초기 기간 세팅
-    window.switchAllocPartTab('제조'); // 초기 파트 세팅
+    window.switchAllocPeriodMode('week'); 
+    window.switchAllocPartTab('제조'); 
 
     onSnapshot(query(collection(axmsDb, "projects_status")), (snap) => {
         window.allocProjects = [];
@@ -54,11 +54,9 @@ window.initAllocationPlan = function() {
         });
     });
     
-    // 백그라운드에서 AXTT 데이터 미리 1회 패치
     fetchHistoricalDataFromAXTT();
 };
 
-// 💡 파트 선택 토글 함수
 window.switchAllocPartTab = function(part) {
     window.allocPartTab = part;
     document.getElementById('btn-alloc-part-mfg').className = part === '제조' ? "px-3 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
@@ -68,10 +66,9 @@ window.switchAllocPartTab = function(part) {
     if(lbl) lbl.innerText = `[${part} 파트]`;
     
     window.renderAllocMemberSelectors();
-    window.loadAllocationData(); // 화면 초기화
+    window.loadAllocationData(); 
 };
 
-// 💡 기간 선택 토글 함수
 window.switchAllocPeriodMode = function(mode) {
     window.allocPeriodMode = mode;
     const btnW = document.getElementById('btn-alloc-period-week');
@@ -152,7 +149,6 @@ window.renderAllocMemberSelectors = function() {
     const container = document.getElementById('alloc-member-list-container');
     if(!container) return;
 
-    // 현재 선택된 파트의 멤버만 필터링
     const members = window.allocTeamMaster.filter(m => m.part === window.allocPartTab);
     
     if (members.length === 0) {
@@ -211,7 +207,6 @@ window.switchAllocView = function(viewMode) {
     }
 };
 
-// 💡 AXTT 데이터 미리 불러오기 (검증 모달 용도 포함)
 async function fetchHistoricalDataFromAXTT() {
     let d = new Date();
     let endStr = d.toISOString().split('T')[0];
@@ -245,7 +240,6 @@ async function fetchHistoricalDataFromAXTT() {
     }
 }
 
-// 💡 AXTT 검증 모달 액션
 window.openAxttVerifyModal = function() {
     const modal = document.getElementById('axtt-verify-modal');
     if(!modal) return;
@@ -255,7 +249,7 @@ window.openAxttVerifyModal = function() {
     let html = '';
     window.allocTeamMaster.forEach(m => {
         let rawVal = window.historicalMemberMd[m.name] || 0;
-        let finalVal = rawVal > 0 ? rawVal.toFixed(1) : '5.0'; // 없으면 5.0 적용
+        let finalVal = rawVal > 0 ? rawVal.toFixed(1) : '5.0'; 
         let badgeColor = m.part === '제조' ? 'text-indigo-600 bg-indigo-50 border-indigo-200' : 'text-teal-600 bg-teal-50 border-teal-200';
         
         html += `<tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
@@ -271,10 +265,7 @@ window.openAxttVerifyModal = function() {
 };
 window.closeAxttVerifyModal = function() { const m = document.getElementById('axtt-verify-modal'); if(m){ m.classList.add('hidden'); m.classList.remove('flex'); } };
 
-
-// 💡 [핵심 에러 방지 알고리즘] Try-Catch가 완벽하게 둘러싼 AI 할당 메인 로직
 window.executeAiAllocation = async function() {
-    // 1. 타겟 인원 필터링
     const activeMembers = window.allocTeamMaster.filter(m => m.part === window.allocPartTab && m.active);
     if (activeMembers.length === 0) return window.showToast(`투입할 [${window.allocPartTab}] 파트 인원을 최소 1명 이상 선택하세요.`, "error");
 
@@ -285,20 +276,17 @@ window.executeAiAllocation = async function() {
     }
 
     try {
-        // 데이터 최신화
         await fetchHistoricalDataFromAXTT();
     } catch(e) {
         console.warn("AXTT 데이터 로딩 실패(스킵가능):", e);
     }
 
-    // 💡 setTimeout 안의 콜백을 Try-Catch로 완벽 방어
     setTimeout(() => {
         try {
             let availMD = 0;
             let periodMultiplier = 1; 
             let targetValue = '';
             
-            // 기간 설정
             if (window.allocPeriodMode === 'month') {
                 targetValue = document.getElementById('alloc-month-picker')?.value || ''; 
                 if(targetValue) {
@@ -322,7 +310,6 @@ window.executeAiAllocation = async function() {
                 if (!targetValue) targetValue = window.getWeekString ? window.getWeekString(new Date()) : "2026-W17";
             }
 
-            // 팀원별 가용량 산출
             activeMembers.forEach(m => {
                 let baseWeeklyMd = window.historicalMemberMd[m.name] || 5.0; 
                 let basePeriodMd = baseWeeklyMd * periodMultiplier;
@@ -337,7 +324,6 @@ window.executeAiAllocation = async function() {
             let outResults = [];
             let aiReport = [];
 
-            // 2. 프로젝트 필터링 및 우선순위 정렬
             let targetProjects = window.allocProjects.filter(p => p.part === window.allocPartTab);
             
             let priorities = targetProjects.map(p => {
@@ -351,7 +337,6 @@ window.executeAiAllocation = async function() {
                 return { ...p, internalReq, score, dDay };
             }).filter(p => p.internalReq > 0 || p.dDay <= 14).sort((a,b) => b.score - a.score);
 
-            // 3. [쏠림 방지] Max Cap 할당
             let currentAvail = availMD;
             let maxPjtLimit = Math.max(10 * periodMultiplier, availMD * 0.45); 
 
@@ -376,12 +361,10 @@ window.executeAiAllocation = async function() {
                 }
             });
 
-            // 💡 [에러 방지] pjtResults가 빈 배열이 되지 않도록 보장
             if (currentAvail > 0 || pjtResults.length === 0) {
                 pjtResults.push({ code: 'COMMON', name: '부서 공통 업무', allocated: Math.max(0, currentAvail), priority: 99, dDay: '-', progress: 100, part: window.allocPartTab });
             }
 
-            // 4. [파트 완전 독립 매칭] 파트가 동일한 인원끼리만 분배
             let pjtRemainMap = {};
             pjtResults.forEach(p => pjtRemainMap[p.code] = p.allocated);
 
@@ -391,13 +374,17 @@ window.executeAiAllocation = async function() {
                 let bestPjt = pjtResults.find(p => pjtRemainMap[p.code] > 0);
                 if (!bestPjt) bestPjt = pjtResults[0];
 
-                m.assignedPjtName = bestPjt ? `[${bestPjt.code}] ${bestPjt.name}` : '-';
+                m.assignedPjtName = bestPjt ? `[${bestPjt.code}] ${bestPjt.name}` : 'COMMON';
+                m.assignedPjtCode = bestPjt ? bestPjt.code : 'COMMON';
+
                 if (bestPjt) pjtRemainMap[bestPjt.code] -= m.expectedMd;
             });
 
-            // 5. AI 리포트 텍스트 생성
+            // 💡 [개선] 공통 업무 쏠림(유휴 캐파) 비율 계산
+            let idleRate = (currentAvail / availMD) * 100;
             let periodText = window.allocPeriodMode === 'week' ? '주간' : '월간';
-            aiReport.push(`[${window.allocPartTab} 파트 전용 ${periodText} 계획]\n선택 인원 ${activeMembers.length}명, 실 가용 공수 총 ${availMD.toFixed(1)}MD 로 산출되었습니다.`);
+
+            aiReport.push(`[${window.allocPartTab} 파트 전용 ${periodText} 계획]\n선택 인원 ${activeMembers.length}명, 휴가/예외를 제외한 실 가용 공수는 총 ${availMD.toFixed(1)}MD 로 산출되었습니다.`);
             
             if (pjtResults.length > 0 && pjtResults[0].code !== 'COMMON') {
                 const topP = pjtResults[0];
@@ -412,6 +399,11 @@ window.executeAiAllocation = async function() {
                 aiReport.push(`⚠️ 내부 가용 인력 대비 초과된 잔여 공수는 '외주 전환 필요' 항목으로 분리하였습니다.`);
             } else {
                 aiReport.push(`✅ 현재 파트 내부 가동률만으로 이번 기간에 요구되는 프로젝트 할당량을 무리 없이 소화 가능합니다.`);
+            }
+
+            // 💡 [핵심] 공통 업무가 너무 많을 경우(30% 이상) AI 인사이트 강한 경고 추가
+            if (idleRate > 30) {
+                aiReport.push(`🚨 [유휴 캐파 경고] 현재 팀의 가용 시간 대비 배정된 프로젝트 물량이 너무 적어, '공통 업무' 배정 비율이 비정상적으로 높게(${idleRate.toFixed(1)}%) 산출되었습니다.\n\n💡 AI 권고사항:\n1) 다음 달 수주 예정인 프로젝트의 선행 작업(조기 착수) 검토\n2) 파트별 기술 교육 및 장비/지그 유지보수 기간으로 적극 활용\n3) 타 파트(부서) 혹은 긴급 프로젝트로의 업무 지원(Help) 편성 검토`);
             }
 
             window.lastAllocatedData = { periodMode: window.allocPeriodMode, targetValue: targetValue, members: activeMembers, pjtResults: pjtResults };
@@ -479,30 +471,36 @@ window.renderAllocUI = function(maxMD, availMD, pjtResults, outResults, members,
         `).join('');
     }
 
-    // 💡 기간에 맞게 동적 그리드 헤더 생성
+    // 💡 프로젝트 개별 선택(수동 오버라이드)을 위한 옵션 리스트 생성
+    const pjtOptionsHtml = pjtResults.map(p => {
+        let label = p.code === 'COMMON' ? '부서 공통 업무' : `[${p.code}] ${p.name}`;
+        return `<option value="${p.code}">${label}</option>`;
+    }).join('');
+
     const thead = document.getElementById('alloc-grid-headers');
     const tbody = document.getElementById('alloc-member-list');
     
     if (thead && tbody) {
-        let hHtml = `<tr><th class="p-3 text-center font-bold w-24 rounded-tl-lg bg-slate-800">이름(파트)</th><th class="p-3 font-bold w-48 text-center bg-slate-800">배정 PJT</th>`;
+        let hHtml = `<tr><th class="p-3 text-center font-bold w-24 rounded-tl-lg bg-slate-800">이름(파트)</th><th class="p-3 font-bold w-48 text-center bg-slate-800">배정 PJT (선택)</th>`;
         
         let colCount = 5;
         if (window.allocPeriodMode === 'week') {
             hHtml += `<th class="p-3 text-center font-bold bg-slate-800">월</th><th class="p-3 text-center font-bold bg-slate-800">화</th><th class="p-3 text-center font-bold bg-slate-800">수</th><th class="p-3 text-center font-bold bg-slate-800">목</th><th class="p-3 text-center font-bold bg-slate-800">금</th>`;
         } else {
-            colCount = 4; // 월간은 보통 4주 단위 쪼개기
+            colCount = 4; 
             hHtml += `<th class="p-3 text-center font-bold bg-slate-800">1주차</th><th class="p-3 text-center font-bold bg-slate-800">2주차</th><th class="p-3 text-center font-bold bg-slate-800">3주차</th><th class="p-3 text-center font-bold bg-slate-800">4주차</th>`;
         }
         hHtml += `<th class="p-3 text-center font-bold text-amber-300 rounded-tr-lg bg-slate-800">합계(MD)</th></tr>`;
         thead.innerHTML = hHtml;
 
-        // 동적 로우 생성
         tbody.innerHTML = members.map((m) => {
             const dMd = (m.expectedMd / colCount).toFixed(1); 
             const vacTag = m.vacationDeduct > 0 ? `<div class="text-[9px] text-rose-500 font-bold mt-1 bg-rose-50 border border-rose-100 rounded text-center">차감 -${m.vacationDeduct}MD</div>` : '';
             
-            // 안전망: assignedPjtName 이 없어도 에러가 나지 않도록 방어
-            let safePjtName = (m.assignedPjtName || '-').includes('COMMON') ? '공통 업무' : (m.assignedPjtName || '-');
+            // 💡 텍스트 대신 select 태그 사용 (개별 선택 기능)
+            let selectHtml = `<select class="w-full text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-1.5 rounded shadow-sm outline-none cursor-pointer text-center truncate" onchange="window.updateManualPjtAssignment('${m.name}', this.value, this.options[this.selectedIndex].text)">`;
+            selectHtml += pjtOptionsHtml.replace(`value="${m.assignedPjtCode}"`, `value="${m.assignedPjtCode}" selected`);
+            selectHtml += `</select>`;
 
             let tdHtml = '';
             for(let c=0; c<colCount; c++){
@@ -511,7 +509,7 @@ window.renderAllocUI = function(maxMD, availMD, pjtResults, outResults, members,
 
             return `
                 <tr class="hover:bg-slate-50 transition-colors border-b"><td class="p-3 text-center border-r font-bold text-slate-800">${m.name}${vacTag}</td>
-                <td class="p-3 border-r"><span class="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-1 rounded w-full block truncate text-center" title="${safePjtName}">${safePjtName}</span></td>
+                <td class="p-2 border-r">${selectHtml}</td>
                 ${tdHtml}
                 <td class="p-3 text-center font-black text-indigo-700 bg-indigo-50/30 row-total-md">${m.expectedMd.toFixed(1)}</td></tr>
             `;
@@ -527,7 +525,6 @@ window.renderAllocUI = function(maxMD, availMD, pjtResults, outResults, members,
         });
     }
 
-    // 💡 안전한 전역 window.Chart 객체 접근
     const ctx = document.getElementById('alloc-chart')?.getContext('2d');
     if (ctx && window.Chart) {
         if(allocChartInstance) allocChartInstance.destroy();
@@ -539,6 +536,23 @@ window.renderAllocUI = function(maxMD, availMD, pjtResults, outResults, members,
     }
 };
 
+// 💡 드롭다운으로 개별 프로젝트 변경 시 캘린더에도 즉시 반영되도록 데이터 업데이트
+window.updateManualPjtAssignment = function(memberName, pjtCode, pjtNameText) {
+    if (window.lastAllocatedData && window.lastAllocatedData.members) {
+        let mem = window.lastAllocatedData.members.find(m => m.name === memberName);
+        if (mem) {
+            mem.assignedPjtCode = pjtCode;
+            mem.assignedPjtName = pjtNameText;
+            
+            // 캘린더 뷰가 활성화되어 있으면 다시 그림
+            if (!document.getElementById('alloc-view-cal').classList.contains('hidden')) {
+                window.renderAllocCalendar();
+            }
+            if (window.showToast) window.showToast(`${memberName}님의 프로젝트가 [${pjtNameText}](으)로 변경되었습니다.`, "success");
+        }
+    }
+};
+
 window.renderAllocCalendar = function() {
     const grid = document.getElementById('alloc-cal-grid');
     const titleEl = document.getElementById('alloc-cal-title');
@@ -546,7 +560,6 @@ window.renderAllocCalendar = function() {
 
     let targetDateObj;
     
-    // 주간/월간 모드 분기처리
     if (window.lastAllocatedData.periodMode === 'week') {
         if (!window.getDatesFromWeek) return;
         const dates = window.getDatesFromWeek(window.lastAllocatedData.targetValue);
@@ -609,7 +622,6 @@ window.renderAllocCalendar = function() {
                 let tintColor = window.allocPartTab === '제조' ? 'indigo' : 'teal';
                 bgClass = `bg-${tintColor}-50/10 border-t-2 border-t-${tintColor}-400`;
                 
-                // 분배 값을 일수로 나눠 뱃지 생성
                 let divisor = window.lastAllocatedData.periodMode === 'week' ? 5 : validDays.size;
                 if(divisor <= 0) divisor = 1;
                 
