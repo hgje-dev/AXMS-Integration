@@ -11,9 +11,10 @@ import './completion-report.js';
 import './product-cost.js';
 import './ncr-dashboard.js';
 import './quality-report.js';
+import './mfg-cost.js';
 
-// 💡 새롭게 변경한 파일명으로 import 추가!
-import './mfg-cost.js'; 
+// 💡 새로 추가된 AI 투입 계획 모듈 임포트
+import './allocation-plan.js'; 
 
 import { initRouter } from './router.js';
 
