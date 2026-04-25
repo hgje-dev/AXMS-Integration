@@ -1,3 +1,4 @@
+/* eslint-disable */
 window.appRoutes = {
     'dashboard-home': { url: './views/dashboard.html', init: () => { if(window.loadHomeDashboards) window.loadHomeDashboards(); } },
     'completion-report': { url: './views/completion-report.html', init: () => { if(window.initCompletionReport) window.initCompletionReport(); } },
@@ -16,6 +17,10 @@ window.appRoutes = {
         } 
     },
     'workhours': { url: './views/workhours.html', init: () => { if(window.loadWorkhoursData) window.loadWorkhoursData(); } },
+    
+    // 💡 [추가됨] AI 투입 자동계획 라우트 등록
+    'allocation-plan': { url: './views/allocation-plan.html', init: () => { if(window.initAllocationPlan) window.initAllocationPlan(); } },
+    
     'weekly-log': { url: './views/weekly.html', init: () => { document.getElementById('weekly-log-filter-week').value = window.getWeekString(new Date()); if(window.loadWeeklyLogsData) window.loadWeeklyLogsData(); } },
     'product-cost': { url: './views/product-cost.html', init: () => { if(window.initProductCost) window.initProductCost(); } },
     'mfg-cost': { url: './views/mfg-cost.html', init: () => { if(window.initMfgCost) window.initMfgCost(); } },
@@ -32,6 +37,10 @@ window.availableApps = {
     'completion-report': { title: '완료보고', icon: 'fa-solid fa-clipboard-check', color: 'text-indigo-600' },
     'project-status': { title: 'PJT현황', icon: 'fa-solid fa-table-list', color: 'text-indigo-600' },
     'workhours': { title: '투입 현황', icon: 'fa-solid fa-user-clock', color: 'text-indigo-600' },
+    
+    // 💡 [추가됨] AI 투입 자동계획 앱 정보 등록
+    'allocation-plan': { title: 'AI 투입 계획', icon: 'fa-solid fa-wand-magic-sparkles', color: 'text-indigo-600' },
+    
     'weekly-log': { title: '주간일지', icon: 'fa-solid fa-calendar-week', color: 'text-indigo-600' },
     'product-cost': { title: 'Product Cost', icon: 'fa-solid fa-coins', color: 'text-emerald-600' },
     'mfg-cost': { title: '제조 Cost', icon: 'fa-solid fa-sack-dollar', color: 'text-amber-600' },
@@ -88,6 +97,9 @@ window.openQuickMenuAdd = function(e) {
         drop.classList.remove('hidden');
         let html = '';
         for (let key in window.availableApps) {
+            // hgje 계정이 아니면 투입계획 추가 못하도록 필터링
+            if (key === 'allocation-plan' && window.userProfile?.email !== 'hgje@axbis.ai') continue;
+
             if (!window.quickMenuItems.includes(key)) {
                 const app = window.availableApps[key];
                 html += `<li class="px-3 py-2 hover:bg-indigo-50 cursor-pointer text-[11px] font-bold text-slate-600 flex items-center gap-1.5 border-b border-slate-50 last:border-0 transition-colors" onclick="window.addQuickMenu('${key}')"><i class="${app.icon} ${app.color}"></i> ${app.title}</li>`;
@@ -124,12 +136,13 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// 💡 13단계 개별 페이지 1:1 권한 매핑
+// 💡 13+1단계 개별 페이지 1:1 권한 매핑
 const routeToPermMap = {
     'dashboard-home': 'dashboard-home',
     'completion-report': 'completion-report',
     'project-status': 'project-status',
     'workhours': 'workhours',
+    'allocation-plan': 'allocation-plan', // 추가됨
     'weekly-log': 'weekly-log',
     'product-cost': 'product-cost',
     'mfg-cost': 'mfg-cost',
@@ -144,6 +157,14 @@ const routeToPermMap = {
 window.openApp = async function(viewId, title) {
     if(window.toggleSidebar) window.toggleSidebar(false);
     let routeKey = viewId.replace('view-', '');
+    
+    // 💡 [추가] hgje@axbis.ai 전용 하드코딩 보안 로직 (다른 관리자도 접근 절대 불가)
+    if (routeKey === 'allocation-plan') {
+        if (window.userProfile?.email !== 'hgje@axbis.ai') {
+            if(window.showToast) window.showToast("접근 권한이 없습니다. 관리자(hgje) 계정으로 로그인하세요.", "error");
+            return; // 실행 중단
+        }
+    }
     
     // 💡 새로운 권한 통제 로직 적용
     const requiredPermission = routeToPermMap[routeKey];
@@ -177,7 +198,7 @@ window.openApp = async function(viewId, title) {
     }
 };
 
-// 💡 Fallback 처리 로직: 권한이 막혔을 때 에러(빈 화면) 방지 (최종 개선판)
+// 💡 Fallback 처리 로직: 권한이 막혔을 때 에러(빈 화면) 방지
 window.navigateHome = function() { 
     const role = window.userProfile?.role;
     const perms = window.userProfile?.permissions || {};
@@ -189,14 +210,14 @@ window.navigateHome = function() {
     } else if (perms['weekly-log']) {
         window.openApp('weekly-log', '주간 업무 일지');
     } else {
-        // 권한이 모두 막혀있어도 첫 페이지를 띄우기 위해 권한이 있는 메뉴를 찾음 (13개 페이지 접근 권한 중에서만 검색)
-        const pageKeys = ['dashboard-home', 'completion-report', 'project-status', 'workhours', 'weekly-log', 'product-cost', 'mfg-cost', 'ncr-dashboard', 'quality-report', 'collab', 'purchase', 'repair', 'simulation'];
+        // 권한이 모두 막혀있어도 첫 페이지를 띄우기 위해 권한이 있는 메뉴를 찾음 (접근 권한 중에서만 검색)
+        const pageKeys = ['dashboard-home', 'completion-report', 'project-status', 'workhours', 'allocation-plan', 'weekly-log', 'product-cost', 'mfg-cost', 'ncr-dashboard', 'quality-report', 'collab', 'purchase', 'repair', 'simulation'];
         let fallbackKey = pageKeys.find(k => perms[k] === true);
         
         if(fallbackKey) {
             window.openApp(fallbackKey, window.availableApps[fallbackKey]?.title || '페이지');
         } else {
-            // 모든 페이지 권한이 없는 경우 (예: 신규가입 직후, 권한 완전 박탈자)
+            // 모든 페이지 권한이 없는 경우
             window.openApp('weekly-log', '주간 업무 일지'); 
         }
     }
