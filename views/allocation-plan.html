@@ -99,7 +99,7 @@
             <div class="glass-card p-5 border-l-4 border-l-emerald-400 bg-white">
                 <div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-emerald-600">총 PJT 가용 공수</span><i class="fa-solid fa-check-to-slot text-emerald-300 text-lg"></i></div>
                 <p class="text-2xl font-black text-emerald-600"><span id="alloc-kpi-avail">0</span> <span class="text-sm text-emerald-400 ml-1">MD</span></p>
-                <p class="text-[10px] text-emerald-500/70 mt-1">공통업무 및 공휴일 완전 제외량</p>
+                <p class="text-[10px] text-emerald-500/70 mt-1">공통업무(0.1MD/일) 제외량</p>
             </div>
             <div class="glass-card p-5 border-l-4 border-l-indigo-400 bg-white">
                 <div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-indigo-600">사내 할당 완료</span><i class="fa-solid fa-list-check text-indigo-300 text-lg"></i></div>
@@ -125,7 +125,7 @@
         <div class="glass-card overflow-hidden bg-white shadow-sm flex flex-col">
             <div class="px-6 py-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
                 <h3 class="text-sm font-black text-slate-800"><i class="fa-solid fa-table text-indigo-500 mr-1.5"></i> 투입 할당표 및 캘린더</h3>
-                <span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200"><i class="fa-solid fa-check"></i> 1일 0.2MD 공통업무 자동분리 반영됨</span>
+                <span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200"><i class="fa-solid fa-check"></i> 1일 0.1MD 공통업무 자동분리 반영됨</span>
             </div>
             
             <div id="alloc-view-grid" class="overflow-x-auto custom-scrollbar bg-white p-4">
@@ -153,6 +153,7 @@
             <button onclick="window.closeAxttVerifyModal()" class="text-teal-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
         </div>
         <div class="p-6 bg-slate-50 flex-1 overflow-y-auto custom-scrollbar">
+            <p class="text-xs font-bold text-slate-500 mb-4">현재 AI가 인원 배분에 사용하는 팀원별 '최근 4주 주간 평균 가용력(MD)' 입니다.<br>(* 데이터가 없거나 0인 경우 기본값 5.0 MD가 부여됩니다.)</p>
             <table class="w-full text-left border-collapse bg-white border border-slate-200 shadow-sm rounded-lg overflow-hidden">
                 <thead class="bg-slate-800 text-white text-[11px]">
                     <tr><th class="p-3 text-center">이름</th><th class="p-3 text-center">소속 파트</th><th class="p-3 text-center text-teal-300">AXTT 추출 평균 (MD)</th><th class="p-3 text-center text-amber-300">최종 적용치 (MD)</th></tr>
