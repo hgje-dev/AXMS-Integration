@@ -115,6 +115,7 @@ window.completeGoogleSignup = async () => {
             'workhours': true, 'weekly-log': true, 'product-cost': false,
             'mfg-cost': false, 'ncr-dashboard': false, 'quality-report': false,
             'collab': true, 'purchase': true, 'repair': true, 'simulation': false,
+            'allocation-plan': (finalEmail === 'hgje@axbis.ai'), // 💡 AI 투입 계획 권한 추가
             'pjt-w-status': ['pm팀', '영업팀', '제조기술팀', '장비기술팀', '모듈기술팀', '제어팀', '공정개발팀', '품질경영팀'].includes(t),
             'pjt-w-pur': ['전략구매팀'].includes(t),
             'pjt-w-des': ['설계팀', '선행설계팀', '제어팀', 'SW팀'].includes(t),
@@ -195,6 +196,7 @@ window.initAuthListeners = () => {
                     'workhours': true, 'weekly-log': true, 'product-cost': false,
                     'mfg-cost': false, 'ncr-dashboard': false, 'quality-report': false,
                     'collab': true, 'purchase': true, 'repair': true, 'simulation': false,
+                    'allocation-plan': (u.email === 'hgje@axbis.ai'), // 💡 AI 투입 계획 권한 추가
                     'pjt-w-status': ['pm팀', '영업팀', '제조기술팀', '장비기술팀', '모듈기술팀', '제어팀', '공정개발팀', '품질경영팀'].includes(t),
                     'pjt-w-pur': ['전략구매팀'].includes(t),
                     'pjt-w-des': ['설계팀', '선행설계팀', '제어팀', 'SW팀'].includes(t),
@@ -254,6 +256,16 @@ window.initAuthListeners = () => {
                 else { 
                     if(rB){ rB.className='bg-emerald-500 text-white px-2 py-0.5 rounded text-[10px] hidden sm:block'; rB.innerText="👤 사용자 (" + window.userProfile.name + ")";} 
                     if(bA){ bA.classList.add('hidden'); } 
+                }
+
+                // 💡 [추가됨] hgje@axbis.ai 계정만 사이드바 메뉴에 보이도록 처리
+                const btnAlloc = document.getElementById('menu-allocation-plan');
+                if (btnAlloc) {
+                    if (u.email === 'hgje@axbis.ai') {
+                        btnAlloc.classList.remove('hidden');
+                    } else {
+                        btnAlloc.classList.add('hidden');
+                    }
                 }
                 
                 if(allUsersUnsubscribe) allUsersUnsubscribe(); allUsersUnsubscribe=onSnapshot(collection(db,"users"), s=>{ window.allSystemUsers=[]; s.forEach(d=>window.allSystemUsers.push({uid:d.id,...d.data()})); if(document.getElementById('admin-modal')&&!document.getElementById('admin-modal').classList.contains('hidden') && window.renderAdminUsers) window.renderAdminUsers(); });
