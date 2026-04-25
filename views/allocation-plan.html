@@ -45,19 +45,36 @@
         </div>
     </div>
 
-    <div class="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-4">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-            <div>
-                <h3 class="text-sm font-black text-slate-700"><i class="fa-solid fa-users-viewfinder text-indigo-500 mr-1.5"></i> 투입 자원 및 휴가(예외) 설정 <span id="current-part-label" class="text-indigo-600 ml-1"></span></h3>
-                <p class="text-[10px] font-bold text-slate-400 mt-1">해당 기간(주/월)에 휴가나 예외로 인해 빠지는 총 공수(MD)를 차감하세요.</p>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                    <h3 class="text-sm font-black text-slate-700"><i class="fa-solid fa-users-viewfinder text-indigo-500 mr-1.5"></i> 투입 자원 및 휴가(예외) 설정 <span id="current-part-label" class="text-indigo-600 ml-1"></span></h3>
+                    <p class="text-[10px] font-bold text-slate-400 mt-1">해당 기간(주/월)에 빠지는 총 공수(MD)를 차감하세요.</p>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="window.selectAllAllocMembers(true)" class="text-[10px] font-bold text-slate-500 hover:text-indigo-600 transition-colors">전체 선택</button>
+                    <span class="text-slate-200">|</span>
+                    <button onclick="window.selectAllAllocMembers(false)" class="text-[10px] font-bold text-slate-500 hover:text-rose-500 transition-colors">전체 해제</button>
+                </div>
             </div>
-            <div class="flex gap-2">
-                <button onclick="window.selectAllAllocMembers(true)" class="text-[10px] font-bold text-slate-500 hover:text-indigo-600 transition-colors">전체 선택</button>
-                <span class="text-slate-200">|</span>
-                <button onclick="window.selectAllAllocMembers(false)" class="text-[10px] font-bold text-slate-500 hover:text-rose-500 transition-colors">전체 해제</button>
-            </div>
+            <div id="alloc-member-list-container" class="flex flex-wrap gap-3"></div>
         </div>
-        <div id="alloc-member-list-container" class="flex flex-wrap gap-3"></div>
+
+        <div class="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                    <h3 class="text-sm font-black text-slate-700"><i class="fa-solid fa-folder-tree text-indigo-500 mr-1.5"></i> 대상 프로젝트 선택</h3>
+                    <p class="text-[10px] font-bold text-slate-400 mt-1">이번 할당에서 제외할 프로젝트(대기/보류 등)를 체크 해제하세요.</p>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="window.selectAllAllocProjects(true)" class="text-[10px] font-bold text-slate-500 hover:text-indigo-600 transition-colors">전체 선택</button>
+                    <span class="text-slate-200">|</span>
+                    <button onclick="window.selectAllAllocProjects(false)" class="text-[10px] font-bold text-slate-500 hover:text-rose-500 transition-colors">전체 해제</button>
+                </div>
+            </div>
+            <div id="alloc-project-list-container" class="flex flex-col gap-2 overflow-y-auto max-h-[250px] custom-scrollbar pr-2"></div>
+        </div>
     </div>
 
     <div id="alloc-empty-state" class="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-dashed border-slate-300">
@@ -65,7 +82,7 @@
             <i class="fa-solid fa-robot text-3xl text-indigo-400"></i>
         </div>
         <h3 class="text-lg font-black text-slate-700 mb-2">자동 할당 대기 중</h3>
-        <p class="text-sm text-slate-500 font-medium text-center max-w-md">선택된 파트의 데이터를 분석하여<br><b>[AI 자동 할당 실행]</b> 버튼 클릭 시 최적의 계획을 생성합니다.</p>
+        <p class="text-sm text-slate-500 font-medium text-center max-w-md">팀원 선택 및 대상 프로젝트를 설정한 후<br><b>[AI 자동 할당 실행]</b> 버튼을 클릭하세요.</p>
     </div>
 
     <div id="alloc-result-dashboard" class="hidden space-y-6 animate-fade-in">
@@ -118,10 +135,8 @@
 
             <div id="alloc-view-grid" class="overflow-x-auto custom-scrollbar bg-white p-4">
                 <table class="w-full text-left border-collapse whitespace-nowrap table-fixed min-w-[800px]">
-                    <thead class="bg-slate-800 text-white text-[11px]" id="alloc-grid-headers">
-                        </thead>
-                    <tbody id="alloc-grid-body" class="divide-y divide-slate-100 text-xs">
-                    </tbody>
+                    <thead class="bg-slate-800 text-white text-[11px]" id="alloc-grid-headers"></thead>
+                    <tbody id="alloc-grid-body" class="divide-y divide-slate-100 text-xs"></tbody>
                 </table>
             </div>
 
@@ -130,8 +145,7 @@
                     <h3 class="text-sm font-black text-slate-700" id="alloc-cal-title">할당 캘린더</h3>
                     <span class="text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-1 rounded border border-rose-200">대한민국 공휴일 적용됨</span>
                 </div>
-                <div class="grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-lg overflow-hidden flex-1 min-h-[500px]" id="alloc-cal-grid">
-                </div>
+                <div class="grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-lg overflow-hidden flex-1 min-h-[500px]" id="alloc-cal-grid"></div>
             </div>
 
         </div>
