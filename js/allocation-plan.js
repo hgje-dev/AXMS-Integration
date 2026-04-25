@@ -65,8 +65,31 @@ function getValidDays(periodMode, targetValue) {
     return validDays;
 }
 
+// 💡 [핵심] 문자열을 분석해 콤마(,)와 범위(-)를 모두 날짜 배열로 변환하는 파서
+window.parseDateString = function(str) {
+    let days = new Set();
+    if(!str) return days;
+    str.split(',').forEach(part => {
+        part = part.trim();
+        if(part.includes('-')) {
+            let parts = part.split('-');
+            if(parts.length === 2) {
+                let start = parseInt(parts[0].trim());
+                let end = parseInt(parts[1].trim());
+                if(!isNaN(start) && !isNaN(end)) {
+                    for(let i=Math.min(start, end); i<=Math.max(start, end); i++) days.add(i);
+                }
+            }
+        } else {
+            let n = parseInt(part);
+            if(!isNaN(n)) days.add(n);
+        }
+    });
+    return days;
+};
+
 window.initAllocationPlan = function() {
-    console.log("✅ AI 투입 계획 모듈 (공통업무 0.2MD 분할 / 담당자 우선배정 / 주간+월간 동시뷰) 초기화");
+    console.log("✅ AI 투입 계획 모듈 (기간 범위 UI 탑재 완료) 초기화");
     
     window.switchAllocPeriodMode('week'); 
     window.switchAllocPartTab('제조'); 
@@ -176,27 +199,39 @@ window.loadAllocationData = function() {
     window.lastAllocatedData = null; 
 };
 
-window.appendDateToInput = function(name, type, dateStr, pickerEl) {
-    if(!dateStr) return;
-    const d = new Date(dateStr);
-    const dayNum = d.getDate(); 
-    
-    const inputId = type === 'vacation' ? `vac-input-${name}` : `sup-input-${name}`;
-    const inputEl = document.getElementById(inputId);
-    
-    if(inputEl) {
-        let currentVal = inputEl.value.trim();
-        let days = currentVal ? currentVal.split(',').map(s => s.trim()).filter(Boolean) : [];
-        if(!days.includes(String(dayNum))) {
-            days.push(String(dayNum));
-            days.sort((a,b) => parseInt(a) - parseInt(b));
-            inputEl.value = days.join(', ');
-            window.updateAllocMemberDates(name, type, inputEl.value);
-        }
+// 💡 [핵심] 시작일/종료일 선택 시 범위를 입력창에 추가해주는 함수
+window.addDateRangeToInput = function(name, type) {
+    const startEl = document.getElementById(`${type}-start-${name}`);
+    const endEl = document.getElementById(`${type}-end-${name}`);
+    const inputEl = document.getElementById(`${type === 'vacation' ? 'vac' : 'sup'}-input-${name}`);
+
+    if(!startEl.value) return window.showToast("시작일을 먼저 선택하세요.", "warning");
+
+    let startDay = new Date(startEl.value).getDate();
+    let endDay = endEl.value ? new Date(endEl.value).getDate() : startDay;
+
+    if (startDay > endDay) {
+        let temp = startDay; startDay = endDay; endDay = temp;
     }
-    pickerEl.value = ''; 
+
+    let appendStr = startDay === endDay ? `${startDay}` : `${startDay}-${endDay}`;
+
+    let currentVal = inputEl.value.trim();
+    if (currentVal) {
+        if(currentVal.endsWith(',')) inputEl.value = currentVal + ' ' + appendStr;
+        else inputEl.value = currentVal + ', ' + appendStr;
+    } else {
+        inputEl.value = appendStr;
+    }
+
+    window.updateAllocMemberDates(name, type, inputEl.value);
+
+    // 날짜 선택기 초기화
+    startEl.value = '';
+    endEl.value = '';
 };
 
+// 💡 1. 향상된 UI 렌더링 (기간 범위 선택기 탑재)
 window.renderAllocMemberSelectors = function() {
     const container = document.getElementById('alloc-member-list-container');
     if(!container) return;
@@ -210,39 +245,49 @@ window.renderAllocMemberSelectors = function() {
     container.innerHTML = members.map(m => {
         let isNormal = m.status === '정상';
         return `
-        <div class="flex flex-col bg-slate-50 px-3 py-2 rounded-lg border border-slate-200 shadow-sm w-full md:w-auto min-w-[280px]">
+        <div class="flex flex-col bg-slate-50 px-3 py-2 rounded-lg border border-slate-200 shadow-sm w-full md:w-[340px]">
             <div class="flex items-center justify-between mb-2">
                 <label class="flex items-center gap-1.5 cursor-pointer shrink-0">
                     <input type="checkbox" class="w-3.5 h-3.5 accent-indigo-600 member-checkbox" data-name="${m.name}" ${m.active ? 'checked' : ''} onchange="window.updateAllocMemberActive('${m.name}', this.checked)">
-                    <span class="text-[11px] font-bold text-slate-700">${m.name}</span>
+                    <span class="text-[12px] font-bold text-slate-800">${m.name}</span>
                 </label>
                 <div class="flex items-center gap-2">
-                    <select class="border border-slate-200 rounded px-1 py-0.5 text-[10px] font-bold text-slate-600 outline-indigo-500 bg-white cursor-pointer" onchange="window.updateAllocMemberStatus('${m.name}', this.value)" ${m.active ? '' : 'disabled'}>
+                    <select class="border border-slate-200 rounded px-1.5 py-1 text-[10px] font-bold text-slate-600 outline-indigo-500 bg-white cursor-pointer" onchange="window.updateAllocMemberStatus('${m.name}', this.value)" ${m.active ? '' : 'disabled'}>
                         <option value="정상" ${m.status === '정상' ? 'selected' : ''}>정상</option>
                         <option value="타팀지원" ${m.status === '타팀지원' ? 'selected' : ''}>타팀지원(전체)</option>
                         <option value="장기휴가" ${m.status === '장기휴가' ? 'selected' : ''}>장기휴가(전체)</option>
                     </select>
-                    <div class="flex items-center gap-1">
+                    <div class="flex items-center gap-1 border-l border-slate-200 pl-2">
                         <span class="text-[9px] font-bold text-slate-400">MD차감</span>
-                        <input type="number" step="0.5" min="0" value="${m.manualVacation || 0}" onchange="window.updateAllocMemberVacation('${m.name}', this.value)" class="w-10 border border-slate-200 rounded px-1 py-0.5 text-[10px] text-rose-500 font-bold outline-indigo-500 text-right bg-white" ${m.active && isNormal ? '' : 'disabled'}>
+                        <input type="number" step="0.5" min="0" max="5.0" value="${m.manualVacation || 0}" onchange="window.updateAllocMemberVacation('${m.name}', this.value)" class="w-12 border border-slate-200 rounded px-1.5 py-1 text-[10px] text-rose-500 font-bold outline-indigo-500 text-right bg-white" ${m.active && isNormal ? '' : 'disabled'}>
                     </div>
                 </div>
             </div>
-            <div class="flex flex-col gap-1.5 border-t border-slate-200/60 pt-2 w-full">
-                 <div class="flex items-center gap-2 relative">
-                      <span class="text-[9px] font-bold text-rose-500 shrink-0 w-10">휴가일:</span>
-                      <div class="relative flex-1 flex items-center">
-                          <input type="text" id="vac-input-${m.name}" value="${m.vacationDates || ''}" onchange="window.updateAllocMemberDates('${m.name}', 'vacation', this.value)" placeholder="일자 쉼표구분 (예: 12, 15)" class="w-full border border-slate-200 rounded px-1.5 py-0.5 text-[10px] outline-indigo-500 text-slate-700 pr-6" ${m.active && isNormal ? '' : 'disabled'}>
-                          <input type="date" id="vac-picker-${m.name}" class="absolute w-0 h-0 opacity-0 -z-10" onchange="window.appendDateToInput('${m.name}', 'vacation', this.value, this)">
-                          <button onclick="document.getElementById('vac-picker-${m.name}').showPicker()" class="absolute right-1 text-slate-400 hover:text-indigo-500 transition-colors" ${m.active && isNormal ? '' : 'disabled'} title="달력으로 날짜 추가"><i class="fa-regular fa-calendar"></i></button>
+
+            <div class="flex flex-col gap-2 border-t border-slate-200/60 pt-2 w-full">
+                 <div class="flex flex-col gap-1">
+                      <div class="flex items-center justify-between">
+                          <span class="text-[10px] font-bold text-rose-500 flex items-center gap-1"><i class="fa-solid fa-plane-departure text-[9px]"></i> 휴가일</span>
+                          <input type="text" id="vac-input-${m.name}" value="${m.vacationDates || ''}" onchange="window.updateAllocMemberDates('${m.name}', 'vacation', this.value)" placeholder="직접입력 (예: 12, 15-18)" class="flex-1 ml-2 border border-slate-200 rounded px-1.5 py-0.5 text-[10px] outline-indigo-500 text-slate-700 text-right" ${m.active && isNormal ? '' : 'disabled'}>
+                      </div>
+                      <div class="flex items-center gap-1">
+                          <input type="date" id="vac-start-${m.name}" class="flex-1 border border-slate-200 rounded px-1 py-0.5 text-[9px] outline-indigo-500 text-slate-600 bg-white cursor-pointer" ${m.active && isNormal ? '' : 'disabled'}>
+                          <span class="text-slate-400 text-[9px]">~</span>
+                          <input type="date" id="vac-end-${m.name}" class="flex-1 border border-slate-200 rounded px-1 py-0.5 text-[9px] outline-indigo-500 text-slate-600 bg-white cursor-pointer" ${m.active && isNormal ? '' : 'disabled'}>
+                          <button onclick="window.addDateRangeToInput('${m.name}', 'vacation')" class="bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 px-2 py-0.5 rounded text-[9px] transition-colors font-bold whitespace-nowrap" ${m.active && isNormal ? '' : 'disabled'}>기간 추가</button>
                       </div>
                  </div>
-                 <div class="flex items-center gap-2 relative">
-                      <span class="text-[9px] font-bold text-orange-500 shrink-0 w-10">지원일:</span>
-                      <div class="relative flex-1 flex items-center">
-                          <input type="text" id="sup-input-${m.name}" value="${m.supportDates || ''}" onchange="window.updateAllocMemberDates('${m.name}', 'support', this.value)" placeholder="일자 쉼표구분 (예: 20, 21)" class="w-full border border-slate-200 rounded px-1.5 py-0.5 text-[10px] outline-indigo-500 text-slate-700 pr-6" ${m.active && isNormal ? '' : 'disabled'}>
-                          <input type="date" id="sup-picker-${m.name}" class="absolute w-0 h-0 opacity-0 -z-10" onchange="window.appendDateToInput('${m.name}', 'support', this.value, this)">
-                          <button onclick="document.getElementById('sup-picker-${m.name}').showPicker()" class="absolute right-1 text-slate-400 hover:text-indigo-500 transition-colors" ${m.active && isNormal ? '' : 'disabled'} title="달력으로 날짜 추가"><i class="fa-regular fa-calendar"></i></button>
+
+                 <div class="flex flex-col gap-1 border-t border-slate-100 pt-1.5">
+                      <div class="flex items-center justify-between">
+                          <span class="text-[10px] font-bold text-orange-500 flex items-center gap-1"><i class="fa-solid fa-handshake-angle text-[9px]"></i> 지원일</span>
+                          <input type="text" id="sup-input-${m.name}" value="${m.supportDates || ''}" onchange="window.updateAllocMemberDates('${m.name}', 'support', this.value)" placeholder="직접입력 (예: 20-25)" class="flex-1 ml-2 border border-slate-200 rounded px-1.5 py-0.5 text-[10px] outline-indigo-500 text-slate-700 text-right" ${m.active && isNormal ? '' : 'disabled'}>
+                      </div>
+                      <div class="flex items-center gap-1">
+                          <input type="date" id="sup-start-${m.name}" class="flex-1 border border-slate-200 rounded px-1 py-0.5 text-[9px] outline-indigo-500 text-slate-600 bg-white cursor-pointer" ${m.active && isNormal ? '' : 'disabled'}>
+                          <span class="text-slate-400 text-[9px]">~</span>
+                          <input type="date" id="sup-end-${m.name}" class="flex-1 border border-slate-200 rounded px-1 py-0.5 text-[9px] outline-indigo-500 text-slate-600 bg-white cursor-pointer" ${m.active && isNormal ? '' : 'disabled'}>
+                          <button onclick="window.addDateRangeToInput('${m.name}', 'support')" class="bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-600 px-2 py-0.5 rounded text-[9px] transition-colors font-bold whitespace-nowrap" ${m.active && isNormal ? '' : 'disabled'}>기간 추가</button>
                       </div>
                  </div>
             </div>
@@ -305,6 +350,11 @@ window.selectAllAllocProjects = function(active) {
     window.renderAllocProjectSelectors();
 };
 
+window.switchAllocView = function(viewMode) {
+    window.renderAllocGrid();
+    window.renderAllocCalendar();
+};
+
 async function fetchHistoricalDataFromAXTT() {
     let d = new Date();
     let endStr = d.toISOString().split('T')[0];
@@ -351,7 +401,7 @@ window.openAxttVerifyModal = function() {
 };
 window.closeAxttVerifyModal = function() { const m = document.getElementById('axtt-verify-modal'); if(m){ m.classList.add('hidden'); m.classList.remove('flex'); } };
 
-// 💡 [AI 핵심 로직] 0.2MD 공통 분리, 일별 Max 1.0 설정, 담당자 우선 매칭
+// AI 실행 로직 (파서 적용)
 window.executeAiAllocation = async function() {
     const activeMembers = window.allocTeamMaster.filter(m => m.part === window.allocPartTab && m.active);
     if (activeMembers.length === 0) return window.showToast(`투입할 [${window.allocPartTab}] 파트 인원을 최소 1명 이상 선택하세요.`, "error");
@@ -374,19 +424,19 @@ window.executeAiAllocation = async function() {
             let totalPeriodDays = validDaysList.length;
             if (totalPeriodDays === 0) totalPeriodDays = 1; 
 
-            let pjtAvailMD = 0; // 메인 프로젝트에 쓸 가용력 (0.8 베이스)
-            let totalCommonMD = 0; // 자동으로 분리된 공통업무 가용력 합계
+            let pjtAvailMD = 0; 
+            let totalCommonMD = 0; 
 
             activeMembers.forEach(m => {
                 let baseWeeklyMd = window.historicalMemberMd[m.name] || 5.0; 
-                let dailyTotalMd = Math.min(baseWeeklyMd / 5, 1.0); // 1일 총 가용 한도는 1.0
+                let dailyTotalMd = Math.min(baseWeeklyMd / 5, 1.0); 
                 
-                // 💡 [핵심] 하루 공수 중 0.2는 공통, 나머지는 메인PJT용
                 let dailyCommonMd = Math.min(0.2, dailyTotalMd);
                 let dailyPjtMd = dailyTotalMd - dailyCommonMd;
                 
-                let vDates = new Set((m.vacationDates || '').split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)));
-                let sDates = new Set((m.supportDates || '').split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)));
+                // 💡 [핵심] 입력된 문자열(12, 15-18)을 정확하게 파싱하여 Set 배열로 생성
+                let vDates = window.parseDateString(m.vacationDates);
+                let sDates = window.parseDateString(m.supportDates);
 
                 let activeDays = 0;
                 m.specificVacationDays = new Set();
@@ -409,10 +459,9 @@ window.executeAiAllocation = async function() {
                     m.expectedTotalMd = 0;
                 } else {
                     let vDeduct = parseFloat(m.manualVacation) || 0;
-                    // 메인 프로젝트 가용량 계산 (수동 차감은 메인 공수에서 우선 뺌)
                     m.expectedPjtMd = Math.max(0, (activeDays * dailyPjtMd) - vDeduct);
                     m.expectedCommonMd = activeDays * dailyCommonMd;
-                    m.expectedTotalMd = m.expectedPjtMd + m.expectedCommonMd; // 그리드 합계용
+                    m.expectedTotalMd = m.expectedPjtMd + m.expectedCommonMd; 
                     
                     pjtAvailMD += m.expectedPjtMd;
                     totalCommonMD += m.expectedCommonMd;
@@ -454,7 +503,6 @@ window.executeAiAllocation = async function() {
                 }
             });
 
-            // 💡 [핵심] 공통 업무 배분: 기본 0.2MD 풀(totalCommonMD) + 남은 PJT 가용력
             let finalCommonAlloc = totalCommonMD + Math.max(0, currentAvail);
             if (finalCommonAlloc > 0 || pjtResults.length === 0) {
                 pjtResults.push({ code: 'COMMON', name: `${window.allocPartTab}공통`, allocated: finalCommonAlloc, priority: 99, dDay: '-', progress: 100, part: window.allocPartTab });
@@ -465,18 +513,14 @@ window.executeAiAllocation = async function() {
 
             let sortedMembers = [...activeMembers].sort((a,b) => b.expectedPjtMd - a.expectedPjtMd);
 
-            // 💡 [핵심] PJT 담당자(Manager) 우선 배정 로직
             sortedMembers.forEach(m => {
                 if (m.status === '타팀지원') {
                     m.assignedPjtName = '타팀 지원 (파견)'; m.assignedPjtCode = 'SUPPORT'; m.assignedPjtDeadline = '-';
                 } else if (m.status === '장기휴가') {
                     m.assignedPjtName = '장기 휴가'; m.assignedPjtCode = 'VACATION'; m.assignedPjtDeadline = '-';
                 } else {
-                    // 1. 내가 담당자인 프로젝트 중 할당 공수가 남은 것 찾기
                     let myPjt = pjtResults.find(p => pjtRemainMap[p.code] > 0 && p.manager === m.name && p.code !== 'COMMON');
-                    // 2. 없으면 일반 PJT 찾기
                     let bestPjt = myPjt || pjtResults.find(p => pjtRemainMap[p.code] > 0 && p.code !== 'COMMON');
-                    // 3. 그것도 없으면 COMMON
                     if (!bestPjt) bestPjt = pjtResults.find(p => p.code === 'COMMON');
 
                     m.assignedPjtName = bestPjt ? `[${bestPjt.code}] ${bestPjt.name}` : 'COMMON';
@@ -492,7 +536,7 @@ window.executeAiAllocation = async function() {
             aiReport.push(`[${window.allocPartTab} 파트 전용 ${periodText} 계획]\n선택 인원 ${activeMembers.length}명, 1일 0.2MD(공통업무)를 자동 분리한 순수 PJT 가용 공수는 총 ${pjtAvailMD.toFixed(1)}MD 로 산출되었습니다.`);
             
             let dispatchCount = activeMembers.filter(m => m.status === '타팀지원' || m.specificSupportDays.size > 0).length;
-            if (dispatchCount > 0) aiReport.push(`ℹ️ 타팀 지원(파견) 데이터가 가용 캐파에서 제외되었습니다.`);
+            if (dispatchCount > 0) aiReport.push(`ℹ️ 입력하신 기간에 해당하는 타팀 지원(파견) 데이터가 가용 캐파에서 완벽하게 제외되었습니다.`);
 
             aiReport.push(`🎯 PJT 현황의 담당자(Manager)로 지정된 인원에게 해당 프로젝트를 0순위로 우선 배정하는 스마트 매칭이 적용되었습니다.`);
 
@@ -514,7 +558,7 @@ window.executeAiAllocation = async function() {
             if(btnSave) { btnSave.classList.remove('hidden'); btnSave.classList.add('flex'); }
             if(btn) { btn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> 다시 계산'; btn.disabled = false; }
             
-            window.showToast(`${window.allocPartTab} 파트 계획이 생성되었습니다.`, "success");
+            window.showToast(`${window.allocPartTab} 파트 최적화 계획이 완성되었습니다.`, "success");
             
         } catch (err) {
             console.error("AI Error: ", err);
@@ -597,7 +641,6 @@ window.renderAllocGrid = function() {
 
         let divisor = activeDaysCount > 0 ? (periodMode === 'week' ? activeDaysCount : colCount) : 1;
         
-        // 💡 1일 최대 0.8MD(공통 제외) 상한선 (월간은 주당 4.0MD 한도)
         let maxVal = periodMode === 'week' ? 0.8 : 4.0;
         let rawDMd = m.expectedPjtMd / divisor;
         if (rawDMd > maxVal) rawDMd = maxVal;
@@ -672,13 +715,14 @@ window.updateManualPjtAssignment = function(memberName, pjtCode, pjtNameText) {
             
             window.renderAllocGrid();
             window.renderAllocCalendar();
-            if (window.showToast) window.showToast(`${memberName}님의 프로젝트가 [${pjtNameText}](으)로 변경되었습니다.`, "success");
+            if (window.showToast) window.showToast(`[${pjtNameText}] 납기일에 맞춰 남은 공수가 재조정되었습니다.`, "success");
         }
     }
 };
 
 window.renderAllocCalendar = function() {
     const grid = document.getElementById('alloc-cal-grid');
+    const titleEl = document.getElementById('alloc-cal-title');
     if (!grid || !window.lastAllocatedData) return;
 
     let targetDateObj;
@@ -693,24 +737,12 @@ window.renderAllocCalendar = function() {
     
     const y = targetDateObj.getFullYear();
     const m = targetDateObj.getMonth(); 
+    
+    let subTitle = window.lastAllocatedData.periodMode === 'week' ? '해당 주차 캘린더' : '해당 월 캘린더';
+    if (titleEl) titleEl.innerText = `${y}년 ${m + 1}월 ${subTitle} (${window.allocPartTab})`;
 
     const firstDay = new Date(y, m, 1).getDay();
     const lastDate = new Date(y, m + 1, 0).getDate();
-
-    let validDays = new Set();
-    if (window.lastAllocatedData.periodMode === 'week') {
-        for(let i=0; i<5; i++) {
-            let d = new Date(targetDateObj);
-            d.setDate(d.getDate() + i);
-            validDays.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
-        }
-    } else {
-        for(let i=1; i<=lastDate; i++) {
-            let dStr = `${y}-${String(m+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
-            let dObj = new Date(y, m, i);
-            if(dObj.getDay() !== 0 && dObj.getDay() !== 6 && !KR_HOLIDAYS.has(dStr)) validDays.add(dStr);
-        }
-    }
 
     let html = '';
     for(let i=0; i<firstDay; i++) {
@@ -734,7 +766,7 @@ window.renderAllocCalendar = function() {
         } else if (isSaturday) {
             txtClass = 'text-blue-500'; bgClass = 'bg-blue-50/20';
         } else {
-            if (validDays.has(dateStr)) {
+            if (window.lastAllocatedData.validDaysList.includes(dateStr)) {
                 let tintColor = window.allocPartTab === '제조' ? 'indigo' : 'teal';
                 bgClass = `bg-${tintColor}-50/10 border-t-2 border-t-${tintColor}-400`;
                 
@@ -748,12 +780,6 @@ window.renderAllocCalendar = function() {
                         return `<div class="text-[9px] font-bold border border-orange-200 bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded mb-0.5 truncate shadow-sm flex justify-between items-center"><span class="truncate pr-1">${mem.name}</span><span class="shrink-0">지원</span></div>`;
                     }
 
-                    if (mem.assignedPjtCode !== 'COMMON' && mem.assignedPjtCode !== 'SUPPORT') {
-                        if (mem.assignedPjtDeadline && mem.assignedPjtDeadline !== '-' && dateStr > mem.assignedPjtDeadline) {
-                            return '';
-                        }
-                    }
-
                     let activeD = 0;
                     window.lastAllocatedData.validDaysList.forEach(vd => {
                         if (!mem.specificVacationDays.has(vd) && !mem.specificSupportDays.has(vd)) {
@@ -763,19 +789,37 @@ window.renderAllocCalendar = function() {
                     
                     let divisor = activeD > 0 ? activeD : 1;
                     
-                    // 💡 캘린더 표시용 뱃지에 PJT공수(0.8) + 공통(0.2) 합산치 표기
                     let pjtMd = mem.expectedPjtMd / divisor;
                     if (pjtMd > 0.8) pjtMd = 0.8;
                     let commonMd = mem.expectedCommonMd / divisor;
                     if (commonMd > 0.2) commonMd = 0.2;
-                    
-                    let totalMdStr = (pjtMd + commonMd).toFixed(1);
-                    
-                    return `
-                        <div class="text-[9px] font-bold border border-${tintColor}-100 bg-white text-${tintColor}-700 px-1.5 py-0.5 rounded mb-0.5 truncate shadow-sm flex justify-between items-center" title="${sName}">
-                            <span class="truncate pr-1">${mem.name}</span>
-                            <span class="shrink-0 opacity-70">${totalMdStr}MD</span>
-                        </div>`;
+
+                    let badges = '';
+
+                    if (mem.assignedPjtCode !== 'COMMON' && mem.assignedPjtCode !== 'SUPPORT') {
+                        if (!mem.assignedPjtDeadline || mem.assignedPjtDeadline === '-' || dateStr <= mem.assignedPjtDeadline) {
+                            badges += `
+                                <div class="text-[9px] font-bold border border-${tintColor}-100 bg-white text-${tintColor}-700 px-1.5 py-0.5 rounded mb-0.5 truncate shadow-sm flex justify-between items-center" title="${sName}">
+                                    <span class="truncate pr-1">${mem.name}</span>
+                                    <span class="shrink-0 opacity-70">${pjtMd.toFixed(1)}MD</span>
+                                </div>`;
+                        }
+                    } 
+                    else if (mem.assignedPjtCode === 'COMMON') {
+                         commonMd = (mem.expectedPjtMd + mem.expectedCommonMd) / divisor;
+                         if(commonMd > 1.0) commonMd = 1.0;
+                         pjtMd = 0; 
+                    }
+
+                    if (commonMd > 0) {
+                         badges += `
+                                <div class="text-[9px] font-bold border border-slate-200 bg-slate-50 text-slate-600 px-1.5 py-0.5 rounded mb-0.5 truncate shadow-sm flex justify-between items-center" title="${window.allocPartTab}공통">
+                                    <span class="truncate pr-1">${mem.name}</span>
+                                    <span class="shrink-0 opacity-70">${commonMd.toFixed(1)}MD</span>
+                                </div>`;
+                    }
+
+                    return badges;
                 }).join('');
                 
                 badgeHtml += `<div class="flex-1 flex flex-col gap-0.5 overflow-y-auto custom-scrollbar mt-1">${membersHtml}</div>`;
@@ -789,5 +833,5 @@ window.renderAllocCalendar = function() {
 };
 
 window.saveAllocationPlan = function() {
-    window.showToast("투입 계획이 시스템에 임시 저장되었습니다.", "success");
+    window.showToast("투입 계획 초안이 확정 저장되었습니다.", "success");
 };
