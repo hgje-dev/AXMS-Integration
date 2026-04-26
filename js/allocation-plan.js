@@ -51,18 +51,14 @@ function getValidDays(periodMode, targetValue, allowOvertime) {
             if(allowOvertime || !KR_HOLIDAYS.has(dStr)) validDays.push(dStr);
         }
         if (allowOvertime) {
-            let sat = new Date(dates.start); sat.setDate(sat.getDate() + 5);
-            let sun = new Date(dates.start); sun.setDate(sun.getDate() + 6);
+            let sat = new Date(dates.start); sat.setDate(sat.getDate() + 5); let sun = new Date(dates.start); sun.setDate(sun.getDate() + 6);
             validDays.push(`${sat.getFullYear()}-${String(sat.getMonth()+1).padStart(2,'0')}-${String(sat.getDate()).padStart(2,'0')}`);
             validDays.push(`${sun.getFullYear()}-${String(sun.getMonth()+1).padStart(2,'0')}-${String(sun.getDate()).padStart(2,'0')}`);
         }
     } else {
-        const parts = targetValue.split('-');
-        const y = parseInt(parts[0]); const m = parseInt(parts[1]);
-        const lastDate = new Date(y, m, 0).getDate();
+        const parts = targetValue.split('-'); const y = parseInt(parts[0]); const m = parseInt(parts[1]); const lastDate = new Date(y, m, 0).getDate();
         for(let i=1; i<=lastDate; i++) {
-            let dStr = `${y}-${String(m).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
-            let dObj = new Date(y, m-1, i);
+            let dStr = `${y}-${String(m).padStart(2,'0')}-${String(i).padStart(2,'0')}`; let dObj = new Date(y, m-1, i);
             let isWeekend = dObj.getDay() === 0 || dObj.getDay() === 6;
             if(allowOvertime || (!isWeekend && !KR_HOLIDAYS.has(dStr))) validDays.push(dStr);
         }
@@ -71,8 +67,7 @@ function getValidDays(periodMode, targetValue, allowOvertime) {
 }
 
 window.parseDateString = function(str) {
-    let days = new Set();
-    if(!str) return days;
+    let days = new Set(); if(!str) return days;
     str.split(',').forEach(part => {
         part = part.trim();
         if(part.includes('-')) {
@@ -86,40 +81,118 @@ window.parseDateString = function(str) {
     return days;
 };
 
-window.addDateRangeToInput = function(name, type) {
-    const prefix = type === 'vacation' ? 'vac' : 'sup';
-    const startEl = document.getElementById(`${prefix}-start-${name}`);
-    const endEl = document.getElementById(`${prefix}-end-${name}`);
-    const inputEl = document.getElementById(`${prefix}-input-${name}`);
+// 💡 [신규] 스마트 일정 퀵-픽(Quick-Pick) 모달 로직
+window.sqState = { name: '', mode: 'vacation', vacSet: new Set(), supSet: new Set(), targetY: 0, targetM: 0, lastDate: 0 };
 
-    if(!startEl || !startEl.value) { if(window.showToast) window.showToast("시작일 달력을 먼저 선택하세요.", "warning"); return; }
-    let startDay = new Date(startEl.value).getDate();
-    let endDay = endEl && endEl.value ? new Date(endEl.value).getDate() : startDay;
-    if (startDay > endDay) { let temp = startDay; startDay = endDay; endDay = temp; }
+window.openScheduleModal = function(name) {
+    const member = window.allocTeamMaster.find(m => m.name === name);
+    if(!member) return;
+
+    window.sqState.name = name;
+    window.sqState.vacSet = window.parseDateString(member.vacationDates);
+    window.sqState.supSet = window.parseDateString(member.supportDates);
+    window.setSqMode('vacation'); // 기본 모드
+
+    // 현재 선택된 기간(월) 판별
+    let targetValue = window.allocPeriodMode === 'week' ? document.getElementById('alloc-week-picker').value : document.getElementById('alloc-month-picker').value;
+    if (!targetValue) targetValue = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
     
-    let appendStr = startDay === endDay ? `${startDay}` : `${startDay}-${endDay}`;
-    let currentVal = inputEl.value.trim();
-    if (currentVal) inputEl.value = currentVal.endsWith(',') ? currentVal + ' ' + appendStr : currentVal + ', ' + appendStr;
-    else inputEl.value = appendStr;
+    let dObj;
+    if (window.allocPeriodMode === 'week') dObj = window.getDatesFromWeek(targetValue).start;
+    else dObj = new Date(parseInt(targetValue.split('-')[0]), parseInt(targetValue.split('-')[1]) - 1, 1);
+    
+    window.sqState.targetY = dObj.getFullYear();
+    window.sqState.targetM = dObj.getMonth() + 1;
+    window.sqState.lastDate = new Date(window.sqState.targetY, window.sqState.targetM, 0).getDate();
 
-    window.updateAllocMemberDates(name, type, inputEl.value);
-    startEl.value = ''; if(endEl) endEl.value = '';
+    document.getElementById('sq-modal-title').innerText = `${name} 팀원 일정 페인팅`;
+    document.getElementById('sq-month-label').innerText = `${window.sqState.targetY}년 ${window.sqState.targetM}월 (클릭하여 칠하기)`;
+
+    window.renderSqGrid();
+
+    const modal = document.getElementById('schedule-quick-modal');
+    modal.classList.remove('hidden'); modal.classList.add('flex');
+};
+
+window.setSqMode = function(mode) {
+    window.sqState.mode = mode;
+    const btnV = document.getElementById('sq-btn-vacation');
+    const btnS = document.getElementById('sq-btn-support');
+    const btnC = document.getElementById('sq-btn-clear');
+    
+    btnV.className = `flex-1 py-2 text-[11px] font-black rounded-lg transition-all flex items-center justify-center gap-1.5 ${mode === 'vacation' ? 'bg-white text-rose-600 shadow-sm border border-rose-200' : 'text-slate-500 hover:text-rose-500'}`;
+    btnS.className = `flex-1 py-2 text-[11px] font-black rounded-lg transition-all flex items-center justify-center gap-1.5 ${mode === 'support' ? 'bg-white text-orange-500 shadow-sm border border-orange-200' : 'text-slate-500 hover:text-orange-500'}`;
+    btnC.className = `flex-1 py-2 text-[11px] font-black rounded-lg transition-all flex items-center justify-center gap-1.5 ${mode === 'clear' ? 'bg-white text-slate-700 shadow-sm border border-slate-300' : 'text-slate-500 hover:text-slate-700'}`;
+};
+
+window.renderSqGrid = function() {
+    const grid = document.getElementById('sq-days-grid');
+    let html = '';
+    for(let i=1; i<=window.sqState.lastDate; i++) {
+        let isVac = window.sqState.vacSet.has(i);
+        let isSup = window.sqState.supSet.has(i);
+        let bgClass = 'bg-slate-50 hover:bg-slate-200 text-slate-700 border-slate-200';
+        if (isVac) bgClass = 'bg-rose-500 hover:bg-rose-600 text-white border-rose-600 shadow-inner';
+        else if (isSup) bgClass = 'bg-orange-400 hover:bg-orange-500 text-white border-orange-500 shadow-inner';
+        
+        html += `<button onclick="window.toggleSqDay(${i})" class="w-full aspect-square rounded-xl border font-black text-sm flex items-center justify-center transition-all transform active:scale-95 ${bgClass}">${i}</button>`;
+    }
+    grid.innerHTML = html;
+};
+
+window.toggleSqDay = function(day) {
+    if (window.sqState.mode === 'vacation') {
+        window.sqState.supSet.delete(day);
+        window.sqState.vacSet.add(day);
+    } else if (window.sqState.mode === 'support') {
+        window.sqState.vacSet.delete(day);
+        window.sqState.supSet.add(day);
+    } else {
+        window.sqState.vacSet.delete(day);
+        window.sqState.supSet.delete(day);
+    }
+    window.renderSqGrid();
+};
+
+window.saveSqSchedule = function() {
+    const member = window.allocTeamMaster.find(m => m.name === window.sqState.name);
+    if(member) {
+        member.vacationDates = Array.from(window.sqState.vacSet).sort((a,b)=>a-b).join(', ');
+        member.supportDates = Array.from(window.sqState.supSet).sort((a,b)=>a-b).join(', ');
+        window.renderAllocMemberSelectors();
+    }
+    document.getElementById('schedule-quick-modal').classList.add('hidden');
+    document.getElementById('schedule-quick-modal').classList.remove('flex');
+};
+
+// 가상 프로젝트 수동 추가
+window.addVirtualProject = function() {
+    const name = document.getElementById('v-pjt-name').value.trim();
+    const md = parseFloat(document.getElementById('v-pjt-md').value);
+    const start = document.getElementById('v-pjt-start').value;
+    const assyEnd = document.getElementById('v-pjt-assy-end').value;
+    const end = document.getElementById('v-pjt-end').value;
+    if (!name || isNaN(md)) return window.showToast("PJT 명칭과 요구 공수를 입력하세요.", "error");
+
+    window.allocProjects.push({
+        id: "V-" + Date.now(), code: "가상-" + (window.allocProjects.length + 1), name: name, estMd: md, finalMd: 0, outMd: 0,
+        d_assyEst: start, d_assyEndEst: assyEnd, d_shipEst: end, part: window.allocPartTab, active: true, isVirtual: true
+    });
+    window.renderAllocProjectSelectors();
+    window.showToast("가상 프로젝트가 시나리오에 투입되었습니다.", "success");
+    document.getElementById('v-pjt-name').value = ''; document.getElementById('v-pjt-md').value = 10;
 };
 
 window.initAllocationPlan = function() {
-    console.log("✅ AI 투입 계획 모듈 (1.0 Daily Cap & 대기 유휴공수 분리 적용) 초기화");
-    window.switchAllocPeriodMode('week'); 
-    window.switchAllocPartTab('제조'); 
-
+    console.log("✅ AI 투입 계획 (스마트 퀵픽 모달 최적화 완성본)");
+    window.switchAllocPeriodMode('week'); window.switchAllocPartTab('제조'); 
     onSnapshot(query(collection(axmsDb, "projects_status")), (snap) => {
-        let oldProjects = [...window.allocProjects]; 
-        window.allocProjects = [];
+        let oldProjects = [...window.allocProjects].filter(p => p.isVirtual); 
+        window.allocProjects = [...oldProjects];
         snap.forEach(d => {
             let p = d.data(); p.id = d.id;
             if (p.status !== 'completed' && p.status !== 'rejected') {
-                let old = oldProjects.find(op => op.id === p.id);
-                p.active = old ? old.active : true; 
-                window.allocProjects.push(p);
+                let old = oldProjects.find(op => op.id === p.id); p.active = old ? old.active : true; window.allocProjects.push(p);
             }
         });
         window.renderAllocProjectSelectors(); 
@@ -137,11 +210,8 @@ window.switchAllocPartTab = function(part) {
 
 window.switchAllocPeriodMode = function(mode) {
     window.allocPeriodMode = mode;
-    const btnW = document.getElementById('btn-alloc-period-week');
-    const btnM = document.getElementById('btn-alloc-period-month');
-    const pickW = document.getElementById('alloc-week-picker');
-    const pickM = document.getElementById('alloc-month-picker');
-
+    const btnW = document.getElementById('btn-alloc-period-week'); const btnM = document.getElementById('btn-alloc-period-month');
+    const pickW = document.getElementById('alloc-week-picker'); const pickM = document.getElementById('alloc-month-picker');
     if (mode === 'week') {
         if(btnW) btnW.className = 'px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap';
         if(btnM) btnM.className = 'px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-1.5 bg-transparent whitespace-nowrap';
@@ -181,17 +251,16 @@ window.changeAllocPeriod = function(offset) {
 };
 
 window.loadAllocationData = function() {
-    const emptyState = document.getElementById('alloc-empty-state');
-    const resultDash = document.getElementById('alloc-result-dashboard');
+    const emptyState = document.getElementById('alloc-empty-state'); const resultDash = document.getElementById('alloc-result-dashboard');
     if(emptyState) { emptyState.classList.remove('hidden'); emptyState.classList.add('flex'); }
     if(resultDash) resultDash.classList.add('hidden');
-    const btnSave = document.getElementById('btn-save-alloc');
-    const btnRun = document.getElementById('btn-run-ai');
+    const btnSave = document.getElementById('btn-save-alloc'); const btnRun = document.getElementById('btn-run-ai');
     if (btnSave) btnSave.classList.add('hidden');
     if (btnRun) btnRun.innerHTML = '<i class="fa-solid fa-microchip"></i> 초정밀 AI 할당 실행';
     window.lastAllocatedData = null; 
 };
 
+// 💡 [초슬림 마스터 UI] 카드 입력창 삭제하고 모달 오픈 버튼으로 통합!
 window.renderAllocMemberSelectors = function() {
     const container = document.getElementById('alloc-member-list-container');
     if(!container) return;
@@ -204,64 +273,49 @@ window.renderAllocMemberSelectors = function() {
 
     container.innerHTML = members.map(m => {
         let isNormal = m.status === '정상';
+        let vacDisplay = m.vacationDates ? m.vacationDates : '-';
+        let supDisplay = m.supportDates ? m.supportDates : '-';
+        
         return `
-        <div class="flex flex-col bg-slate-50 px-3 py-2 rounded-lg border border-slate-200 shadow-sm w-full md:w-[350px]">
-            <div class="flex items-center justify-between mb-2">
+        <div class="flex flex-col bg-slate-50 px-3 py-2.5 rounded-2xl border border-slate-200 shadow-sm w-full md:w-[350px] transition-all hover:border-indigo-300">
+            <div class="flex items-center justify-between mb-1.5">
                 <label class="flex items-center gap-1.5 cursor-pointer shrink-0 w-24">
                     <input type="checkbox" class="w-3.5 h-3.5 accent-indigo-600 member-checkbox" data-name="${m.name}" ${m.active ? 'checked' : ''} onchange="window.updateAllocMemberActive('${m.name}', this.checked)">
                     <span class="text-[12px] font-bold text-slate-800">${m.name}</span>
                 </label>
                 <div class="flex items-center gap-1.5">
-                    <select class="border border-slate-200 rounded px-1 py-1 text-[9px] font-bold text-emerald-600 outline-emerald-500 bg-white cursor-pointer" onchange="window.updateAllocMemberEfficiency('${m.name}', this.value)" ${m.active ? '' : 'disabled'} title="개인 숙련도/효율 가중치">
+                    <select class="border border-slate-200 rounded px-1 py-1 text-[9px] font-bold text-emerald-600 bg-white outline-none cursor-pointer" onchange="window.updateAllocMemberEfficiency('${m.name}', this.value)" ${m.active ? '' : 'disabled'} title="숙련도">
                         <option value="1.2" ${m.efficiency === 1.2 ? 'selected' : ''}>시니어(1.2x)</option>
                         <option value="1.0" ${m.efficiency === 1.0 ? 'selected' : ''}>일반(1.0x)</option>
                         <option value="0.8" ${m.efficiency === 0.8 ? 'selected' : ''}>주니어(0.8x)</option>
                     </select>
-                    <select class="border border-slate-200 rounded px-1.5 py-1 text-[9px] font-bold text-slate-600 outline-indigo-500 bg-white cursor-pointer" onchange="window.updateAllocMemberStatus('${m.name}', this.value)" ${m.active ? '' : 'disabled'}>
+                    <select class="border border-slate-200 rounded px-1.5 py-1 text-[9px] font-bold text-slate-600 bg-white outline-none cursor-pointer" onchange="window.updateAllocMemberStatus('${m.name}', this.value)" ${m.active ? '' : 'disabled'}>
                         <option value="정상" ${m.status === '정상' ? 'selected' : ''}>정상</option>
                         <option value="타팀지원" ${m.status === '타팀지원' ? 'selected' : ''}>타팀지원(전체)</option>
                         <option value="장기휴가" ${m.status === '장기휴가' ? 'selected' : ''}>장기휴가(전체)</option>
                     </select>
                     <div class="flex items-center gap-1 border-l border-slate-200 pl-1.5">
                         <span class="text-[9px] font-bold text-slate-400">차감</span>
-                        <input type="number" step="0.5" min="0" max="5.0" value="${m.manualVacation || 0}" onchange="window.updateAllocMemberVacation('${m.name}', this.value)" class="w-10 border border-slate-200 rounded px-1 py-1 text-[10px] text-rose-500 font-bold outline-indigo-500 text-right bg-white" ${m.active && isNormal ? '' : 'disabled'} title="임의 차감 공수">
+                        <input type="number" step="0.5" min="0" max="5.0" value="${m.manualVacation || 0}" onchange="window.updateAllocMemberVacation('${m.name}', this.value)" class="w-10 border border-slate-200 rounded px-1 py-1 text-[10px] text-rose-500 font-bold outline-none text-right bg-white" ${m.active && isNormal ? '' : 'disabled'} title="임의 차감">
                     </div>
                 </div>
             </div>
 
-            <div class="flex flex-col gap-1.5 border-t border-slate-200/60 pt-2 w-full">
-                 <div class="flex flex-col gap-1">
-                      <div class="flex items-center justify-between">
-                          <span class="text-[10px] font-bold text-rose-500 flex items-center gap-1"><i class="fa-solid fa-plane-departure text-[9px]"></i> 휴가일</span>
-                          <input type="text" id="vac-input-${m.name}" value="${m.vacationDates || ''}" onchange="window.updateAllocMemberDates('${m.name}', 'vacation', this.value)" placeholder="직접입력 (예: 12, 15-18)" class="flex-1 ml-2 border border-slate-200 rounded px-1.5 py-0.5 text-[10px] outline-indigo-500 text-slate-700 text-right" ${m.active && isNormal ? '' : 'disabled'}>
-                      </div>
-                      <div class="flex items-center gap-1">
-                          <input type="date" id="vac-start-${m.name}" class="flex-1 border border-slate-200 rounded px-1 py-0.5 text-[9px] outline-indigo-500 text-slate-600 bg-white cursor-pointer" ${m.active && isNormal ? '' : 'disabled'}>
-                          <span class="text-slate-400 text-[9px]">~</span>
-                          <input type="date" id="vac-end-${m.name}" class="flex-1 border border-slate-200 rounded px-1 py-0.5 text-[9px] outline-indigo-500 text-slate-600 bg-white cursor-pointer" ${m.active && isNormal ? '' : 'disabled'}>
-                          <button onclick="window.addDateRangeToInput('${m.name}', 'vacation')" class="bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 px-2 py-0.5 rounded text-[9px] transition-colors font-bold whitespace-nowrap" ${m.active && isNormal ? '' : 'disabled'}>기간 추가</button>
-                      </div>
-                 </div>
-
-                 <div class="flex flex-col gap-1 border-t border-slate-100 pt-1.5">
-                      <div class="flex items-center justify-between">
-                          <span class="text-[10px] font-bold text-orange-500 flex items-center gap-1"><i class="fa-solid fa-handshake-angle text-[9px]"></i> 지원일</span>
-                          <input type="text" id="sup-input-${m.name}" value="${m.supportDates || ''}" onchange="window.updateAllocMemberDates('${m.name}', 'support', this.value)" placeholder="직접입력 (예: 20-25)" class="flex-1 ml-2 border border-slate-200 rounded px-1.5 py-0.5 text-[10px] outline-indigo-500 text-slate-700 text-right" ${m.active && isNormal ? '' : 'disabled'}>
-                      </div>
-                      <div class="flex items-center gap-1">
-                          <input type="date" id="sup-start-${m.name}" class="flex-1 border border-slate-200 rounded px-1 py-0.5 text-[9px] outline-indigo-500 text-slate-600 bg-white cursor-pointer" ${m.active && isNormal ? '' : 'disabled'}>
-                          <span class="text-slate-400 text-[9px]">~</span>
-                          <input type="date" id="sup-end-${m.name}" class="flex-1 border border-slate-200 rounded px-1 py-0.5 text-[9px] outline-indigo-500 text-slate-600 bg-white cursor-pointer" ${m.active && isNormal ? '' : 'disabled'}>
-                          <button onclick="window.addDateRangeToInput('${m.name}', 'support')" class="bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-600 px-2 py-0.5 rounded text-[9px] transition-colors font-bold whitespace-nowrap" ${m.active && isNormal ? '' : 'disabled'}>기간 추가</button>
-                      </div>
-                 </div>
+            <div class="flex items-center justify-between bg-white border border-slate-200 px-2 py-1.5 rounded-lg mt-1" ${m.active && isNormal ? '' : 'style="opacity:0.5; pointer-events:none;"'}>
+                <div class="text-[9px] text-slate-500 truncate flex-1 flex gap-2">
+                    <span class="truncate" title="${vacDisplay}"><span class="text-rose-500 font-black">휴가</span> ${vacDisplay}</span>
+                    <span class="text-slate-300">|</span>
+                    <span class="truncate" title="${supDisplay}"><span class="text-orange-500 font-black">지원</span> ${supDisplay}</span>
+                </div>
+                <button onclick="window.openScheduleModal('${m.name}')" class="bg-indigo-50 border border-indigo-200 text-indigo-700 px-2 py-1 rounded shadow-sm hover:bg-indigo-600 hover:text-white transition-colors text-[9px] font-black shrink-0 flex items-center gap-1">
+                    <i class="fa-regular fa-calendar-check"></i> 달력으로 칠하기
+                </button>
             </div>
         </div>
         `;
     }).join('');
 };
 
-window.updateAllocMemberDates = function(name, type, val) { const member = window.allocTeamMaster.find(m => m.name === name); if(member) { if (type === 'vacation') member.vacationDates = val; else if (type === 'support') member.supportDates = val; } };
 window.updateAllocMemberActive = (name, active) => { const member = window.allocTeamMaster.find(m => m.name === name); if(member) member.active = active; window.renderAllocMemberSelectors(); };
 window.updateAllocMemberStatus = (name, status) => { const member = window.allocTeamMaster.find(m => m.name === name); if(member) member.status = status; window.renderAllocMemberSelectors(); };
 window.updateAllocMemberVacation = (name, val) => { const member = window.allocTeamMaster.find(m => m.name === name); if(member) member.manualVacation = parseFloat(val) || 0; };
@@ -275,7 +329,7 @@ window.renderAllocProjectSelectors = function() {
     cont.innerHTML = projects.map(p => `
         <label class="flex items-center gap-2 bg-slate-50 hover:bg-indigo-50/50 px-3 py-2 rounded-lg border border-slate-200 cursor-pointer transition-all shadow-sm">
             <input type="checkbox" class="w-4 h-4 accent-indigo-600 shrink-0" ${p.active !== false ? 'checked' : ''} onchange="window.updateAllocProjectActive('${p.id}', this.checked)">
-            <span class="text-indigo-600 font-black text-xs shrink-0 w-24">[${p.code}]</span>
+            <span class="text-indigo-600 font-black text-xs shrink-0 w-24 truncate">${p.isVirtual?`<span class="bg-amber-100 text-amber-700 px-1 py-0.5 rounded text-[8px] mr-1">가상</span>`:''}[${p.code}]</span>
             <span class="text-[11px] font-bold text-slate-700 truncate w-full" title="${p.name}">${p.name}</span>
             <span class="text-[10px] font-bold text-slate-400 shrink-0 border-l pl-2">${p.progress || 0}% 진행</span>
         </label>`).join('');
@@ -310,11 +364,10 @@ window.openAxttVerifyModal = function() {
 };
 window.closeAxttVerifyModal = function() { const m = document.getElementById('axtt-verify-modal'); if(m){ m.classList.add('hidden'); m.classList.remove('flex'); } };
 
-// 💡 [AI Core] 일별 하드캡 적용 및 정확한 타임라인 매핑 로직
+// AI 핵심 로직 유지
 window.executeAiAllocation = async function() {
     const activeMembers = window.allocTeamMaster.filter(m => m.part === window.allocPartTab && m.active);
-    if (activeMembers.length === 0) return window.showToast(`투입할 [${window.allocPartTab}] 파트 인원을 최소 1명 이상 선택하세요.`, "error");
-
+    if (activeMembers.length === 0) return window.showToast(`투입할 파트 인원을 선택하세요.`, "error");
     let targetProjects = window.allocProjects.filter(p => p.part === window.allocPartTab && p.active !== false);
 
     const btn = document.getElementById('btn-run-ai');
@@ -339,18 +392,13 @@ window.executeAiAllocation = async function() {
             
             activeMembers.forEach(m => {
                 let efficiency = m.efficiency || 1.0; 
-                let baseWeeklyMd = window.historicalMemberMd[m.name] || 5.0; 
-                let dailyTotalMd = Math.min(baseWeeklyMd / 5, 1.0); 
-                
+                let dailyTotalMd = Math.min((window.historicalMemberMd[m.name] || 5.0) / 5, 1.0); 
                 let dailyCommonMd = Math.min(0.1, dailyTotalMd);
                 let dailyPjtMd = (dailyTotalMd - dailyCommonMd) * efficiency; 
                 
                 let vDates = window.parseDateString(m.vacationDates);
                 let sDates = window.parseDateString(m.supportDates);
-                
-                m.specificVacationDays = new Set(); 
-                m.specificSupportDays = new Set();
-                m.validWorkingDays = [];
+                m.specificVacationDays = new Set(); m.specificSupportDays = new Set(); m.validWorkingDays = [];
 
                 validDaysList.forEach(dStr => {
                     let dayNum = parseInt(dStr.split('-')[2]);
@@ -368,9 +416,7 @@ window.executeAiAllocation = async function() {
                     m.expectedPjtMd = Math.max(0, (m.validWorkingDays.length * dailyPjtMd) - vDeductAdjusted);
                     m.expectedCommonMd = m.validWorkingDays.length * dailyCommonMd;
                     m.expectedTotalMd = m.expectedPjtMd + m.expectedCommonMd; 
-                    
-                    pjtAvailMD += m.expectedPjtMd; 
-                    totalCommonMD += m.expectedCommonMd;
+                    pjtAvailMD += m.expectedPjtMd; totalCommonMD += m.expectedCommonMd;
                 }
                 m.vacationDeduct = parseFloat(m.manualVacation) || 0;
             });
@@ -380,36 +426,30 @@ window.executeAiAllocation = async function() {
             let priorities = targetProjects.map(p => {
                 let remain = Math.max(0, (parseFloat(p.estMd)||0) - (parseFloat(p.finalMd)||0));
                 let outMd = parseFloat(p.outMd) || 0;
-                
                 let originalReq = Math.max(0, remain - outMd);
                 let mlFactor = (applyMlCorrection && (p.progress || 0) < 50) ? 1.15 : 1.0;
-                let internalReq = originalReq * riskBuffer * mlFactor; // 스코어링/우선순위용 볼륨
+                let internalReq = originalReq * riskBuffer * mlFactor; 
                 
                 if(outMd > 0) outResults.push({ code: p.code, name: p.name, allocated: outMd, reason: '기등록 외주' });
                 let dDay = p.d_shipEst ? Math.ceil((new Date(p.d_shipEst) - new Date()) / 86400000) : 999;
                 let score = (dDay <= 7 ? 100 : (dDay <= 14 ? 50 : 0)) + (internalReq * 2);
                 
-                return { ...p, internalReq, score, dDay, originalReq: originalReq, allocated: 0, mlApplied: mlFactor > 1.0, d_assyEst: p.d_assyEst, d_shipEst: p.d_shipEst };
+                return { ...p, internalReq, score, dDay, originalReq: originalReq, allocated: 0, mlApplied: mlFactor > 1.0, d_assyEst: p.d_assyEst, d_assyEndEst: p.d_assyEndEst, d_shipEst: p.d_shipEst };
             }).filter(p => p.originalReq > 0 || p.dDay <= 14).sort((a,b) => b.score - a.score);
 
             let currentAvail = pjtAvailMD;
             let periodMultiplier = totalPeriodDays / 5;
             let maxPjtLimit = Math.max(10 * periodMultiplier, pjtAvailMD * 0.45); 
 
-            // 1차 분배
             priorities.forEach((p, idx) => {
                 if (currentAvail <= 0) return;
                 let currentLimit = p.dDay <= 7 ? Math.max(15 * periodMultiplier, pjtAvailMD * 0.6) : maxPjtLimit;
                 let reqMd = Math.min(p.internalReq > 0 ? p.internalReq : (3.0 * periodMultiplier), currentLimit);
                 reqMd = Math.round(reqMd * 2) / 2;
-                
-                let alloc = Math.min(reqMd, currentAvail, p.originalReq - p.allocated); // 하드 캡
-                if (alloc > 0) {
-                    p.allocated += alloc; currentAvail -= alloc; p.priority = idx + 1;
-                }
+                let alloc = Math.min(reqMd, currentAvail, p.originalReq - p.allocated); 
+                if (alloc > 0) { p.allocated += alloc; currentAvail -= alloc; p.priority = idx + 1; }
             });
 
-            // 2차 Squeeze
             if (currentAvail > 0) {
                 priorities.forEach(p => {
                     if (currentAvail <= 0) return;
@@ -431,13 +471,11 @@ window.executeAiAllocation = async function() {
             let pjtRemainMap = {}; pjtResults.forEach(p => pjtRemainMap[p.code] = p.allocated);
             let sortedMembers = [...activeMembers].sort((a,b) => b.expectedPjtMd - a.expectedPjtMd);
             
-            let totalIdleMD = 0;
-            let totalAssignedReal = 0;
+            let totalIdleMD = 0; let totalAssignedReal = 0;
 
-            // 💡 매칭 및 실제 일수(Window) 기반 유휴 공수(IDLE) 산출
             sortedMembers.forEach(m => {
-                if (m.status === '타팀지원') { m.assignedPjtName = '타팀 지원 (파견)'; m.assignedPjtCode = 'SUPPORT'; m.assignedPjtStartDate = '-'; m.assignedPjtDeadline = '-'; }
-                else if (m.status === '장기휴가') { m.assignedPjtName = '장기 휴가'; m.assignedPjtCode = 'VACATION'; m.assignedPjtStartDate = '-'; m.assignedPjtDeadline = '-'; }
+                if (m.status === '타팀지원') { m.assignedPjtName = '타팀 지원 (파견)'; m.assignedPjtCode = 'SUPPORT'; m.assignedPjtStartDate = '-'; m.assignedPjtAssyEnd = '-'; m.assignedPjtDeadline = '-'; }
+                else if (m.status === '장기휴가') { m.assignedPjtName = '장기 휴가'; m.assignedPjtCode = 'VACATION'; m.assignedPjtStartDate = '-'; m.assignedPjtAssyEnd = '-'; m.assignedPjtDeadline = '-'; }
                 else {
                     let myPjt = pjtResults.find(p => pjtRemainMap[p.code] > 0 && p.manager === m.name);
                     let bestPjt = null;
@@ -452,35 +490,28 @@ window.executeAiAllocation = async function() {
                     m.assignedPjtName = bestPjt ? `[${bestPjt.code}] ${bestPjt.name}` : '대기 (프로젝트 없음)';
                     m.assignedPjtCode = bestPjt ? bestPjt.code : 'IDLE';
                     m.assignedPjtStartDate = bestPjt ? (bestPjt.d_assyEst || '-') : '-';
+                    m.assignedPjtAssyEnd = bestPjt ? (bestPjt.d_assyEndEst || '-') : '-';
                     m.assignedPjtDeadline = bestPjt ? (bestPjt.d_shipEst || '-') : '-';
 
-                    let inWindowCount = 0;
-                    let outWindowCount = 0;
+                    let dailyMax = 0.9 * m.efficiency; let calculatedActualPjt = 0; let calculatedIdle = 0;
 
                     m.validWorkingDays.forEach(vd => {
                         let isBefore = bestPjt && bestPjt.d_assyEst && bestPjt.d_assyEst !== '-' && vd < bestPjt.d_assyEst;
                         let isAfter = bestPjt && bestPjt.d_shipEst && bestPjt.d_shipEst !== '-' && vd > bestPjt.d_shipEst;
-                        if (isBefore || isAfter) outWindowCount++;
-                        else inWindowCount++;
+                        if (isBefore || isAfter) { calculatedIdle += dailyMax; } 
+                        else {
+                            let isSetup = bestPjt && bestPjt.d_assyEndEst && bestPjt.d_assyEndEst !== '-' && vd > bestPjt.d_assyEndEst;
+                            let dayCapacity = isSetup ? (dailyMax * 0.2) : dailyMax; 
+                            calculatedActualPjt += dayCapacity; calculatedIdle += (dailyMax - dayCapacity);
+                        }
                     });
 
-                    // 실제 투입 가능한 PJT 공수 vs 버려지는 IDLE 공수 분리
-                    let dailyPjtMd = 0.9 * m.efficiency;
-                    let calculatedActualPjt = Math.max(0, (inWindowCount * dailyPjtMd) - (m.manualVacation * m.efficiency));
-                    let calculatedIdle = outWindowCount * dailyPjtMd;
+                    let vDeductAdjusted = m.vacationDeduct * m.efficiency;
+                    calculatedActualPjt = Math.max(0, calculatedActualPjt - vDeductAdjusted);
 
-                    // 프로젝트가 아예 없으면 전부 IDLE
-                    if (!bestPjt) {
-                        calculatedActualPjt = 0;
-                        calculatedIdle = m.expectedPjtMd;
-                    }
-
-                    m.actualPjtMd = calculatedActualPjt;
-                    m.actualIdleMd = calculatedIdle;
-
-                    totalAssignedReal += m.actualPjtMd;
-                    totalIdleMD += m.actualIdleMd;
-
+                    if (!bestPjt) { calculatedActualPjt = 0; calculatedIdle = m.expectedPjtMd; }
+                    m.actualPjtMd = calculatedActualPjt; m.actualIdleMd = calculatedIdle;
+                    totalAssignedReal += m.actualPjtMd; totalIdleMD += m.actualIdleMd;
                     if (bestPjt) pjtRemainMap[bestPjt.code] -= m.actualPjtMd;
                 }
             });
@@ -488,94 +519,59 @@ window.executeAiAllocation = async function() {
             if (totalIdleMD > 0) pjtResults.push({ code: 'IDLE', name: `유휴 공수 (대기)`, allocated: totalIdleMD, priority: 98, part: window.allocPartTab });
             if (totalCommonMD > 0) pjtResults.push({ code: 'COMMON', name: `${window.allocPartTab}공통`, allocated: totalCommonMD, priority: 99, part: window.allocPartTab });
 
-            let aiReport = [];
-            let periodText = window.allocPeriodMode === 'week' ? '주간' : '월간';
-
-            aiReport.push(`[${window.allocPartTab} 파트 ${periodText} 진단 리포트]\n선택 인원 ${activeMembers.length}명의 개별 숙련도 가중치가 반영된 실질 PJT 산출력(MD)은 총 ${pjtAvailMD.toFixed(1)}MD 로 측정되었습니다.`);
-            aiReport.push(`⏱️ [공정 동기화] PJT별 '조립 예정일(착수)'과 '출하 예정일(납기)'을 기준으로 캘린더 타임라인을 정밀 분리했습니다. 착수 전이거나 납기가 끝난 기간의 잉여 시간은 '유휴/대기' 공수로 자동 반환됩니다.`);
-            
-            if (applyMlCorrection) aiReport.push(`🧠 [ML 오차 보정] 초기 프로젝트(진행률 50% 미만)에 15% 가중치를 주어 우선적으로 공수를 선점하게 하되, 절대 목표치(목표MD)를 초과하여 낭비되지 않도록 Hard Cap을 적용했습니다.`);
-            if (allowOvertime) aiReport.push(`🔥 [특근 시뮬레이션] 주말/공휴일이 정상 영업일로 산입되어 팀의 한계 캐파(Max Capacity)를 끌어올렸습니다.`);
-            if (optStrategy === 'balance') aiReport.push(`⚖️ [다중 제약 최적화] 시니어를 긴급 건에 우선 투입하고 주니어에게 여유 건을 매칭하여 팀 수익성과 육성 밸런스를 확보했습니다.`);
-
-            if (totalIdleMD > 0) aiReport.push(`🚨 [유휴/대기 공수 발생] 타임라인 불일치 및 잔여 시간으로 인해 총 ${totalIdleMD.toFixed(1)}MD 의 '유휴 공수(대기)'가 발생했습니다. 달력의 붉은색 뱃지를 확인하시고 해당 기간에 추가 프로젝트를 배정하세요.`);
-            else if (outResults.length > 0) aiReport.push(`⚠️ 가동률 100% 극대화에도 불구하고 캐파가 부족하여 초과된 잔여 공수(${outResults.reduce((a,b)=>a+b.allocated,0).toFixed(1)}MD)가 발생했습니다. 납기 조율 및 외주 전환이 필요합니다.`);
-            else aiReport.push(`✅ 현재 파트 내부의 산출력만으로 요구되는 모든 프로젝트 할당량을 낭비 없이 완벽히 방어할 수 있습니다.`);
+            let aiReport = []; let periodText = window.allocPeriodMode === 'week' ? '주간' : '월간';
+            aiReport.push(`[${window.allocPartTab} 파트 ${periodText} 진단 리포트]\n선택 인원 ${activeMembers.length}명의 숙련도가 반영된 실질 PJT 산출력(MD)은 총 ${pjtAvailMD.toFixed(1)}MD 로 측정되었습니다.`);
+            aiReport.push(`⏱️ [공정 부하율 분배] 조립/셋업/출하 타임라인이 정밀 연동되어 잉여 인력을 유휴(대기)로 완벽히 분리시켰습니다.`);
+            if (applyMlCorrection) aiReport.push(`🧠 [ML 오차 보정] 초기 프로젝트에 15% 할증을 주어 공수를 선점하되, 절대 목표치를 초과하지 않도록 방어했습니다.`);
+            if (optStrategy === 'balance') aiReport.push(`⚖️ [다중 제약 최적화] 시니어를 긴급 건에 우선 투입하여 팀 수익성과 육성 밸런스를 확보했습니다.`);
+            if (allowOvertime) aiReport.push(`🔥 [특근 시뮬레이션] 주말/공휴일이 정상 영업일로 산입되어 팀 한계 캐파를 기준으로 배분되었습니다.`);
+            if (totalIdleMD > 0) aiReport.push(`🚨 [유휴/대기 공수] 셋업 기간 및 타임라인 불일치로 총 ${totalIdleMD.toFixed(1)}MD 의 '대기 시간'이 발생했습니다. 추가 PJT 배정을 검토하세요.`);
+            else if (outResults.length > 0) aiReport.push(`⚠️ 가동률 극대화에도 캐파가 부족하여 초과된 잔여 공수(${outResults.reduce((a,b)=>a+b.allocated,0).toFixed(1)}MD)가 발생했습니다. 납기 조율 및 외주 전환이 시급합니다.`);
+            else aiReport.push(`✅ 현재 파트 내부의 산출력만으로 요구되는 모든 프로젝트 할당량을 완벽 방어 가능합니다.`);
 
             window.lastAllocatedData = { periodMode: window.allocPeriodMode, targetValue: targetValue, validDaysList: validDaysList, members: activeMembers, pjtResults: pjtResults, outResults: outResults, availMD: pjtAvailMD + totalCommonMD, riskBuffer: riskBuffer, allowOvertime: allowOvertime, idleMD: totalIdleMD, assignedReal: totalAssignedReal };
             
             window.renderAllocUI((activeMembers.length * 5.0 * (totalPeriodDays/5)), pjtAvailMD + totalCommonMD, pjtResults, outResults, activeMembers, aiReport.join('\n\n'));
             window.renderAllocGrid(); window.renderAllocCalendar();
             
-            const emptyState = document.getElementById('alloc-empty-state'); if(emptyState) { emptyState.classList.add('hidden'); emptyState.classList.remove('flex'); }
-            document.getElementById('alloc-result-dashboard').classList.remove('hidden');
+            document.getElementById('alloc-empty-state').classList.add('hidden'); document.getElementById('alloc-result-dashboard').classList.remove('hidden');
             document.getElementById('btn-save-alloc').classList.remove('hidden');
             
             if(applyMlCorrection) document.getElementById('badge-ml').classList.remove('hidden'); else document.getElementById('badge-ml').classList.add('hidden');
             if(riskBuffer > 1.0) document.getElementById('buffer-badge').classList.remove('hidden'); else document.getElementById('buffer-badge').classList.add('hidden');
-            
-            if(allowOvertime) { 
-                document.getElementById('cal-weekend-badge').innerText = '주말/특근 허용 (MAX 가동)'; 
-                document.getElementById('cal-weekend-badge').className = 'text-[10px] font-bold text-indigo-500 bg-indigo-50 px-2 py-1 rounded border border-indigo-200';
-            } else { 
-                document.getElementById('cal-weekend-badge').innerText = '대한민국 공휴일 제외됨'; 
-                document.getElementById('cal-weekend-badge').className = 'text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-1 rounded border border-rose-200';
-            }
+            if(allowOvertime) { document.getElementById('cal-weekend-badge').innerText = '주말/특근 허용 (MAX 가동)'; document.getElementById('cal-weekend-badge').className = 'text-[10px] font-bold text-indigo-500 bg-indigo-50 px-2 py-1 rounded border border-indigo-200'; } 
+            else { document.getElementById('cal-weekend-badge').innerText = '대한민국 공휴일 제외됨'; document.getElementById('cal-weekend-badge').className = 'text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-1 rounded border border-rose-200'; }
 
             if(btn) { btn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> 시뮬레이션 재계산'; btn.disabled = false; }
             window.showToast(`초정밀 시뮬레이션 배분 완료!`, "success");
-            
         } catch (err) { console.error(err); if(btn) btn.disabled = false; }
     }, 800);
 };
 
 window.renderAllocUI = function(maxMD, availMD, pjtResults, outResults, members, aiText) {
-    const insightEl = document.getElementById('alloc-ai-insight'); if (insightEl) insightEl.innerText = aiText;
-    document.getElementById('alloc-kpi-members').innerText = members.length;
+    document.getElementById('alloc-ai-insight').innerText = aiText; document.getElementById('alloc-kpi-members').innerText = members.length;
     document.getElementById('alloc-kpi-avail').innerText = availMD.toFixed(1);
-    
-    // 💡 할당 완료 = 실제 PJT 투입 합계
-    let assignedReal = window.lastAllocatedData.assignedReal || 0;
-    document.getElementById('alloc-kpi-assigned').innerText = assignedReal.toFixed(1);
-    
-    let idleVal = window.lastAllocatedData.idleMD || 0;
-    const idleEl = document.getElementById('alloc-kpi-idle');
-    if (idleEl) idleEl.innerText = idleVal.toFixed(1);
+    document.getElementById('alloc-kpi-assigned').innerText = (window.lastAllocatedData.assignedReal || 0).toFixed(1);
+    document.getElementById('alloc-kpi-idle').innerText = (window.lastAllocatedData.idleMD || 0).toFixed(1);
     
     const pjtCont = document.getElementById('alloc-pjt-list');
     if(pjtCont) {
         pjtCont.innerHTML = pjtResults.map(p => {
-            let badgeColor = p.priority === 1 ? 'bg-rose-500' : 'bg-indigo-500';
-            let extraStyle = '';
-            
-            if (p.code === 'COMMON') badgeColor = 'bg-slate-400';
-            else if (p.code === 'IDLE') { badgeColor = 'bg-rose-600'; extraStyle = 'border-rose-200 bg-rose-50'; }
-            
+            let badgeColor = p.priority === 1 ? 'bg-rose-500' : 'bg-indigo-500'; let extraStyle = '';
+            if (p.code === 'COMMON') badgeColor = 'bg-slate-400'; else if (p.code === 'IDLE') { badgeColor = 'bg-rose-600'; extraStyle = 'border-rose-200 bg-rose-50'; }
+            let originalTag = p.originalReq && p.originalReq < p.allocated ? `<div class="text-[9px] text-amber-500 font-bold mt-0.5">(원본 ${p.originalReq.toFixed(1)}MD)</div>` : '';
             let mlBadge = p.mlApplied ? `<span class="text-[8px] bg-indigo-100 text-indigo-600 px-1 py-0.5 rounded border border-indigo-200 ml-1">ML보정</span>` : '';
-            
             return `<div class="flex items-center justify-between p-4 rounded-xl border border-slate-200 ${extraStyle} hover:shadow-md transition-all">
                 <div class="flex items-center gap-4"><div class="w-8 h-8 rounded-full ${badgeColor} text-white flex items-center justify-center font-black shadow-sm shrink-0">${p.priority===99||p.priority===98?'-':p.priority}</div>
                 <div><div class="font-black ${p.code==='IDLE'?'text-rose-700':'text-slate-800'} text-sm">${p.name} ${mlBadge}</div><div class="text-[10px] text-slate-400 font-bold">${p.code}</div></div></div>
-                <div class="text-right border-l pl-4 shrink-0 min-w-[80px]"><span class="text-[10px] font-bold text-slate-400 block mb-1">최종 배정</span><span class="text-xl font-black ${p.code==='IDLE'?'text-rose-600':'text-indigo-600'}">${(p.allocated||0).toFixed(1)} MD</span></div></div>`}).join('') + outResults.map(o => `
+                <div class="text-right border-l pl-4 shrink-0 min-w-[80px]"><span class="text-[10px] font-bold text-slate-400 block mb-1">최종 배정</span><span class="text-xl font-black ${p.code==='IDLE'?'text-rose-600':'text-indigo-600'}">${(p.allocated||0).toFixed(1)} MD</span>${originalTag}</div></div>`}).join('') + outResults.map(o => `
             <div class="flex items-center justify-between p-3 rounded-lg border border-rose-100 bg-rose-50/30 mt-2 opacity-80"><span class="text-xs font-bold text-slate-600">${o.name} <span class="text-[9px] text-rose-400 ml-1">(${o.reason})</span></span><span class="text-sm font-black text-rose-500">${(o.allocated||0).toFixed(1)} MD</span></div>`).join('');
     }
-    
     const ctx = document.getElementById('alloc-chart')?.getContext('2d');
     if (ctx && window.Chart) {
-        if(allocChartInstance) allocChartInstance.destroy();
-        window.Chart.defaults.font.family = "'Pretendard', sans-serif";
-        
-        let chartLabels = []; let chartData = []; let chartColors = [];
-        const baseColors = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#8b5cf6', '#64748b'];
-        let colorIdx = 0;
-        
-        pjtResults.forEach(p => {
-            chartLabels.push(p.name); chartData.push(p.allocated);
-            if (p.code === 'COMMON') chartColors.push('#94a3b8'); 
-            else if (p.code === 'IDLE') chartColors.push('#f43f5e'); 
-            else { chartColors.push(baseColors[colorIdx % baseColors.length]); colorIdx++; }
-        });
-
+        if(allocChartInstance) allocChartInstance.destroy(); window.Chart.defaults.font.family = "'Pretendard', sans-serif";
+        let chartLabels = []; let chartData = []; let chartColors = []; const baseColors = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#8b5cf6', '#64748b']; let colorIdx = 0;
+        pjtResults.forEach(p => { chartLabels.push(p.name); chartData.push(p.allocated); if (p.code === 'COMMON') chartColors.push('#94a3b8'); else if (p.code === 'IDLE') chartColors.push('#f43f5e'); else { chartColors.push(baseColors[colorIdx % baseColors.length]); colorIdx++; } });
         allocChartInstance = new window.Chart(ctx, { type: 'doughnut', data: { labels: chartLabels, datasets: [{ data: chartData, backgroundColor: chartColors, borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { display: false } } } });
     }
 };
@@ -584,66 +580,49 @@ window.renderAllocGrid = function() {
     if (!window.lastAllocatedData) return;
     const { members, pjtResults, periodMode, validDaysList } = window.lastAllocatedData;
     const thead = document.getElementById('alloc-grid-headers'); const tbody = document.getElementById('alloc-grid-body');
-    if (!thead || !tbody) return;
-    
     let weekHeaders = '';
-    if (periodMode === 'week') {
-        const dayNames = ['월', '화', '수', '목', '금', '토', '일'];
-        for(let i=0; i<(window.lastAllocatedData.allowOvertime ? 7 : 5); i++) {
-             weekHeaders += `<th class="p-3 text-center font-bold bg-slate-800">${dayNames[i]}</th>`;
-        }
-    }
-
+    if (periodMode === 'week') { const dayNames = ['월', '화', '수', '목', '금', '토', '일']; for(let i=0; i<(window.lastAllocatedData.allowOvertime ? 7 : 5); i++) weekHeaders += `<th class="p-3 text-center font-bold bg-slate-800">${dayNames[i]}</th>`; }
     let colCount = periodMode === 'week' ? (window.lastAllocatedData.allowOvertime ? 7 : 5) : 4; 
     let hHtml = `<tr><th class="p-3 text-center font-bold w-24 rounded-tl-lg bg-slate-800">이름(숙련도)</th><th class="p-3 font-bold w-48 text-center bg-slate-800">배정 PJT (선택)</th>`;
-    if (periodMode === 'week') hHtml += weekHeaders;
-    else hHtml += `<th class="p-3 text-center font-bold bg-slate-800">1주차</th><th class="p-3 text-center font-bold bg-slate-800">2주차</th><th class="p-3 text-center font-bold bg-slate-800">3주차</th><th class="p-3 text-center font-bold bg-slate-800">4주차</th>`;
-    hHtml += `<th class="p-3 text-center font-bold text-amber-300 rounded-tr-lg bg-slate-800">산출합계(MD)</th></tr>`;
-    thead.innerHTML = hHtml;
+    if (periodMode === 'week') hHtml += weekHeaders; else hHtml += `<th class="p-3 text-center font-bold bg-slate-800">1주차</th><th class="p-3 text-center font-bold bg-slate-800">2주차</th><th class="p-3 text-center font-bold bg-slate-800">3주차</th><th class="p-3 text-center font-bold bg-slate-800">4주차</th>`;
+    hHtml += `<th class="p-3 text-center font-bold text-amber-300 rounded-tr-lg bg-slate-800">산출합계(MD)</th></tr>`; thead.innerHTML = hHtml;
 
     const pjtOptionsHtml = pjtResults.filter(p => p.code !== 'IDLE').map(p => `<option value="${p.code}">${p.code === 'COMMON' ? `${window.allocPartTab}공통` : `[${p.code}] ${p.name}`}</option>`).join('');
 
     tbody.innerHTML = members.map((m) => {
-        let maxVal = periodMode === 'week' ? parseFloat((0.9 * m.efficiency).toFixed(2)) : parseFloat((4.5 * m.efficiency).toFixed(2));
-        
+        let activeDaysCount = 0; 
+        validDaysList.forEach(vd => { if (!m.specificVacationDays.has(vd) && !m.specificSupportDays.has(vd)) { let isBeforeStart = m.assignedPjtCode !== 'COMMON' && m.assignedPjtCode !== 'IDLE' && m.assignedPjtStartDate && m.assignedPjtStartDate !== '-' && vd < m.assignedPjtStartDate; let isAfterEnd = m.assignedPjtCode !== 'COMMON' && m.assignedPjtCode !== 'IDLE' && m.assignedPjtDeadline && m.assignedPjtDeadline !== '-' && vd > m.assignedPjtDeadline; if (!isBeforeStart && !isAfterEnd) activeDaysCount++; } });
+        let divisor = activeDaysCount > 0 ? (periodMode === 'week' ? activeDaysCount : colCount) : 1;
+        let rawDMd = parseFloat((m.expectedPjtMd / divisor).toFixed(2)); let maxVal = periodMode === 'week' ? parseFloat((0.9 * m.efficiency).toFixed(2)) : parseFloat((4.5 * m.efficiency).toFixed(2));
+        if (rawDMd > maxVal) rawDMd = maxVal; const dMd = rawDMd.toFixed(1); 
+
         let selectHtml = '';
-        if (m.status === '타팀지원' || m.status === '장기휴가') {
-            let label = m.status === '타팀지원' ? '타팀 지원 (파견)' : '장기 휴가';
-            selectHtml = `<div class="w-full text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-1.5 rounded shadow-sm text-center truncate">${label}</div>`;
-        } else if (m.assignedPjtCode === 'IDLE') {
-            selectHtml = `<div class="w-full text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-1.5 rounded shadow-sm text-center truncate">대기 (배정없음)</div>`;
-        } else {
-            selectHtml = `<select class="w-full text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-1.5 rounded shadow-sm outline-none cursor-pointer text-center truncate" onchange="window.updateManualPjtAssignment('${m.name}', this.value, this.options[this.selectedIndex].text)">${pjtOptionsHtml.replace(`value="${m.assignedPjtCode}"`, `value="${m.assignedPjtCode}" selected`)}</select>`;
-        }
+        if (m.status === '타팀지원' || m.status === '장기휴가') selectHtml = `<div class="w-full text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-1.5 rounded shadow-sm text-center truncate">${m.status === '타팀지원' ? '타팀 지원 (파견)' : '장기 휴가'}</div>`;
+        else if (m.assignedPjtCode === 'IDLE') selectHtml = `<div class="w-full text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-1.5 rounded shadow-sm text-center truncate">대기 (프로젝트 없음)</div>`;
+        else selectHtml = `<select class="w-full text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-1.5 rounded shadow-sm outline-none cursor-pointer text-center truncate" onchange="window.updateManualPjtAssignment('${m.name}', this.value, this.options[this.selectedIndex].text)">${pjtOptionsHtml.replace(`value="${m.assignedPjtCode}"`, `value="${m.assignedPjtCode}" selected`)}</select>`;
 
         let tdHtml = ''; let initRowTotal = 0;
-        
         for(let c=0; c<colCount; c++){
             if (m.status === '타팀지원' || m.status === '장기휴가') tdHtml += `<td class="p-2 border-r bg-slate-100/50"><input value="0.0" class="w-full text-center text-xs font-bold text-slate-400 bg-transparent outline-none" disabled></td>`;
             else {
                 let dStr = periodMode === 'week' ? validDaysList[c] : `week-${c}`;
-                
-                if (!dStr) {
-                    tdHtml += `<td class="p-2 border-r bg-slate-100"><input value="-" class="w-full text-center text-xs font-bold text-slate-300 bg-transparent outline-none" disabled></td>`;
-                } else if (periodMode === 'week' && m.specificVacationDays.has(dStr)) tdHtml += `<td class="p-2 border-r bg-rose-50/50"><input value="휴가" class="w-full text-center text-xs font-bold text-rose-400 bg-transparent outline-none" disabled></td>`;
+                if (!dStr) tdHtml += `<td class="p-2 border-r bg-slate-100"><input value="-" class="w-full text-center text-xs font-bold text-slate-300 bg-transparent outline-none" disabled></td>`;
+                else if (periodMode === 'week' && m.specificVacationDays.has(dStr)) tdHtml += `<td class="p-2 border-r bg-rose-50/50"><input value="휴가" class="w-full text-center text-xs font-bold text-rose-400 bg-transparent outline-none" disabled></td>`;
                 else if (periodMode === 'week' && m.specificSupportDays.has(dStr)) tdHtml += `<td class="p-2 border-r bg-orange-50/50"><input value="지원" class="w-full text-center text-xs font-bold text-orange-400 bg-transparent outline-none" disabled></td>`;
                 else {
                     let isBeforeStart = periodMode === 'week' && m.assignedPjtCode !== 'COMMON' && m.assignedPjtCode !== 'IDLE' && m.assignedPjtStartDate && m.assignedPjtStartDate !== '-' && dStr < m.assignedPjtStartDate;
                     let isOverdueWork = periodMode === 'week' && m.assignedPjtCode !== 'COMMON' && m.assignedPjtCode !== 'IDLE' && m.assignedPjtDeadline && m.assignedPjtDeadline !== '-' && dStr > m.assignedPjtDeadline;
+                    let isSetup = periodMode === 'week' && m.assignedPjtCode !== 'COMMON' && m.assignedPjtCode !== 'IDLE' && m.assignedPjtAssyEnd && m.assignedPjtAssyEnd !== '-' && dStr > m.assignedPjtAssyEnd;
                     let isIdle = m.assignedPjtCode === 'IDLE';
 
-                    if (isBeforeStart) {
-                        tdHtml += `<td class="p-2 border-r bg-slate-100"><input value="0.0" class="w-full text-center text-xs font-bold text-slate-300 bg-transparent outline-none cursor-not-allowed" title="착수 전" disabled></td>`;
-                    } else if (isOverdueWork) {
-                        tdHtml += `<td class="p-2 border-r bg-rose-50/30"><input type="number" step="0.1" max="${maxVal.toFixed(1)}" value="${maxVal.toFixed(1)}" class="w-full text-center text-xs font-bold text-rose-600 bg-transparent outline-none calc-trigger-md" title="납기 초과 경고"></td>`; 
-                        initRowTotal += maxVal; 
-                    } else if (isIdle) {
-                        tdHtml += `<td class="p-2 border-r bg-rose-50/10"><input type="number" step="0.1" max="${maxVal.toFixed(1)}" value="${maxVal.toFixed(1)}" class="w-full text-center text-xs font-bold text-rose-500 bg-transparent outline-none calc-trigger-md" title="유휴 대기"></td>`; 
-                        initRowTotal += maxVal;
-                    } else {
-                        let txtColor = m.efficiency > 1.0 ? 'text-indigo-700' : (m.efficiency < 1.0 ? 'text-slate-500' : 'text-slate-800');
-                        tdHtml += `<td class="p-2 border-r bg-slate-50/30"><input type="number" step="0.1" max="${maxVal.toFixed(1)}" value="${maxVal.toFixed(1)}" class="w-full text-center text-xs font-bold ${txtColor} bg-transparent outline-none calc-trigger-md"></td>`; 
-                        initRowTotal += maxVal; 
+                    let cellMax = maxVal; if (isSetup) cellMax = parseFloat((maxVal * 0.2).toFixed(2));
+
+                    if (isBeforeStart) tdHtml += `<td class="p-2 border-r bg-slate-100"><input value="0.0" class="w-full text-center text-xs font-bold text-slate-300 bg-transparent outline-none cursor-not-allowed" title="착수 전" disabled></td>`;
+                    else if (isOverdueWork) { tdHtml += `<td class="p-2 border-r bg-rose-50/30"><input type="number" step="0.1" max="${cellMax.toFixed(1)}" value="${cellMax.toFixed(1)}" class="w-full text-center text-xs font-bold text-rose-600 bg-transparent outline-none calc-trigger-md" title="납기 초과 경고"></td>`; initRowTotal += cellMax; } 
+                    else if (isIdle) { tdHtml += `<td class="p-2 border-r bg-rose-50/10"><input type="number" step="0.1" max="${maxVal.toFixed(1)}" value="${maxVal.toFixed(1)}" class="w-full text-center text-xs font-bold text-rose-500 bg-transparent outline-none calc-trigger-md" title="유휴 대기"></td>`; initRowTotal += maxVal; } 
+                    else {
+                        let txtColor = m.efficiency > 1.0 ? 'text-indigo-700' : (m.efficiency < 1.0 ? 'text-slate-500' : 'text-slate-800'); if (isSetup) txtColor = 'text-teal-600';
+                        tdHtml += `<td class="p-2 border-r bg-slate-50/30"><input type="number" step="0.1" max="${cellMax.toFixed(1)}" value="${cellMax.toFixed(1)}" class="w-full text-center text-xs font-bold ${txtColor} bg-transparent outline-none calc-trigger-md"></td>`; initRowTotal += cellMax; 
                     }
                 }
             }
@@ -651,12 +630,7 @@ window.renderAllocGrid = function() {
         return `<tr class="hover:bg-slate-50 transition-colors border-b"><td class="p-3 text-center border-r font-bold text-slate-800">${m.name}<span class="text-[9px] text-slate-400 ml-1">x${m.efficiency}</span></td><td class="p-2 border-r">${selectHtml}</td>${tdHtml}<td class="p-3 text-center font-black text-indigo-700 bg-indigo-50/30 row-total-md">${(initRowTotal + m.expectedCommonMd).toFixed(1)}</td></tr>`;
     }).join('');
 
-    document.querySelectorAll('.calc-trigger-md').forEach(input => { input.addEventListener('input', function() { 
-        let maxV = parseFloat(this.getAttribute('max'));
-        if(this.value > maxV) this.value = maxV.toFixed(1); 
-        let tr = this.closest('tr'); let sum = 0; tr.querySelectorAll('.calc-trigger-md').forEach(el => sum += (parseFloat(el.value)||0)); 
-        tr.querySelector('.row-total-md').innerText = (sum + (window.lastAllocatedData.members.find(m=>m.name === tr.cells[0].innerText.split('\n')[0])?.expectedCommonMd || 0)).toFixed(1); 
-    }); });
+    document.querySelectorAll('.calc-trigger-md').forEach(input => { input.addEventListener('input', function() { let maxV = parseFloat(this.getAttribute('max')); if(this.value > maxV) this.value = maxV.toFixed(1); let tr = this.closest('tr'); let sum = 0; tr.querySelectorAll('.calc-trigger-md').forEach(el => sum += (parseFloat(el.value)||0)); tr.querySelector('.row-total-md').innerText = (sum + (window.lastAllocatedData.members.find(m=>m.name === tr.cells[0].innerText.split('\n')[0])?.expectedCommonMd || 0)).toFixed(1); }); });
 };
 
 window.updateManualPjtAssignment = function(memberName, pjtCode, pjtNameText) {
@@ -665,8 +639,7 @@ window.updateManualPjtAssignment = function(memberName, pjtCode, pjtNameText) {
         if (mem) {
             mem.assignedPjtCode = pjtCode; mem.assignedPjtName = pjtNameText;
             let targetPjt = window.allocProjects.find(p => p.code === pjtCode); 
-            mem.assignedPjtStartDate = targetPjt ? (targetPjt.d_assyEst || '-') : '-';
-            mem.assignedPjtDeadline = targetPjt ? (targetPjt.d_shipEst || '-') : '-';
+            mem.assignedPjtStartDate = targetPjt ? (targetPjt.d_assyEst || '-') : '-'; mem.assignedPjtAssyEnd = targetPjt ? (targetPjt.d_assyEndEst || '-') : '-'; mem.assignedPjtDeadline = targetPjt ? (targetPjt.d_shipEst || '-') : '-';
             window.renderAllocGrid(); window.renderAllocCalendar();
         }
     }
@@ -683,59 +656,48 @@ window.renderAllocCalendar = function() {
     let html = ''; for(let i=0; i<firstDay; i++) html += `<div class="bg-slate-50 opacity-50 border-b border-slate-200"></div>`;
 
     for(let i=1; i<=lastDate; i++) {
-        let dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
-        let dObj = new Date(y, m, i);
+        let dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`; let dObj = new Date(y, m, i);
         let isHoliday = KR_HOLIDAYS.has(dateStr); let isSunday = dObj.getDay() === 0; let isSaturday = dObj.getDay() === 6;
         let badgeHtml = ''; let bgClass = 'bg-white';
 
-        if (isSunday || isHoliday) { 
-            bgClass = window.lastAllocatedData.allowOvertime ? 'bg-rose-50/10' : 'bg-rose-50/30'; 
-            if (isHoliday) badgeHtml += `<div class="text-[9px] font-bold text-rose-500 bg-rose-50 rounded text-center mb-1 border border-rose-100">공휴일</div>`; 
-        }
+        if (isSunday || isHoliday) { bgClass = window.lastAllocatedData.allowOvertime ? 'bg-rose-50/10' : 'bg-rose-50/30'; if (isHoliday) badgeHtml += `<div class="text-[9px] font-bold text-rose-500 bg-rose-50 rounded text-center mb-1 border border-rose-100">공휴일</div>`; }
         else if (isSaturday) bgClass = window.lastAllocatedData.allowOvertime ? 'bg-blue-50/10' : 'bg-blue-50/30';
 
         if (validDaysList.includes(dateStr)) {
-            let tintColor = window.allocPartTab === '제조' ? 'indigo' : 'teal';
-            bgClass += ` border-t-2 border-t-${tintColor}-400`; 
+            let tintColor = window.allocPartTab === '제조' ? 'indigo' : 'teal'; bgClass += ` border-t-2 border-t-${tintColor}-400`; 
             
             let dailyCommonSum = 0;
             let pjtBadges = members.map(mem => {
                 if (mem.specificVacationDays.has(dateStr)) return `<div class="text-[9px] border border-rose-200 bg-rose-50 text-rose-600 px-1 py-0.5 rounded mb-0.5 truncate flex justify-between"><span>${mem.name}</span><span>휴가</span></div>`;
                 if (mem.specificSupportDays.has(dateStr)) return `<div class="text-[9px] border border-orange-200 bg-orange-50 text-orange-600 px-1 py-0.5 rounded mb-0.5 truncate flex justify-between"><span>${mem.name}</span><span>지원</span></div>`;
-                
                 if (mem.status === '장기휴가' || mem.status === '타팀지원') return '';
 
-                let isActiveToday = true;
-                let isOverdueWork = false;
-                let isIdle = mem.assignedPjtCode === 'IDLE';
+                let isActiveToday = true; let isOverdueWork = false; let isSetupPhase = false; let isIdle = mem.assignedPjtCode === 'IDLE';
 
                 if (mem.assignedPjtCode !== 'COMMON' && mem.assignedPjtCode !== 'SUPPORT' && !isIdle) {
-                    if (mem.assignedPjtStartDate && mem.assignedPjtStartDate !== '-' && dateStr < mem.assignedPjtStartDate) isActiveToday = false; // 착수전
-                    if (mem.assignedPjtDeadline && mem.assignedPjtDeadline !== '-' && dateStr > mem.assignedPjtDeadline) isOverdueWork = true; // 초과
+                    if (mem.assignedPjtStartDate && mem.assignedPjtStartDate !== '-' && dateStr < mem.assignedPjtStartDate) isActiveToday = false; 
+                    if (mem.assignedPjtDeadline && mem.assignedPjtDeadline !== '-' && dateStr > mem.assignedPjtDeadline) isOverdueWork = true;
+                    if (mem.assignedPjtAssyEnd && mem.assignedPjtAssyEnd !== '-' && dateStr > mem.assignedPjtAssyEnd && !isOverdueWork) isSetupPhase = true;
                 }
 
                 if (isActiveToday) {
                     let dailyTotalMd = Math.min((window.historicalMemberMd[mem.name] || 5.0) / 5, 1.0);
                     dailyCommonSum += Math.min(0.1, dailyTotalMd); 
 
-                    let pjtMd = 0.9 * mem.efficiency; // 하드 캡 (0.9 * 숙련도)
+                    let maxDaily = 0.9 * mem.efficiency;
+                    let pjtMd = isSetupPhase ? (maxDaily * 0.2) : maxDaily;
 
-                    let badgeStyle = isOverdueWork 
-                        ? `border-rose-300 bg-rose-50 text-rose-700` 
-                        : (isIdle 
-                            ? `border-rose-200 bg-rose-50 text-rose-500 border-dashed` 
-                            : `border-${tintColor}-100 bg-white text-${tintColor}-700`);
-
-                    let sName = isIdle ? '대기 (프로젝트 없음)' : (mem.assignedPjtName || '-');
+                    let badgeStyle = isOverdueWork ? `border-rose-300 bg-rose-50 text-rose-700` : (isIdle ? `border-rose-200 bg-rose-50 text-rose-500 border-dashed` : (isSetupPhase ? `border-teal-200 bg-teal-50 text-teal-700` : `border-${tintColor}-100 bg-white text-${tintColor}-700`));
+                    let phaseLabel = isSetupPhase ? ' (셋업)' : '';
+                    let sName = isIdle ? '대기 (프로젝트 없음)' : ((mem.assignedPjtName || '-') + phaseLabel);
                     let star = mem.efficiency > 1.0 ? '⭐' : ''; 
+                    
                     return `<div class="text-[9px] font-bold border ${badgeStyle} px-1.5 py-0.5 rounded mb-0.5 truncate flex justify-between shadow-sm" title="${sName}"><span>${mem.name}${star}</span><span>${pjtMd.toFixed(1)}MD</span></div>`;
                 }
                 return '';
             }).join('');
 
-            if(dailyCommonSum > 0) {
-                badgeHtml += `<div class="text-[9px] font-black border border-slate-300 bg-slate-800 text-white px-1.5 py-0.5 rounded mb-1 truncate flex justify-between shadow-md"><span>${window.allocPartTab}공통</span><span>${dailyCommonSum.toFixed(1)}MD</span></div>`;
-            }
+            if(dailyCommonSum > 0) badgeHtml += `<div class="text-[9px] font-black border border-slate-300 bg-slate-800 text-white px-1.5 py-0.5 rounded mb-1 truncate flex justify-between shadow-md"><span>${window.allocPartTab}공통</span><span>${dailyCommonSum.toFixed(1)}MD</span></div>`;
             badgeHtml += pjtBadges;
         }
         html += `<div class="${bgClass} p-1.5 border-b border-r border-slate-200 hover:bg-slate-50 transition-colors flex flex-col min-h-[100px]"><div class="text-xs font-black text-center mb-1 ${isSunday||isHoliday?'text-rose-500':isSaturday?'text-blue-500':'text-slate-700'}">${i}</div>${badgeHtml}</div>`;
