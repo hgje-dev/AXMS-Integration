@@ -91,6 +91,44 @@ window.parseDateString = function(str) {
     return days;
 };
 
+// 💡 1. [핵심] JSON 변환 무결성 보장을 위한 커스텀 세이브 로직
+window.saveAllocationPlan = function() { 
+    try {
+        // 객체 복사 과정에서 Set이나 DOM 노드 등 직렬화 불가 객체 원천 차단
+        const safeTeamMaster = window.allocTeamMaster.map(m => ({
+            name: m.name,
+            part: m.part,
+            active: m.active,
+            manualVacation: m.manualVacation,
+            status: m.status,
+            vacationDates: m.vacationDates,
+            supportDates: m.supportDates,
+            efficiency: m.efficiency
+        }));
+
+        const draft = {
+            teamMaster: safeTeamMaster,
+            virtualProjects: window.allocProjects.filter(p => p.isVirtual),
+            pjtActiveStates: window.allocProjects.map(p => ({ id: p.id, active: p.active })), // 프로젝트 체크 여부 저장
+            manualOverrides: window.manualOverrides,
+            partTab: window.allocPartTab,
+            periodMode: window.allocPeriodMode,
+            weekVal: document.getElementById('alloc-week-picker').value,
+            monthVal: document.getElementById('alloc-month-picker').value,
+            optOvertime: document.getElementById('opt-overtime').checked,
+            optMl: document.getElementById('opt-ml').checked,
+            optStrategy: document.getElementById('opt-strategy').value,
+            optBuffer: document.getElementById('opt-buffer').value
+        };
+        
+        localStorage.setItem('axbis_alloc_draft', JSON.stringify(draft));
+        window.showToast("현재의 시뮬레이션 설정 및 수동 할당(Lock) 내역이 안전하게 보관되었습니다.", "success"); 
+    } catch(e) {
+        console.error("Save Error:", e);
+        window.showToast("저장 중 오류가 발생했습니다.", "error");
+    }
+};
+
 window.moState = { name: '', dateStr: '' };
 
 window.openManualEditModal = function(name, dateStr) {
@@ -117,7 +155,6 @@ window.openManualEditModal = function(name, dateStr) {
     document.getElementById('manual-override-modal').classList.add('flex');
 };
 
-// 💡 [핵심 버그 수정] select 태그에 min-w-0 추가, input/button에 shrink-0 추가
 window.addMoRow = function(code, md) {
     const container = document.getElementById('mo-rows');
     let pjtOptions = window.allocProjects.filter(p=>p.part === window.allocPartTab).map(p =>
@@ -129,8 +166,8 @@ window.addMoRow = function(code, md) {
     div.className = 'flex items-center gap-2 mb-2 mo-row animate-fade-in w-full';
     div.innerHTML = `
         <select class="flex-1 min-w-0 border border-slate-300 rounded-lg p-2 text-[10px] font-bold text-slate-700 outline-none mo-code cursor-pointer focus:border-indigo-500">${pjtOptions}</select>
-        <input type="number" step="0.1" min="0" max="1.5" value="${md}" class="w-16 shrink-0 border border-slate-300 rounded-lg p-2 text-right text-[11px] font-black text-indigo-700 outline-none mo-md focus:border-indigo-500" title="투입 MD 설정">
-        <button onclick="this.parentElement.remove()" class="w-8 h-8 shrink-0 flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" title="삭제"><i class="fa-solid fa-trash"></i></button>
+        <input type="number" step="0.1" min="0" max="1.5" value="${md}" class="w-16 shrink-0 border border-slate-300 rounded-lg p-2 text-right text-[11px] font-black text-indigo-700 outline-none mo-md focus:border-indigo-500">
+        <button onclick="this.parentElement.remove()" class="w-8 h-8 shrink-0 flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"><i class="fa-solid fa-trash"></i></button>
     `;
     container.appendChild(div);
 };
@@ -148,13 +185,16 @@ window.saveManualOverride = function() {
 
     if(newOverrides.length > 0) {
         window.manualOverrides[name][dateStr] = newOverrides;
-        window.showToast(`${dateStr} 배정이 수동으로 고정되었습니다.`, "success");
+        window.showToast(`${dateStr} 배정이 수동으로 고정(Lock) 되었습니다.`, "success");
     } else {
         delete window.manualOverrides[name][dateStr]; 
     }
 
     document.getElementById('manual-override-modal').classList.add('hidden');
     document.getElementById('manual-override-modal').classList.remove('flex');
+    
+    // 💡 [추가] 수동 개입 시 즉시 저장(Auto-Save) 후 AI 재실행
+    window.saveAllocationPlan();
     window.executeAiAllocation(); 
 };
 
@@ -164,6 +204,8 @@ window.clearManualOverride = function() {
     document.getElementById('manual-override-modal').classList.add('hidden');
     document.getElementById('manual-override-modal').classList.remove('flex');
     window.showToast("수동 고정이 해제되어 AI 통제로 전환됩니다.", "success");
+    
+    window.saveAllocationPlan(); // 변경사항 즉시 저장
     window.executeAiAllocation();
 };
 
@@ -215,17 +257,21 @@ window.saveSqSchedule = function() {
         window.renderAllocMemberSelectors();
     }
     document.getElementById('schedule-quick-modal').classList.add('hidden'); document.getElementById('schedule-quick-modal').classList.remove('flex');
+    window.saveAllocationPlan(); // 자동 저장
 };
 
 window.addVirtualProject = function() {
     const name = document.getElementById('v-pjt-name').value.trim(); const md = parseFloat(document.getElementById('v-pjt-md').value);
     const start = document.getElementById('v-pjt-start').value; const assyEnd = document.getElementById('v-pjt-assy-end').value; const end = document.getElementById('v-pjt-end').value;
     if (!name || isNaN(md)) return window.showToast("PJT 명칭과 요구 공수를 입력하세요.", "error");
+
     window.allocProjects.push({ id: "V-" + Date.now(), code: "가상-" + (window.allocProjects.length + 1), name: name, estMd: md, finalMd: 0, outMd: 0, d_assyEst: start, d_assyEndEst: assyEnd, d_shipEst: end, part: window.allocPartTab, active: true, isVirtual: true });
     window.renderAllocProjectSelectors(); window.showToast("가상 프로젝트가 시나리오에 투입되었습니다.", "success");
     document.getElementById('v-pjt-name').value = ''; document.getElementById('v-pjt-md').value = 10;
+    window.saveAllocationPlan(); // 자동 저장
 };
 
+// 💡 2. 로컬 스토리지 데이터 자동 복원 및 화면 로딩
 window.loadDraft = function() {
     let draftStr = localStorage.getItem('axbis_alloc_draft');
     if (draftStr) {
@@ -242,6 +288,15 @@ window.loadDraft = function() {
                     if (!window.allocProjects.find(p => p.id === vp.id)) window.allocProjects.push(vp);
                 });
             }
+            
+            // 💡 프로젝트 활성/비활성 상태(체크박스) 복원
+            if (draft.pjtActiveStates) {
+                draft.pjtActiveStates.forEach(state => {
+                    let p = window.allocProjects.find(x => x.id === state.id);
+                    if (p) p.active = state.active;
+                });
+            }
+
             if(draft.manualOverrides) window.manualOverrides = draft.manualOverrides;
             
             if(draft.optOvertime !== undefined) document.getElementById('opt-overtime').checked = draft.optOvertime;
@@ -254,15 +309,19 @@ window.loadDraft = function() {
             if(draft.periodMode) window.allocPeriodMode = draft.periodMode;
             if(draft.partTab) window.allocPartTab = draft.partTab;
             
-            console.log("💾 로컬 저장 데이터(초안 및 수동 Lock) 복원 완료");
+            console.log("💾 로컬 저장 데이터 복원 완료");
             
-            setTimeout(() => { if (window.allocProjects.length > 0) window.executeAiAllocation(); }, 600);
+            // 데이터 복원 후 AI 자동 실행 (Auto-Run)
+            setTimeout(() => {
+                if (window.allocProjects.length > 0) window.executeAiAllocation();
+            }, 600);
         } catch(e) { console.error("Draft load error", e); }
     }
 };
 
 let isFirstLoad = true;
 window.initAllocationPlan = function() {
+    console.log("✅ AI 투입 계획 (수동개입 + 자동저장 버그 완전 픽스) 초기화");
     onSnapshot(query(collection(axmsDb, "projects_status")), (snap) => {
         let oldProjects = [...window.allocProjects].filter(p => p.isVirtual); 
         window.allocProjects = [...oldProjects];
@@ -333,6 +392,8 @@ window.loadAllocationData = function() {
     const emptyState = document.getElementById('alloc-empty-state'); const resultDash = document.getElementById('alloc-result-dashboard');
     if(emptyState) { emptyState.classList.remove('hidden'); emptyState.classList.add('flex'); }
     if(resultDash) resultDash.classList.add('hidden');
+    // 💡 [수정] 저장은 수동 모달 등에서 자동 처리되므로 숨기지 않고 유지하거나, 명시적 버튼만 제어
+    document.getElementById('btn-save-alloc').style.display = 'none';
     const btnRun = document.getElementById('btn-run-ai');
     if (btnRun) btnRun.innerHTML = '<i class="fa-solid fa-microchip"></i> 일자별 AI 할당 실행';
     window.lastAllocatedData = null; 
@@ -412,6 +473,7 @@ async function fetchHistoricalDataFromAXTT() {
         for (let name in rawStats) window.historicalMemberMd[name] = Math.min(rawStats[name] / 4, 5.0); 
     } catch (error) { window.historicalMemberMd = {}; }
 }
+
 window.openAxttVerifyModal = function() {
     const modal = document.getElementById('axtt-verify-modal'); if(!modal) return;
     const tbody = document.getElementById('axtt-verify-tbody'); let html = '';
@@ -426,7 +488,7 @@ window.openAxttVerifyModal = function() {
 };
 window.closeAxttVerifyModal = function() { const m = document.getElementById('axtt-verify-modal'); if(m){ m.classList.add('hidden'); m.classList.remove('flex'); } };
 
-// AI 메인 실행 
+// AI 실행 로직
 window.executeAiAllocation = async function() {
     const activeMembers = window.allocTeamMaster.filter(m => m.part === window.allocPartTab && m.active);
     if (activeMembers.length === 0) return window.showToast(`투입할 파트 인원을 선택하세요.`, "error");
@@ -471,7 +533,6 @@ window.executeAiAllocation = async function() {
                 m.remainingDeduct = parseFloat(m.manualVacation) || 0;
             });
 
-            // 🔄 일자별 마이크로 루프
             validDaysList.forEach(dStr => {
                 let dayNum = parseInt(dStr.split('-')[2]);
                 let activePjts = pjts.filter(p => p.remain > 0.05 && (!p.d_assyEst || p.d_assyEst === '-' || dStr >= p.d_assyEst));
@@ -489,7 +550,6 @@ window.executeAiAllocation = async function() {
 
                     let dailyTotal = Math.min((window.historicalMemberMd[m.name] || 5.0) / 5, 1.0);
                     
-                    // 수동 개입 확인
                     let hasOverride = window.manualOverrides[m.name] && window.manualOverrides[m.name][dStr];
                     let manualCommon = 0;
 
@@ -595,6 +655,9 @@ window.executeAiAllocation = async function() {
             window.renderAllocGrid(); window.renderAllocCalendar();
             
             document.getElementById('alloc-empty-state').classList.add('hidden'); document.getElementById('alloc-result-dashboard').classList.remove('hidden');
+            
+            // 💡 [저장 버튼 표시] AI 실행 시 저장 버튼이 나타남
+            document.getElementById('btn-save-alloc').style.display = 'flex';
             
             if(btn) { btn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> 마이크로 재계산'; btn.disabled = false; }
             window.showToast(`초정밀 마이크로 시뮬레이션 완료!`, "success");
