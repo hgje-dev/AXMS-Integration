@@ -126,6 +126,11 @@
             <div class="glass-card p-5 border-l-4 border-l-rose-400 bg-rose-50/30"><div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-rose-600">유휴 공수 (대기)</span><i class="fa-solid fa-mug-hot text-rose-300 text-lg"></i></div><p class="text-2xl font-black text-rose-600"><span id="alloc-kpi-idle">0</span> <span class="text-sm text-rose-400 ml-1">MD</span></p></div>
         </div>
 
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-2 glass-card bg-white overflow-hidden"><div class="px-6 py-4 border-b bg-slate-50/50"><h3 class="text-sm font-black text-slate-800">프로젝트 배분 결과</h3></div><div class="p-6 overflow-y-auto max-h-[400px]" id="alloc-pjt-list"></div></div>
+            <div class="glass-card p-6 bg-white"><h3 class="text-sm font-black text-slate-800 mb-4 border-b pb-2">공수 점유율</h3><div class="relative h-[250px] flex items-center justify-center"><canvas id="alloc-chart"></canvas></div></div>
+        </div>
+
         <div class="glass-card overflow-hidden bg-white shadow-sm border border-slate-200 flex flex-col rounded-3xl">
             <div class="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center flex-wrap gap-3">
                 <h3 class="text-sm font-black text-slate-800" id="alloc-cal-title">투입 계획표</h3>
@@ -172,10 +177,11 @@
         <div class="px-5 py-4 border-b border-slate-200 bg-slate-800 text-white flex justify-between items-center"><h2 class="text-sm font-black">일정 페인팅</h2><button onclick="document.getElementById('schedule-quick-modal').classList.add('hidden'); document.getElementById('schedule-quick-modal').classList.remove('flex');" class="text-slate-400"><i class="fa-solid fa-xmark text-lg"></i></button></div>
         <div class="p-5 flex flex-col gap-5">
             <div class="flex gap-2 bg-slate-100 p-1.5 rounded-xl shadow-inner border border-slate-200">
-                <button onclick="window.setSqMode('vacation')" id="sq-btn-vacation" class="flex-1 py-2 text-[11px] font-black rounded-lg transition-all">🔴 휴가</button>
-                <button onclick="window.setSqMode('support')" id="sq-btn-support" class="flex-1 py-2 text-[11px] font-black rounded-lg transition-all">🟠 지원</button>
-                <button onclick="window.setSqMode('clear')" id="sq-btn-clear" class="flex-1 py-2 text-[11px] font-black rounded-lg transition-all">⚪ 해제</button>
+                <button onclick="window.setSqMode('vacation')" id="sq-btn-vacation" class="flex-1 py-2 text-[11px] font-black bg-white text-rose-600 shadow-sm rounded-lg border border-rose-200 transition-all flex items-center justify-center gap-1.5">🔴 휴가</button>
+                <button onclick="window.setSqMode('support')" id="sq-btn-support" class="flex-1 py-2 text-[11px] font-black text-slate-500 hover:text-orange-500 transition-all rounded-lg flex items-center justify-center gap-1.5">🟠 타팀 지원</button>
+                <button onclick="window.setSqMode('clear')" id="sq-btn-clear" class="flex-1 py-2 text-[11px] font-black text-slate-500 hover:text-slate-700 transition-all rounded-lg flex items-center justify-center gap-1.5">⚪ 해제</button>
             </div>
+            <div class="text-center text-[10px] font-bold text-slate-400" id="sq-month-label">달력 로딩중...</div>
             <div id="sq-days-grid" class="grid grid-cols-7 gap-2"></div>
             <button onclick="window.saveSqSchedule()" class="w-full bg-indigo-600 text-white font-black py-3.5 rounded-xl text-xs mt-1">선택 일정 확정</button>
         </div>
