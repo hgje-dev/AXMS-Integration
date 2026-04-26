@@ -13,8 +13,13 @@ const axttConfig = {
     measurementId: "G-V28BZLW8XQ"
 };
 
-// 💡 [Firebase 중복 초기화 방지]
-const axttApp = getApps().length > 0 ? getApp("AXTT_APP") : initializeApp(axttConfig, "AXTT_APP");
+// 🚨 [치명적 버그 수정] Firebase 중복 초기화로 인한 로그인 스크립트 충돌 방지 무적 패턴
+let axttApp;
+try {
+    axttApp = getApp("AXTT_APP");
+} catch (e) {
+    axttApp = initializeApp(axttConfig, "AXTT_APP");
+}
 const axttDb = getFirestore(axttApp);
 
 window.showToast = window.showToast || function(msg, type) { 
@@ -71,13 +76,14 @@ window.parseDateString = function(str) {
     return days;
 };
 
-// 💡 안전한 데이터 저장 함수
+// 💡 안전 저장 로직
 window.saveAllocationPlan = function() { 
     try {
         const safeTeamMaster = window.allocTeamMaster.map(m => ({ name: m.name, part: m.part, active: m.active, manualVacation: m.manualVacation, status: m.status, vacationDates: m.vacationDates, supportDates: m.supportDates, efficiency: m.efficiency }));
         const draft = { 
             teamMaster: safeTeamMaster, 
             virtualProjects: window.allocProjects.filter(p => p.isVirtual), 
+            pjtActiveStates: window.allocProjects.map(p => ({ id: p.id, active: p.active })), 
             manualOverrides: window.manualOverrides, 
             partTab: window.allocPartTab, 
             periodMode: window.allocPeriodMode, 
@@ -98,6 +104,7 @@ window.loadDraft = function() {
             let draft = JSON.parse(draftStr);
             if (draft.teamMaster) draft.teamMaster.forEach(dm => { let tm = window.allocTeamMaster.find(m => m.name === dm.name); if (tm) Object.assign(tm, dm); });
             if (draft.virtualProjects) draft.virtualProjects.forEach(vp => { if (!window.allocProjects.find(p => p.id === vp.id)) window.allocProjects.push(vp); });
+            if (draft.pjtActiveStates) draft.pjtActiveStates.forEach(state => { let p = window.allocProjects.find(x => x.id === state.id); if (p) p.active = state.active; });
             if (draft.manualOverrides) window.manualOverrides = draft.manualOverrides;
             if (draft.optOvertime !== undefined) document.getElementById('opt-overtime').checked = draft.optOvertime;
             if (draft.optStrategy) document.getElementById('opt-strategy').value = draft.optStrategy;
@@ -116,7 +123,7 @@ window.openManualEditModal = function(name, dateStr) {
     window.moState = { name, dateStr };
     document.getElementById('mo-title').innerText = `[${name}] ${dateStr} 투입 조정`;
     let isLocked = window.manualOverrides[name] && window.manualOverrides[name][dateStr];
-    document.getElementById('mo-status').innerHTML = isLocked ? `<span class="text-rose-600 text-[10px] font-black"><i class="fa-solid fa-lock"></i> 수동 고정됨 (AI 터치 불가)</span>` : `<span class="text-indigo-600 text-[10px] font-black"><i class="fa-solid fa-robot"></i> AI 자동 배정 상태</span>`;
+    document.getElementById('mo-status').innerHTML = isLocked ? `<span class="bg-rose-100 text-rose-700 px-2 py-1 rounded font-black text-[10px]"><i class="fa-solid fa-lock"></i> 수동 고정됨</span>` : `<span class="bg-indigo-100 text-indigo-700 px-2 py-1 rounded font-black text-[10px]"><i class="fa-solid fa-robot"></i> AI 자동 배정</span>`;
     
     let assignments = isLocked ? window.manualOverrides[name][dateStr] : (window.lastAllocatedData?.members.find(m=>m.name===name)?.assignments[dateStr] || []);
     assignments = assignments.filter(a => a.code !== 'VAC' && a.code !== 'SUP' && a.code !== 'IDLE');
@@ -125,12 +132,14 @@ window.openManualEditModal = function(name, dateStr) {
     if(assignments.length === 0) window.addMoRow('', 0.5); else assignments.forEach(a => window.addMoRow(a.code, a.md));
     document.getElementById('manual-override-modal').classList.remove('hidden'); document.getElementById('manual-override-modal').classList.add('flex');
 };
+
+// 💡 입력창 찌그러짐 방지 (shrink-0, min-w-0 적용)
 window.addMoRow = function(code, md) {
     const container = document.getElementById('mo-rows');
     let pjtOptions = window.allocProjects.filter(p=>p.part === window.allocPartTab).map(p => `<option value="${p.code}" ${p.code === code ? 'selected' : ''}>${p.isVirtual?'[가상] ':''}[${p.code}] ${p.name}</option>`).join('');
     pjtOptions += `<option value="COMMON" ${code === 'COMMON' ? 'selected' : ''}>${window.allocPartTab}공통</option>`;
     let div = document.createElement('div'); div.className = 'flex items-center gap-2 mb-2 mo-row w-full';
-    div.innerHTML = `<select class="flex-1 min-w-0 border rounded-lg p-2 text-[10px] font-bold mo-code">${pjtOptions}</select><input type="number" step="0.1" value="${md}" class="w-16 shrink-0 border rounded-lg p-2 text-right text-[11px] font-black mo-md"><button onclick="this.parentElement.remove()" class="w-8 shrink-0 text-slate-300 hover:text-rose-500"><i class="fa-solid fa-trash"></i></button>`;
+    div.innerHTML = `<select class="flex-1 min-w-0 border rounded-lg p-2 text-[10px] font-bold mo-code">${pjtOptions}</select><input type="number" step="0.1" value="${md}" class="w-16 shrink-0 border rounded-lg p-2 text-right text-[11px] font-black mo-md"><button onclick="this.parentElement.remove()" class="w-8 shrink-0 text-slate-300 hover:text-rose-500 bg-white border border-slate-200 rounded-lg"><i class="fa-solid fa-trash"></i></button>`;
     container.appendChild(div);
 };
 window.saveManualOverride = function() {
@@ -138,7 +147,8 @@ window.saveManualOverride = function() {
     if(!window.manualOverrides[name]) window.manualOverrides[name] = {};
     let newOverrides = []; document.querySelectorAll('.mo-row').forEach(row => { let code = row.querySelector('.mo-code').value; let md = parseFloat(row.querySelector('.mo-md').value); if(code && md > 0) newOverrides.push({code, md}); });
     if(newOverrides.length > 0) window.manualOverrides[name][dateStr] = newOverrides; else delete window.manualOverrides[name][dateStr];
-    document.getElementById('manual-override-modal').classList.add('hidden'); window.saveAllocationPlan(); window.executeAiAllocation(); 
+    document.getElementById('manual-override-modal').classList.add('hidden'); 
+    window.saveAllocationPlan(); window.executeAiAllocation(); 
 };
 window.clearManualOverride = function() { const {name, dateStr} = window.moState; if(window.manualOverrides[name]) delete window.manualOverrides[name][dateStr]; document.getElementById('manual-override-modal').classList.add('hidden'); window.saveAllocationPlan(); window.executeAiAllocation(); };
 
@@ -184,7 +194,7 @@ window.addVirtualProject = function() {
     const start = document.getElementById('v-pjt-start').value; const assyEnd = document.getElementById('v-pjt-assy-end').value; const end = document.getElementById('v-pjt-end').value;
     if (!name || isNaN(md)) return window.showToast("PJT 명칭과 요구 공수를 입력하세요.", "error");
     window.allocProjects.push({ id: "V-" + Date.now(), code: "가상-" + (window.allocProjects.length + 1), name: name, estMd: md, finalMd: 0, outMd: 0, d_assyEst: start, d_assyEndEst: assyEnd, d_shipEst: end, part: window.allocPartTab, active: true, isVirtual: true });
-    window.renderAllocProjectSelectors(); window.showToast("가상 프로젝트가 시나리오에 투입되었습니다.", "success");
+    window.renderAllocProjectSelectors(); window.showToast("가상 프로젝트 투입 완료", "success");
     document.getElementById('v-pjt-name').value = ''; document.getElementById('v-pjt-md').value = 10;
     window.saveAllocationPlan(); 
 };
@@ -202,7 +212,6 @@ window.initAllocationPlan = function() {
 
 window.switchAllocPartTab = function(part) {
     window.allocPartTab = part;
-    // 💡 버튼 안전 조작 로직 추가
     let mfgBtn = document.getElementById('btn-alloc-part-mfg'); let optBtn = document.getElementById('btn-alloc-part-opt');
     if (mfgBtn) mfgBtn.className = part === '제조' ? "px-3 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
     if (optBtn) optBtn.className = part === '광학' ? "px-3 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
@@ -280,23 +289,23 @@ window.renderAllocMemberSelectors = function() {
         </div>`;
     }).join('');
 };
-window.updateAllocMemberActive = (name, active) => { const member = window.allocTeamMaster.find(m => m.name === name); if(member) member.active = active; window.renderAllocMemberSelectors(); };
-window.updateAllocMemberStatus = (name, status) => { const member = window.allocTeamMaster.find(m => m.name === name); if(member) member.status = status; window.renderAllocMemberSelectors(); };
-window.updateAllocMemberEfficiency = (name, val) => { const member = window.allocTeamMaster.find(m => m.name === name); if(member) member.efficiency = parseFloat(val) || 1.0; };
-window.selectAllAllocMembers = (active) => { window.allocTeamMaster.filter(m => m.part === window.allocPartTab).forEach(m => m.active = active); window.renderAllocMemberSelectors(); };
+window.updateAllocMemberActive = (name, active) => { const member = window.allocTeamMaster.find(m => m.name === name); if(member) member.active = active; window.renderAllocMemberSelectors(); window.saveAllocationPlan(); };
+window.updateAllocMemberStatus = (name, status) => { const member = window.allocTeamMaster.find(m => m.name === name); if(member) member.status = status; window.renderAllocMemberSelectors(); window.saveAllocationPlan(); };
+window.updateAllocMemberEfficiency = (name, val) => { const member = window.allocTeamMaster.find(m => m.name === name); if(member) member.efficiency = parseFloat(val) || 1.0; window.saveAllocationPlan(); };
+window.selectAllAllocMembers = (active) => { window.allocTeamMaster.filter(m => m.part === window.allocPartTab).forEach(m => m.active = active); window.renderAllocMemberSelectors(); window.saveAllocationPlan(); };
 
 window.renderAllocProjectSelectors = function() {
     const cont = document.getElementById('alloc-project-list-container'); if(!cont) return;
     const projects = window.allocProjects.filter(p => p.part === window.allocPartTab);
     cont.innerHTML = projects.map(p => `
-        <label class="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 cursor-pointer shadow-sm">
+        <label class="flex items-center gap-2 bg-slate-50 hover:bg-indigo-50/50 px-3 py-2 rounded-xl border border-slate-200 cursor-pointer shadow-sm">
             <input type="checkbox" class="w-3.5 h-3.5 accent-indigo-600 shrink-0" ${p.active !== false ? 'checked' : ''} onchange="window.updateAllocProjectActive('${p.id}', this.checked)">
             <span class="text-indigo-600 font-black text-[11px] shrink-0 w-24 truncate">${p.isVirtual?`<span class="bg-amber-100 text-amber-700 px-1 py-0.5 rounded mr-1">가상</span>`:''}[${p.code}]</span>
             <span class="text-[10px] font-bold text-slate-700 truncate w-full">${p.name}</span>
         </label>`).join('');
 };
-window.updateAllocProjectActive = function(id, active) { const p = window.allocProjects.find(x => x.id === id); if(p) p.active = active; };
-window.selectAllAllocProjects = function(active) { window.allocProjects.filter(p => p.part === window.allocPartTab).forEach(p => p.active = active); window.renderAllocProjectSelectors(); };
+window.updateAllocProjectActive = function(id, active) { const p = window.allocProjects.find(x => x.id === id); if(p) p.active = active; window.saveAllocationPlan(); };
+window.selectAllAllocProjects = function(active) { window.allocProjects.filter(p => p.part === window.allocPartTab).forEach(p => p.active = active); window.renderAllocProjectSelectors(); window.saveAllocationPlan(); };
 
 window.executeAiAllocation = async function() {
     const activeMembers = window.allocTeamMaster.filter(m => m.part === window.allocPartTab && m.active);
@@ -429,7 +438,11 @@ window.executeAiAllocation = async function() {
             window.renderAllocUI(); window.renderAllocCalendar();
             
             if(btn) { btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> AI 빈칸 자동 채우기'; btn.disabled = false; }
-            window.showToast("월간 마스터 계획 수립 완료!");
+            window.showToast("마스터 계획 시뮬레이션 완료!");
+            
+            // 💡 [추가] AI 돌린 후 자동 저장 (최신 상태 보관)
+            window.saveAllocationPlan();
+
         } catch (err) { console.error(err); if(btn) btn.disabled = false; }
     }, 100);
 };
