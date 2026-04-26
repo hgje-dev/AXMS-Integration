@@ -13,27 +13,29 @@ const axttConfig = {
     measurementId: "G-V28BZLW8XQ"
 };
 
-const axttApp = getApps().some(a => a.name === "AXTT_APP") ? getApp("AXTT_APP") : initializeApp(axttConfig, "AXTT_APP");
+// 💡 [Firebase 중복 초기화 방지]
+const axttApp = getApps().length > 0 ? getApp("AXTT_APP") : initializeApp(axttConfig, "AXTT_APP");
 const axttDb = getFirestore(axttApp);
 
 window.showToast = window.showToast || function(msg, type) { 
     let t = document.createElement('div');
-    t.className = `fixed top-10 left-1/2 transform -translate-x-1/2 z-[9999] px-6 py-3 rounded-full font-black text-sm shadow-xl transition-all ${type==='error'?'bg-rose-500 text-white':'bg-emerald-500 text-white'}`;
+    t.className = `fixed top-10 left-1/2 transform -translate-x-1/2 z-[9999] px-6 py-3 rounded-full font-black text-sm shadow-xl transition-all animate-fade-in ${type==='error'?'bg-rose-500 text-white':'bg-emerald-500 text-white'}`;
     t.innerText = msg; document.body.appendChild(t);
     setTimeout(() => { t.style.opacity = '0'; setTimeout(()=>t.remove(), 500); }, 3000);
 };
 
 window.allocPartTab = '제조'; 
-window.allocPeriodMode = 'month'; // 기본값을 월간으로 변경
+window.allocPeriodMode = 'month'; 
+
 window.allocTeamMaster = [
-    { name: '홍승현', part: '제조', active: true, status: '정상', vacationDates: '', supportDates: '', efficiency: 1.2 }, 
-    { name: '박종민', part: '제조', active: true, status: '정상', vacationDates: '', supportDates: '', efficiency: 1.0 },
-    { name: '박원범', part: '제조', active: true, status: '정상', vacationDates: '', supportDates: '', efficiency: 0.8 }, 
-    { name: '표영덕', part: '제조', active: true, status: '정상', vacationDates: '', supportDates: '', efficiency: 1.0 },
-    { name: '양윤석', part: '광학', active: true, status: '정상', vacationDates: '', supportDates: '', efficiency: 1.2 },
-    { name: '조성주', part: '광학', active: true, status: '정상', vacationDates: '', supportDates: '', efficiency: 1.0 },
-    { name: '박광렬', part: '광학', active: true, status: '정상', vacationDates: '', supportDates: '', efficiency: 1.0 },
-    { name: '이원범', part: '광학', active: true, status: '정상', vacationDates: '', supportDates: '', efficiency: 0.8 }
+    { name: '홍승현', part: '제조', active: true, manualVacation: 0, status: '정상', vacationDates: '', supportDates: '', efficiency: 1.2 }, 
+    { name: '박종민', part: '제조', active: true, manualVacation: 0, status: '정상', vacationDates: '', supportDates: '', efficiency: 1.0 },
+    { name: '박원범', part: '제조', active: true, manualVacation: 0, status: '정상', vacationDates: '', supportDates: '', efficiency: 0.8 }, 
+    { name: '표영덕', part: '제조', active: true, manualVacation: 0, status: '정상', vacationDates: '', supportDates: '', efficiency: 1.0 },
+    { name: '양윤석', part: '광학', active: true, manualVacation: 0, status: '정상', vacationDates: '', supportDates: '', efficiency: 1.2 },
+    { name: '조성주', part: '광학', active: true, manualVacation: 0, status: '정상', vacationDates: '', supportDates: '', efficiency: 1.0 },
+    { name: '박광렬', part: '광학', active: true, manualVacation: 0, status: '정상', vacationDates: '', supportDates: '', efficiency: 1.0 },
+    { name: '이원범', part: '광학', active: true, manualVacation: 0, status: '정상', vacationDates: '', supportDates: '', efficiency: 0.8 }
 ];
 
 window.allocProjects = [];
@@ -53,7 +55,6 @@ function getValidDays(periodMode, targetValue, allowOvertime) {
     const y = parseInt(parts[0]); 
     const m = periodMode === 'week' ? parseInt(parts[1].substring(1)) : parseInt(parts[1]); 
 
-    // 무조건 월간 단위로 날짜 전체를 스캔
     const lastDate = new Date(y, m, 0).getDate();
     for(let i=1; i<=lastDate; i++) {
         let dStr = `${y}-${String(m).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
@@ -70,10 +71,10 @@ window.parseDateString = function(str) {
     return days;
 };
 
-// 💡 안전한 데이터 저장 함수 (DOM 요소 제외)
+// 💡 안전한 데이터 저장 함수
 window.saveAllocationPlan = function() { 
     try {
-        const safeTeamMaster = window.allocTeamMaster.map(m => ({ name: m.name, part: m.part, active: m.active, status: m.status, vacationDates: m.vacationDates, supportDates: m.supportDates, efficiency: m.efficiency }));
+        const safeTeamMaster = window.allocTeamMaster.map(m => ({ name: m.name, part: m.part, active: m.active, manualVacation: m.manualVacation, status: m.status, vacationDates: m.vacationDates, supportDates: m.supportDates, efficiency: m.efficiency }));
         const draft = { 
             teamMaster: safeTeamMaster, 
             virtualProjects: window.allocProjects.filter(p => p.isVirtual), 
@@ -105,7 +106,7 @@ window.loadDraft = function() {
             if (draft.periodMode) window.allocPeriodMode = draft.periodMode;
             if (draft.partTab) window.allocPartTab = draft.partTab;
             
-            setTimeout(() => window.executeAiAllocation(), 400); // 💡 데이터 로드 후 자동 실행
+            setTimeout(() => window.executeAiAllocation(), 400); 
         } catch(e) { console.error("Load failed:", e); }
     }
 };
@@ -115,7 +116,7 @@ window.openManualEditModal = function(name, dateStr) {
     window.moState = { name, dateStr };
     document.getElementById('mo-title').innerText = `[${name}] ${dateStr} 투입 조정`;
     let isLocked = window.manualOverrides[name] && window.manualOverrides[name][dateStr];
-    document.getElementById('mo-status').innerHTML = isLocked ? `<span class="bg-rose-100 text-rose-700 px-2 py-1 rounded font-black text-[10px]"><i class="fa-solid fa-lock"></i> 수동 고정됨 (AI 터치 불가)</span>` : `<span class="bg-indigo-100 text-indigo-700 px-2 py-1 rounded font-black text-[10px]"><i class="fa-solid fa-robot"></i> AI 자동 배정 상태</span>`;
+    document.getElementById('mo-status').innerHTML = isLocked ? `<span class="text-rose-600 text-[10px] font-black"><i class="fa-solid fa-lock"></i> 수동 고정됨 (AI 터치 불가)</span>` : `<span class="text-indigo-600 text-[10px] font-black"><i class="fa-solid fa-robot"></i> AI 자동 배정 상태</span>`;
     
     let assignments = isLocked ? window.manualOverrides[name][dateStr] : (window.lastAllocatedData?.members.find(m=>m.name===name)?.assignments[dateStr] || []);
     assignments = assignments.filter(a => a.code !== 'VAC' && a.code !== 'SUP' && a.code !== 'IDLE');
@@ -129,7 +130,7 @@ window.addMoRow = function(code, md) {
     let pjtOptions = window.allocProjects.filter(p=>p.part === window.allocPartTab).map(p => `<option value="${p.code}" ${p.code === code ? 'selected' : ''}>${p.isVirtual?'[가상] ':''}[${p.code}] ${p.name}</option>`).join('');
     pjtOptions += `<option value="COMMON" ${code === 'COMMON' ? 'selected' : ''}>${window.allocPartTab}공통</option>`;
     let div = document.createElement('div'); div.className = 'flex items-center gap-2 mb-2 mo-row w-full';
-    div.innerHTML = `<select class="flex-1 min-w-0 border rounded-lg p-2 text-[10px] font-bold mo-code">${pjtOptions}</select><input type="number" step="0.1" value="${md}" class="w-16 shrink-0 border rounded-lg p-2 text-right text-[11px] font-black mo-md"><button onclick="this.parentElement.remove()" class="w-8 h-8 shrink-0 text-slate-300 hover:text-rose-500 bg-white border border-slate-200 rounded-lg"><i class="fa-solid fa-trash"></i></button>`;
+    div.innerHTML = `<select class="flex-1 min-w-0 border rounded-lg p-2 text-[10px] font-bold mo-code">${pjtOptions}</select><input type="number" step="0.1" value="${md}" class="w-16 shrink-0 border rounded-lg p-2 text-right text-[11px] font-black mo-md"><button onclick="this.parentElement.remove()" class="w-8 shrink-0 text-slate-300 hover:text-rose-500"><i class="fa-solid fa-trash"></i></button>`;
     container.appendChild(div);
 };
 window.saveManualOverride = function() {
@@ -137,9 +138,7 @@ window.saveManualOverride = function() {
     if(!window.manualOverrides[name]) window.manualOverrides[name] = {};
     let newOverrides = []; document.querySelectorAll('.mo-row').forEach(row => { let code = row.querySelector('.mo-code').value; let md = parseFloat(row.querySelector('.mo-md').value); if(code && md > 0) newOverrides.push({code, md}); });
     if(newOverrides.length > 0) window.manualOverrides[name][dateStr] = newOverrides; else delete window.manualOverrides[name][dateStr];
-    document.getElementById('manual-override-modal').classList.add('hidden'); 
-    window.saveAllocationPlan(); // 즉시 저장
-    window.executeAiAllocation(); 
+    document.getElementById('manual-override-modal').classList.add('hidden'); window.saveAllocationPlan(); window.executeAiAllocation(); 
 };
 window.clearManualOverride = function() { const {name, dateStr} = window.moState; if(window.manualOverrides[name]) delete window.manualOverrides[name][dateStr]; document.getElementById('manual-override-modal').classList.add('hidden'); window.saveAllocationPlan(); window.executeAiAllocation(); };
 
@@ -177,7 +176,7 @@ window.toggleSqDay = function(day) {
 window.saveSqSchedule = function() {
     const member = window.allocTeamMaster.find(m => m.name === window.sqState.name);
     if(member) { member.vacationDates = Array.from(window.sqState.vacSet).sort((a,b)=>a-b).join(', '); member.supportDates = Array.from(window.sqState.supSet).sort((a,b)=>a-b).join(', '); window.renderAllocMemberSelectors(); }
-    document.getElementById('schedule-quick-modal').classList.add('hidden'); window.saveAllocationPlan(); // 즉시 저장
+    document.getElementById('schedule-quick-modal').classList.add('hidden'); window.saveAllocationPlan(); 
 };
 
 window.addVirtualProject = function() {
@@ -187,12 +186,11 @@ window.addVirtualProject = function() {
     window.allocProjects.push({ id: "V-" + Date.now(), code: "가상-" + (window.allocProjects.length + 1), name: name, estMd: md, finalMd: 0, outMd: 0, d_assyEst: start, d_assyEndEst: assyEnd, d_shipEst: end, part: window.allocPartTab, active: true, isVirtual: true });
     window.renderAllocProjectSelectors(); window.showToast("가상 프로젝트가 시나리오에 투입되었습니다.", "success");
     document.getElementById('v-pjt-name').value = ''; document.getElementById('v-pjt-md').value = 10;
-    window.saveAllocationPlan(); // 즉시 저장
+    window.saveAllocationPlan(); 
 };
 
 let isFirstLoad = true;
 window.initAllocationPlan = function() {
-    console.log("✅ AI 투입 계획 (수동선입력+AI자동채우기 월간 마스터 버전)");
     onSnapshot(query(collection(axmsDb, "projects_status")), (snap) => {
         let oldProjects = [...window.allocProjects].filter(p => p.isVirtual); 
         window.allocProjects = [...oldProjects];
@@ -204,12 +202,13 @@ window.initAllocationPlan = function() {
 
 window.switchAllocPartTab = function(part) {
     window.allocPartTab = part;
-    document.getElementById('btn-alloc-part-mfg').className = part === '제조' ? "px-3 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
-    document.getElementById('btn-alloc-part-opt').className = part === '광학' ? "px-3 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
+    // 💡 버튼 안전 조작 로직 추가
+    let mfgBtn = document.getElementById('btn-alloc-part-mfg'); let optBtn = document.getElementById('btn-alloc-part-opt');
+    if (mfgBtn) mfgBtn.className = part === '제조' ? "px-3 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
+    if (optBtn) optBtn.className = part === '광학' ? "px-3 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap" : "px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap";
     window.renderAllocMemberSelectors(); window.renderAllocProjectSelectors(); window.loadAllocationData(); 
 };
 
-// 💡 스위치 시 바로 AI 재계산 실행
 window.switchAllocPeriodMode = function(mode) {
     window.allocPeriodMode = mode;
     const btnW = document.getElementById('btn-alloc-period-week'); const btnM = document.getElementById('btn-alloc-period-month');
@@ -227,11 +226,7 @@ window.switchAllocPeriodMode = function(mode) {
         if(pickM && !pickM.value) { pickM.value = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`; }
         if(pickM) window.updateAllocPeriodDisplay(pickM.value);
     }
-    // 데이터 보존 및 즉시 렌더링
-    if (!isFirstLoad) {
-        window.saveAllocationPlan();
-        window.executeAiAllocation(); 
-    }
+    if (!isFirstLoad) { window.saveAllocationPlan(); window.executeAiAllocation(); }
 };
 
 window.updateAllocPeriodDisplay = function(val) {
@@ -303,11 +298,13 @@ window.renderAllocProjectSelectors = function() {
 window.updateAllocProjectActive = function(id, active) { const p = window.allocProjects.find(x => x.id === id); if(p) p.active = active; };
 window.selectAllAllocProjects = function(active) { window.allocProjects.filter(p => p.part === window.allocPartTab).forEach(p => p.active = active); window.renderAllocProjectSelectors(); };
 
-// 💡 [핵심 엔진] 월간 마스터 스케줄링 (수동 선입력 -> AI 빈칸 채우기 -> 주간 필터링)
 window.executeAiAllocation = async function() {
     const activeMembers = window.allocTeamMaster.filter(m => m.part === window.allocPartTab && m.active);
     if (activeMembers.length === 0) return;
     let targetProjects = window.allocProjects.filter(p => p.part === window.allocPartTab && p.active !== false);
+
+    const btn = document.getElementById('btn-run-ai');
+    if(btn) { btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 빈칸 채우는 중...'; btn.disabled = true; }
 
     const allowOvertime = document.getElementById('opt-overtime')?.checked || false;
     const optStrategy = document.getElementById('opt-strategy')?.value || 'speed';
@@ -317,11 +314,9 @@ window.executeAiAllocation = async function() {
             let targetValue = window.allocPeriodMode === 'week' ? document.getElementById('alloc-week-picker').value : document.getElementById('alloc-month-picker').value;
             if (!targetValue) targetValue = window.allocPeriodMode === 'week' ? window.getWeekString(new Date()) : `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
             
-            // 💡 1. 캘린더 생성 (항상 해당 월 전체 기준)
             const monthVal = window.allocPeriodMode === 'week' ? targetValue.split('-W')[0] + '-' + targetValue.split('-')[1] : targetValue;
             const fullMonthDaysList = getValidDays('month', monthVal, allowOvertime);
             
-            // 💡 2. 이번 주 보기 상태면 필터링용 리스트 추가 생성
             let viewDaysList = fullMonthDaysList;
             if (window.allocPeriodMode === 'week') {
                 const wDates = window.getDatesFromWeek(targetValue);
@@ -346,7 +341,6 @@ window.executeAiAllocation = async function() {
 
             let viewPjtAvail = 0; let viewCommon = 0; let viewIdle = 0;
 
-            // 💡 3. 월간 마이크로 배정 루프
             fullMonthDaysList.forEach(dStr => {
                 let dayNum = parseInt(dStr.split('-')[2]);
                 let activePjts = pjts.filter(p => p.remain > 0.05 && (!p.d_assyEst || p.d_assyEst === '-' || dStr >= p.d_assyEst));
@@ -357,16 +351,13 @@ window.executeAiAllocation = async function() {
 
                 activeMembers.forEach(m => {
                     m.assignments[dStr] = [];
-                    let isVac = m.vSet.has(dayNum); let isSup = m.sSet.has(dayNum);
-                    if (m.status === '장기휴가' || m.status === '타팀지원' || isVac || isSup) return;
+                    if (m.status === '장기휴가' || m.status === '타팀지원' || m.vSet.has(dayNum) || m.sSet.has(dayNum)) return;
 
-                    let dailyTotal = 1.0; // historical data가 없다면 1.0 고정 (가정)
-                    
+                    let dailyTotal = 1.0; 
                     let hasOverride = window.manualOverrides[m.name] && window.manualOverrides[m.name][dStr];
                     let dailyCommon = 0;
 
                     if (hasOverride) {
-                        // 수동 배정 (선입력)
                         let totalManualMd = 0;
                         window.manualOverrides[m.name][dStr].forEach(ov => {
                             let take = parseFloat(ov.md); totalManualMd += take;
@@ -384,7 +375,6 @@ window.executeAiAllocation = async function() {
                             viewPjtAvail += Math.max(0, todayPjt); viewCommon += dailyCommon; viewIdle += availCap;
                         }
                     } else {
-                        // AI 빈칸 채우기
                         dailyCommon = 0.1;
                         let dailyCap = (dailyTotal - dailyCommon) * m.efficiency;
                         let availCap = Math.round(dailyCap * 10) / 10;
@@ -412,7 +402,6 @@ window.executeAiAllocation = async function() {
                 });
             });
 
-            // 💡 4. 현재 '뷰' 모드에 따른 결과 집계
             let pjtResults = []; let outResults = [];
             pjts.forEach((p, idx) => {
                 if (p.allocated > 0) pjtResults.push({ ...p, priority: idx + 1 });
@@ -420,11 +409,10 @@ window.executeAiAllocation = async function() {
                 if (finalUnmet > 0.1) outResults.push({ code: p.code, name: p.name, allocated: finalUnmet });
             });
 
-            // 현재 뷰포트에 맞게 lastAllocatedData 저장
             window.lastAllocatedData = { 
                 periodMode: window.allocPeriodMode, 
                 targetValue: targetValue, 
-                validDaysList: viewDaysList, // 핵심: 그리드와 달력은 현재 뷰(주간/월간)만 그림
+                validDaysList: viewDaysList, 
                 members: activeMembers, 
                 pjtResults: pjtResults, 
                 outResults: outResults, 
@@ -438,30 +426,27 @@ window.executeAiAllocation = async function() {
             document.getElementById('alloc-result-dashboard').classList.remove('hidden');
             document.getElementById('btn-save-alloc').style.display = 'flex';
             
-            window.renderAllocUI(); window.renderAllocGrid(); window.renderAllocCalendar();
-        } catch (err) { console.error(err); }
+            window.renderAllocUI(); window.renderAllocCalendar();
+            
+            if(btn) { btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> AI 빈칸 자동 채우기'; btn.disabled = false; }
+            window.showToast("월간 마스터 계획 수립 완료!");
+        } catch (err) { console.error(err); if(btn) btn.disabled = false; }
     }, 100);
 };
 
 window.renderAllocUI = function() {
     const d = window.lastAllocatedData;
-    document.getElementById('alloc-kpi-members').innerText = d.members.length;
     document.getElementById('alloc-kpi-avail').innerText = d.availMD.toFixed(1);
     document.getElementById('alloc-kpi-assigned').innerText = d.assignedReal.toFixed(1);
     document.getElementById('alloc-kpi-idle').innerText = d.idleMD.toFixed(1);
     document.getElementById('alloc-kpi-pjt-count').innerText = d.pjtResults.filter(p=>!p.isVirtual && p.allocated > 0).length;
 };
 
-window.renderAllocGrid = function() {
-    return; // 이 버전에서는 달력 뷰(Calendar) 중심이므로 표는 그리지 않습니다. (수동 개입은 달력에서 직접 처리)
-};
-
-// 💡 [달력 렌더링] 주간/월간 뷰에 맞게 유동적으로 그림
 window.renderAllocCalendar = function() {
     const grid = document.getElementById('alloc-cal-grid'); if (!grid || !window.lastAllocatedData) return;
     const { members, validDaysList, periodMode, targetValue } = window.lastAllocatedData;
     
-    document.getElementById('alloc-cal-title').innerText = periodMode === 'week' ? "주간 상세 계획 (AI + 수동 락다운)" : "월간 마스터 플랜 (AI + 수동 락다운)";
+    document.getElementById('alloc-cal-title').innerText = periodMode === 'week' ? "주간 상세 계획표 (수동 선입력 가능)" : "월간 마스터 플랜 (수동 선입력 가능)";
 
     let startD, endD;
     if (periodMode === 'week') {
@@ -472,14 +457,9 @@ window.renderAllocCalendar = function() {
         startD = new Date(y, m - 1, 1); endD = new Date(y, m, 0);
     }
 
-    // 캘린더 그리드 생성 로직 (빈칸 채우기)
     const firstDay = startD.getDay(); 
     let html = ''; 
-    
-    // 월간일 때만 앞 빈칸 채움
-    if (periodMode === 'month') {
-        for(let i=0; i<firstDay; i++) html += `<div class="bg-slate-50 opacity-30 border-b border-r"></div>`;
-    }
+    if (periodMode === 'month') { for(let i=0; i<firstDay; i++) html += `<div class="bg-slate-50 opacity-30 border-b border-r border-slate-200"></div>`; }
 
     let currentDate = new Date(startD);
     while (currentDate <= endD) {
@@ -492,29 +472,24 @@ window.renderAllocCalendar = function() {
         if (validDaysList.includes(dateStr)) {
             let commonSum = 0;
             let pjtBadges = members.map(mem => {
-                let dayAs = mem.assignments[dateStr];
-                if (!dayAs || dayAs.length === 0) return '';
-                let memHtml = ''; let hasRealWork = false;
-
-                dayAs.forEach(a => {
-                    if (a.code === 'VAC' || a.code === 'SUP') return; // 휴가/지원은 달력에서 생략
-                    if (a.code !== 'IDLE') hasRealWork = true;
+                let dayAs = mem.assignments[dateStr] || [];
+                return dayAs.map(a => {
+                    if (a.code === 'VAC' || a.code === 'SUP') return ''; 
+                    if (a.code !== 'IDLE') commonSum += 0.1;
                     
                     let isOverdue = a.d_shipEst && a.d_shipEst !== '-' && dateStr > a.d_shipEst;
                     let isSetup = a.phase === 'Setup';
                     
                     let style = a.locked ? 'border-amber-200 bg-indigo-50 text-indigo-700' : (isOverdue ? 'border-rose-200 bg-rose-50 text-rose-700' : (a.code === 'IDLE' ? 'border-rose-200 bg-rose-50 text-rose-500 border-dashed' : (isSetup ? 'border-teal-200 bg-teal-50 text-teal-700' : 'border-indigo-100 bg-white text-indigo-700')));
-                    let lockIcon = a.locked ? '<i class="fa-solid fa-lock text-amber-500 ml-0.5"></i>' : '';
+                    let lockIcon = a.locked ? '<i class="fa-solid fa-lock text-amber-500 ml-0.5 text-[8px]"></i>' : '';
                     let shortCode = a.code === 'IDLE' ? '대기' : (a.code === 'COMMON' ? '공통' : a.code);
                     if (isSetup) shortCode += '(셋업)';
 
-                    memHtml += `<div onclick="window.openManualEditModal('${mem.name}', '${dateStr}')" class="text-[9px] font-bold border ${style} px-1.5 py-0.5 rounded mb-0.5 flex justify-between items-center cursor-pointer hover:ring-1 ring-amber-400">
+                    return `<div onclick="window.openManualEditModal('${mem.name}', '${dateStr}')" class="text-[9px] font-bold border ${style} px-1.5 py-0.5 rounded mb-0.5 flex justify-between items-center cursor-pointer hover:ring-1 ring-amber-400">
                         <div class="flex items-center gap-1 truncate"><span class="font-black shrink-0">${mem.name}${lockIcon}</span><span class="text-[8px] opacity-70 truncate w-12">${shortCode}</span></div>
                         <span class="shrink-0">${a.md.toFixed(1)}</span>
                     </div>`;
-                });
-                if (hasRealWork || dayAs.find(a=>a.code==='IDLE')) commonSum += 0.1;
-                return memHtml;
+                }).join('');
             }).join('');
             if(commonSum > 0) badgeHtml = `<div class="text-[9px] font-black bg-slate-800 text-white px-1.5 py-0.5 mb-1 rounded flex justify-between shadow-md"><span>제조공통</span><span>${commonSum.toFixed(1)}MD</span></div>` + pjtBadges;
         }
@@ -522,7 +497,7 @@ window.renderAllocCalendar = function() {
         let minH = periodMode === 'week' ? 'min-h-[300px]' : 'min-h-[120px]';
         let tCol = isSunday||isHoliday ? 'text-rose-500' : (isSaturday ? 'text-blue-500' : 'text-slate-700');
         
-        html += `<div class="${bgClass} p-1 border-b border-r ${minH} flex flex-col"><div class="text-[11px] font-black text-center mb-1 ${tCol}">${currentDate.getDate()}</div>${badgeHtml}</div>`;
+        html += `<div class="${bgClass} p-1 border-b border-r border-slate-200 ${minH} flex flex-col"><div class="text-[11px] font-black text-center mb-1 ${tCol}">${currentDate.getDate()}</div>${badgeHtml}</div>`;
         
         currentDate.setDate(currentDate.getDate() + 1);
     }
