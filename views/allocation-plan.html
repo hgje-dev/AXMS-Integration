@@ -14,7 +14,7 @@
                     <button id="btn-alloc-part-opt" onclick="window.switchAllocPartTab('광학')" class="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap">광학 파트</button>
                 </div>
             </div>
-            <p class="text-xs font-bold text-slate-500 mt-2">직관적인 스마트 캘린더를 통해 예외 일정을 손쉽게 제어하고 AI 시뮬레이션을 실행합니다.</p>
+            <p class="text-xs font-bold text-slate-500 mt-2">일자별 마이크로 배정 엔진(Micro-Scheduling)과 다중 제약 최적화를 통해 1인 다중 PJT 투입을 제어합니다.</p>
         </div>
         <div class="flex items-center gap-3 flex-wrap">
             <button onclick="window.openAxttVerifyModal()" class="text-[11px] font-bold text-teal-600 bg-teal-50 border border-teal-200 hover:bg-teal-100 px-3 py-2.5 rounded-xl transition-colors shadow-sm flex items-center gap-1.5">
@@ -35,7 +35,7 @@
                 <button onclick="window.changeAllocPeriod(1)" class="px-3 py-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-all z-10"><i class="fa-solid fa-chevron-right"></i></button>
             </div>
             <button id="btn-run-ai" onclick="window.executeAiAllocation()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md transition-all flex items-center gap-2">
-                <i class="fa-solid fa-microchip"></i> 초정밀 AI 할당 실행
+                <i class="fa-solid fa-microchip"></i> 일자별 AI 할당 실행
             </button>
             <button id="btn-save-alloc" onclick="window.saveAllocationPlan()" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md transition-all items-center gap-2">
                 <i class="fa-solid fa-check-double"></i> 계획 확정 및 저장
@@ -47,8 +47,8 @@
         <div class="flex items-center gap-2">
             <div class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-md"><i class="fa-solid fa-brain"></i></div>
             <div>
-                <h3 class="text-xs font-black text-indigo-900">AI 심층 시뮬레이터</h3>
-                <p class="text-[9px] font-bold text-indigo-500">조립/셋업 공정 분리 및 ML 방어</p>
+                <h3 class="text-xs font-black text-indigo-900">AI 일자별 마이크로 스케줄러</h3>
+                <p class="text-[9px] font-bold text-indigo-500">1인 다중 PJT 및 스킬 매칭</p>
             </div>
         </div>
         <div class="w-px h-8 bg-indigo-200 hidden md:block"></div>
@@ -66,13 +66,21 @@
                 <div class="w-8 h-4 bg-slate-300 rounded-full peer-checked:bg-indigo-600 transition-colors"></div>
                 <div class="absolute left-1 top-1 w-2 h-2 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
             </div>
-            <span class="text-xs font-bold text-slate-700 group-hover:text-indigo-600 transition-colors">ML 오차보정</span>
+            <span class="text-xs font-bold text-slate-700 group-hover:text-indigo-600 transition-colors">ML 예측 오차보정</span>
         </label>
         <div class="flex items-center gap-2 ml-auto">
             <span class="text-[11px] font-bold text-slate-600">배분 전략:</span>
             <select id="opt-strategy" class="border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold text-indigo-700 outline-none cursor-pointer shadow-sm">
-                <option value="speed" selected>납기 최우선</option>
-                <option value="balance">수익성/육성 밸런스</option>
+                <option value="speed" selected>순차적 납기 최우선 (Sequential)</option>
+                <option value="balance">스킬 매칭 최적화 (Senior ↔ Urgent)</option>
+            </select>
+        </div>
+        <div class="flex items-center gap-2">
+            <span class="text-[11px] font-bold text-slate-600">버퍼:</span>
+            <select id="opt-buffer" class="border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold text-indigo-700 outline-none cursor-pointer shadow-sm">
+                <option value="1.0">0%</option>
+                <option value="1.1" selected>10%</option>
+                <option value="1.2">20%</option>
             </select>
         </div>
     </div>
@@ -168,7 +176,11 @@
                 </table>
             </div>
             <div id="alloc-view-cal" class="bg-slate-50 p-4">
-                <div class="grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-lg overflow-hidden" id="alloc-cal-grid"></div>
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-sm font-black text-slate-700" id="alloc-cal-title">할당 캘린더</h3>
+                    <span id="cal-weekend-badge" class="text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-1 rounded border border-rose-200">대한민국 공휴일 제외됨</span>
+                </div>
+                <div class="grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-lg overflow-hidden flex-1 min-h-[500px]" id="alloc-cal-grid"></div>
             </div>
         </div>
     </div>
@@ -186,11 +198,8 @@
                 <button onclick="window.setSqMode('support')" id="sq-btn-support" class="flex-1 py-2 text-[11px] font-black text-slate-500 hover:text-orange-500 transition-all rounded-lg flex items-center justify-center gap-1.5">🟠 타팀 지원</button>
                 <button onclick="window.setSqMode('clear')" id="sq-btn-clear" class="flex-1 py-2 text-[11px] font-black text-slate-500 hover:text-slate-700 transition-all rounded-lg flex items-center justify-center gap-1.5">⚪ 선택 해제</button>
             </div>
-            
             <div class="text-center text-[10px] font-bold text-slate-400" id="sq-month-label">달력 로딩중...</div>
-            
             <div id="sq-days-grid" class="grid grid-cols-7 gap-2"></div>
-            
             <button onclick="window.saveSqSchedule()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3.5 rounded-xl text-xs shadow-md transition-all mt-1">
                 <i class="fa-solid fa-check mr-1"></i> 선택한 일정 확정하기
             </button>
