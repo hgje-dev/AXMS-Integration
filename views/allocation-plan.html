@@ -32,7 +32,7 @@
             <button id="btn-run-ai" onclick="window.executeAiAllocation()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md transition-all flex items-center gap-2">
                 <i class="fa-solid fa-wand-magic-sparkles"></i> AI 빈칸 자동 채우기
             </button>
-            <button id="btn-save-alloc" onclick="window.saveAllocationPlan()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md transition-all items-center gap-2 flex">
+            <button id="btn-save-alloc" onclick="window.saveAllocationPlan()" style="display: none;" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md transition-all items-center gap-2">
                 <i class="fa-solid fa-check-double"></i> 현재 상태 보관하기
             </button>
         </div>
@@ -91,7 +91,7 @@
         </div>
     </div>
 
-    <div id="alloc-result-dashboard" class="space-y-6">
+    <div id="alloc-result-dashboard" class="space-y-6 hidden">
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div class="glass-card p-5 border-l-4 border-l-emerald-400 bg-white shadow-sm"><span class="text-xs font-bold text-slate-500 block mb-1">실질 산출 캐파 (MD)</span><p class="text-2xl font-black text-emerald-600" id="alloc-kpi-avail">0</p></div>
             <div class="glass-card p-5 border-l-4 border-l-indigo-400 bg-white shadow-sm"><span class="text-xs font-bold text-slate-500 block mb-1">PJT 할당 완료</span><p class="text-2xl font-black text-indigo-600" id="alloc-kpi-assigned">0</p></div>
@@ -104,8 +104,9 @@
                 <h3 class="text-sm font-black text-slate-800" id="alloc-cal-title">투입 계획표 (수동 선입력 가능)</h3>
                 <div class="flex items-center gap-4 text-[10px] font-bold">
                     <span class="flex items-center gap-1"><span class="w-3 h-3 bg-white border border-indigo-200 rounded"></span> 일반</span>
-                    <span class="flex items-center gap-1"><span class="w-3 h-3 bg-rose-50 border border-rose-200 rounded"></span> 납기지연</span>
-                    <span class="flex items-center gap-1"><span class="w-3 h-3 bg-indigo-50 border border-indigo-200 rounded"><i class="fa-solid fa-lock text-amber-500"></i></span> 수동고정</span>
+                    <span class="flex items-center gap-1"><span class="w-3 h-3 bg-teal-50 border border-teal-200 rounded"></span> 셋업/최소</span>
+                    <span class="flex items-center gap-1"><span class="w-3 h-3 bg-rose-50 border border-rose-200 rounded"></span> 납기지연/유휴</span>
+                    <span class="flex items-center gap-1"><span class="w-3 h-3 bg-indigo-50 border border-amber-200 rounded"><i class="fa-solid fa-lock text-amber-500"></i></span> 수동고정</span>
                 </div>
             </div>
             
