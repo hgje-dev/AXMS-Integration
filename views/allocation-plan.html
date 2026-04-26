@@ -14,7 +14,7 @@
                     <button id="btn-alloc-part-opt" onclick="window.switchAllocPartTab('광학')" class="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap">광학 파트</button>
                 </div>
             </div>
-            <p class="text-xs font-bold text-slate-500 mt-2">일자별 마이크로 배정 엔진과 더불어 팀장의 '수동 개입(Lock)'을 완벽하게 지원합니다.</p>
+            <p class="text-xs font-bold text-slate-500 mt-2">일자별 마이크로 스케줄링과 더불어 팀장의 '수동 개입(Lock)' 및 데이터 자동 저장을 지원합니다.</p>
         </div>
         <div class="flex items-center gap-3 flex-wrap">
             <button onclick="window.openAxttVerifyModal()" class="text-[11px] font-bold text-teal-600 bg-teal-50 border border-teal-200 hover:bg-teal-100 px-3 py-2.5 rounded-xl transition-colors shadow-sm flex items-center gap-1.5">
@@ -38,7 +38,7 @@
                 <i class="fa-solid fa-microchip"></i> 일자별 AI 할당 실행
             </button>
             <button id="btn-save-alloc" onclick="window.saveAllocationPlan()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md transition-all items-center gap-2 flex">
-                <i class="fa-solid fa-check-double"></i> 계획 확정 및 저장
+                <i class="fa-solid fa-check-double"></i> 설정 확정 및 보관
             </button>
         </div>
     </div>
@@ -73,6 +73,14 @@
             <select id="opt-strategy" class="border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold text-indigo-700 outline-none cursor-pointer shadow-sm">
                 <option value="speed" selected>순차적 납기 최우선 (Sequential)</option>
                 <option value="balance">스킬 매칭 최적화 (Senior ↔ Urgent)</option>
+            </select>
+        </div>
+        <div class="flex items-center gap-2">
+            <span class="text-[11px] font-bold text-slate-600">버퍼:</span>
+            <select id="opt-buffer" class="border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold text-indigo-700 outline-none cursor-pointer shadow-sm">
+                <option value="1.0">0%</option>
+                <option value="1.1" selected>10%</option>
+                <option value="1.2">20%</option>
             </select>
         </div>
     </div>
@@ -138,7 +146,7 @@
     <div id="alloc-empty-state" class="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-dashed border-slate-300">
         <div class="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mb-4"><i class="fa-solid fa-robot text-3xl text-indigo-400"></i></div>
         <h3 class="text-lg font-black text-slate-700 mb-2">자동 할당 대기 중</h3>
-        <p class="text-sm text-slate-500 font-medium text-center">인원 일정 및 프로젝트를 설정한 후 실행 버튼을 클릭하세요.</p>
+        <p class="text-sm text-slate-500 font-medium text-center">인원 일정 및 시뮬레이션 옵션을 설정한 후 실행 버튼을 클릭하세요.</p>
     </div>
 
     <div id="alloc-result-dashboard" class="hidden space-y-6 animate-fade-in">
@@ -219,8 +227,7 @@
                     <span class="text-[10px] font-black text-slate-700 w-16 text-center">할당(MD)</span>
                     <span class="w-6"></span>
                 </div>
-                <div id="mo-rows" class="space-y-2">
-                    </div>
+                <div id="mo-rows" class="space-y-2"></div>
                 <button onclick="window.addMoRow('', 0.1)" class="w-full py-2 border border-dashed border-indigo-300 text-indigo-600 text-[10px] font-bold rounded-lg hover:bg-indigo-50 transition-colors mt-2">
                     + PJT 분할 추가
                 </button>
