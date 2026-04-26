@@ -5,25 +5,19 @@
             <div class="flex items-center gap-3">
                 <h2 class="text-2xl font-black text-slate-800 flex items-center gap-3">
                     <div class="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shadow-inner">
-                        <i class="fa-solid fa-wand-magic-sparkles text-xl"></i>
+                        <i class="fa-solid fa-calendar-check text-xl"></i>
                     </div>
-                    투입 자동계획 (AI Allocation)
+                    월간 마스터 투입계획 (Monthly Master Planner)
                 </h2>
-                <div class="flex gap-1 bg-slate-200/70 p-1 rounded-lg ml-2">
-                    <button id="btn-alloc-part-mfg" onclick="window.switchAllocPartTab('제조')" class="px-3 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700 transition-all whitespace-nowrap">제조 파트</button>
-                    <button id="btn-alloc-part-opt" onclick="window.switchAllocPartTab('광학')" class="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap">광학 파트</button>
-                </div>
             </div>
-            <p class="text-xs font-bold text-slate-500 mt-2">일자별 마이크로 스케줄링과 더불어 팀장의 '수동 개입(Lock)' 및 데이터 자동 저장을 지원합니다.</p>
+            <p class="text-xs font-bold text-slate-500 mt-2">월 단위로 수동/자동 계획을 수립하고, 주간 단위로 상세 투입 현황을 모니터링합니다.</p>
         </div>
         <div class="flex items-center gap-3 flex-wrap">
-            <button onclick="window.openAxttVerifyModal()" class="text-[11px] font-bold text-teal-600 bg-teal-50 border border-teal-200 hover:bg-teal-100 px-3 py-2.5 rounded-xl transition-colors shadow-sm flex items-center gap-1.5">
-                <i class="fa-solid fa-database"></i> AXTT 연동 데이터
-            </button>
             <div class="flex gap-1 bg-slate-100 p-1 rounded-xl shadow-inner border border-slate-200">
-                <button id="btn-alloc-period-week" onclick="window.switchAllocPeriodMode('week')" class="px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap">주간 계획</button>
-                <button id="btn-alloc-period-month" onclick="window.switchAllocPeriodMode('month')" class="px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-1.5 bg-transparent whitespace-nowrap">월간 계획</button>
+                <button id="btn-alloc-period-week" onclick="window.switchAllocPeriodMode('week')" class="px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap">주간 상세 보기</button>
+                <button id="btn-alloc-period-month" onclick="window.switchAllocPeriodMode('month')" class="px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all flex items-center gap-1.5 bg-transparent whitespace-nowrap">월간 전체 플랜</button>
             </div>
+            
             <div class="flex items-center bg-white border border-slate-200 rounded-xl p-1 shadow-sm relative group">
                 <button onclick="window.changeAllocPeriod(-1)" class="px-3 py-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-all z-10"><i class="fa-solid fa-chevron-left"></i></button>
                 <div class="relative flex items-center justify-center px-4 cursor-pointer z-10 min-w-[140px] h-full" onclick="document.getElementById(window.allocPeriodMode === 'week' ? 'alloc-week-picker' : 'alloc-month-picker').showPicker()">
@@ -34,178 +28,99 @@
                 </div>
                 <button onclick="window.changeAllocPeriod(1)" class="px-3 py-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-all z-10"><i class="fa-solid fa-chevron-right"></i></button>
             </div>
+            
             <button id="btn-run-ai" onclick="window.executeAiAllocation()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md transition-all flex items-center gap-2">
-                <i class="fa-solid fa-microchip"></i> 일자별 AI 할당 실행
+                <i class="fa-solid fa-wand-magic-sparkles"></i> AI 빈칸 자동 채우기
             </button>
-            <button id="btn-save-alloc" onclick="window.saveAllocationPlan()" style="display: none;" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md transition-all items-center gap-2">
-                <i class="fa-solid fa-check-double"></i> 설정 확정 및 보관
+            <button id="btn-save-alloc" onclick="window.saveAllocationPlan()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md transition-all items-center gap-2 flex">
+                <i class="fa-solid fa-check-double"></i> 현재 상태 보관하기
             </button>
         </div>
     </div>
 
     <div class="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 shadow-sm flex flex-wrap gap-5 items-center">
         <div class="flex items-center gap-2">
-            <div class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-md"><i class="fa-solid fa-brain"></i></div>
-            <div>
-                <h3 class="text-xs font-black text-indigo-900">AI 일자별 마이크로 스케줄러</h3>
-                <p class="text-[9px] font-bold text-indigo-500">1인 다중 PJT 및 스킬 매칭</p>
-            </div>
+            <div class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-md"><i class="fa-solid fa-sliders"></i></div>
+            <h3 class="text-xs font-black text-indigo-900">플래닝 옵션</h3>
         </div>
         <div class="w-px h-8 bg-indigo-200 hidden md:block"></div>
         <label class="flex items-center gap-2 cursor-pointer group">
-            <div class="relative flex items-center">
-                <input type="checkbox" id="opt-overtime" class="sr-only peer">
-                <div class="w-8 h-4 bg-slate-300 rounded-full peer-checked:bg-rose-500 transition-colors"></div>
-                <div class="absolute left-1 top-1 w-2 h-2 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
-            </div>
-            <span class="text-xs font-bold text-slate-700 group-hover:text-rose-600 transition-colors">주말특근(MAX)</span>
-        </label>
-        <label class="flex items-center gap-2 cursor-pointer group">
-            <div class="relative flex items-center">
-                <input type="checkbox" id="opt-ml" class="sr-only peer" checked>
-                <div class="w-8 h-4 bg-slate-300 rounded-full peer-checked:bg-indigo-600 transition-colors"></div>
-                <div class="absolute left-1 top-1 w-2 h-2 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
-            </div>
-            <span class="text-xs font-bold text-slate-700 group-hover:text-indigo-600 transition-colors">ML 예측 오차보정</span>
+            <input type="checkbox" id="opt-overtime" class="sr-only peer">
+            <div class="w-8 h-4 bg-slate-300 rounded-full peer-checked:bg-rose-500 transition-colors"></div>
+            <span class="text-xs font-bold text-slate-700">주말특근(MAX)</span>
         </label>
         <div class="flex items-center gap-2 ml-auto">
             <span class="text-[11px] font-bold text-slate-600">배분 전략:</span>
-            <select id="opt-strategy" class="border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold text-indigo-700 outline-none cursor-pointer shadow-sm">
-                <option value="speed" selected>순차적 납기 최우선 (Sequential)</option>
-                <option value="balance">스킬 매칭 최적화 (Senior ↔ Urgent)</option>
-            </select>
-        </div>
-        <div class="flex items-center gap-2">
-            <span class="text-[11px] font-bold text-slate-600">버퍼:</span>
-            <select id="opt-buffer" class="border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold text-indigo-700 outline-none cursor-pointer shadow-sm">
-                <option value="1.0">0%</option>
-                <option value="1.1" selected>10%</option>
-                <option value="1.2">20%</option>
+            <select id="opt-strategy" class="border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold text-indigo-700">
+                <option value="speed" selected>납기 최우선 (Urgency)</option>
+                <option value="balance">스킬 매칭 (Profitability)</option>
             </select>
         </div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div class="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-4 lg:col-span-1">
+        <div class="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-4">
             <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h3 class="text-sm font-black text-slate-700"><i class="fa-solid fa-users-viewfinder text-indigo-500 mr-1.5"></i> 팀원 상태 및 일정 관리</h3>
-                <div class="flex gap-2">
-                    <button onclick="window.selectAllAllocMembers(true)" class="text-[10px] font-bold text-indigo-600">전체 선택</button>
-                    <button onclick="window.selectAllAllocMembers(false)" class="text-[10px] font-bold text-rose-500">해제</button>
-                </div>
+                <h3 class="text-sm font-black text-slate-700"><i class="fa-solid fa-users text-indigo-500 mr-1.5"></i> 팀원 및 개인 일정</h3>
             </div>
-            <div id="alloc-member-list-container" class="flex flex-col gap-2 overflow-y-auto max-h-[500px] custom-scrollbar pr-2"></div>
+            <div id="alloc-member-list-container" class="space-y-2 overflow-y-auto max-h-[400px] pr-2 custom-scrollbar"></div>
         </div>
 
-        <div class="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-4 lg:col-span-1">
+        <div class="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-4">
             <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h3 class="text-sm font-black text-slate-700"><i class="fa-solid fa-folder-tree text-indigo-500 mr-1.5"></i> 기존 프로젝트 선택</h3>
-                <button onclick="window.selectAllAllocProjects(true)" class="text-[10px] font-bold text-indigo-600">전체 선택</button>
+                <h3 class="text-sm font-black text-slate-700"><i class="fa-solid fa-folder-tree text-indigo-500 mr-1.5"></i> 기존 PJT 선택</h3>
             </div>
-            <div id="alloc-project-list-container" class="flex flex-col gap-2 overflow-y-auto max-h-[500px] custom-scrollbar pr-2"></div>
+            <div id="alloc-project-list-container" class="space-y-2 overflow-y-auto max-h-[400px] pr-2 custom-scrollbar"></div>
         </div>
 
-        <div class="bg-slate-800 rounded-3xl p-5 shadow-xl space-y-5 text-white relative overflow-hidden">
-            <div class="absolute -right-10 -bottom-10 opacity-10"><i class="fa-solid fa-flask text-9xl"></i></div>
-            <div class="flex items-center gap-2 border-b border-slate-700 pb-3 relative z-10">
-                <i class="fa-solid fa-plus-circle text-amber-400"></i>
-                <h3 class="text-sm font-black">가상/긴급 PJT 시뮬레이션</h3>
-            </div>
-            <div class="space-y-3 relative z-10">
-                <div>
-                    <label class="text-[10px] font-bold text-slate-400 block mb-1">PJT 명칭 / 코드</label>
-                    <input type="text" id="v-pjt-name" placeholder="예: [긴급] AX-26 레이저 검수" class="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-amber-400 transition-colors">
+        <div class="bg-slate-800 rounded-3xl p-5 shadow-xl text-white relative overflow-hidden">
+            <div class="absolute -right-10 -bottom-10 opacity-10"><i class="fa-solid fa-bolt text-9xl"></i></div>
+            <h3 class="text-sm font-black mb-4 border-b border-slate-700 pb-2 flex items-center gap-2"><i class="fa-solid fa-plus-circle text-amber-400"></i> 가상 PJT 시뮬레이션</h3>
+            <div class="space-y-3">
+                <input type="text" id="v-pjt-name" placeholder="PJT 명칭 / 코드" class="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-amber-400">
+                <div class="grid grid-cols-2 gap-3">
+                    <input type="number" id="v-pjt-md" value="10" placeholder="요구공수(MD)" class="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-amber-400">
+                    <input type="date" id="v-pjt-assy-end" title="조립완료목표" class="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2 text-[10px] font-bold outline-none focus:border-amber-400">
                 </div>
                 <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="text-[10px] font-bold text-slate-400 block mb-1">예상 요구 공수 (MD)</label>
-                        <input type="number" id="v-pjt-md" value="10" step="1" class="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-amber-400 transition-colors">
-                    </div>
-                    <div>
-                        <label class="text-[10px] font-bold text-slate-400 block mb-1">조립 완료 목표일</label>
-                        <input type="date" id="v-pjt-assy-end" class="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2 text-[10px] font-bold outline-none focus:border-amber-400 transition-colors">
-                    </div>
+                    <input type="date" id="v-pjt-start" title="착수예정" class="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2 text-[10px] font-bold">
+                    <input type="date" id="v-pjt-end" title="출하예정" class="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2 text-[10px] font-bold">
                 </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="text-[10px] font-bold text-slate-400 block mb-1">착수일(조립예정)</label>
-                        <input type="date" id="v-pjt-start" class="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2 text-[10px] font-bold outline-none focus:border-amber-400">
-                    </div>
-                    <div>
-                        <label class="text-[10px] font-bold text-slate-400 block mb-1">납기일(출하예정)</label>
-                        <input type="date" id="v-pjt-end" class="w-full bg-slate-900 border border-slate-600 rounded-xl px-3 py-2 text-[10px] font-bold outline-none focus:border-amber-400">
-                    </div>
-                </div>
-                <button onclick="window.addVirtualProject()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-black py-3 rounded-xl text-xs shadow-lg transition-all mt-2">
-                    <i class="fa-solid fa-bolt mr-1"></i> 시나리오 투입
-                </button>
+                <button onclick="window.addVirtualProject()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-black py-3 rounded-xl text-xs shadow-lg transition-all mt-2">시나리오 투입</button>
             </div>
         </div>
     </div>
 
-    <div id="alloc-empty-state" class="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-dashed border-slate-300">
-        <div class="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mb-4"><i class="fa-solid fa-robot text-3xl text-indigo-400"></i></div>
-        <h3 class="text-lg font-black text-slate-700 mb-2">자동 할당 대기 중</h3>
-        <p class="text-sm text-slate-500 font-medium text-center">인원 일정 및 프로젝트를 설정한 후 실행 버튼을 클릭하세요.</p>
-    </div>
-
-    <div id="alloc-result-dashboard" class="hidden space-y-6 animate-fade-in">
-        <div class="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-3xl p-6 border border-indigo-100 shadow-sm relative overflow-hidden">
-            <div class="absolute -right-6 -top-6 text-indigo-500/10"><i class="fa-solid fa-brain text-9xl"></i></div>
-            <h3 class="text-sm font-black text-indigo-800 mb-3 flex items-center gap-2 relative z-10"><i class="fa-solid fa-wand-magic-sparkles text-indigo-600"></i> AI 진단 및 의사결정 전략 리포트</h3>
-            <p id="alloc-ai-insight" class="text-[13px] font-bold text-slate-700 leading-relaxed relative z-10 break-keep whitespace-pre-wrap"></p>
-        </div>
-
+    <div id="alloc-result-dashboard" class="space-y-6">
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div class="glass-card p-5 border-l-4 border-l-slate-400 bg-white"><div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-slate-500">투입 인원</span><i class="fa-solid fa-users text-slate-300 text-lg"></i></div><p class="text-2xl font-black text-slate-700"><span id="alloc-kpi-members">0</span> <span class="text-sm text-slate-400 ml-1">명</span></p></div>
-            <div class="glass-card p-5 border-l-4 border-l-emerald-400 bg-white"><div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-emerald-600">실질 산출 캐파 (MD)</span><i class="fa-solid fa-gauge-high text-emerald-300 text-lg"></i></div><p class="text-2xl font-black text-emerald-600"><span id="alloc-kpi-avail">0</span> <span class="text-sm text-emerald-400 ml-1">MD</span></p></div>
-            <div class="glass-card p-5 border-l-4 border-l-indigo-400 bg-white"><div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-indigo-600">PJT 할당 완료</span><i class="fa-solid fa-list-check text-indigo-300 text-lg"></i></div><p class="text-2xl font-black text-indigo-600"><span id="alloc-kpi-assigned">0</span> <span class="text-sm text-indigo-400 ml-1">MD</span></p></div>
-            <div class="glass-card p-5 border-l-4 border-l-rose-400 bg-rose-50/30"><div class="flex justify-between items-start mb-1"><span class="text-xs font-bold text-rose-600">유휴 공수 (대기)</span><i class="fa-solid fa-mug-hot text-rose-300 text-lg"></i></div><p class="text-2xl font-black text-rose-600"><span id="alloc-kpi-idle">0</span> <span class="text-sm text-rose-400 ml-1">MD</span></p></div>
+            <div class="glass-card p-5 border-l-4 border-l-emerald-400 bg-white shadow-sm"><span class="text-xs font-bold text-slate-500 block mb-1">실질 산출 캐파 (MD)</span><p class="text-2xl font-black text-emerald-600" id="alloc-kpi-avail">0</p></div>
+            <div class="glass-card p-5 border-l-4 border-l-indigo-400 bg-white shadow-sm"><span class="text-xs font-bold text-slate-500 block mb-1">PJT 할당 완료</span><p class="text-2xl font-black text-indigo-600" id="alloc-kpi-assigned">0</p></div>
+            <div class="glass-card p-5 border-l-4 border-l-rose-400 bg-rose-50/30 shadow-sm"><span class="text-xs font-bold text-rose-600 block mb-1">유휴 공수 (대기)</span><p class="text-2xl font-black text-rose-600" id="alloc-kpi-idle">0</p></div>
+            <div class="glass-card p-5 border-l-4 border-l-slate-400 bg-white shadow-sm"><span class="text-xs font-bold text-slate-500 block mb-1">투입 프로젝트 수</span><p class="text-2xl font-black text-slate-700" id="alloc-kpi-pjt-count">0</p></div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div class="lg:col-span-2 glass-card bg-white overflow-hidden"><div class="px-6 py-4 border-b bg-slate-50/50"><h3 class="text-sm font-black text-slate-800">프로젝트 배분 결과</h3></div><div class="p-6 overflow-y-auto max-h-[400px]" id="alloc-pjt-list"></div></div>
-            <div class="glass-card p-6 bg-white"><h3 class="text-sm font-black text-slate-800 mb-4 border-b pb-2">공수 점유율</h3><div class="relative h-[250px] flex items-center justify-center"><canvas id="alloc-chart"></canvas></div></div>
-        </div>
-
-        <div class="glass-card overflow-hidden bg-white shadow-sm flex flex-col">
-            <div id="alloc-view-grid" class="overflow-x-auto custom-scrollbar p-4 border-b">
-                <table class="w-full text-left border-collapse whitespace-nowrap table-fixed min-w-[900px]">
-                    <thead class="bg-slate-800 text-white text-[11px]" id="alloc-grid-headers"></thead>
-                    <tbody id="alloc-grid-body" class="divide-y divide-slate-100 text-xs"></tbody>
-                </table>
-            </div>
-            <div id="alloc-view-cal" class="bg-slate-50 p-4">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-sm font-black text-slate-700" id="alloc-cal-title">할당 캘린더</h3>
-                    <div class="flex items-center gap-2">
-                        <span class="text-[10px] font-bold text-slate-500 bg-white px-2 py-1 rounded border border-slate-200"><i class="fa-solid fa-hand-pointer mr-1"></i> 뱃지 클릭 시 수동 배정(Lock)</span>
-                        <span id="cal-weekend-badge" class="text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-1 rounded border border-rose-200">대한민국 공휴일 제외됨</span>
-                    </div>
+        <div class="glass-card overflow-hidden bg-white shadow-sm border border-slate-200 flex flex-col rounded-3xl">
+            <div class="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                <h3 class="text-sm font-black text-slate-800" id="alloc-cal-title">투입 계획표 (수동 선입력 가능)</h3>
+                <div class="flex items-center gap-4 text-[10px] font-bold">
+                    <span class="flex items-center gap-1"><span class="w-3 h-3 bg-white border border-indigo-200 rounded"></span> 일반</span>
+                    <span class="flex items-center gap-1"><span class="w-3 h-3 bg-rose-50 border border-rose-200 rounded"></span> 납기지연</span>
+                    <span class="flex items-center gap-1"><span class="w-3 h-3 bg-indigo-50 border border-indigo-200 rounded"><i class="fa-solid fa-lock text-amber-500"></i></span> 수동고정</span>
                 </div>
-                <div class="grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-lg overflow-hidden flex-1 min-h-[500px]" id="alloc-cal-grid"></div>
             </div>
-        </div>
-    </div>
-</div>
-
-<div id="schedule-quick-modal" class="fixed inset-0 z-[500] hidden items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4">
-    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-[420px] flex flex-col overflow-hidden animate-fade-in">
-        <div class="px-5 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-800 text-white">
-            <h2 class="text-sm font-black flex items-center gap-2"><i class="fa-regular fa-calendar-check text-indigo-400"></i> <span id="sq-modal-title">일정 설정</span></h2>
-            <button onclick="document.getElementById('schedule-quick-modal').classList.add('hidden'); document.getElementById('schedule-quick-modal').classList.remove('flex');" class="text-slate-400 hover:text-white transition-colors"><i class="fa-solid fa-xmark text-lg"></i></button>
-        </div>
-        <div class="p-5 flex flex-col gap-5">
-            <div class="flex gap-2 bg-slate-100 p-1.5 rounded-xl shadow-inner border border-slate-200">
-                <button onclick="window.setSqMode('vacation')" id="sq-btn-vacation" class="flex-1 py-2 text-[11px] font-black bg-white text-rose-600 shadow-sm rounded-lg border border-rose-200 transition-all flex items-center justify-center gap-1.5">🔴 휴가(차감)</button>
-                <button onclick="window.setSqMode('support')" id="sq-btn-support" class="flex-1 py-2 text-[11px] font-black text-slate-500 hover:text-orange-500 transition-all rounded-lg flex items-center justify-center gap-1.5">🟠 타팀 지원</button>
-                <button onclick="window.setSqMode('clear')" id="sq-btn-clear" class="flex-1 py-2 text-[11px] font-black text-slate-500 hover:text-slate-700 transition-all rounded-lg flex items-center justify-center gap-1.5">⚪ 선택 해제</button>
+            
+            <div id="alloc-view-cal" class="p-6">
+                <div class="grid grid-cols-7 gap-px mb-2">
+                    <div class="text-center py-2 text-[11px] font-black text-rose-500">일</div>
+                    <div class="text-center py-2 text-[11px] font-black text-slate-400">월</div>
+                    <div class="text-center py-2 text-[11px] font-black text-slate-400">화</div>
+                    <div class="text-center py-2 text-[11px] font-black text-slate-400">수</div>
+                    <div class="text-center py-2 text-[11px] font-black text-slate-400">목</div>
+                    <div class="text-center py-2 text-[11px] font-black text-slate-400">금</div>
+                    <div class="text-center py-2 text-[11px] font-black text-blue-500">토</div>
+                </div>
+                <div class="grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-xl overflow-hidden" id="alloc-cal-grid"></div>
             </div>
-            <div class="text-center text-[10px] font-bold text-slate-400" id="sq-month-label">달력 로딩중...</div>
-            <div id="sq-days-grid" class="grid grid-cols-7 gap-2"></div>
-            <button onclick="window.saveSqSchedule()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3.5 rounded-xl text-xs shadow-md transition-all mt-1">
-                <i class="fa-solid fa-check mr-1"></i> 선택한 일정 확정하기
-            </button>
         </div>
     </div>
 </div>
@@ -217,32 +132,30 @@
             <button onclick="document.getElementById('manual-override-modal').classList.add('hidden'); document.getElementById('manual-override-modal').classList.remove('flex');" class="text-indigo-300 hover:text-white transition-colors"><i class="fa-solid fa-xmark text-lg"></i></button>
         </div>
         <div class="p-5 flex flex-col gap-4 bg-slate-50">
-            <div class="flex items-center justify-between mb-2">
-                <span class="text-xs font-bold text-slate-600">현재 통제 상태:</span>
-                <div id="mo-status"></div>
-            </div>
+            <div id="mo-status"></div>
             <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
-                <div class="flex items-center justify-between border-b pb-2">
-                    <span class="text-[10px] font-black text-slate-700">배정 프로젝트 선택</span>
-                    <span class="text-[10px] font-black text-slate-700 w-16 text-center">할당(MD)</span>
-                    <span class="w-6"></span>
-                </div>
                 <div id="mo-rows" class="space-y-2"></div>
-                <button onclick="window.addMoRow('', 0.1)" class="w-full py-2 border border-dashed border-indigo-300 text-indigo-600 text-[10px] font-bold rounded-lg hover:bg-indigo-50 transition-colors mt-2">
-                    + PJT 분할 추가
-                </button>
+                <button onclick="window.addMoRow('', 0.5)" class="w-full py-2 border border-dashed border-indigo-300 text-indigo-600 text-[10px] font-bold rounded-lg hover:bg-indigo-50 mt-2">+ PJT 분할 추가</button>
             </div>
-            <div class="flex gap-2 mt-2">
-                <button onclick="window.clearManualOverride()" class="flex-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-black py-3 rounded-xl text-xs transition-all shadow-sm">
-                    <i class="fa-solid fa-unlock text-slate-400 mr-1"></i> 고정 해제 (AI 일임)
-                </button>
-                <button onclick="window.saveManualOverride()" class="flex-1 bg-amber-500 hover:bg-amber-600 text-indigo-950 font-black py-3 rounded-xl text-xs transition-all shadow-md">
-                    <i class="fa-solid fa-lock mr-1"></i> 이대로 수동 고정하기
-                </button>
+            <div class="flex gap-2">
+                <button onclick="window.clearManualOverride()" class="flex-1 bg-white border border-slate-300 text-slate-700 font-black py-3 rounded-xl text-xs transition-all shadow-sm">고정 해제 (AI 일임)</button>
+                <button onclick="window.saveManualOverride()" class="flex-1 bg-amber-500 hover:bg-amber-600 text-indigo-950 font-black py-3 rounded-xl text-xs shadow-md transition-all">이대로 수동 고정하기</button>
             </div>
-            <p class="text-[9px] text-slate-400 text-center leading-tight">수동 고정(Lock) 시, AI는 이 날짜의 배정을 건드리지 않고<br>나머지 인원과 일정들만 최적화하여 캘린더를 재구성합니다.</p>
         </div>
     </div>
 </div>
 
-<div id="axtt-verify-modal" class="fixed inset-0 z-[400] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4"><div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden transform transition-all"><div class="px-6 py-5 border-b border-slate-200 flex justify-between items-center bg-teal-50"><h2 class="text-base font-extrabold text-teal-800 flex items-center gap-2"><i class="fa-solid fa-database text-teal-500"></i> AXTT 과거 4주 데이터</h2><button onclick="window.closeAxttVerifyModal()" class="text-teal-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button></div><div class="p-6 bg-slate-50 flex-1 overflow-y-auto custom-scrollbar"><table class="w-full text-left border-collapse bg-white border border-slate-200 shadow-sm rounded-lg overflow-hidden"><thead class="bg-slate-800 text-white text-[11px]"><tr><th class="p-3 text-center">이름</th><th class="p-3 text-center">소속 파트</th><th class="p-3 text-center text-teal-300">AXTT 추출 평균</th><th class="p-3 text-center text-amber-300">최종 적용치</th></tr></thead><tbody id="axtt-verify-tbody" class="divide-y divide-slate-100 text-xs"></tbody></table></div></div></div>
+<div id="schedule-quick-modal" class="fixed inset-0 z-[500] hidden items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-[420px] flex flex-col overflow-hidden animate-fade-in">
+        <div class="px-5 py-4 border-b border-slate-200 bg-slate-800 text-white flex justify-between items-center"><h2 class="text-sm font-black">일정 페인팅</h2><button onclick="document.getElementById('schedule-quick-modal').classList.add('hidden'); document.getElementById('schedule-quick-modal').classList.remove('flex');" class="text-slate-400"><i class="fa-solid fa-xmark text-lg"></i></button></div>
+        <div class="p-5 flex flex-col gap-5">
+            <div class="flex gap-2 bg-slate-100 p-1.5 rounded-xl shadow-inner border border-slate-200">
+                <button onclick="window.setSqMode('vacation')" id="sq-btn-vacation" class="flex-1 py-2 text-[11px] font-black rounded-lg transition-all">🔴 휴가</button>
+                <button onclick="window.setSqMode('support')" id="sq-btn-support" class="flex-1 py-2 text-[11px] font-black rounded-lg transition-all">🟠 지원</button>
+                <button onclick="window.setSqMode('clear')" id="sq-btn-clear" class="flex-1 py-2 text-[11px] font-black rounded-lg transition-all">⚪ 해제</button>
+            </div>
+            <div id="sq-days-grid" class="grid grid-cols-7 gap-2"></div>
+            <button onclick="window.saveSqSchedule()" class="w-full bg-indigo-600 text-white font-black py-3.5 rounded-xl text-xs mt-1">선택 일정 확정</button>
+        </div>
+    </div>
+</div>
