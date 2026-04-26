@@ -14,7 +14,7 @@
                     <button id="btn-alloc-part-opt" onclick="window.switchAllocPartTab('광학')" class="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md transition-all whitespace-nowrap">광학 파트</button>
                 </div>
             </div>
-            <p class="text-xs font-bold text-slate-500 mt-2">일자별 마이크로 배정 엔진(Micro-Scheduling)과 다중 제약 최적화를 통해 1인 다중 PJT 투입을 제어합니다.</p>
+            <p class="text-xs font-bold text-slate-500 mt-2">일자별 마이크로 배정 엔진과 더불어 팀장의 '수동 개입(Lock)'을 완벽하게 지원합니다.</p>
         </div>
         <div class="flex items-center gap-3 flex-wrap">
             <button onclick="window.openAxttVerifyModal()" class="text-[11px] font-bold text-teal-600 bg-teal-50 border border-teal-200 hover:bg-teal-100 px-3 py-2.5 rounded-xl transition-colors shadow-sm flex items-center gap-1.5">
@@ -37,7 +37,7 @@
             <button id="btn-run-ai" onclick="window.executeAiAllocation()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md transition-all flex items-center gap-2">
                 <i class="fa-solid fa-microchip"></i> 일자별 AI 할당 실행
             </button>
-            <button id="btn-save-alloc" onclick="window.saveAllocationPlan()" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md transition-all items-center gap-2">
+            <button id="btn-save-alloc" onclick="window.saveAllocationPlan()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md transition-all items-center gap-2 flex">
                 <i class="fa-solid fa-check-double"></i> 계획 확정 및 저장
             </button>
         </div>
@@ -73,14 +73,6 @@
             <select id="opt-strategy" class="border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold text-indigo-700 outline-none cursor-pointer shadow-sm">
                 <option value="speed" selected>순차적 납기 최우선 (Sequential)</option>
                 <option value="balance">스킬 매칭 최적화 (Senior ↔ Urgent)</option>
-            </select>
-        </div>
-        <div class="flex items-center gap-2">
-            <span class="text-[11px] font-bold text-slate-600">버퍼:</span>
-            <select id="opt-buffer" class="border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold text-indigo-700 outline-none cursor-pointer shadow-sm">
-                <option value="1.0">0%</option>
-                <option value="1.1" selected>10%</option>
-                <option value="1.2">20%</option>
             </select>
         </div>
     </div>
@@ -178,7 +170,10 @@
             <div id="alloc-view-cal" class="bg-slate-50 p-4">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-sm font-black text-slate-700" id="alloc-cal-title">할당 캘린더</h3>
-                    <span id="cal-weekend-badge" class="text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-1 rounded border border-rose-200">대한민국 공휴일 제외됨</span>
+                    <div class="flex items-center gap-2">
+                        <span class="text-[10px] font-bold text-slate-500 bg-white px-2 py-1 rounded border border-slate-200"><i class="fa-solid fa-hand-pointer mr-1"></i> 뱃지 클릭 시 수동 배정(Lock)</span>
+                        <span id="cal-weekend-badge" class="text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-1 rounded border border-rose-200">대한민국 공휴일 제외됨</span>
+                    </div>
                 </div>
                 <div class="grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-lg overflow-hidden flex-1 min-h-[500px]" id="alloc-cal-grid"></div>
             </div>
@@ -207,9 +202,40 @@
     </div>
 </div>
 
-<div id="axtt-verify-modal" class="fixed inset-0 z-[400] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
-    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden transform transition-all">
-        <div class="px-6 py-5 border-b border-slate-200 flex justify-between items-center bg-teal-50"><h2 class="text-base font-extrabold text-teal-800 flex items-center gap-2"><i class="fa-solid fa-database text-teal-500"></i> AXTT 과거 4주 데이터</h2><button onclick="window.closeAxttVerifyModal()" class="text-teal-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button></div>
-        <div class="p-6 bg-slate-50 flex-1 overflow-y-auto custom-scrollbar"><table class="w-full text-left border-collapse bg-white border border-slate-200 shadow-sm rounded-lg overflow-hidden"><thead class="bg-slate-800 text-white text-[11px]"><tr><th class="p-3 text-center">이름</th><th class="p-3 text-center">소속 파트</th><th class="p-3 text-center text-teal-300">AXTT 추출 평균</th><th class="p-3 text-center text-amber-300">최종 적용치</th></tr></thead><tbody id="axtt-verify-tbody" class="divide-y divide-slate-100 text-xs"></tbody></table></div>
+<div id="manual-override-modal" class="fixed inset-0 z-[600] hidden items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-[450px] flex flex-col overflow-hidden animate-fade-in">
+        <div class="px-5 py-4 border-b border-slate-200 flex justify-between items-center bg-indigo-900 text-white">
+            <h2 class="text-sm font-black flex items-center gap-2"><i class="fa-solid fa-lock text-amber-400"></i> <span id="mo-title">수동 할당 개입</span></h2>
+            <button onclick="document.getElementById('manual-override-modal').classList.add('hidden'); document.getElementById('manual-override-modal').classList.remove('flex');" class="text-indigo-300 hover:text-white transition-colors"><i class="fa-solid fa-xmark text-lg"></i></button>
+        </div>
+        <div class="p-5 flex flex-col gap-4 bg-slate-50">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-bold text-slate-600">현재 통제 상태:</span>
+                <div id="mo-status"></div>
+            </div>
+            <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
+                <div class="flex items-center justify-between border-b pb-2">
+                    <span class="text-[10px] font-black text-slate-700">배정 프로젝트 선택</span>
+                    <span class="text-[10px] font-black text-slate-700 w-16 text-center">할당(MD)</span>
+                    <span class="w-6"></span>
+                </div>
+                <div id="mo-rows" class="space-y-2">
+                    </div>
+                <button onclick="window.addMoRow('', 0.1)" class="w-full py-2 border border-dashed border-indigo-300 text-indigo-600 text-[10px] font-bold rounded-lg hover:bg-indigo-50 transition-colors mt-2">
+                    + PJT 분할 추가
+                </button>
+            </div>
+            <div class="flex gap-2 mt-2">
+                <button onclick="window.clearManualOverride()" class="flex-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-black py-3 rounded-xl text-xs transition-all shadow-sm">
+                    <i class="fa-solid fa-unlock text-slate-400 mr-1"></i> 고정 해제 (AI 일임)
+                </button>
+                <button onclick="window.saveManualOverride()" class="flex-1 bg-amber-500 hover:bg-amber-600 text-indigo-950 font-black py-3 rounded-xl text-xs transition-all shadow-md">
+                    <i class="fa-solid fa-lock mr-1"></i> 이대로 수동 고정하기
+                </button>
+            </div>
+            <p class="text-[9px] text-slate-400 text-center leading-tight">수동 고정(Lock) 시, AI는 이 날짜의 배정을 건드리지 않고<br>나머지 인원과 일정들만 최적화하여 캘린더를 재구성합니다.</p>
+        </div>
     </div>
 </div>
+
+<div id="axtt-verify-modal" class="fixed inset-0 z-[400] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4"><div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden transform transition-all"><div class="px-6 py-5 border-b border-slate-200 flex justify-between items-center bg-teal-50"><h2 class="text-base font-extrabold text-teal-800 flex items-center gap-2"><i class="fa-solid fa-database text-teal-500"></i> AXTT 과거 4주 데이터</h2><button onclick="window.closeAxttVerifyModal()" class="text-teal-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button></div><div class="p-6 bg-slate-50 flex-1 overflow-y-auto custom-scrollbar"><table class="w-full text-left border-collapse bg-white border border-slate-200 shadow-sm rounded-lg overflow-hidden"><thead class="bg-slate-800 text-white text-[11px]"><tr><th class="p-3 text-center">이름</th><th class="p-3 text-center">소속 파트</th><th class="p-3 text-center text-teal-300">AXTT 추출 평균</th><th class="p-3 text-center text-amber-300">최종 적용치</th></tr></thead><tbody id="axtt-verify-tbody" class="divide-y divide-slate-100 text-xs"></tbody></table></div></div></div>
