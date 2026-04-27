@@ -1915,14 +1915,12 @@ window.openCrReqModal = function(projectId, title) {
     document.getElementById('cr-req-pid').value = projectId; 
     document.getElementById('cr-req-pname').innerText = title;
     
-    // 제조팀 총평 입력 필드 초기화
-    document.getElementById('cr-req-gb-cat').value = '제작';
-    document.getElementById('cr-req-gb-item').value = '';
-    document.getElementById('cr-req-gb-good').value = '';
-    document.getElementById('cr-req-gb-bad').value = '';
-
-    const targetQual = document.getElementById('cr-req-target-qual');
-    const targetPur = document.getElementById('cr-req-target-pur');
+    // 👇 [수정 후] 테이블을 초기화하고 빈 입력 행을 하나 생성하는 방식
+    const tbody = document.getElementById('cr-req-gb-tbody');
+    if (tbody) {
+        tbody.innerHTML = '';
+        window.addCrReqGbRow();
+    }
     
     // 품질경영팀 목록 세팅
     if(targetQual) {
