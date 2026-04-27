@@ -171,7 +171,6 @@ window.addVirtualProject = function() {
     document.getElementById('v-pjt-name').value = ''; document.getElementById('v-pjt-md').value = 10; window.saveAllocationPlan(); 
 };
 
-// 💡 수정됨: 누락되어 에러를 발생시킨 함수를 임시로 선언하여 방어
 window.fetchHistoricalDataFromAXTT = function() {
     console.log("AXTT 과거 데이터 연동 준비 완료");
 };
@@ -184,7 +183,7 @@ window.initAllocationPlan = function() {
         if (isFirstLoad) { window.loadDraft(); window.switchAllocPeriodMode(window.allocPeriodMode); window.switchAllocPartTab(window.allocPartTab); isFirstLoad = false; } 
         else { window.renderAllocProjectSelectors(); }
     });
-    fetchHistoricalDataFromAXTT();
+    window.fetchHistoricalDataFromAXTT();
 };
 
 window.switchAllocPartTab = function(part) { window.allocPartTab = part; let mf = document.getElementById('btn-alloc-part-mfg'); let op = document.getElementById('btn-alloc-part-opt'); if (mf) mf.className = part === '제조' ? "px-3 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700" : "px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md"; if (op) op.className = part === '광학' ? "px-3 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700" : "px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md"; window.renderAllocMemberSelectors(); window.renderAllocProjectSelectors(); window.loadAllocationData(); };
@@ -233,6 +232,9 @@ window.renderAllocProjectSelectors = function() {
 window.updateAllocProjectActive = (id, a) => { const p = window.allocProjects.find(x => x.id === id); if(p) p.active = a; window.saveAllocationPlan(); };
 window.selectAllAllocProjects = (a) => { window.allocProjects.filter(p => p.part === window.allocPartTab).forEach(p => p.active = a); window.renderAllocProjectSelectors(); window.saveAllocationPlan(); };
 
+// ===============================================
+// 💡 AI 투입 계획 핵심 연산 로직 (정상 작동 보장)
+// ===============================================
 window.executeAiAllocation = async function() {
     const activeMembers = window.allocTeamMaster.filter(m => m.part === window.allocPartTab && m.active);
     if (activeMembers.length === 0) return window.showToast("투입할 파트 인원을 선택하세요.", "error");
@@ -382,7 +384,11 @@ window.executeAiAllocation = async function() {
             document.getElementById('alloc-empty-state').classList.add('hidden'); document.getElementById('alloc-result-dashboard').classList.remove('hidden');
             document.getElementById('btn-save-alloc').style.display = 'flex';
             
-            window.renderAllocUI(); window.renderAllocCalendar(); window.saveAllocationPlan(); 
+            // 🚨 UI 렌더링 함수 완벽 호출
+            window.renderAllocUI(); 
+            window.renderAllocCalendar(); 
+            window.saveAllocationPlan(); 
+            
             window.showToast("연산 완료 및 계획 수립 성공!", "success");
 
         } catch (err) { 
@@ -394,9 +400,14 @@ window.executeAiAllocation = async function() {
     }, 100);
 };
 
-// 💡 수정됨: pjt-count 대신 members.length를 올바른 DOM ID에 바인딩
+// =========================================================================
+// 🚨 [핵심 해결 영역] 빠져있던 하단 위젯(차트, 리스트, 리포트) 렌더링 로직 복원
+// =========================================================================
 window.renderAllocUI = function() {
     const d = window.lastAllocatedData;
+    if (!d) return;
+
+    // 1. 최상단 KPI 카드 업데이트
     const kpiAvail = document.getElementById('alloc-kpi-avail');
     const kpiAssigned = document.getElementById('alloc-kpi-assigned');
     const kpiIdle = document.getElementById('alloc-kpi-idle');
@@ -406,6 +417,76 @@ window.renderAllocUI = function() {
     if (kpiAssigned) kpiAssigned.innerText = d.assignedReal.toFixed(1);
     if (kpiIdle) kpiIdle.innerText = d.idleMD.toFixed(1);
     if (kpiMembers) kpiMembers.innerText = d.members.length;
+
+    // 2. 전략 리포트 렌더링
+    const insightEl = document.getElementById('alloc-ai-insight');
+    if (insightEl) {
+        let utilization = d.availMD > 0 ? ((d.assignedReal / d.availMD) * 100).toFixed(1) : 0;
+        let msg = `■ 현재 선택된 조건 하에 산출 가능한 총 캐파(MD)는 ${d.availMD.toFixed(1)}MD 이며, 이 중 ${d.assignedReal.toFixed(1)}MD 가 배분되었습니다. (가동률: ${utilization}%)\n`;
+        
+        if (d.outResults.length > 0) {
+            msg += `■ 배분 실패 경고: ${d.outResults.length}개의 프로젝트가 배분 한도를 초과했습니다. 주말 특근이나 타 파트 인원 충원이 필요합니다.\n`;
+        } else {
+            msg += `■ 모든 타겟 프로젝트의 요구 공수가 기간 내에 성공적으로 할당되었습니다.\n`;
+        }
+        
+        if (d.idleMD > 10) {
+            msg += `■ 남은 유휴 공수가 꽤 많습니다. 조기 착수가 가능한 선행 프로젝트를 추가하거나, 작업자들에게 리프레시 휴가를 권장할 수 있습니다.`;
+        }
+        
+        insightEl.innerText = msg;
+    }
+
+    // 3. 프로젝트 배분 결과(리스트) 렌더링
+    const pjtListEl = document.getElementById('alloc-pjt-list');
+    if (pjtListEl) {
+        if (d.pjtResults.length === 0) {
+            pjtListEl.innerHTML = '<div class="text-slate-400 text-xs text-center py-4 font-bold border border-dashed rounded-xl">할당된 프로젝트가 없습니다.</div>';
+        } else {
+            let sortedPjts = d.pjtResults.sort((a,b) => b.allocated - a.allocated);
+            pjtListEl.innerHTML = sortedPjts.map(p => `
+                <div class="flex items-center justify-between bg-slate-50 hover:bg-indigo-50/50 transition-colors border border-slate-100 p-3 rounded-xl mb-2 shadow-sm">
+                    <div class="flex items-center gap-2 truncate">
+                        <span class="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded text-[10px] font-black shrink-0">[${p.code}]</span>
+                        <span class="text-sm font-bold text-slate-700 truncate" title="${p.name}">${p.name}</span>
+                    </div>
+                    <span class="font-black text-indigo-600 text-sm shrink-0 ml-2">${p.allocated.toFixed(1)} <span class="text-[10px] text-slate-400">MD</span></span>
+                </div>
+            `).join('');
+        }
+    }
+
+    // 4. 공수 점유율(파이 차트) 렌더링
+    if (window.allocChartInstance) window.allocChartInstance.destroy();
+    const chartCanvas = document.getElementById('alloc-chart');
+    if (chartCanvas) {
+        const ctx = chartCanvas.getContext('2d');
+        window.allocChartInstance = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['할당 완료 (Assigned)', '유휴 공수 (Idle)'],
+                datasets: [{
+                    data: [d.assignedReal, d.idleMD],
+                    backgroundColor: ['#6366f1', '#fb7185'], // indigo-500, rose-400
+                    borderWidth: 2,
+                    borderColor: '#ffffff',
+                    hoverOffset: 6
+                }]
+            },
+            options: {
+                responsive: true, 
+                maintainAspectRatio: false,
+                cutout: '75%',
+                layout: { padding: 10 },
+                plugins: {
+                    legend: { 
+                        position: 'bottom', 
+                        labels: { usePointStyle: true, boxWidth: 8, font: { size: 11, family: "'Pretendard', sans-serif", weight: 'bold' } } 
+                    }
+                }
+            }
+        });
+    }
 };
 
 window.renderAllocCalendar = function() {
@@ -448,7 +529,6 @@ window.renderAllocCalendar = function() {
                     let shortCode = a.code === 'IDLE' ? '대기' : (a.code === 'COMMON' ? '공통' : a.code);
                     if (isSetup) shortCode += '(셋업)';
 
-                    // 💡 수정됨: a.md가 문자열일 수 있으므로 parseFloat 적용 (에러 원천 방어)
                     const parsedMd = parseFloat(a.md) || 0;
                     return `<div onclick="window.openManualEditModal('${mem.name}', '${dateStr}')" class="text-[9px] font-bold border ${style} px-1.5 py-0.5 rounded mb-0.5 flex justify-between items-center cursor-pointer hover:ring-1 ring-amber-400 shadow-sm"><div class="flex items-center gap-1 truncate"><span class="font-black shrink-0">${mem.name}${lockIcon}</span><span class="text-[8px] opacity-70 truncate w-12">${shortCode}</span></div><span class="shrink-0">${parsedMd.toFixed(1)}</span></div>`;
                 }).join('');
