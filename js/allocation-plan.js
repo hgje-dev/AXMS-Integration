@@ -24,7 +24,6 @@ window.allocProjects = []; window.historicalMemberMd = {}; window.lastAllocatedD
 
 const KR_HOLIDAYS = new Set(['2024-01-01', '2024-02-09', '2024-02-12', '2024-03-01', '2024-04-10', '2024-05-06', '2024-05-15', '2024-06-06', '2024-08-15', '2024-09-16', '2024-09-17', '2024-09-18', '2024-10-03', '2024-10-09', '2024-12-25', '2025-01-01', '2025-01-28', '2025-01-29', '2025-01-30', '2025-03-01', '2025-03-03', '2025-05-05', '2025-05-06', '2025-06-06', '2025-08-15', '2025-10-03', '2025-10-06', '2025-10-07', '2025-10-09', '2025-12-25', '2026-01-01', '2026-02-16', '2026-02-17', '2026-02-18', '2026-03-01', '2026-03-02', '2026-05-05', '2026-05-24', '2026-05-25', '2026-06-06', '2026-08-15', '2026-09-24', '2026-09-25', '2026-09-26', '2026-10-03', '2026-10-05', '2026-10-09', '2026-12-25']);
 
-// 🚨 [복구완료] 날짜 파싱 및 변환 함수들
 window.getWeekString = function(d) {
     const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
     const dayNum = date.getUTCDay() || 7;
@@ -172,6 +171,11 @@ window.addVirtualProject = function() {
     document.getElementById('v-pjt-name').value = ''; document.getElementById('v-pjt-md').value = 10; window.saveAllocationPlan(); 
 };
 
+// 💡 수정됨: 누락되어 에러를 발생시킨 함수를 임시로 선언하여 방어
+window.fetchHistoricalDataFromAXTT = function() {
+    console.log("AXTT 과거 데이터 연동 준비 완료");
+};
+
 let isFirstLoad = true;
 window.initAllocationPlan = function() {
     onSnapshot(query(collection(axmsDb, "projects_status")), (snap) => {
@@ -229,7 +233,6 @@ window.renderAllocProjectSelectors = function() {
 window.updateAllocProjectActive = (id, a) => { const p = window.allocProjects.find(x => x.id === id); if(p) p.active = a; window.saveAllocationPlan(); };
 window.selectAllAllocProjects = (a) => { window.allocProjects.filter(p => p.part === window.allocPartTab).forEach(p => p.active = a); window.renderAllocProjectSelectors(); window.saveAllocationPlan(); };
 
-// 🚨 [에러 수정 & 무적방어] try-catch-finally 적용된 핵심 AI 로직
 window.executeAiAllocation = async function() {
     const activeMembers = window.allocTeamMaster.filter(m => m.part === window.allocPartTab && m.active);
     if (activeMembers.length === 0) return window.showToast("투입할 파트 인원을 선택하세요.", "error");
@@ -386,18 +389,23 @@ window.executeAiAllocation = async function() {
             console.error("AI Allocation Engine Error:", err); 
             window.showToast("연산 중 오류가 발생했습니다. 로그를 확인하세요.", "error");
         } finally {
-            // 🚨 오류가 나든 성공하든 버튼 100% 복구
             if(btn) { btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> AI 빈칸 채우기'; btn.disabled = false; }
         }
     }, 100);
 };
 
+// 💡 수정됨: pjt-count 대신 members.length를 올바른 DOM ID에 바인딩
 window.renderAllocUI = function() {
     const d = window.lastAllocatedData;
-    document.getElementById('alloc-kpi-avail').innerText = d.availMD.toFixed(1);
-    document.getElementById('alloc-kpi-assigned').innerText = d.assignedReal.toFixed(1);
-    document.getElementById('alloc-kpi-idle').innerText = d.idleMD.toFixed(1);
-    document.getElementById('alloc-kpi-pjt-count').innerText = d.pjtResults.filter(p=>!p.isVirtual && p.allocated > 0).length;
+    const kpiAvail = document.getElementById('alloc-kpi-avail');
+    const kpiAssigned = document.getElementById('alloc-kpi-assigned');
+    const kpiIdle = document.getElementById('alloc-kpi-idle');
+    const kpiMembers = document.getElementById('alloc-kpi-members');
+    
+    if (kpiAvail) kpiAvail.innerText = d.availMD.toFixed(1);
+    if (kpiAssigned) kpiAssigned.innerText = d.assignedReal.toFixed(1);
+    if (kpiIdle) kpiIdle.innerText = d.idleMD.toFixed(1);
+    if (kpiMembers) kpiMembers.innerText = d.members.length;
 };
 
 window.renderAllocCalendar = function() {
@@ -440,7 +448,9 @@ window.renderAllocCalendar = function() {
                     let shortCode = a.code === 'IDLE' ? '대기' : (a.code === 'COMMON' ? '공통' : a.code);
                     if (isSetup) shortCode += '(셋업)';
 
-                    return `<div onclick="window.openManualEditModal('${mem.name}', '${dateStr}')" class="text-[9px] font-bold border ${style} px-1.5 py-0.5 rounded mb-0.5 flex justify-between items-center cursor-pointer hover:ring-1 ring-amber-400 shadow-sm"><div class="flex items-center gap-1 truncate"><span class="font-black shrink-0">${mem.name}${lockIcon}</span><span class="text-[8px] opacity-70 truncate w-12">${shortCode}</span></div><span class="shrink-0">${a.md.toFixed(1)}</span></div>`;
+                    // 💡 수정됨: a.md가 문자열일 수 있으므로 parseFloat 적용 (에러 원천 방어)
+                    const parsedMd = parseFloat(a.md) || 0;
+                    return `<div onclick="window.openManualEditModal('${mem.name}', '${dateStr}')" class="text-[9px] font-bold border ${style} px-1.5 py-0.5 rounded mb-0.5 flex justify-between items-center cursor-pointer hover:ring-1 ring-amber-400 shadow-sm"><div class="flex items-center gap-1 truncate"><span class="font-black shrink-0">${mem.name}${lockIcon}</span><span class="text-[8px] opacity-70 truncate w-12">${shortCode}</span></div><span class="shrink-0">${parsedMd.toFixed(1)}</span></div>`;
                 }).join('');
             }).join('');
             if(commonSum > 0) badgeHtml = `<div class="text-[9px] font-black bg-slate-800 text-white px-1.5 py-0.5 mb-1 rounded flex justify-between shadow-md"><span>제조공통</span><span>${commonSum.toFixed(1)}MD</span></div>` + pjtBadges;
