@@ -5,7 +5,6 @@ import { getFirestore, collection, query, onSnapshot, doc, setDoc, where, getDoc
 
 const axttConfig = { apiKey: "AIzaSyA_LSZ2wvuvkyh_nCqMbdFchkG_qQvmFWY", authDomain: "axtt-b064c.firebaseapp.com", projectId: "axtt-b064c", storageBucket: "axtt-b064c.firebasestorage.app", messagingSenderId: "592770464981", appId: "1:592770464981:web:15c4b550c401e7bcb0765c", measurementId: "G-V28BZLW8XQ" };
 
-// 💡 Firebase 중복 초기화 충돌 방지 로직
 let axttApp;
 try { axttApp = getApp("AXTT_APP"); } 
 catch (e) { axttApp = initializeApp(axttConfig, "AXTT_APP"); }
@@ -25,19 +24,26 @@ window.allocProjects = []; window.historicalMemberMd = {}; window.lastAllocatedD
 
 const KR_HOLIDAYS = new Set(['2024-01-01', '2024-02-09', '2024-02-12', '2024-03-01', '2024-04-10', '2024-05-06', '2024-05-15', '2024-06-06', '2024-08-15', '2024-09-16', '2024-09-17', '2024-09-18', '2024-10-03', '2024-10-09', '2024-12-25', '2025-01-01', '2025-01-28', '2025-01-29', '2025-01-30', '2025-03-01', '2025-03-03', '2025-05-05', '2025-05-06', '2025-06-06', '2025-08-15', '2025-10-03', '2025-10-06', '2025-10-07', '2025-10-09', '2025-12-25', '2026-01-01', '2026-02-16', '2026-02-17', '2026-02-18', '2026-03-01', '2026-03-02', '2026-05-05', '2026-05-24', '2026-05-25', '2026-06-06', '2026-08-15', '2026-09-24', '2026-09-25', '2026-09-26', '2026-10-03', '2026-10-05', '2026-10-09', '2026-12-25']);
 
-// 🚨 [복구완료] 무한 로딩의 원인이었던 날짜 파싱 함수들 재탑재
+// 🚨 [복구완료] 날짜 파싱 및 변환 함수들
+window.getWeekString = function(d) {
+    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const dayNum = date.getUTCDay() || 7;
+    date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(date.getUTCFullYear(),0,1));
+    const weekNo = Math.ceil((((date - yearStart) / 86400000) + 1)/7);
+    return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+};
+
 window.getDatesFromWeek = function(weekStr) {
     if(!weekStr) return { start: new Date() };
     const [y, w] = weekStr.split('-W').map(Number);
     const d = new Date(y, 0, 1 + (w - 1) * 7);
-    const day = d.getDay();
-    d.setDate(d.getDate() - day + (day === 0 ? -6 : 1));
+    const day = d.getDay(); d.setDate(d.getDate() - day + (day === 0 ? -6 : 1));
     return { start: d };
 };
 
 window.formatWeekToKorean = function(weekStr) {
-    if(!weekStr) return '';
-    const p = weekStr.split('-W'); return `${p[0]}년 ${p[1]}주차`;
+    if(!weekStr) return ''; const p = weekStr.split('-W'); return `${p[0]}년 ${p[1]}주차`;
 };
 
 window.getValidDays = function(periodMode, targetValue, allowOvertime) {
@@ -117,7 +123,7 @@ window.addMoRow = function(code, md) {
     let opts = window.allocProjects.filter(p=>p.part === window.allocPartTab).map(p => `<option value="${p.code}" ${p.code === code ? 'selected' : ''}>${p.isVirtual?'[가상] ':''}[${p.code}] ${p.name}</option>`).join('');
     opts += `<option value="COMMON" ${code === 'COMMON' ? 'selected' : ''}>${window.allocPartTab}공통</option>`;
     let div = document.createElement('div'); div.className = 'flex items-center gap-2 mb-2 mo-row w-full animate-fade-in';
-    div.innerHTML = `<select class="flex-1 min-w-0 border rounded-lg p-2 text-[10px] font-bold mo-code focus:border-indigo-500">${opts}</select><input type="number" step="0.1" value="${md}" class="w-16 shrink-0 border rounded-lg p-2 text-right text-[11px] font-black mo-md focus:border-indigo-500"><button onclick="this.parentElement.remove()" class="w-8 h-8 shrink-0 text-slate-300 hover:text-rose-500 bg-white border rounded-lg"><i class="fa-solid fa-trash"></i></button>`;
+    div.innerHTML = `<select class="flex-1 min-w-0 border rounded-lg p-2 text-[10px] font-bold mo-code">${opts}</select><input type="number" step="0.1" value="${md}" class="w-16 shrink-0 border rounded-lg p-2 text-right text-[11px] font-black mo-md"><button onclick="this.parentElement.remove()" class="w-8 h-8 shrink-0 text-slate-300 hover:text-rose-500 bg-white border rounded-lg"><i class="fa-solid fa-trash"></i></button>`;
     document.getElementById('mo-rows').appendChild(div);
 };
 window.saveManualOverride = function() {
@@ -141,12 +147,12 @@ window.openScheduleModal = function(name) {
     document.getElementById('sq-modal-title').innerText = `${name} 팀원 일정 페인팅`; document.getElementById('sq-month-label').innerText = `${dObj.getFullYear()}년 ${dObj.getMonth()+1}월`;
     window.renderSqGrid(); document.getElementById('schedule-quick-modal').classList.remove('hidden'); document.getElementById('schedule-quick-modal').classList.add('flex');
 };
-window.setSqMode = function(m) { window.sqState.mode = m; ['vacation','support','clear'].forEach(x => { document.getElementById(`sq-btn-${x}`).className = `flex-1 py-2 text-[11px] font-black rounded-lg transition-all ${m === x ? (x==='vacation'?'bg-white text-rose-600 border border-rose-200 shadow-sm':(x==='support'?'bg-white text-orange-500 border border-orange-200 shadow-sm':'bg-white text-slate-700 border border-slate-300 shadow-sm')) : 'text-slate-500 hover:text-slate-700'}`; }); };
+window.setSqMode = function(m) { window.sqState.mode = m; ['vacation','support','clear'].forEach(x => { document.getElementById(`sq-btn-${x}`).className = `flex-1 py-2 text-[11px] font-black rounded-lg ${m === x ? (x==='vacation'?'bg-white text-rose-600 border border-rose-200 shadow-sm':(x==='support'?'bg-white text-orange-500 border border-orange-200 shadow-sm':'bg-white text-slate-700 border border-slate-300 shadow-sm')) : 'text-slate-500 hover:text-slate-700'}`; }); };
 window.renderSqGrid = function() {
     let h = ''; for(let i=1; i<=window.sqState.lastDate; i++) {
         let isV = window.sqState.vacSet.has(i); let isS = window.sqState.supSet.has(i);
         let bc = isV ? 'bg-rose-500 text-white border-rose-600 shadow-inner' : (isS ? 'bg-orange-400 text-white border-orange-500 shadow-inner' : 'bg-slate-50 text-slate-700 border-slate-200');
-        h += `<button onclick="window.toggleSqDay(${i})" class="w-full aspect-square rounded-xl border font-black text-sm transition-transform active:scale-95 ${bc}">${i}</button>`;
+        h += `<button onclick="window.toggleSqDay(${i})" class="w-full aspect-square rounded-xl border font-black text-sm active:scale-95 ${bc}">${i}</button>`;
     }
     document.getElementById('sq-days-grid').innerHTML = h;
 };
@@ -180,16 +186,15 @@ window.initAllocationPlan = function() {
 window.switchAllocPartTab = function(part) { window.allocPartTab = part; let mf = document.getElementById('btn-alloc-part-mfg'); let op = document.getElementById('btn-alloc-part-opt'); if (mf) mf.className = part === '제조' ? "px-3 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700" : "px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md"; if (op) op.className = part === '광학' ? "px-3 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-indigo-700" : "px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-md"; window.renderAllocMemberSelectors(); window.renderAllocProjectSelectors(); window.loadAllocationData(); };
 window.switchAllocPeriodMode = function(mode) {
     window.allocPeriodMode = mode; const bw = document.getElementById('btn-alloc-period-week'); const bm = document.getElementById('btn-alloc-period-month'); const pw = document.getElementById('alloc-week-picker'); const pm = document.getElementById('alloc-month-picker');
-    if (mode === 'week') { if(bw) bw.className='px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg'; if(bm) bm.className='px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 bg-transparent'; if(pw) pw.classList.remove('hidden'); if(pm) pm.classList.add('hidden'); if(pw && !pw.value) pw.value = window.getWeekString ? window.getWeekString(new Date()) : "2026-W17"; if(pw) window.updateAllocPeriodDisplay(pw.value); } 
+    if (mode === 'week') { if(bw) bw.className='px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg'; if(bm) bm.className='px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 bg-transparent'; if(pw) pw.classList.remove('hidden'); if(pm) pm.classList.add('hidden'); if(pw && !pw.value) pw.value = window.getWeekString(new Date()); if(pw) window.updateAllocPeriodDisplay(pw.value); } 
     else { if(bm) bm.className='px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 shadow-sm rounded-lg'; if(bw) bw.className='px-4 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 bg-transparent'; if(pm) pm.classList.remove('hidden'); if(pw) pw.classList.add('hidden'); if(pm && !pm.value) pm.value = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`; if(pm) window.updateAllocPeriodDisplay(pm.value); }
     if (!isFirstLoad) { window.saveAllocationPlan(); window.executeAiAllocation(); }
 };
-window.updateAllocPeriodDisplay = function(val) { const el = document.getElementById('alloc-period-display'); if (!el) return; if (window.allocPeriodMode === 'week') el.innerText = window.formatWeekToKorean ? window.formatWeekToKorean(val) : val; else el.innerText = `${val.split('-')[0]}년 ${parseInt(val.split('-')[1])}월`; };
+window.updateAllocPeriodDisplay = function(val) { const el = document.getElementById('alloc-period-display'); if (!el) return; if (window.allocPeriodMode === 'week') el.innerText = window.formatWeekToKorean(val); else el.innerText = `${val.split('-')[0]}년 ${parseInt(val.split('-')[1])}월`; };
 window.changeAllocPeriod = function(o) {
-    if (window.allocPeriodMode === 'week') { const p = document.getElementById('alloc-week-picker'); if (!p || !p.value) return; const pt = p.value.split('-W'); const d = new Date(parseInt(pt[0]), 0, (parseInt(pt[1]) + o - 1) * 7 + 1); if (window.getWeekString) { p.value = window.getWeekString(d); window.updateAllocPeriodDisplay(p.value); window.executeAiAllocation(); } } 
+    if (window.allocPeriodMode === 'week') { const p = document.getElementById('alloc-week-picker'); if (!p || !p.value) return; const pt = p.value.split('-W'); const d = new Date(parseInt(pt[0]), 0, (parseInt(pt[1]) + o - 1) * 7 + 1); p.value = window.getWeekString(d); window.updateAllocPeriodDisplay(p.value); window.executeAiAllocation(); } 
     else { const p = document.getElementById('alloc-month-picker'); if (!p || !p.value) return; const pt = p.value.split('-'); const d = new Date(parseInt(pt[0]), parseInt(pt[1]) - 1 + o, 1); p.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; window.updateAllocPeriodDisplay(p.value); window.executeAiAllocation(); }
 };
-
 window.loadAllocationData = function() { document.getElementById('alloc-empty-state').classList.remove('hidden'); document.getElementById('alloc-empty-state').classList.add('flex'); document.getElementById('alloc-result-dashboard').classList.add('hidden'); const btn = document.getElementById('btn-run-ai'); if (btn) btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> AI 빈칸 채우기'; window.lastAllocatedData = null; };
 
 window.renderAllocMemberSelectors = function() {
@@ -199,10 +204,7 @@ window.renderAllocMemberSelectors = function() {
         return `
         <div class="bg-slate-50 px-3 py-2.5 rounded-xl border border-slate-200 shadow-sm w-full transition-all hover:border-indigo-300">
             <div class="flex items-center justify-between mb-1.5">
-                <label class="flex items-center gap-1.5 cursor-pointer shrink-0 w-20">
-                    <input type="checkbox" class="w-3 h-3 accent-indigo-600" ${m.active ? 'checked' : ''} onchange="window.updateAllocMemberActive('${m.name}', this.checked)">
-                    <span class="text-[11px] font-bold">${m.name}</span>
-                </label>
+                <label class="flex items-center gap-1.5 cursor-pointer shrink-0 w-20"><input type="checkbox" class="w-3 h-3 accent-indigo-600" ${m.active ? 'checked' : ''} onchange="window.updateAllocMemberActive('${m.name}', this.checked)"><span class="text-[11px] font-bold">${m.name}</span></label>
                 <div class="flex items-center gap-1.5">
                     <select class="border rounded px-1 py-1 text-[9px] font-bold text-emerald-600 bg-white outline-none" onchange="window.updateAllocMemberEfficiency('${m.name}', this.value)" ${m.active ? '' : 'disabled'}><option value="1.2" ${m.efficiency === 1.2 ? 'selected' : ''}>시니어(1.2x)</option><option value="1.0" ${m.efficiency === 1.0 ? 'selected' : ''}>일반(1.0x)</option><option value="0.8" ${m.efficiency === 0.8 ? 'selected' : ''}>주니어(0.8x)</option></select>
                     <select class="border rounded px-1 text-[9px] font-bold bg-white outline-none" onchange="window.updateAllocMemberStatus('${m.name}', this.value)" ${m.active ? '' : 'disabled'}><option value="정상" ${m.status === '정상' ? 'selected' : ''}>정상</option><option value="타팀지원" ${m.status === '타팀지원' ? 'selected' : ''}>지원</option><option value="장기휴가" ${m.status === '장기휴가' ? 'selected' : ''}>휴가</option></select>
@@ -222,31 +224,12 @@ window.selectAllAllocMembers = (a) => { window.allocTeamMaster.filter(m => m.par
 
 window.renderAllocProjectSelectors = function() {
     const cont = document.getElementById('alloc-project-list-container'); if(!cont) return; const pjts = window.allocProjects.filter(p => p.part === window.allocPartTab);
-    cont.innerHTML = pjts.map(p => `<label class="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 cursor-pointer shadow-sm"><input type="checkbox" class="w-3.5 h-3.5 accent-indigo-600 shrink-0" ${p.active !== false ? 'checked' : ''} onchange="window.updateAllocProjectActive('${p.id}', this.checked)"><span class="text-indigo-600 font-black text-[11px] shrink-0 w-24 truncate">${p.isVirtual?`<span class="bg-amber-100 text-amber-700 px-1 py-0.5 rounded mr-1">가상</span>`:''}[${p.code}]</span><span class="text-[10px] font-bold text-slate-700 truncate w-full">${p.name}</span></label>`).join('');
+    cont.innerHTML = pjts.map(p => `<label class="flex items-center gap-2 bg-slate-50 hover:bg-indigo-50/50 px-3 py-2 rounded-xl border border-slate-200 cursor-pointer shadow-sm"><input type="checkbox" class="w-3.5 h-3.5 accent-indigo-600 shrink-0" ${p.active !== false ? 'checked' : ''} onchange="window.updateAllocProjectActive('${p.id}', this.checked)"><span class="text-indigo-600 font-black text-[11px] shrink-0 w-24 truncate">${p.isVirtual?`<span class="bg-amber-100 text-amber-700 px-1 py-0.5 rounded mr-1">가상</span>`:''}[${p.code}]</span><span class="text-[10px] font-bold text-slate-700 truncate w-full">${p.name}</span></label>`).join('');
 };
 window.updateAllocProjectActive = (id, a) => { const p = window.allocProjects.find(x => x.id === id); if(p) p.active = a; window.saveAllocationPlan(); };
 window.selectAllAllocProjects = (a) => { window.allocProjects.filter(p => p.part === window.allocPartTab).forEach(p => p.active = a); window.renderAllocProjectSelectors(); window.saveAllocationPlan(); };
 
-async function fetchHistoricalDataFromAXTT() {
-    let d = new Date(); let eStr = d.toISOString().split('T')[0]; d.setDate(d.getDate() - 28); let sStr = d.toISOString().split('T')[0];
-    try {
-        const q = query(collection(axttDb, "work_logs"), where("date", ">=", sStr), where("date", "<=", eStr));
-        const snap = await getDocs(q); if (snap.empty) { window.historicalMemberMd = {}; return; }
-        let rs = {}; snap.forEach(d => { const dt = d.data(); const n = dt.authorName; const h = parseFloat(dt.hours) || 0; if (!rs[n]) rs[n] = 0; rs[n] += (h / 8); });
-        window.historicalMemberMd = {}; for (let n in rs) window.historicalMemberMd[n] = Math.min(rs[n] / 4, 5.0); 
-    } catch (err) { window.historicalMemberMd = {}; }
-}
-window.openAxttVerifyModal = function() {
-    const tb = document.getElementById('axtt-verify-tbody'); let h = '';
-    window.allocTeamMaster.forEach(m => {
-        let rv = window.historicalMemberMd[m.name] || 0; let fv = rv > 0 ? rv.toFixed(1) : '5.0'; let bc = m.part === '제조' ? 'text-indigo-600 bg-indigo-50 border-indigo-200' : 'text-teal-600 bg-teal-50 border-teal-200';
-        h += `<tr class="border-b hover:bg-slate-50"><td class="p-3 text-center font-bold text-slate-800">${m.name}</td><td class="p-3 text-center"><span class="px-2 py-0.5 text-[10px] font-bold rounded shadow-sm border ${bc}">${m.part}</span></td><td class="p-3 text-center text-teal-600 font-bold">${rv > 0 ? rv.toFixed(1) : '<span class="text-slate-300">없음</span>'}</td><td class="p-3 text-center text-amber-600 font-black">${fv}</td></tr>`;
-    });
-    tb.innerHTML = h; document.getElementById('axtt-verify-modal').classList.remove('hidden'); document.getElementById('axtt-verify-modal').classList.add('flex');
-};
-window.closeAxttVerifyModal = function() { document.getElementById('axtt-verify-modal').classList.add('hidden'); document.getElementById('axtt-verify-modal').classList.remove('flex'); };
-
-// 🚨 [무적 방어 패턴] try-catch-finally 탑재 완료
+// 🚨 [에러 수정 & 무적방어] try-catch-finally 적용된 핵심 AI 로직
 window.executeAiAllocation = async function() {
     const activeMembers = window.allocTeamMaster.filter(m => m.part === window.allocPartTab && m.active);
     if (activeMembers.length === 0) return window.showToast("투입할 파트 인원을 선택하세요.", "error");
@@ -258,8 +241,15 @@ window.executeAiAllocation = async function() {
 
     const optOvertimeEl = document.getElementById('opt-overtime');
     const allowOvertime = optOvertimeEl ? optOvertimeEl.checked : false;
+    
+    const optMlEl = document.getElementById('opt-ml');
+    const applyMlCorrection = optMlEl ? optMlEl.checked : true;
+
     const optStrategyEl = document.getElementById('opt-strategy');
     const optStrategy = optStrategyEl ? optStrategyEl.value : 'speed';
+    
+    const optBufferEl = document.getElementById('opt-buffer');
+    const riskBuffer = optBufferEl ? parseFloat(optBufferEl.value) : 1.0;
 
     setTimeout(() => {
         try {
@@ -267,7 +257,6 @@ window.executeAiAllocation = async function() {
             let targetValue = pMode === 'week' ? document.getElementById('alloc-week-picker').value : document.getElementById('alloc-month-picker').value;
             if (!targetValue) targetValue = pMode === 'week' ? window.getWeekString(new Date()) : `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
             
-            // 💡 [핵심 버그 수정] 월을 무조건 정확하게 추출하여 넘기기
             let targetMonthStr = '';
             if (pMode === 'week') {
                 let sd = window.getDatesFromWeek(targetValue).start;
@@ -286,7 +275,9 @@ window.executeAiAllocation = async function() {
             let pjts = targetProjects.map(p => {
                 let remain = Math.max(0, (parseFloat(p.estMd)||0) - (parseFloat(p.finalMd)||0) - (parseFloat(p.outMd)||0));
                 let dDay = p.d_shipEst ? Math.ceil((new Date(p.d_shipEst) - new Date()) / 86400000) : 999;
-                return { ...p, originalReq: remain, remain: remain, scoreReq: remain, dDay, allocated: 0 };
+                let mlFactor = (applyMlCorrection && (p.progress || 0) < 50) ? 1.15 : 1.0;
+                let scoreReq = remain * riskBuffer * mlFactor;
+                return { ...p, originalReq: remain, remain: remain, scoreReq: scoreReq, dDay, allocated: 0 };
             });
 
             activeMembers.forEach(m => {
@@ -294,7 +285,10 @@ window.executeAiAllocation = async function() {
                 m.vSet = window.parseDateString(m.vacationDates); 
                 m.sSet = window.parseDateString(m.supportDates);
                 m.assignments = {}; 
+                m.totalPjtMd = 0;
                 m.totalIdleMd = 0;
+                m.totalCommonMd = 0;
+                m.remainingDeduct = parseFloat(m.manualVacation) || 0;
             });
 
             let viewPjtAvail = 0; let viewCommon = 0; let viewIdle = 0;
@@ -302,7 +296,7 @@ window.executeAiAllocation = async function() {
             fullMonthDaysList.forEach(dStr => {
                 let dayNum = parseInt(dStr.split('-')[2]);
                 let activePjts = pjts.filter(p => p.remain > 0.05 && (!p.d_assyEst || p.d_assyEst === '-' || dStr >= p.d_assyEst));
-                activePjts.sort((a,b) => a.dDay - b.dDay);
+                activePjts.sort((a,b) => a.dDay - b.dDay || b.scoreReq - a.scoreReq);
 
                 let urgentPjts = activePjts.filter(p => p.dDay <= 7);
                 let normalPjts = activePjts.filter(p => p.dDay > 7);
@@ -317,14 +311,16 @@ window.executeAiAllocation = async function() {
 
                     if (hasOverride) {
                         let totalManualMd = 0;
-                        window.manualOverrides[m.name][dStr].forEach(ov => {
+                        hasOverride.forEach(ov => {
                             let take = parseFloat(ov.md); totalManualMd += take;
                             if (ov.code === 'COMMON') dailyCommon += take;
                             else { let tp = pjts.find(p => p.code === ov.code); if (tp) { tp.remain -= take; tp.allocated += take; } }
                             m.assignments[dStr].push({ ...ov, locked: true });
                         });
-                        let availCap = Math.max(0, (dailyTotal * m.efficiency) - totalManualMd);
                         
+                        let availCap = Math.max(0, (dailyTotal * m.efficiency) - totalManualMd);
+                        m.totalCommonMd += dailyCommon;
+
                         availCap = Math.round(availCap * 10) / 10;
                         if (availCap > 0) { m.assignments[dStr].push({ code: 'IDLE', name: '유휴 공수 (대기)', md: availCap }); m.totalIdleMd += availCap; }
 
@@ -335,6 +331,13 @@ window.executeAiAllocation = async function() {
                     } else {
                         dailyCommon = 0.1;
                         let dailyCap = (dailyTotal - dailyCommon) * m.efficiency;
+
+                        if (m.remainingDeduct > 0) {
+                            let deductTake = Math.min(m.remainingDeduct, dailyCap);
+                            dailyCap -= deductTake; m.remainingDeduct -= deductTake;
+                        }
+
+                        m.totalCommonMd += dailyCommon;
                         let availCap = Math.round(dailyCap * 10) / 10;
 
                         let pjtQueue = optStrategy === 'balance' && m.efficiency >= 1.0 ? [...urgentPjts, ...normalPjts] : activePjts;
@@ -346,7 +349,7 @@ window.executeAiAllocation = async function() {
                             let maxDaily = isSetup ? (dailyTotal * 0.2 * m.efficiency) : dailyCap;
                             
                             let take = Math.min(availCap, p.remain, maxDaily); take = Math.round(take * 10) / 10;
-                            if (take > 0) { p.remain -= take; availCap -= take; p.allocated += take; m.assignments[dStr].push({ code: p.code, name: p.name, md: take, d_shipEst: p.d_shipEst }); }
+                            if (take > 0) { p.remain -= take; availCap -= take; p.allocated += take; m.assignments[dStr].push({ code: p.code, name: p.name, md: take, phase: isSetup ? 'Setup' : 'Assy', d_shipEst: p.d_shipEst }); }
                         }
 
                         availCap = Math.round(availCap * 10) / 10;
@@ -368,36 +371,23 @@ window.executeAiAllocation = async function() {
             });
 
             window.lastAllocatedData = { 
-                periodMode: window.allocPeriodMode, 
-                targetValue: targetValue, 
-                validDaysList: viewDaysList, 
-                members: activeMembers, 
-                pjtResults: pjtResults, 
-                outResults: outResults, 
-                availMD: viewPjtAvail + viewCommon, 
-                idleMD: viewIdle, 
-                assignedReal: viewPjtAvail,
-                allowOvertime: allowOvertime 
+                periodMode: window.allocPeriodMode, targetValue: targetValue, validDaysList: viewDaysList, 
+                members: activeMembers, pjtResults: pjtResults, outResults: outResults, 
+                availMD: viewPjtAvail + viewCommon, idleMD: viewIdle, assignedReal: viewPjtAvail, allowOvertime: allowOvertime 
             };
             
-            document.getElementById('alloc-empty-state').classList.add('hidden'); 
-            document.getElementById('alloc-result-dashboard').classList.remove('hidden');
+            document.getElementById('alloc-empty-state').classList.add('hidden'); document.getElementById('alloc-result-dashboard').classList.remove('hidden');
             document.getElementById('btn-save-alloc').style.display = 'flex';
             
-            window.renderAllocUI(); window.renderAllocCalendar();
-            window.saveAllocationPlan(); // 결과 자동 저장
-
-            window.showToast("마스터 계획 시뮬레이션 완료!", "success");
+            window.renderAllocUI(); window.renderAllocCalendar(); window.saveAllocationPlan(); 
+            window.showToast("연산 완료 및 계획 수립 성공!", "success");
 
         } catch (err) { 
             console.error("AI Allocation Engine Error:", err); 
-            window.showToast("연산 중 오류가 발생했습니다.", "error");
+            window.showToast("연산 중 오류가 발생했습니다. 로그를 확인하세요.", "error");
         } finally {
-            // 🚨 무조건 버튼 상태 원상 복구
-            if(btn) { 
-                btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> AI 빈칸 자동 채우기'; 
-                btn.disabled = false; 
-            }
+            // 🚨 오류가 나든 성공하든 버튼 100% 복구
+            if(btn) { btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> AI 빈칸 채우기'; btn.disabled = false; }
         }
     }, 100);
 };
@@ -413,7 +403,6 @@ window.renderAllocUI = function() {
 window.renderAllocCalendar = function() {
     const grid = document.getElementById('alloc-cal-grid'); if (!grid || !window.lastAllocatedData) return;
     const { members, validDaysList, periodMode, targetValue } = window.lastAllocatedData;
-    
     document.getElementById('alloc-cal-title').innerText = periodMode === 'week' ? "주간 상세 계획표 (수동 선입력 가능)" : "월간 마스터 플랜 (수동 선입력 가능)";
 
     let startD, endD;
@@ -421,16 +410,13 @@ window.renderAllocCalendar = function() {
         const wDates = window.getDatesFromWeek(targetValue);
         startD = new Date(wDates.start); endD = new Date(wDates.start); endD.setDate(endD.getDate() + 6);
     } else {
-        const parts = targetValue.split('-'); const y = parseInt(parts[0]); const m = parseInt(parts[1]);
-        startD = new Date(y, m - 1, 1); endD = new Date(y, m, 0);
+        const parts = targetValue.split('-'); startD = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, 1); endD = new Date(parseInt(parts[0]), parseInt(parts[1]), 0);
     }
 
-    const firstDay = startD.getDay(); 
-    let html = ''; 
+    const firstDay = startD.getDay(); let html = ''; 
     if (periodMode === 'month') { for(let i=0; i<firstDay; i++) html += `<div class="bg-slate-50 opacity-30 border-b border-r border-slate-200"></div>`; }
 
     let daysToRender = Math.round((endD - startD) / (1000 * 60 * 60 * 24)) + 1;
-    
     for(let i=0; i<daysToRender; i++) {
         let currentDate = new Date(startD); currentDate.setDate(currentDate.getDate() + i);
         let y = currentDate.getFullYear(); let m = String(currentDate.getMonth()+1).padStart(2,'0'); let d = String(currentDate.getDate()).padStart(2,'0');
@@ -449,16 +435,12 @@ window.renderAllocCalendar = function() {
                     
                     let isOverdue = a.d_shipEst && a.d_shipEst !== '-' && dateStr > a.d_shipEst;
                     let isSetup = a.phase === 'Setup';
-                    
                     let style = a.locked ? 'border-amber-200 bg-indigo-50 text-indigo-700' : (isOverdue ? 'border-rose-200 bg-rose-50 text-rose-700' : (a.code === 'IDLE' ? 'border-rose-200 bg-rose-50 text-rose-500 border-dashed' : (isSetup ? 'border-teal-200 bg-teal-50 text-teal-700' : 'border-indigo-100 bg-white text-indigo-700')));
                     let lockIcon = a.locked ? '<i class="fa-solid fa-lock text-amber-500 ml-0.5 text-[8px]"></i>' : '';
                     let shortCode = a.code === 'IDLE' ? '대기' : (a.code === 'COMMON' ? '공통' : a.code);
                     if (isSetup) shortCode += '(셋업)';
 
-                    return `<div onclick="window.openManualEditModal('${mem.name}', '${dateStr}')" class="text-[9px] font-bold border ${style} px-1.5 py-0.5 rounded mb-0.5 flex justify-between items-center cursor-pointer hover:ring-1 ring-amber-400 shadow-sm">
-                        <div class="flex items-center gap-1 truncate"><span class="font-black shrink-0">${mem.name}${lockIcon}</span><span class="text-[8px] opacity-70 truncate w-12">${shortCode}</span></div>
-                        <span class="shrink-0">${a.md.toFixed(1)}</span>
-                    </div>`;
+                    return `<div onclick="window.openManualEditModal('${mem.name}', '${dateStr}')" class="text-[9px] font-bold border ${style} px-1.5 py-0.5 rounded mb-0.5 flex justify-between items-center cursor-pointer hover:ring-1 ring-amber-400 shadow-sm"><div class="flex items-center gap-1 truncate"><span class="font-black shrink-0">${mem.name}${lockIcon}</span><span class="text-[8px] opacity-70 truncate w-12">${shortCode}</span></div><span class="shrink-0">${a.md.toFixed(1)}</span></div>`;
                 }).join('');
             }).join('');
             if(commonSum > 0) badgeHtml = `<div class="text-[9px] font-black bg-slate-800 text-white px-1.5 py-0.5 mb-1 rounded flex justify-between shadow-md"><span>제조공통</span><span>${commonSum.toFixed(1)}MD</span></div>` + pjtBadges;
@@ -466,7 +448,6 @@ window.renderAllocCalendar = function() {
         
         let minH = periodMode === 'week' ? 'min-h-[300px]' : 'min-h-[120px]';
         let tCol = isSunday||isHoliday ? 'text-rose-500' : (isSaturday ? 'text-blue-500' : 'text-slate-700');
-        
         html += `<div class="${bgClass} p-1 border-b border-r border-slate-200 ${minH} flex flex-col"><div class="text-[11px] font-black text-center mb-1 ${tCol}">${currentDate.getDate()}</div>${badgeHtml}</div>`;
     }
     grid.innerHTML = html;
