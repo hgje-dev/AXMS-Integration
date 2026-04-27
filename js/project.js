@@ -1948,11 +1948,6 @@ window.sendCrRequest = async function() {
     const targetPur = document.getElementById('cr-req-target-pur').value;
     
     if(!targetQual && !targetPur) return safeShowError("요청 대상자(품질 또는 구매)를 최소 1명 이상 선택해주세요.");
-    
-    const cat = document.getElementById('cr-req-gb-cat').value;
-    const item = document.getElementById('cr-req-gb-item').value.trim();
-    const good = document.getElementById('cr-req-gb-good').value.trim();
-    const bad = document.getElementById('cr-req-gb-bad').value.trim();
 
     const btn = document.querySelector('#cr-req-modal button[onclick="window.sendCrRequest()"]');
     if(btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 처리중...'; }
@@ -1960,21 +1955,30 @@ window.sendCrRequest = async function() {
     try {
         const batch = writeBatch(db);
         
-        // 1. 제조팀 총평을 품질 완료보고서 컬렉션(project_completion_reports)에 병합
         const crRef = doc(db, "project_completion_reports", pid);
         let lessonsArray = [];
-        if(item || good || bad) {
-            lessonsArray.push({ category: cat, item: item, highlight: good, lowlight: bad });
-        }
+        
+        // ✅ 해결된 부분: 테이블의 모든 행(Good/Bad 항목들)을 순회하며 배열에 담습니다.
+        document.querySelectorAll('.cr-req-gb-row').forEach(tr => {
+            const cat = tr.querySelector('.cr-gb-category').value;
+            const item = tr.querySelector('.cr-gb-item').value.trim();
+            const good = tr.querySelector('.cr-gb-high').value.trim();
+            const bad = tr.querySelector('.cr-gb-low').value.trim();
+            
+            // 아이템, 잘된 점, 아쉬운 점 중 하나라도 입력되어 있다면 저장 대상에 포함
+            if (item || good || bad) {
+                lessonsArray.push({ category: cat, item: item, highlight: good, lowlight: bad });
+            }
+        });
         
         batch.set(crRef, {
             projectId: pid,
-            lessons: lessonsArray,
+            lessons: lessonsArray, // ✅ 여러 개가 담긴 배열을 저장
             qualityStatus: '대기중',
             createdAt: Date.now()
         }, { merge: true });
 
-        // 2. 구매팀 원가 분석을 위해 Product Cost 컬렉션(product_costs)에 기본 문서 뼈대 생성
+        // 구매팀 원가 분석 문서 생성
         const pcRef = doc(db, "product_costs", pid);
         batch.set(pcRef, {
             projectId: pid,
@@ -1982,14 +1986,13 @@ window.sendCrRequest = async function() {
             createdAt: Date.now()
         }, { merge: true });
 
-        // 3. 프로젝트 기본 현황에 '완료 요청 송부됨' 마킹
+        // 프로젝트 기본 현황에 '완료 요청 송부됨' 마킹
         const pjtRef = doc(db, "projects_status", pid);
         batch.update(pjtRef, { crSent: true });
 
-        // 트랜잭션 일괄 실행
         await batch.commit();
 
-        // 4. 담당자들에게 알림 및 메일 발송
+        // 담당자 알림 및 메일 발송
         let notifiedCount = 0;
         if(targetQual) {
             const success = await window.notifyUser(targetQual, "제조 완료에 따른 [품질 완료보고서 (Q-Report)] 작성을 요청합니다.", pid, "품질보고 요청");
