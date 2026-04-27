@@ -2013,3 +2013,41 @@ window.sendCrRequest = async function() {
         if(btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> 총평 저장 및 요청 발송'; }
     }
 };
+// 💡 [수정 후] 새롭게 추가된 코드 (파일 내 적당한 위치, 보통 함수 선언부 모인 곳에 추가)
+window.addCrReqGbRow = function(data = null) {
+    const tbody = document.getElementById('cr-req-gb-tbody');
+    if(!tbody) return;
+    
+    const tr = document.createElement('tr');
+    tr.className = "cr-req-gb-row hover:bg-slate-50/50 transition-colors bg-white border-b border-slate-100";
+    
+    const catVal = data ? data.category : '제작';
+    const itemVal = data ? data.item : '';
+    const hlVal = data ? data.highlight : '';
+    const llVal = data ? data.lowlight : '';
+
+    tr.innerHTML = `
+        <td class="p-2 border-r border-slate-100 align-top">
+            <select class="cr-gb-category w-full border border-slate-300 rounded px-2 py-1.5 text-xs font-bold text-slate-700 outline-emerald-500 bg-white cursor-pointer">
+                <option value="제작" ${catVal==='제작'?'selected':''}>제작</option>
+                <option value="품질개선" ${catVal==='품질개선'?'selected':''}>품질개선</option>
+                <option value="납기단축" ${catVal==='납기단축'?'selected':''}>납기단축</option>
+                <option value="원가절감" ${catVal==='원가절감'?'selected':''}>원가절감</option>
+                <option value="기타" ${catVal==='기타'?'selected':''}>기타</option>
+            </select>
+        </td>
+        <td class="p-2 border-r border-slate-100 align-top">
+            <input type="text" class="cr-gb-item w-full border border-slate-300 rounded px-2 py-1.5 text-xs outline-emerald-500 bg-white" value="${itemVal}" placeholder="아이템명">
+        </td>
+        <td class="p-2 border-r border-slate-100 align-top">
+            <textarea class="cr-gb-high w-full border border-slate-300 rounded p-2 text-xs outline-emerald-500 custom-scrollbar resize-y min-h-[50px] focus:bg-emerald-50/20" placeholder="잘된 점 또는 개선안 (Highlight)">${hlVal}</textarea>
+        </td>
+        <td class="p-2 border-r border-slate-100 align-top">
+            <textarea class="cr-gb-low w-full border border-slate-300 rounded p-2 text-xs outline-rose-500 custom-scrollbar resize-y min-h-[50px] focus:bg-rose-50/20" placeholder="문제점 또는 아쉬운 점 (Lowlight)">${llVal}</textarea>
+        </td>
+        <td class="p-2 text-center align-middle">
+            <button onclick="this.closest('tr').remove()" class="text-slate-300 hover:text-rose-500 transition-colors p-1.5 bg-white border border-slate-200 rounded-lg shadow-sm hover:border-rose-200 hover:bg-rose-50"><i class="fa-solid fa-trash-can"></i></button>
+        </td>
+    `;
+    tbody.appendChild(tr);
+};
