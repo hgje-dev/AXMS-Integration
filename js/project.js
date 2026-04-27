@@ -1912,20 +1912,103 @@ window.deleteLink = async function(pid, idx) {
 // ==========================================
 window.openCrReqModal = function(projectId, title) {
     const modal = document.getElementById('cr-req-modal'); if(!modal) return;
-    document.getElementById('cr-req-pid').value = projectId; document.getElementById('cr-req-pname').innerText = title;
-    const targetSelect = document.getElementById('cr-req-target');
-    if(targetSelect) {
+    document.getElementById('cr-req-pid').value = projectId; 
+    document.getElementById('cr-req-pname').innerText = title;
+    
+    // 제조팀 총평 입력 필드 초기화
+    document.getElementById('cr-req-gb-cat').value = '제작';
+    document.getElementById('cr-req-gb-item').value = '';
+    document.getElementById('cr-req-gb-good').value = '';
+    document.getElementById('cr-req-gb-bad').value = '';
+
+    const targetQual = document.getElementById('cr-req-target-qual');
+    const targetPur = document.getElementById('cr-req-target-pur');
+    
+    // 품질경영팀 목록 세팅
+    if(targetQual) {
         const qmTeam = (window.allSystemUsers || []).filter(u => u.team === '품질경영팀');
-        targetSelect.innerHTML = qmTeam.length > 0 ? qmTeam.map(u => `<option value="${u.name}">${u.name} (${u.position || '매니저'})</option>`).join('') : '<option value="">품질경영팀 인원이 없습니다.</option>';
+        targetQual.innerHTML = qmTeam.length > 0 ? '<option value="">선택 (품질팀)</option>' + qmTeam.map(u => `<option value="${u.name}">${u.name} (${u.position || '매니저'})</option>`).join('') : '<option value="">품질경영팀 인원이 없습니다.</option>';
     }
+    
+    // 전략구매팀 목록 세팅
+    if(targetPur) {
+        const purTeam = (window.allSystemUsers || []).filter(u => u.team === '전략구매팀');
+        targetPur.innerHTML = purTeam.length > 0 ? '<option value="">선택 (구매팀)</option>' + purTeam.map(u => `<option value="${u.name}">${u.name} (${u.position || '매니저'})</option>`).join('') : '<option value="">전략구매팀 인원이 없습니다.</option>';
+    }
+    
     modal.classList.remove('hidden'); modal.classList.add('flex');
 };
-window.closeCrReqModal = function() { const m = document.getElementById('cr-req-modal'); if(m) { m.classList.add('hidden'); m.classList.remove('flex'); } };
+
+window.closeCrReqModal = function() { 
+    const m = document.getElementById('cr-req-modal'); 
+    if(m) { m.classList.add('hidden'); m.classList.remove('flex'); } 
+};
+
 window.sendCrRequest = async function() {
-    const pid = document.getElementById('cr-req-pid').value, targetName = document.getElementById('cr-req-target').value;
-    if(!targetName) return safeShowError("대상자를 선택해주세요.");
+    const pid = document.getElementById('cr-req-pid').value;
+    const targetQual = document.getElementById('cr-req-target-qual').value;
+    const targetPur = document.getElementById('cr-req-target-pur').value;
+    
+    if(!targetQual && !targetPur) return safeShowError("요청 대상자(품질 또는 구매)를 최소 1명 이상 선택해주세요.");
+    
+    const cat = document.getElementById('cr-req-gb-cat').value;
+    const item = document.getElementById('cr-req-gb-item').value.trim();
+    const good = document.getElementById('cr-req-gb-good').value.trim();
+    const bad = document.getElementById('cr-req-gb-bad').value.trim();
+
+    const btn = document.querySelector('#cr-req-modal button[onclick="window.sendCrRequest()"]');
+    if(btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 처리중...'; }
+
     try {
-        const success = await window.notifyUser(targetName, "품질 완료보고서 작성을 요청합니다.", pid, "완료요청");
-        if(success) { await setDoc(doc(db, "projects_status", pid), { crSent: true }, { merge: true }); safeShowSuccess(targetName + "님에게 요청을 보냈습니다."); window.closeCrReqModal(); if(window.renderProjectStatusList) window.renderProjectStatusList(); } else safeShowError("전송 실패");
-    } catch(e) { safeShowError("오류 발생", e); }
+        const batch = writeBatch(db);
+        
+        // 1. 제조팀 총평을 품질 완료보고서 컬렉션(project_completion_reports)에 병합
+        const crRef = doc(db, "project_completion_reports", pid);
+        let lessonsArray = [];
+        if(item || good || bad) {
+            lessonsArray.push({ category: cat, item: item, highlight: good, lowlight: bad });
+        }
+        
+        batch.set(crRef, {
+            projectId: pid,
+            lessons: lessonsArray,
+            qualityStatus: '대기중',
+            createdAt: Date.now()
+        }, { merge: true });
+
+        // 2. 구매팀 원가 분석을 위해 Product Cost 컬렉션(product_costs)에 기본 문서 뼈대 생성
+        const pcRef = doc(db, "product_costs", pid);
+        batch.set(pcRef, {
+            projectId: pid,
+            status: '대기중',
+            createdAt: Date.now()
+        }, { merge: true });
+
+        // 3. 프로젝트 기본 현황에 '완료 요청 송부됨' 마킹
+        const pjtRef = doc(db, "projects_status", pid);
+        batch.update(pjtRef, { crSent: true });
+
+        // 트랜잭션 일괄 실행
+        await batch.commit();
+
+        // 4. 담당자들에게 알림 및 메일 발송
+        let notifiedCount = 0;
+        if(targetQual) {
+            const success = await window.notifyUser(targetQual, "제조 완료에 따른 [품질 완료보고서 (Q-Report)] 작성을 요청합니다.", pid, "품질보고 요청");
+            if(success) notifiedCount++;
+        }
+        if(targetPur) {
+            const success = await window.notifyUser(targetPur, "제조 완료에 따른 [원가 분석 보고 (Product Cost)] 작성을 요청합니다.", pid, "원가분석 요청");
+            if(success) notifiedCount++;
+        }
+
+        safeShowSuccess(`성공적으로 저장되었으며 ${notifiedCount}명에게 요청 알림을 발송했습니다.`);
+        window.closeCrReqModal(); 
+        if(window.renderProjectStatusList) window.renderProjectStatusList(); 
+        
+    } catch(e) { 
+        safeShowError("오류 발생", e); 
+    } finally {
+        if(btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> 총평 저장 및 요청 발송'; }
+    }
 };
