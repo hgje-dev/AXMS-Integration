@@ -1954,13 +1954,14 @@ window.openCrReqModal = function(projectId, title) {
     document.getElementById('cr-req-pid').value = projectId; 
     document.getElementById('cr-req-pname').innerText = title;
     
-    // 💡 [수정 후] 테이블을 초기화하고 빈 입력 행을 하나 생성하는 방식
+    // 테이블을 초기화하고 빈 입력 행을 하나 생성
     const tbody = document.getElementById('cr-req-gb-tbody');
     if (tbody) {
         tbody.innerHTML = '';
         window.addCrReqGbRow();
     }
-
+    
+    // ✅ 누락되었던 요소 선택 변수 선언 추가!
     const targetQual = document.getElementById('cr-req-target-qual');
     const targetPur = document.getElementById('cr-req-target-pur');
     
@@ -1969,6 +1970,7 @@ window.openCrReqModal = function(projectId, title) {
         const qmTeam = (window.allSystemUsers || []).filter(u => u.team === '품질경영팀');
         targetQual.innerHTML = qmTeam.length > 0 ? '<option value="">선택 (품질팀)</option>' + qmTeam.map(u => `<option value="${u.name}">${u.name} (${u.position || '매니저'})</option>`).join('') : '<option value="">품질경영팀 인원이 없습니다.</option>';
     }
+    
     // 전략구매팀 목록 세팅
     if(targetPur) {
         const purTeam = (window.allSystemUsers || []).filter(u => u.team === '전략구매팀');
