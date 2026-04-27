@@ -758,32 +758,63 @@
     </div>
 </div>
 
-<div id="cr-req-modal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
-    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden transform transition-all">
-        <div class="px-6 py-4 border-b flex justify-between items-center bg-rose-50">
+<div id="cr-req-modal" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 overflow-y-auto">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col overflow-hidden transform transition-all my-auto max-h-[90vh]">
+        <div class="px-6 py-4 border-b flex justify-between items-center bg-rose-50 shrink-0">
             <h2 class="text-lg font-extrabold text-rose-800 flex items-center gap-2">
-                <i class="fa-solid fa-paper-plane text-rose-500"></i> 품질 완료보고 작성 요청
+                <i class="fa-solid fa-paper-plane text-rose-500"></i> 최종 완료보고 요청 및 제조팀 총평
             </h2>
-            <button onclick="window.closeCrReqModal()" class="text-rose-400 hover:text-rose-500">
+            <button onclick="window.closeCrReqModal()" class="text-rose-400 hover:text-rose-500 transition-colors">
                 <i class="fa-solid fa-xmark text-xl"></i>
             </button>
         </div>
-        <div class="p-6 bg-white space-y-4">
+        <div class="p-6 bg-slate-50 space-y-5 overflow-y-auto custom-scrollbar flex-1">
             <input type="hidden" id="cr-req-pid">
-            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                <p class="text-sm font-bold text-slate-700 text-center mb-1" id="cr-req-pname">프로젝트명</p>
-                <p class="text-[11px] text-slate-500 text-center">해당 프로젝트에 대해 품질경영팀으로 완료보고서 작성을 공식 요청합니다.</p>
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                <p class="text-sm font-black text-slate-700 text-center mb-1" id="cr-req-pname">프로젝트명</p>
+                <p class="text-[11px] text-slate-500 text-center">해당 프로젝트에 대해 품질팀과 구매팀으로 완료보고서 작성을 공식 요청합니다.</p>
             </div>
-            <div>
-                <label class="block text-[11px] font-bold text-rose-600 mb-1.5"><i class="fa-solid fa-user-check"></i> 요청 대상자 선택 (품질경영팀)</label>
-                <select id="cr-req-target" class="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 font-bold outline-rose-500">
-                    <option value="">품질경영팀 인원 불러오는 중...</option>
-                </select>
+
+            <div class="border border-indigo-100 rounded-2xl overflow-hidden shadow-sm bg-white">
+                <div class="bg-indigo-50 px-5 py-3 border-b border-indigo-100">
+                    <h3 class="text-xs font-black text-indigo-800"><i class="fa-solid fa-industry mr-1"></i> 제조팀 프로젝트 총평 (Good & Bad)</h3>
+                </div>
+                <div class="p-5 space-y-4">
+                    <div class="flex gap-2">
+                        <select id="cr-req-gb-cat" class="w-32 border border-slate-300 rounded-lg px-3 py-2 text-xs font-bold text-slate-700 outline-indigo-500 bg-slate-50">
+                            <option value="제작">제작</option>
+                            <option value="품질개선">품질개선</option>
+                            <option value="납기단축">납기단축</option>
+                            <option value="원가절감">원가절감</option>
+                            <option value="기타">기타</option>
+                        </select>
+                        <input type="text" id="cr-req-gb-item" placeholder="주요 평가 아이템/공정명 입력" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-xs outline-indigo-500 bg-white font-bold">
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <textarea id="cr-req-gb-good" placeholder="잘된 점 (Highlight)" class="w-full border border-emerald-200 rounded-xl p-3 text-xs outline-emerald-500 custom-scrollbar resize-y min-h-[80px] bg-emerald-50/30 focus:bg-white shadow-inner font-medium"></textarea>
+                        <textarea id="cr-req-gb-bad" placeholder="아쉬운 점 (Lowlight)" class="w-full border border-rose-200 rounded-xl p-3 text-xs outline-rose-500 custom-scrollbar resize-y min-h-[80px] bg-rose-50/30 focus:bg-white shadow-inner font-medium"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                    <label class="block text-[11px] font-bold text-rose-600 mb-2"><i class="fa-solid fa-user-shield mr-1"></i> 품질 검수 담당자 지정</label>
+                    <select id="cr-req-target-qual" class="w-full px-3 py-2.5 border border-slate-200 rounded-xl bg-slate-50 font-bold outline-rose-500 text-xs cursor-pointer">
+                        <option value="">선택 안함</option>
+                    </select>
+                </div>
+                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                    <label class="block text-[11px] font-bold text-emerald-600 mb-2"><i class="fa-solid fa-coins mr-1"></i> 구매/원가 담당자 지정</label>
+                    <select id="cr-req-target-pur" class="w-full px-3 py-2.5 border border-slate-200 rounded-xl bg-slate-50 font-bold outline-emerald-500 text-xs cursor-pointer">
+                        <option value="">선택 안함</option>
+                    </select>
+                </div>
             </div>
         </div>
-        <div class="px-6 py-4 border-t bg-slate-50 flex justify-end gap-2">
-            <button onclick="window.closeCrReqModal()" class="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-100 transition-colors">취소</button>
-            <button onclick="window.sendCrRequest()" class="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2"><i class="fa-solid fa-paper-plane"></i> 요청 보내기</button>
+        <div class="px-6 py-4 border-t bg-white flex justify-end gap-2 shrink-0">
+            <button onclick="window.closeCrReqModal()" class="px-5 py-2.5 bg-slate-100 border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-200 transition-colors">취소</button>
+            <button onclick="window.sendCrRequest()" class="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2"><i class="fa-solid fa-paper-plane"></i> 총평 저장 및 요청 발송</button>
         </div>
     </div>
 </div>
