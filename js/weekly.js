@@ -32,7 +32,6 @@ const WEEKLY_KR_HOLIDAYS = {
     '2027-01-01': '신정', '2027-02-06': '설연휴', '2027-02-07': '설날', '2027-02-08': '설연휴', '2027-02-09': '대체공휴일', '2027-03-01': '삼일절', '2027-05-05': '어린이날', '2027-05-13': '부처님오신날', '2027-06-06': '현충일', '2027-08-15': '광복절', '2027-08-16': '대체공휴일', '2027-09-14': '추석연휴', '2027-09-15': '추석', '2027-09-16': '추석연휴', '2027-10-03': '개천절', '2027-10-09': '한글날', '2027-10-11': '대체공휴일', '2027-12-25': '성탄절'
 };
 
-// 💡 [핵심 해결] 한글 완벽 지원 이메일 발송 함수
 window.notifyUser = async function(targetName, content, projectId, typeDesc) {
     if (!targetName) return false;
     const users = window.allSystemUsers || [];
@@ -56,7 +55,6 @@ window.notifyUser = async function(targetName, content, projectId, typeDesc) {
                 const subject = `[AXBIS 알림] ${msgTitle}`;
                 const bodyHtml = `<div style="font-family: sans-serif; padding: 20px;"><div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;"><h3>${msgTitle}</h3><p>${String(content).replace(/\n/g, '<br>')}</p></div></div>`;
                 
-                // 🔥 한글(유니코드) 완벽 지원 Base64 인코더
                 const encodeBase64 = (str) => {
                     const bytes = new TextEncoder().encode(str);
                     let bin = '';
@@ -345,7 +343,6 @@ window.loadWeeklyLogsData = function() {
         }
     });
 
-    // 💡 조건문을 변경하여 화면에 들어올 때마다 리스너를 재연결하도록 수정
     if (noticeUnsubscribe) noticeUnsubscribe();
     
     noticeUnsubscribe = onSnapshot(doc(db, "settings", "weekly_notice"), (docSnap) => {
@@ -418,7 +415,7 @@ window.loadWeeklyLogsData = function() {
             s.forEach(function(d) {
                 window.allSchedules.push(Object.assign({ id: d.id }, d.data()));
             });
-            window.currentScheduleList = window.allSchedules.filter(sch => sch.authorUid === window.currentUser.uid);
+            window.currentScheduleList = window.allSchedules.filter(sch => sch.authorUid === window.currentUser?.uid);
             
             window.renderKanbanBoard();
             window.renderTeamKanbanBoard();
@@ -877,9 +874,9 @@ window.saveWeeklyLog = async function(isFinalSubmit) {
         return;
     }
 
-    let authorUid = window.currentUser ? window.currentUser.uid : 'unknown';
-    let authorName = window.userProfile ? window.userProfile.name : 'unknown';
-    let authorTeam = window.userProfile ? (window.userProfile.team || window.userProfile.department || '') : '';
+    let authorUid = window.currentUser?.uid || 'unknown';
+    let authorName = window.userProfile?.name || 'unknown';
+    let authorTeam = window.userProfile?.team || window.userProfile?.department || '';
     let existingLog = null;
 
     if (id) {
@@ -1328,7 +1325,7 @@ function getWeeksInMonth(year, month) {
 }
 
 function getActualDateFromWeekDay(weekStr, dayStr) {
-    if(!window.getDatesFromWeek) return null;
+    if(!window.getDatesFromWeek || !weekStr) return null; 
     const { start } = window.getDatesFromWeek(weekStr);
     const dayMap = {"월요일":0, "화요일":1, "수요일":2, "목요일":3, "금요일":4, "토요일":5, "일요일":6};
     let offset = dayMap[dayStr];
@@ -1463,6 +1460,8 @@ window.changeMyCalMonth = function(offset) {
 };
 
 window.loadMyMonthlySchedules = async function() {
+    if (!window.currentUser) return; // 💡 에러 방지를 위한 사용자 유무 확인
+
     const year = window.mySchCalDate.getFullYear();
     const month = window.mySchCalDate.getMonth() + 1;
     const monthDisplay = document.getElementById('my-sch-cal-month-display');
@@ -1566,8 +1565,11 @@ window.renderMyCalendarBoard = function(year, month) {
     grid.innerHTML = html;
 };
 
+// 💡 일정추가 버튼 클릭 시 호출
 window.openScheduleModal = function(day) {
-    if (!day) day = '월요일';
+    // 💡 이벤트 객체(e.g., 포인터 이벤트)가 넘어온 경우 '월요일'로 기본값 지정
+    if (!day || typeof day !== 'string') day = '월요일';
+    
     const idEl = document.getElementById('sch-id'); if (idEl) idEl.value = '';
     const dayEl = document.getElementById('sch-day'); if (dayEl) dayEl.value = day;
     const catEl = document.getElementById('sch-category'); if (catEl) catEl.value = '휴가/연차';
@@ -1674,6 +1676,17 @@ window.closeScheduleViewModal = function() {
     }
 };
 
+window.deleteSchedule = async function(id) {
+    if (confirm("이 일정을 정말 삭제하시겠습니까?")) { 
+        try {
+            await deleteDoc(doc(db, "weekly_schedules", id)); 
+            if (window.showToast) window.showToast("일정이 삭제되었습니다."); 
+        } catch (e) { 
+            if (window.showToast) window.showToast("삭제 실패", "error"); 
+        }
+    }
+}
+
 window.saveSchedule = async function() {
     const idEl = document.getElementById('sch-id');
     const weekEl = document.getElementById('weekly-log-filter-week');
@@ -1684,10 +1697,13 @@ window.saveSchedule = async function() {
     const contentEl = document.getElementById('sch-content');
     const sharedEl = document.getElementById('sch-is-shared');
 
-    if (!idEl || !weekEl || !dayEl || !categoryEl || !titleEl) return;
+    if (!idEl || !dayEl || !categoryEl || !titleEl) return;
 
     const id = idEl.value;
-    const week = weekEl.value;
+    
+    // 💡 주차 선택기가 혹시라도 비어있으면 현재 주차를 폴백으로 사용하도록 방어 코드 적용
+    const week = (weekEl && weekEl.value) ? weekEl.value : window.getWeekString(new Date());
+    
     const day = dayEl.value;
     const category = categoryEl.value;
     const time = timeEl ? timeEl.value.trim() : '';
@@ -1700,6 +1716,12 @@ window.saveSchedule = async function() {
         return;
     }
 
+    // 💡 로그인이 풀리거나 정보가 제대로 넘어오지 않았을 때 에러 발생 방지
+    if (!window.currentUser) {
+        if (window.showToast) window.showToast("사용자 정보를 확인할 수 없습니다. 다시 로그인해주세요.", "error");
+        return;
+    }
+
     const payload = { 
         week: week, 
         day: day, 
@@ -1709,7 +1731,7 @@ window.saveSchedule = async function() {
         content: content, 
         isShared: isShared,
         authorUid: window.currentUser.uid, 
-        authorName: window.userProfile.name,
+        authorName: window.userProfile?.name || '팀원',
         updatedAt: Date.now() 
     };
 
@@ -1721,9 +1743,10 @@ window.saveSchedule = async function() {
             payload.isCompleted = false;
             await addDoc(collection(db, "weekly_schedules"), payload);
         }
-        if (window.showToast) window.showToast("일정이 저장되었습니다.");
+        if (window.showToast) window.showToast("일정이 저장되었습니다.", "success");
         window.closeScheduleModal();
     } catch (e) {
+        console.error(e);
         if (window.showToast) window.showToast("저장 실패", "error");
     }
 };
