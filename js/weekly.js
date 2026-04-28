@@ -1168,7 +1168,7 @@ window.exportWeeklyLogsExcel = async function() {
     }
 };
 
-window.toggleScheduleComplete = async function(id, isCompleted) {
+window.toggleWeeklyScheduleComplete = async function(id, isCompleted) {
     try {
         await setDoc(doc(db, "weekly_schedules", id), { isCompleted: isCompleted, updatedAt: Date.now() }, { merge: true });
     } catch (e) {
@@ -1204,13 +1204,13 @@ window.renderKanbanBoard = function() {
             const completedTextClass = s.isCompleted ? 'line-through text-slate-400' : style.text;
             const checkedAttr = s.isCompleted ? 'checked' : '';
 
-            return '<div class="rounded-xl border p-3 ' + completedCardClass + ' relative group cursor-pointer hover:shadow-md transition-all" onclick="window.editSchedule(\'' + s.id + '\')"><button onclick="event.stopPropagation(); window.deleteSchedule(\'' + s.id + '\')" class="absolute top-2 right-2 text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"><i class="fa-solid fa-xmark"></i></button><div class="flex items-center gap-2 mb-2"><input type="checkbox" ' + checkedAttr + ' onclick="event.stopPropagation();" onchange="window.toggleScheduleComplete(\'' + s.id + '\', this.checked)" class="accent-indigo-600 w-4 h-4 cursor-pointer shrink-0"><div class="flex items-center gap-1.5 text-[10px] font-black ' + style.badge + ' w-fit px-2 py-0.5 rounded"><i class="fa-solid ' + style.icon + '"></i> ' + s.category + '</div></div><div class="text-sm font-bold ' + completedTextClass + ' mb-1 truncate">' + safeTitle + '</div><div class="text-[10px] text-slate-500 font-bold flex items-center gap-1"><i class="fa-regular fa-clock"></i> ' + safeTime + '</div></div>';
+            return '<div class="rounded-xl border p-3 ' + completedCardClass + ' relative group cursor-pointer hover:shadow-md transition-all" onclick="window.editWeeklySchedule(\'' + s.id + '\')"><button onclick="event.stopPropagation(); window.deleteWeeklySchedule(\'' + s.id + '\')" class="absolute top-2 right-2 text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"><i class="fa-solid fa-xmark"></i></button><div class="flex items-center gap-2 mb-2"><input type="checkbox" ' + checkedAttr + ' onclick="event.stopPropagation();" onchange="window.toggleWeeklyScheduleComplete(\'' + s.id + '\', this.checked)" class="accent-indigo-600 w-4 h-4 cursor-pointer shrink-0"><div class="flex items-center gap-1.5 text-[10px] font-black ' + style.badge + ' w-fit px-2 py-0.5 rounded"><i class="fa-solid ' + style.icon + '"></i> ' + s.category + '</div></div><div class="text-sm font-bold ' + completedTextClass + ' mb-1 truncate">' + safeTitle + '</div><div class="text-[10px] text-slate-500 font-bold flex items-center gap-1"><i class="fa-regular fa-clock"></i> ' + safeTime + '</div></div>';
         }).join('');
 
         const isWeekend = (day === '토요일' || day === '일요일');
         const headerColor = isWeekend ? 'text-rose-500' : 'text-slate-700';
 
-        return '<div class="bg-slate-50 rounded-2xl border border-slate-100 flex flex-col min-h-[300px]"><div class="text-center py-3 border-b border-slate-200 bg-white rounded-t-2xl"><h4 class="text-sm font-black ' + headerColor + '">' + day + '</h4></div><div class="p-3 flex-1 flex flex-col gap-3">' + eventsHtml + '<button onclick="window.openScheduleModal(\'' + day + '\')" class="w-full border-2 border-dashed border-slate-200 hover:border-indigo-300 hover:bg-white text-slate-400 hover:text-indigo-500 rounded-xl py-3 text-xs font-bold transition-colors flex items-center justify-center gap-2 mt-auto"><i class="fa-solid fa-plus"></i> 일정 추가</button></div></div>';
+        return '<div class="bg-slate-50 rounded-2xl border border-slate-100 flex flex-col min-h-[300px]"><div class="text-center py-3 border-b border-slate-200 bg-white rounded-t-2xl"><h4 class="text-sm font-black ' + headerColor + '">' + day + '</h4></div><div class="p-3 flex-1 flex flex-col gap-3">' + eventsHtml + '<button onclick="window.openWeeklyScheduleModal(\'' + day + '\')" class="w-full border-2 border-dashed border-slate-200 hover:border-indigo-300 hover:bg-white text-slate-400 hover:text-indigo-500 rounded-xl py-3 text-xs font-bold transition-colors flex items-center justify-center gap-2 mt-auto"><i class="fa-solid fa-plus"></i> 일정 추가</button></div></div>';
     }).join('');
 };
 
@@ -1240,7 +1240,7 @@ window.renderTeamKanbanBoard = function() {
             const authorName = String(s.authorName || '팀원');
             const completedTextClass = s.isCompleted ? 'line-through text-slate-400' : 'text-slate-700';
 
-            return '<div class="cursor-pointer hover:bg-slate-100 p-2 border-b border-slate-100 transition-colors" onclick="window.viewSchedule(\'' + s.id + '\')"><div class="flex items-center gap-1.5 mb-1"><span class="text-[9px] font-bold text-white bg-indigo-500 w-fit px-1.5 rounded">' + authorName + '</span><span class="text-[9px] font-bold ' + style.text + '"><i class="fa-solid ' + style.icon + ' mr-0.5"></i>' + s.category + '</span></div><div class="text-xs font-bold truncate ' + completedTextClass + '">' + safeTitle + '</div></div>';
+            return '<div class="cursor-pointer hover:bg-slate-100 p-2 border-b border-slate-100 transition-colors" onclick="window.viewWeeklySchedule(\'' + s.id + '\')"><div class="flex items-center gap-1.5 mb-1"><span class="text-[9px] font-bold text-white bg-indigo-500 w-fit px-1.5 rounded">' + authorName + '</span><span class="text-[9px] font-bold ' + style.text + '"><i class="fa-solid ' + style.icon + ' mr-0.5"></i>' + s.category + '</span></div><div class="text-xs font-bold truncate ' + completedTextClass + '">' + safeTitle + '</div></div>';
         }).join('');
 
         const isWeekend = (day === '토요일' || day === '일요일');
@@ -1401,7 +1401,7 @@ window.renderTeamCalendarBoard = function(year, month) {
             const authorName = String(s.authorName || '팀원');
             const completedClass = s.isCompleted ? 'line-through opacity-50 grayscale' : '';
             return `
-                <div class="text-[10px] font-bold border px-1.5 py-0.5 rounded mb-0.5 truncate cursor-pointer hover:shadow-sm transition-all ${style.bg} ${completedClass}" onclick="window.viewSchedule('${s.id}')" title="${safeTitle}">
+                <div class="text-[10px] font-bold border px-1.5 py-0.5 rounded mb-0.5 truncate cursor-pointer hover:shadow-sm transition-all ${style.bg} ${completedClass}" onclick="window.viewWeeklySchedule('${s.id}')" title="${safeTitle}">
                     <span class="bg-white/70 px-1 rounded mr-1">${authorName}</span>${safeTitle}
                 </div>
             `;
@@ -1460,7 +1460,7 @@ window.changeMyCalMonth = function(offset) {
 };
 
 window.loadMyMonthlySchedules = async function() {
-    if (!window.currentUser) return; // 💡 에러 방지를 위한 사용자 유무 확인
+    if (!window.currentUser) return;
 
     const year = window.mySchCalDate.getFullYear();
     const month = window.mySchCalDate.getMonth() + 1;
@@ -1546,7 +1546,7 @@ window.renderMyCalendarBoard = function(year, month) {
             const safeTitle = String(s.title || s.content || '제목 없음').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const completedClass = s.isCompleted ? 'line-through opacity-50 grayscale' : '';
             return `
-                <div class="text-[10px] font-bold border px-1.5 py-0.5 rounded mb-0.5 truncate cursor-pointer hover:shadow-sm transition-all ${style.bg} ${completedClass}" onclick="window.editSchedule('${s.id}')" title="${safeTitle}">
+                <div class="text-[10px] font-bold border px-1.5 py-0.5 rounded mb-0.5 truncate cursor-pointer hover:shadow-sm transition-all ${style.bg} ${completedClass}" onclick="window.editWeeklySchedule('${s.id}')" title="${safeTitle}">
                     ${safeTitle}
                 </div>
             `;
@@ -1566,8 +1566,7 @@ window.renderMyCalendarBoard = function(year, month) {
 };
 
 // 💡 일정추가 버튼 클릭 시 호출
-window.openScheduleModal = function(day) {
-    // 💡 이벤트 객체(e.g., 포인터 이벤트)가 넘어온 경우 '월요일'로 기본값 지정
+window.openWeeklyScheduleModal = function(day) {
     if (!day || typeof day !== 'string') day = '월요일';
     
     const idEl = document.getElementById('sch-id'); if (idEl) idEl.value = '';
@@ -1586,7 +1585,7 @@ window.openScheduleModal = function(day) {
     }
 };
 
-window.closeScheduleModal = function() {
+window.closeWeeklyScheduleModal = function() {
     const modal = document.getElementById('schedule-modal');
     if (modal) {
         modal.classList.add('hidden');
@@ -1594,7 +1593,7 @@ window.closeScheduleModal = function() {
     }
 };
 
-window.editSchedule = function(id) {
+window.editWeeklySchedule = function(id) {
     const s = window.currentScheduleList.find(function(x) { return x.id === id; });
     if (!s) return;
     
@@ -1617,7 +1616,7 @@ window.editSchedule = function(id) {
     }
 };
 
-window.viewSchedule = function(id) {
+window.viewWeeklySchedule = function(id) {
     const s = window.allSchedules.find(function(x) { return x.id === id; });
     if (!s) return;
     
@@ -1668,7 +1667,7 @@ window.viewSchedule = function(id) {
     }
 };
 
-window.closeScheduleViewModal = function() {
+window.closeWeeklyScheduleViewModal = function() {
     const modal = document.getElementById('schedule-view-modal');
     if(modal) {
         modal.classList.add('hidden');
@@ -1676,7 +1675,7 @@ window.closeScheduleViewModal = function() {
     }
 };
 
-window.deleteSchedule = async function(id) {
+window.deleteWeeklySchedule = async function(id) {
     if (confirm("이 일정을 정말 삭제하시겠습니까?")) { 
         try {
             await deleteDoc(doc(db, "weekly_schedules", id)); 
@@ -1687,7 +1686,7 @@ window.deleteSchedule = async function(id) {
     }
 }
 
-window.saveSchedule = async function() {
+window.saveWeeklySchedule = async function() {
     const idEl = document.getElementById('sch-id');
     const weekEl = document.getElementById('weekly-log-filter-week');
     const dayEl = document.getElementById('sch-day');
@@ -1730,7 +1729,7 @@ window.saveSchedule = async function() {
         title: title,
         content: content, 
         isShared: isShared,
-        authorUid: window.currentUser.uid, 
+        authorUid: window.currentUser?.uid || 'guest', 
         authorName: window.userProfile?.name || '팀원',
         updatedAt: Date.now() 
     };
@@ -1744,7 +1743,7 @@ window.saveSchedule = async function() {
             await addDoc(collection(db, "weekly_schedules"), payload);
         }
         if (window.showToast) window.showToast("일정이 저장되었습니다.", "success");
-        window.closeScheduleModal();
+        window.closeWeeklyScheduleModal();
     } catch (e) {
         console.error(e);
         if (window.showToast) window.showToast("저장 실패", "error");
